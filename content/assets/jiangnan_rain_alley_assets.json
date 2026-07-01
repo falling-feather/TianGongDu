@@ -1,0 +1,164 @@
+{
+  "schemaVersion": 1,
+  "id": "asset_pack.jiangnan_rain_alley_m1",
+  "displayNameKey": "asset_pack.jiangnan_rain_alley_m1.name",
+  "tags": ["assets", "jiangnan", "rain_alley", "m1"],
+  "designerNote": "江南雨巷 M1 美术资源清单，作为概念、角色、敌人、建筑、VFX 和 UI 图标的生产接口。",
+  "status": "draft",
+  "sourceNote": "依据 doc/07 第 19.1 章拆解，真实资产路径待资源 manifest 接入后补充。",
+  "owner": "art",
+  "regionId": "region.jiangnan_rain_alley",
+  "assetGroups": [
+    {
+      "id": "asset_group.jiangnan.subregion_concepts",
+      "displayNameKey": "asset_group.jiangnan.subregion_concepts.name",
+      "tags": ["asset_group", "concept", "subregion"],
+      "designerNote": "11 个子地区概念图，每个子地区至少一张用于定调和关卡沟通。",
+      "status": "draft",
+      "assetType": "concept_art",
+      "requiredCount": 11,
+      "referenceIds": [
+        "subregion.jiangnan_rain_alley.water_entry",
+        "subregion.jiangnan_rain_alley.town_awning",
+        "subregion.jiangnan_rain_alley.main_water_lane",
+        "subregion.jiangnan_rain_alley.umbrella_shop",
+        "subregion.jiangnan_rain_alley.bamboo_path",
+        "subregion.jiangnan_rain_alley.dye_paper_court",
+        "subregion.jiangnan_rain_alley.wind_bell_lane",
+        "subregion.jiangnan_rain_alley.night_market",
+        "subregion.jiangnan_rain_alley.old_bridge_lower",
+        "subregion.jiangnan_rain_alley.roof_route",
+        "subregion.jiangnan_rain_alley.rain_curtain_bridge"
+      ]
+    },
+    {
+      "id": "asset_group.jiangnan.environment_tilesets",
+      "displayNameKey": "asset_group.jiangnan.environment_tilesets.name",
+      "tags": ["asset_group", "tileset", "environment"],
+      "designerNote": "水巷、作坊、竹林、夜市、旧桥、断桥雨幕环境 tileset，像素尺度必须一致。",
+      "status": "draft",
+      "assetType": "tileset",
+      "requiredCount": 6,
+      "referenceIds": ["tile.water_lane", "tile.workshop", "tile.bamboo_path", "tile.night_market", "tile.old_bridge", "tile.rain_curtain_bridge"]
+    },
+    {
+      "id": "asset_group.jiangnan.interactive_buildings",
+      "displayNameKey": "asset_group.jiangnan.interactive_buildings.name",
+      "tags": ["asset_group", "building", "interactive"],
+      "designerNote": "10 个核心建筑外观和交互状态，需区分可进入、可交互、背景建筑。",
+      "status": "draft",
+      "assetType": "building_sprite",
+      "requiredCount": 10,
+      "referenceIds": [
+        "building.jiangnan_rain_alley.umbrella_shop",
+        "building.jiangnan_rain_alley.dock_shed",
+        "building.jiangnan_rain_alley.tea_awning",
+        "building.jiangnan_rain_alley.bamboo_store",
+        "building.jiangnan_rain_alley.dye_court",
+        "building.jiangnan_rain_alley.wind_bell_shrine",
+        "building.jiangnan_rain_alley.market_ledger",
+        "building.jiangnan_rain_alley.old_bridge_shed",
+        "building.jiangnan_rain_alley.roof_store",
+        "building.jiangnan_rain_alley.record_table"
+      ]
+    },
+    {
+      "id": "asset_group.jiangnan.npc_portraits",
+      "displayNameKey": "asset_group.jiangnan.npc_portraits.name",
+      "tags": ["asset_group", "npc", "portrait"],
+      "designerNote": "15 名关键 NPC 半身像，后续补表情和行走小人。",
+      "status": "draft",
+      "assetType": "portrait",
+      "requiredCount": 15,
+      "referenceIds": [
+        "npc.master_shen_yu",
+        "npc.market_runner",
+        "npc.alley_resident",
+        "npc.boatman_liujiang",
+        "npc.zhou_bamboo",
+        "npc.tang_oilpaper",
+        "npc.lan_dyer_wen",
+        "npc.apprentice_aqing",
+        "npc.ye_hao",
+        "npc.mei_bridge_keeper",
+        "npc.xu_lan_lantern",
+        "npc.fang_account",
+        "npc.du_repairer",
+        "npc.qiao_thread",
+        "npc.yao_archivist"
+      ]
+    },
+    {
+      "id": "asset_group.jiangnan.enemy_sprites",
+      "displayNameKey": "asset_group.jiangnan.enemy_sprites.name",
+      "tags": ["asset_group", "enemy", "animation"],
+      "designerNote": "9 类敌人 sprite，每类至少 idle、move、attack、hit、restore。",
+      "status": "draft",
+      "assetType": "sprite_animation",
+      "requiredCount": 9,
+      "requiredStates": ["idle", "move", "attack", "hit", "restore"],
+      "referenceIds": [
+        "enemy.rain_wraith",
+        "enemy.broken_umbrella_shadow",
+        "enemy.bamboo_husk",
+        "enemy.rain_mildew_walker",
+        "enemy.wind_echo",
+        "enemy.rain_tax_collector",
+        "enemy.bridge_stalker",
+        "enemy.broken_bone_umbrella_spirit",
+        "enemy.unsigned_mark_echo"
+      ]
+    },
+    {
+      "id": "asset_group.jiangnan.boss_sprites",
+      "displayNameKey": "asset_group.jiangnan.boss_sprites.name",
+      "tags": ["asset_group", "boss", "animation"],
+      "designerNote": "Boss 三阶段与归位动画，避免文化符号怪物化。",
+      "status": "draft",
+      "assetType": "boss_animation",
+      "requiredCount": 1,
+      "requiredStates": ["phase_1", "phase_2", "phase_3", "restoration"],
+      "referenceIds": ["boss.rain_alley_broken_umbrella_obsession"]
+    },
+    {
+      "id": "asset_group.jiangnan.skill_vfx",
+      "displayNameKey": "asset_group.jiangnan.skill_vfx.name",
+      "tags": ["asset_group", "vfx", "skill"],
+      "designerNote": "架伞、收风、借风、伞旋、归伞反击等技能动画和 VFX 分层。",
+      "status": "draft",
+      "assetType": "vfx",
+      "requiredCount": 8,
+      "referenceIds": ["skill.umbrella.guard", "skill.umbrella.gather_wind", "skill.umbrella.borrow_wind", "skill.umbrella.umbrella_spin", "skill.umbrella.parry_counter"]
+    },
+    {
+      "id": "asset_group.jiangnan.ui_icons",
+      "displayNameKey": "asset_group.jiangnan.ui_icons.name",
+      "tags": ["asset_group", "ui", "icons"],
+      "designerNote": "风息、四维、任务、技能、材料、归位图标，小尺寸必须可读。",
+      "status": "draft",
+      "assetType": "ui_icon",
+      "requiredCount": 12,
+      "referenceIds": ["resource.wind_breath", "ui.four_eyes", "ui.quest", "ui.skill", "ui.material", "ui.restoration"]
+    },
+    {
+      "id": "asset_group.jiangnan.ending_states",
+      "displayNameKey": "asset_group.jiangnan.ending_states.name",
+      "tags": ["asset_group", "ending", "state"],
+      "designerNote": "3 套旧桥/夜市归位后差异图，对应急单、完整工序、折中补修。",
+      "status": "draft",
+      "assetType": "state_art",
+      "requiredCount": 3,
+      "referenceIds": ["outcome.jiangnan_rain_alley.rush_delivery", "outcome.jiangnan_rain_alley.full_process", "outcome.jiangnan_rain_alley.material_compromise"]
+    }
+  ],
+  "variants": [
+    {
+      "id": "asset.variant.umbrella.blue_lantern",
+      "displayNameKey": "asset.variant.umbrella.blue_lantern.name",
+      "tags": ["asset_variant", "umbrella", "blue_dye"],
+      "designerNote": "蓝文支线解锁的灯伞花色，用于夜市视觉反馈。",
+      "status": "draft",
+      "sourceQuestId": "quest.jiangnan_rain_alley.side.blue_pattern"
+    }
+  ]
+}

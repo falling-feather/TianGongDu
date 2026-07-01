@@ -1,0 +1,252 @@
+{
+  "schemaVersion": 1,
+  "id": "quest_set.jiangnan_rain_alley_m1",
+  "displayNameKey": "quest_set.jiangnan_rain_alley_m1.name",
+  "tags": ["quests", "jiangnan", "rain_alley", "m1"],
+  "designerNote": "江南雨巷 M1 主线、支线和回访任务集合。",
+  "status": "mvp",
+  "sourceNote": "依据 doc/07 第 14 章拆解。",
+  "owner": "planning",
+  "regionId": "region.jiangnan_rain_alley",
+  "mainlineQuest": {
+    "id": "quest.jiangnan_rain_alley.mainline",
+    "displayNameKey": "quest.jiangnan_rain_alley.mainline.name",
+    "tags": ["quest", "mainline", "jiangnan"],
+    "designerNote": "江南主线，从水路入镇到断桥归位和天工录落款。",
+    "status": "mvp",
+    "type": "mainline",
+    "regionId": "region.jiangnan_rain_alley",
+    "stepIds": [
+      "quest_step.jiangnan_rain_alley.arrive_by_water",
+      "quest_step.jiangnan_rain_alley.check_delivery",
+      "quest_step.jiangnan_rain_alley.learn_guard",
+      "quest_step.jiangnan_rain_alley.choose_bamboo",
+      "quest_step.jiangnan_rain_alley.paper_and_oil",
+      "quest_step.jiangnan_rain_alley.market_decision",
+      "quest_step.jiangnan_rain_alley.find_rivet",
+      "quest_step.jiangnan_rain_alley.old_bridge_trial",
+      "quest_step.jiangnan_rain_alley.boss_restoration",
+      "quest_step.jiangnan_rain_alley.record_in_tiangong"
+    ],
+    "choiceIds": ["choice.rush_order", "choice.full_process", "choice.material_compromise"],
+    "completionCriteria": ["boss.rain_alley_broken_umbrella_obsession.restored", "record.tiangong.logged"]
+  },
+  "steps": [
+    {
+      "id": "quest_step.jiangnan_rain_alley.arrive_by_water",
+      "displayNameKey": "quest_step.jiangnan_rain_alley.arrive_by_water.name",
+      "tags": ["quest_step", "escort"],
+      "designerNote": "护送材料到码头，开放镇口和主巷。",
+      "subregionId": "subregion.jiangnan_rain_alley.water_entry",
+      "completionCriteria": ["delivery.umbrella_ribs.arrived"],
+      "unlockIds": ["subregion.jiangnan_rain_alley.town_awning", "subregion.jiangnan_rain_alley.main_water_lane"]
+    },
+    {
+      "id": "quest_step.jiangnan_rain_alley.check_delivery",
+      "displayNameKey": "quest_step.jiangnan_rain_alley.check_delivery.name",
+      "tags": ["quest_step", "dialogue"],
+      "designerNote": "与骆青禾和沈雨确认伞骨、桐油和试伞文牒。",
+      "subregionId": "subregion.jiangnan_rain_alley.town_awning",
+      "completionCriteria": ["npc.market_runner.met", "npc.master_shen_yu.met"],
+      "unlockIds": ["subregion.jiangnan_rain_alley.umbrella_shop"]
+    },
+    {
+      "id": "quest_step.jiangnan_rain_alley.learn_guard",
+      "displayNameKey": "quest_step.jiangnan_rain_alley.learn_guard.name",
+      "tags": ["quest_step", "tutorial", "skill"],
+      "designerNote": "作坊内完成架伞教学，建立纸伞门径差异。",
+      "subregionId": "subregion.jiangnan_rain_alley.umbrella_shop",
+      "completionCriteria": ["skill.umbrella.guard.learned"],
+      "unlockIds": ["skill.umbrella.guard", "subregion.jiangnan_rain_alley.bamboo_path"]
+    },
+    {
+      "id": "quest_step.jiangnan_rain_alley.choose_bamboo",
+      "displayNameKey": "quest_step.jiangnan_rain_alley.choose_bamboo.name",
+      "tags": ["quest_step", "collect", "craft"],
+      "designerNote": "到竹林取得合格青篾，记录材料选择对格挡消耗和评价的影响。",
+      "subregionId": "subregion.jiangnan_rain_alley.bamboo_path",
+      "completionCriteria": ["item.bamboo.qualified_obtained"],
+      "unlockIds": ["trait.umbrella.even_bamboo_frame", "subregion.jiangnan_rain_alley.dye_paper_court"]
+    },
+    {
+      "id": "quest_step.jiangnan_rain_alley.paper_and_oil",
+      "displayNameKey": "quest_step.jiangnan_rain_alley.paper_and_oil.name",
+      "tags": ["quest_step", "craft", "paper"],
+      "designerNote": "完成糊纸和上油，给出湿滞抗性或风息获取加成。",
+      "subregionId": "subregion.jiangnan_rain_alley.dye_paper_court",
+      "completionCriteria": ["craft.paper_surface.trial_ready"],
+      "unlockIds": ["trait.umbrella.wind_hungry_surface", "trait.umbrella.stable_blue_dye"]
+    },
+    {
+      "id": "quest_step.jiangnan_rain_alley.market_decision",
+      "displayNameKey": "quest_step.jiangnan_rain_alley.market_decision.name",
+      "tags": ["quest_step", "choice", "four_eyes"],
+      "designerNote": "夜市急单、完整工序、折中补修三选一，必须产生三个后续反馈点。",
+      "subregionId": "subregion.jiangnan_rain_alley.night_market",
+      "completionCriteria": ["choice.rush_order|choice.full_process|choice.material_compromise"],
+      "unlockIds": ["feedback.mentor_comment", "feedback.market_resident_line", "feedback.restoration_visual_state"]
+    },
+    {
+      "id": "quest_step.jiangnan_rain_alley.find_rivet",
+      "displayNameKey": "quest_step.jiangnan_rain_alley.find_rivet.name",
+      "tags": ["quest_step", "borrow_wind", "return_route"],
+      "designerNote": "通过风铃巷或屋檐回访取得风铃铆，打开断桥雨幕。",
+      "subregionId": "subregion.jiangnan_rain_alley.roof_route",
+      "completionCriteria": ["item.wind_bell_rivet.obtained"],
+      "unlockIds": ["subregion.jiangnan_rain_alley.rain_curtain_bridge"]
+    },
+    {
+      "id": "quest_step.jiangnan_rain_alley.old_bridge_trial",
+      "displayNameKey": "quest_step.jiangnan_rain_alley.old_bridge_trial.name",
+      "tags": ["quest_step", "combat", "elite"],
+      "designerNote": "旧桥下层击败断骨伞灵，检验弹反、收风和伞旋。",
+      "subregionId": "subregion.jiangnan_rain_alley.old_bridge_lower",
+      "completionCriteria": ["enemy.broken_bone_umbrella_spirit.restored"],
+      "unlockIds": ["skill.umbrella.borrow_wind.stabilized", "checkpoint.old_bridge"]
+    },
+    {
+      "id": "quest_step.jiangnan_rain_alley.boss_restoration",
+      "displayNameKey": "quest_step.jiangnan_rain_alley.boss_restoration.name",
+      "tags": ["quest_step", "boss", "restoration"],
+      "designerNote": "Boss 失序归零后进行归位交互，不以处决作为终点。",
+      "subregionId": "subregion.jiangnan_rain_alley.rain_curtain_bridge",
+      "completionCriteria": ["boss.rain_alley_broken_umbrella_obsession.restored"],
+      "unlockIds": ["record.tiangong.pending", "post_boss.feedback"]
+    },
+    {
+      "id": "quest_step.jiangnan_rain_alley.record_in_tiangong",
+      "displayNameKey": "quest_step.jiangnan_rain_alley.record_in_tiangong.name",
+      "tags": ["quest_step", "record", "post_boss"],
+      "designerNote": "查看四维后果并将江南雨巷选择写入天工录。",
+      "subregionId": "subregion.jiangnan_rain_alley.rain_curtain_bridge",
+      "completionCriteria": ["record.tiangong.logged"],
+      "unlockIds": ["region.jiangnan_rain_alley.completed", "clue.unsigned_mark"]
+    }
+  ],
+  "sideQuests": [
+    {
+      "id": "quest.jiangnan_rain_alley.side.bridge_debt",
+      "displayNameKey": "quest.jiangnan_rain_alley.side.bridge_debt.name",
+      "tags": ["quest", "side", "bridge"],
+      "designerNote": "找旧桥修补记录，确认雨幕前兆。",
+      "startNpcId": "npc.mei_bridge_keeper",
+      "startSubregionId": "subregion.jiangnan_rain_alley.old_bridge_lower",
+      "rewardIds": ["hint.boss.weak_point.bridge_record"],
+      "fourEyeEffects": { "dailyLife": 3, "ritualFaith": 2 }
+    },
+    {
+      "id": "quest.jiangnan_rain_alley.side.apprentice_shortcut",
+      "displayNameKey": "quest.jiangnan_rain_alley.side.apprentice_shortcut.name",
+      "tags": ["quest", "side", "apprentice"],
+      "designerNote": "帮阿青验证简化工序是否可靠，呈现年轻一代分歧。",
+      "startNpcId": "npc.apprentice_aqing",
+      "startSubregionId": "subregion.jiangnan_rain_alley.umbrella_shop",
+      "rewardIds": ["trust.apprentice_aqing", "hint.skill.umbrella.parry_counter"],
+      "fourEyeEffects": { "inheritance": 2, "market": 2 }
+    },
+    {
+      "id": "quest.jiangnan_rain_alley.side.bamboo_after_wind",
+      "displayNameKey": "quest.jiangnan_rain_alley.side.bamboo_after_wind.name",
+      "tags": ["quest", "side", "bamboo", "choice_gate"],
+      "designerNote": "回竹林找可返修竹材，开放折中补修路线。",
+      "startNpcId": "npc.zhou_bamboo",
+      "startSubregionId": "subregion.jiangnan_rain_alley.bamboo_path",
+      "rewardIds": ["trait.umbrella.repaired_rib", "choice.material_compromise"],
+      "fourEyeEffects": { "dailyLife": 2 }
+    },
+    {
+      "id": "quest.jiangnan_rain_alley.side.blue_pattern",
+      "displayNameKey": "quest.jiangnan_rain_alley.side.blue_pattern.name",
+      "tags": ["quest", "side", "visual_variant"],
+      "designerNote": "选择夜市灯伞图样与染纸方案，影响视觉变体。",
+      "startNpcId": "npc.lan_dyer_wen",
+      "startSubregionId": "subregion.jiangnan_rain_alley.dye_paper_court",
+      "rewardIds": ["asset.variant.umbrella.blue_lantern"],
+      "fourEyeEffects": { "market": 2, "ritualFaith": 2 }
+    },
+    {
+      "id": "quest.jiangnan_rain_alley.side.old_umbrella_marks",
+      "displayNameKey": "quest.jiangnan_rain_alley.side.old_umbrella_marks.name",
+      "tags": ["quest", "side", "archive_clue"],
+      "designerNote": "检查旧伞骨缝，确认无款工印线索。",
+      "startNpcId": "npc.du_repairer",
+      "startSubregionId": "subregion.jiangnan_rain_alley.old_bridge_lower",
+      "rewardIds": ["clue.unsigned_mark", "record.tiangong.old_umbrella_marks"],
+      "fourEyeEffects": { "inheritance": 2, "ritualFaith": 2 }
+    },
+    {
+      "id": "quest.jiangnan_rain_alley.side.wind_bell_tuning",
+      "displayNameKey": "quest.jiangnan_rain_alley.side.wind_bell_tuning.name",
+      "tags": ["quest", "side", "wind_bell"],
+      "designerNote": "按正确风向调整风铃，降低部分机关难度。",
+      "startNpcId": "npc.xu_lan_lantern",
+      "startSubregionId": "subregion.jiangnan_rain_alley.wind_bell_lane",
+      "rewardIds": ["shortcut.wind_bell_lane", "item.wind_bell_rivet"],
+      "fourEyeEffects": { "ritualFaith": 3 }
+    },
+    {
+      "id": "quest.jiangnan_rain_alley.side.account_correction",
+      "displayNameKey": "quest.jiangnan_rain_alley.side.account_correction.name",
+      "tags": ["quest", "side", "ledger"],
+      "designerNote": "查出订单重复记账或错排，给夜市选择增加市场回声。",
+      "startNpcId": "npc.fang_account",
+      "startSubregionId": "subregion.jiangnan_rain_alley.night_market",
+      "rewardIds": ["discount.night_market", "feedback.market_ledger_corrected"],
+      "fourEyeEffects": { "market": 2, "dailyLife": 1 }
+    },
+    {
+      "id": "quest.jiangnan_rain_alley.side.resident_patch",
+      "displayNameKey": "quest.jiangnan_rain_alley.side.resident_patch.name",
+      "tags": ["quest", "side", "resident"],
+      "designerNote": "为居民补一把日用伞，建立生活维度反馈。",
+      "startNpcId": "npc.alley_resident",
+      "startSubregionId": "subregion.jiangnan_rain_alley.main_water_lane",
+      "rewardIds": ["item.rain_patch", "feedback.resident_gratitude"],
+      "fourEyeEffects": { "dailyLife": 3 }
+    }
+  ],
+  "repeatableInteractions": [
+    {
+      "id": "repeatable.jiangnan_rain_alley.workshop_repair",
+      "displayNameKey": "repeatable.jiangnan_rain_alley.workshop_repair.name",
+      "tags": ["repeatable", "repair"],
+      "designerNote": "作坊返修，更换伞面特质或修复缺陷。",
+      "subregionId": "subregion.jiangnan_rain_alley.umbrella_shop"
+    },
+    {
+      "id": "repeatable.jiangnan_rain_alley.night_market_runner",
+      "displayNameKey": "repeatable.jiangnan_rain_alley.night_market_runner.name",
+      "tags": ["repeatable", "market"],
+      "designerNote": "夜市跑单，影响市场反馈和居民台词。",
+      "subregionId": "subregion.jiangnan_rain_alley.night_market"
+    },
+    {
+      "id": "repeatable.jiangnan_rain_alley.boat_shortcut",
+      "displayNameKey": "repeatable.jiangnan_rain_alley.boat_shortcut.name",
+      "tags": ["repeatable", "travel"],
+      "designerNote": "水路摆渡，在码头和旧桥之间快速移动。",
+      "subregionId": "subregion.jiangnan_rain_alley.water_entry"
+    },
+    {
+      "id": "repeatable.jiangnan_rain_alley.bamboo_regather",
+      "displayNameKey": "repeatable.jiangnan_rain_alley.bamboo_regather.name",
+      "tags": ["repeatable", "collect"],
+      "designerNote": "竹林补采，刷新基础材料。",
+      "subregionId": "subregion.jiangnan_rain_alley.bamboo_path"
+    },
+    {
+      "id": "repeatable.jiangnan_rain_alley.wind_bell_retune",
+      "displayNameKey": "repeatable.jiangnan_rain_alley.wind_bell_retune.name",
+      "tags": ["repeatable", "puzzle"],
+      "designerNote": "风铃复调，降低机关难度。",
+      "subregionId": "subregion.jiangnan_rain_alley.wind_bell_lane"
+    },
+    {
+      "id": "repeatable.jiangnan_rain_alley.old_bridge_replay",
+      "displayNameKey": "repeatable.jiangnan_rain_alley.old_bridge_replay.name",
+      "tags": ["repeatable", "challenge"],
+      "designerNote": "旧桥回放，Boss 归位后可重打挑战，不覆盖剧情结果。",
+      "subregionId": "subregion.jiangnan_rain_alley.old_bridge_lower"
+    }
+  ]
+}

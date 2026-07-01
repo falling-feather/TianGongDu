@@ -1,0 +1,181 @@
+{
+  "schemaVersion": 1,
+  "id": "audio_pack.jiangnan_rain_alley_m1",
+  "displayNameKey": "audio_pack.jiangnan_rain_alley_m1.name",
+  "tags": ["audio", "jiangnan", "rain_alley", "m1"],
+  "designerNote": "江南雨巷 M1 音乐、环境音和关键音效清单；音频要承担空间、机关提示和 Boss 阶段过渡。",
+  "status": "draft",
+  "sourceNote": "依据 doc/07 第 19.2 章拆解，真实音频路径待资源 manifest 接入后补充。",
+  "owner": "audio",
+  "regionId": "region.jiangnan_rain_alley",
+  "tracks": [
+    {
+      "id": "bgm.jiangnan_rain_alley.main_loop",
+      "displayNameKey": "bgm.jiangnan_rain_alley.main_loop.name",
+      "tags": ["bgm", "daily", "workshop"],
+      "designerNote": "水巷与作坊日常循环，保留温润雨声和作坊节奏。",
+      "status": "draft",
+      "type": "bgm",
+      "usageIds": ["subregion.jiangnan_rain_alley.main_water_lane", "subregion.jiangnan_rain_alley.umbrella_shop"]
+    },
+    {
+      "id": "bgm.jiangnan_rain_alley.night_market",
+      "displayNameKey": "bgm.jiangnan_rain_alley.night_market.name",
+      "tags": ["bgm", "market", "evening"],
+      "designerNote": "夜市回廊音乐，支持灯市、人潮和急单压力。",
+      "status": "draft",
+      "type": "bgm",
+      "usageIds": ["subregion.jiangnan_rain_alley.night_market"]
+    },
+    {
+      "id": "bgm.jiangnan_rain_alley.old_bridge",
+      "displayNameKey": "bgm.jiangnan_rain_alley.old_bridge.name",
+      "tags": ["bgm", "bridge", "haunting"],
+      "designerNote": "旧桥前兆音乐，强调桥洞混响和风口异常。",
+      "status": "draft",
+      "type": "bgm",
+      "usageIds": ["subregion.jiangnan_rain_alley.old_bridge_lower", "subregion.jiangnan_rain_alley.wind_bell_lane"]
+    },
+    {
+      "id": "bgm.jiangnan_rain_alley.boss",
+      "displayNameKey": "bgm.jiangnan_rain_alley.boss.name",
+      "tags": ["bgm", "boss", "restoration"],
+      "designerNote": "Boss 战音乐，支持三阶段和归位后安静层过渡。",
+      "status": "draft",
+      "type": "bgm",
+      "usageIds": ["boss.rain_alley_broken_umbrella_obsession"]
+    }
+  ],
+  "ambient": [
+    {
+      "id": "amb.rain.light",
+      "displayNameKey": "amb.rain.light.name",
+      "tags": ["ambient", "rain"],
+      "designerNote": "轻雨环境音，用于日常和低压探索。",
+      "status": "draft",
+      "type": "ambient",
+      "usageIds": ["region.jiangnan_rain_alley"]
+    },
+    {
+      "id": "amb.rain.heavy",
+      "displayNameKey": "amb.rain.heavy.name",
+      "tags": ["ambient", "rain", "boss"],
+      "designerNote": "强雨环境音，用于旧桥、断桥和 Boss 阶段。",
+      "status": "draft",
+      "type": "ambient",
+      "usageIds": ["subregion.jiangnan_rain_alley.old_bridge_lower", "subregion.jiangnan_rain_alley.rain_curtain_bridge"]
+    },
+    {
+      "id": "amb.water_lane",
+      "displayNameKey": "amb.water_lane.name",
+      "tags": ["ambient", "water", "lane"],
+      "designerNote": "水巷空间环境音，提示水路和桥洞层级。",
+      "status": "draft",
+      "type": "ambient",
+      "usageIds": ["subregion.jiangnan_rain_alley.water_entry", "subregion.jiangnan_rain_alley.main_water_lane"]
+    }
+  ],
+  "sfx": [
+    {
+      "id": "sfx.umbrella.open",
+      "displayNameKey": "sfx.umbrella.open.name",
+      "tags": ["sfx", "umbrella"],
+      "designerNote": "纸伞开伞声，服务架伞、试伞和归位。",
+      "status": "draft",
+      "type": "sfx",
+      "usageIds": ["skill.umbrella.guard", "interaction.jiangnan_rain_alley.bridge_boss_restore"]
+    },
+    {
+      "id": "sfx.umbrella.close",
+      "displayNameKey": "sfx.umbrella.close.name",
+      "tags": ["sfx", "umbrella"],
+      "designerNote": "纸伞收伞声，服务技能结束和交互确认。",
+      "status": "draft",
+      "type": "sfx",
+      "usageIds": ["pathway.paper_umbrella"]
+    },
+    {
+      "id": "sfx.umbrella.block",
+      "displayNameKey": "sfx.umbrella.block.name",
+      "tags": ["sfx", "block"],
+      "designerNote": "格挡命中声，必须清楚提示判定成功。",
+      "status": "draft",
+      "type": "sfx",
+      "usageIds": ["skill.umbrella.guard"]
+    },
+    {
+      "id": "sfx.parry.wind",
+      "displayNameKey": "sfx.parry.wind.name",
+      "tags": ["sfx", "parry", "wind"],
+      "designerNote": "弹反风声，提示风息获取和破绽窗口。",
+      "status": "draft",
+      "type": "sfx",
+      "usageIds": ["skill.umbrella.parry_counter"]
+    },
+    {
+      "id": "sfx.gather_wind",
+      "displayNameKey": "sfx.gather_wind.name",
+      "tags": ["sfx", "wind", "skill"],
+      "designerNote": "收风技能声，用于拉近、吹散雨幕和打断远程。",
+      "status": "draft",
+      "type": "sfx",
+      "usageIds": ["skill.umbrella.gather_wind"]
+    },
+    {
+      "id": "sfx.borrow_wind",
+      "displayNameKey": "sfx.borrow_wind.name",
+      "tags": ["sfx", "wind", "movement"],
+      "designerNote": "借风越行声，提示位移落点和风口成功。",
+      "status": "draft",
+      "type": "sfx",
+      "usageIds": ["skill.umbrella.borrow_wind"]
+    },
+    {
+      "id": "sfx.wind_bell.correct",
+      "displayNameKey": "sfx.wind_bell.correct.name",
+      "tags": ["sfx", "wind_bell", "puzzle"],
+      "designerNote": "风铃机关正确音，作为机关反馈和低视线提示。",
+      "status": "draft",
+      "type": "sfx",
+      "usageIds": ["interaction.jiangnan_rain_alley.wind_bell_tuning"]
+    },
+    {
+      "id": "sfx.wind_bell.wrong",
+      "displayNameKey": "sfx.wind_bell.wrong.name",
+      "tags": ["sfx", "wind_bell", "puzzle"],
+      "designerNote": "风铃机关错误音，必须短促且不惩罚过重。",
+      "status": "draft",
+      "type": "sfx",
+      "usageIds": ["trap.ringing_latch"]
+    },
+    {
+      "id": "sfx.boss.core_restore",
+      "displayNameKey": "sfx.boss.core_restore.name",
+      "tags": ["sfx", "boss", "restoration"],
+      "designerNote": "Boss 核心归位声，连接战斗结束、四维结算和雨声降噪。",
+      "status": "draft",
+      "type": "sfx",
+      "usageIds": ["interaction.jiangnan_rain_alley.bridge_boss_restore"]
+    }
+  ],
+  "mixRules": [
+    {
+      "id": "mix.jiangnan_rain_alley.daily_to_combat",
+      "displayNameKey": "mix.jiangnan_rain_alley.daily_to_combat.name",
+      "tags": ["mix", "combat"],
+      "designerNote": "日常雨声进入战斗鼓点，保留环境层不硬切。",
+      "status": "draft",
+      "from": "bgm.jiangnan_rain_alley.main_loop",
+      "to": "bgm.jiangnan_rain_alley.old_bridge"
+    },
+    {
+      "id": "mix.jiangnan_rain_alley.boss_to_restoration",
+      "displayNameKey": "mix.jiangnan_rain_alley.boss_to_restoration.name",
+      "tags": ["mix", "boss", "restoration"],
+      "designerNote": "Boss 阶段音乐进入归位安静层，雨声逐步降噪。",
+      "status": "draft",
+      "from": "bgm.jiangnan_rain_alley.boss",
+      "to": "amb.rain.light"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "world_event.rain_alley_market_choice",
+  "displayNameKey": "world_event.rain_alley_market_choice.name",
+  "tags": ["world_event", "choice", "four_eyes", "rain_alley"],
+  "designerNote": "夜市急单选择用于验证四维反馈进入 HUD 和 NPC 台词。",
+  "trigger": "player_interacts_at_umbrella_shop",
+  "choiceIds": ["choice.rush_order", "choice.full_process"],
+  "feedbackTargets": [
+    "mentor_comment",
+    "market_resident_line",
+    "restoration_visual_state"
+  ]
+}
+

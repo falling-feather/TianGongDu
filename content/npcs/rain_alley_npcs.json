@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "npc_set.rain_alley_intro",
+  "displayNameKey": "npc_set.rain_alley_intro.name",
+  "tags": ["npcs", "mentor", "paper_umbrella", "jiangnan"],
+  "designerNote": "首屏 demo 中的师傅和夜市委托入口。",
+  "npcs": [
+    {
+      "id": "npc.master_shen_yu",
+      "displayNameKey": "npc.master_shen_yu.name",
+      "roles": ["mentor", "craftsman", "witness"],
+      "trust": 1,
+      "tension": 0,
+      "teaches": ["pathway.paper_umbrella"]
+    },
+    {
+      "id": "npc.market_runner",
+      "displayNameKey": "npc.market_runner.name",
+      "roles": ["commissioner", "witness"],
+      "trust": 0,
+      "tension": 1,
+      "offersChoiceIds": ["choice.rush_order", "choice.full_process"]
+    }
+  ]
+}
+

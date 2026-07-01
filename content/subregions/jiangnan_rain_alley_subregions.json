@@ -1,0 +1,246 @@
+{
+  "schemaVersion": 1,
+  "id": "subregion_set.jiangnan_rain_alley_m1",
+  "displayNameKey": "subregion_set.jiangnan_rain_alley_m1.name",
+  "tags": ["subregions", "jiangnan", "rain_alley", "m1"],
+  "designerNote": "江南雨巷第一版投放的 11 个子地区定义；其中 7 个为 M1 核心可玩节点。",
+  "status": "mvp",
+  "sourceNote": "依据 doc/07 第 12 章拆解，文化和空间细节仍需资料复验。",
+  "owner": "planning",
+  "regionId": "region.jiangnan_rain_alley",
+  "coreSubregionIds": [
+    "subregion.jiangnan_rain_alley.water_entry",
+    "subregion.jiangnan_rain_alley.main_water_lane",
+    "subregion.jiangnan_rain_alley.umbrella_shop",
+    "subregion.jiangnan_rain_alley.bamboo_path",
+    "subregion.jiangnan_rain_alley.night_market",
+    "subregion.jiangnan_rain_alley.old_bridge_lower",
+    "subregion.jiangnan_rain_alley.rain_curtain_bridge"
+  ],
+  "subregions": [
+    {
+      "id": "subregion.jiangnan_rain_alley.water_entry",
+      "regionId": "region.jiangnan_rain_alley",
+      "displayNameKey": "subregion.jiangnan_rain_alley.water_entry.name",
+      "tags": ["subregion", "escort", "dock", "core"],
+      "designerNote": "开场护送伞骨与桐油，展示执灯基础战斗和水势信息。",
+      "status": "mvp",
+      "type": "escort",
+      "layer": "works",
+      "purpose": "开场护送、基础移动、轻战斗、工灯照形。",
+      "buildingIds": ["building.jiangnan_rain_alley.dock_shed"],
+      "npcIds": ["npc.boatman_liujiang", "npc.market_runner"],
+      "enemyIds": ["enemy.rain_wraith"],
+      "interactionIds": ["interaction.jiangnan_rain_alley.water_delivery", "interaction.jiangnan_rain_alley.boat_shortcut"],
+      "connections": [
+        { "to": "subregion.jiangnan_rain_alley.town_awning", "gate": "quest_step.jiangnan_rain_alley.arrive_by_water.complete" },
+        { "to": "subregion.jiangnan_rain_alley.main_water_lane", "gate": "none" }
+      ],
+      "productionRole": "core"
+    },
+    {
+      "id": "subregion.jiangnan_rain_alley.town_awning",
+      "regionId": "region.jiangnan_rain_alley",
+      "displayNameKey": "subregion.jiangnan_rain_alley.town_awning.name",
+      "tags": ["subregion", "dialogue", "market"],
+      "designerNote": "镇口低压对话节点，承接茶棚、验货桌和第一轮任务分派。",
+      "status": "draft",
+      "type": "hub",
+      "layer": "market",
+      "purpose": "对话、交付材料、居民和行会信息聚合。",
+      "buildingIds": ["building.jiangnan_rain_alley.tea_awning"],
+      "npcIds": ["npc.market_runner", "npc.alley_resident"],
+      "enemyIds": ["enemy.rain_wraith"],
+      "interactionIds": ["interaction.jiangnan_rain_alley.check_delivery"],
+      "connections": [
+        { "to": "subregion.jiangnan_rain_alley.water_entry", "gate": "none" },
+        { "to": "subregion.jiangnan_rain_alley.main_water_lane", "gate": "none" }
+      ],
+      "productionRole": "mergeable"
+    },
+    {
+      "id": "subregion.jiangnan_rain_alley.main_water_lane",
+      "regionId": "region.jiangnan_rain_alley",
+      "displayNameKey": "subregion.jiangnan_rain_alley.main_water_lane.name",
+      "tags": ["subregion", "street", "navigation", "core"],
+      "designerNote": "主干街巷，连接市井节点并展示可见不可达的回访奖励。",
+      "status": "mvp",
+      "type": "hub",
+      "layer": "market",
+      "purpose": "主干导航、轻敌巡游、居民反馈、桥下和屋檐回访暗示。",
+      "buildingIds": ["building.jiangnan_rain_alley.tea_awning"],
+      "npcIds": ["npc.alley_resident", "npc.fang_account"],
+      "enemyIds": ["enemy.broken_umbrella_shadow"],
+      "interactionIds": ["interaction.jiangnan_rain_alley.resident_patch", "interaction.jiangnan_rain_alley.inspect_unsigned_mark"],
+      "connections": [
+        { "to": "subregion.jiangnan_rain_alley.umbrella_shop", "gate": "none" },
+        { "to": "subregion.jiangnan_rain_alley.night_market", "gate": "time.evening" },
+        { "to": "subregion.jiangnan_rain_alley.roof_route", "gate": "skill.umbrella.borrow_wind" },
+        { "to": "subregion.jiangnan_rain_alley.old_bridge_lower", "gate": "none" }
+      ],
+      "productionRole": "core"
+    },
+    {
+      "id": "subregion.jiangnan_rain_alley.umbrella_shop",
+      "regionId": "region.jiangnan_rain_alley",
+      "displayNameKey": "subregion.jiangnan_rain_alley.umbrella_shop.name",
+      "tags": ["subregion", "workshop", "paper_umbrella", "core"],
+      "designerNote": "江南师承据点，负责架伞教学、工序演示、返修和技能解锁。",
+      "status": "mvp",
+      "type": "hub",
+      "layer": "works",
+      "purpose": "师承、工艺、器具特质、试伞和返修。",
+      "buildingIds": ["building.jiangnan_rain_alley.umbrella_shop"],
+      "npcIds": ["npc.master_shen_yu", "npc.apprentice_aqing", "npc.ye_hao", "npc.qiao_thread"],
+      "enemyIds": ["enemy.broken_umbrella_shadow"],
+      "interactionIds": ["interaction.jiangnan_rain_alley.learn_guard", "interaction.jiangnan_rain_alley.craft_paper_oil"],
+      "connections": [
+        { "to": "subregion.jiangnan_rain_alley.main_water_lane", "gate": "none" },
+        { "to": "subregion.jiangnan_rain_alley.bamboo_path", "gate": "quest_step.jiangnan_rain_alley.learn_guard.complete" },
+        { "to": "subregion.jiangnan_rain_alley.dye_paper_court", "gate": "quest_step.jiangnan_rain_alley.choose_bamboo.complete" }
+      ],
+      "productionRole": "core"
+    },
+    {
+      "id": "subregion.jiangnan_rain_alley.bamboo_path",
+      "regionId": "region.jiangnan_rain_alley",
+      "displayNameKey": "subregion.jiangnan_rain_alley.bamboo_path.name",
+      "tags": ["subregion", "collect", "bamboo", "core"],
+      "designerNote": "材料采集支路，让竹材质量影响格挡消耗、师傅评价和折中结局。",
+      "status": "mvp",
+      "type": "collect",
+      "layer": "works",
+      "purpose": "采集、观察竹节、风口地形和伏击战。",
+      "buildingIds": ["building.jiangnan_rain_alley.bamboo_store"],
+      "npcIds": ["npc.zhou_bamboo"],
+      "enemyIds": ["enemy.bamboo_husk"],
+      "interactionIds": ["interaction.jiangnan_rain_alley.collect_bamboo", "interaction.jiangnan_rain_alley.bamboo_after_wind"],
+      "connections": [
+        { "to": "subregion.jiangnan_rain_alley.umbrella_shop", "gate": "none" },
+        { "to": "subregion.jiangnan_rain_alley.dye_paper_court", "gate": "item.bamboo" }
+      ],
+      "productionRole": "core"
+    },
+    {
+      "id": "subregion.jiangnan_rain_alley.dye_paper_court",
+      "regionId": "region.jiangnan_rain_alley",
+      "displayNameKey": "subregion.jiangnan_rain_alley.dye_paper_court.name",
+      "tags": ["subregion", "craft", "paper", "whitebox"],
+      "designerNote": "伞面、蓝染和湿滞抗性的工艺节点，先做白盒数据和资源预留。",
+      "status": "draft",
+      "type": "craft",
+      "layer": "works",
+      "purpose": "糊纸、上油、伞面视觉变体和湿滞抗性。",
+      "buildingIds": ["building.jiangnan_rain_alley.dye_court"],
+      "npcIds": ["npc.tang_oilpaper", "npc.lan_dyer_wen"],
+      "enemyIds": ["enemy.rain_mildew_walker"],
+      "interactionIds": ["interaction.jiangnan_rain_alley.craft_paper_oil", "interaction.jiangnan_rain_alley.blue_pattern"],
+      "connections": [
+        { "to": "subregion.jiangnan_rain_alley.umbrella_shop", "gate": "none" },
+        { "to": "subregion.jiangnan_rain_alley.wind_bell_lane", "gate": "trait.umbrella.wind_hungry_surface" }
+      ],
+      "productionRole": "whitebox"
+    },
+    {
+      "id": "subregion.jiangnan_rain_alley.wind_bell_lane",
+      "regionId": "region.jiangnan_rain_alley",
+      "displayNameKey": "subregion.jiangnan_rain_alley.wind_bell_lane.name",
+      "tags": ["subregion", "wind", "puzzle", "whitebox"],
+      "designerNote": "用风铃和收风验证音色机关，并解释旧桥雨幕异常。",
+      "status": "draft",
+      "type": "puzzle",
+      "layer": "works",
+      "purpose": "收风、吹散雨幕、音色机关和断桥入口前置。",
+      "buildingIds": ["building.jiangnan_rain_alley.wind_bell_shrine"],
+      "npcIds": ["npc.xu_lan_lantern", "npc.mei_bridge_keeper"],
+      "enemyIds": ["enemy.wind_echo"],
+      "interactionIds": ["interaction.jiangnan_rain_alley.wind_bell_tuning"],
+      "connections": [
+        { "to": "subregion.jiangnan_rain_alley.old_bridge_lower", "gate": "item.wind_bell_rivet" },
+        { "to": "subregion.jiangnan_rain_alley.roof_route", "gate": "skill.umbrella.borrow_wind" }
+      ],
+      "productionRole": "whitebox"
+    },
+    {
+      "id": "subregion.jiangnan_rain_alley.night_market",
+      "regionId": "region.jiangnan_rain_alley",
+      "displayNameKey": "subregion.jiangnan_rain_alley.night_market.name",
+      "tags": ["subregion", "choice", "market", "core"],
+      "designerNote": "夜市急单与完整工序发生冲突，承接四维选择和后续反馈。",
+      "status": "mvp",
+      "type": "hub",
+      "layer": "market",
+      "purpose": "三选一四维选择、跑单支线、账棚纠偏和居民台词回声。",
+      "buildingIds": ["building.jiangnan_rain_alley.market_ledger"],
+      "npcIds": ["npc.market_runner", "npc.fang_account", "npc.lan_dyer_wen", "npc.xu_lan_lantern"],
+      "enemyIds": ["enemy.rain_tax_collector"],
+      "interactionIds": ["interaction.jiangnan_rain_alley.market_choice", "interaction.jiangnan_rain_alley.account_correction"],
+      "connections": [
+        { "to": "subregion.jiangnan_rain_alley.main_water_lane", "gate": "none" },
+        { "to": "subregion.jiangnan_rain_alley.old_bridge_lower", "gate": "choice.any_market_decision" }
+      ],
+      "productionRole": "core"
+    },
+    {
+      "id": "subregion.jiangnan_rain_alley.old_bridge_lower",
+      "regionId": "region.jiangnan_rain_alley",
+      "displayNameKey": "subregion.jiangnan_rain_alley.old_bridge_lower.name",
+      "tags": ["subregion", "combat", "bridge", "core"],
+      "designerNote": "精英战和风口预热节点，检验弹反、收风、伞旋和借风资源循环。",
+      "status": "mvp",
+      "type": "combat",
+      "layer": "haunting",
+      "purpose": "旧桥巡检、精英战、Boss 弱点前置和检查点。",
+      "buildingIds": ["building.jiangnan_rain_alley.old_bridge_shed"],
+      "npcIds": ["npc.mei_bridge_keeper", "npc.du_repairer"],
+      "enemyIds": ["enemy.bridge_stalker", "enemy.broken_bone_umbrella_spirit"],
+      "interactionIds": ["interaction.jiangnan_rain_alley.old_bridge_trial", "interaction.jiangnan_rain_alley.bridge_debt"],
+      "connections": [
+        { "to": "subregion.jiangnan_rain_alley.main_water_lane", "gate": "none" },
+        { "to": "subregion.jiangnan_rain_alley.roof_route", "gate": "skill.umbrella.borrow_wind" },
+        { "to": "subregion.jiangnan_rain_alley.rain_curtain_bridge", "gate": "item.wind_bell_rivet" }
+      ],
+      "productionRole": "core"
+    },
+    {
+      "id": "subregion.jiangnan_rain_alley.roof_route",
+      "regionId": "region.jiangnan_rain_alley",
+      "displayNameKey": "subregion.jiangnan_rain_alley.roof_route.name",
+      "tags": ["subregion", "return_route", "roof", "borrow_wind"],
+      "designerNote": "借风越行后的回访路线，用高处视角验证空间层级和隐藏材料。",
+      "status": "mvp",
+      "type": "return_route",
+      "layer": "return",
+      "purpose": "借风越行、隐藏材料、风铃铆和上层视角。",
+      "buildingIds": ["building.jiangnan_rain_alley.roof_store"],
+      "npcIds": ["npc.apprentice_aqing"],
+      "enemyIds": ["enemy.broken_umbrella_shadow"],
+      "interactionIds": ["interaction.jiangnan_rain_alley.find_rivet"],
+      "connections": [
+        { "to": "subregion.jiangnan_rain_alley.main_water_lane", "gate": "skill.umbrella.borrow_wind" },
+        { "to": "subregion.jiangnan_rain_alley.old_bridge_lower", "gate": "skill.umbrella.borrow_wind" }
+      ],
+      "productionRole": "return"
+    },
+    {
+      "id": "subregion.jiangnan_rain_alley.rain_curtain_bridge",
+      "regionId": "region.jiangnan_rain_alley",
+      "displayNameKey": "subregion.jiangnan_rain_alley.rain_curtain_bridge.name",
+      "tags": ["subregion", "boss", "restoration", "core"],
+      "designerNote": "江南雨巷第一版投放终局，Boss 三阶段后进入归位和四维结算。",
+      "status": "mvp",
+      "type": "boss",
+      "layer": "haunting",
+      "purpose": "Boss 三阶段、雨幕机关、归位交互和地区回声。",
+      "buildingIds": ["building.jiangnan_rain_alley.record_table"],
+      "npcIds": ["npc.master_shen_yu", "npc.xu_lan_lantern", "npc.mei_bridge_keeper", "npc.yao_archivist"],
+      "enemyIds": ["boss.rain_alley_broken_umbrella_obsession", "enemy.broken_umbrella_shadow"],
+      "interactionIds": ["interaction.jiangnan_rain_alley.bridge_boss_restore", "interaction.jiangnan_rain_alley.record_tiangong"],
+      "connections": [
+        { "to": "subregion.jiangnan_rain_alley.old_bridge_lower", "gate": "checkpoint.old_bridge" },
+        { "to": "subregion.jiangnan_rain_alley.umbrella_shop", "gate": "boss.rain_alley_broken_umbrella_obsession.restored" }
+      ],
+      "productionRole": "core"
+    }
+  ]
+}

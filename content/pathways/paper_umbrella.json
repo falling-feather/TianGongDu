@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "id": "pathway.paper_umbrella",
+  "displayNameKey": "pathway.paper_umbrella.name",
+  "tags": ["pathway", "umbrella", "guard", "wind", "starter"],
+  "designerNote": "纸伞门径把执灯训练中的格挡、定印和身法转译为架伞、弹反、收风与借风越行。",
+  "baseStance": "guard_counter",
+  "combatRole": "defensive_control",
+  "traversalRole": "short_wind_crossing",
+  "resourceModel": {
+    "id": "windBreath",
+    "displayNameKey": "resource.wind_breath.name",
+    "min": 0,
+    "max": 100,
+    "gainRules": [
+      { "trigger": "block", "amount": 4 },
+      { "trigger": "perfect_block", "amount": 10 },
+      { "trigger": "parry", "amount": 18 },
+      { "trigger": "wind_vent_step", "amount": 6 }
+    ]
+  },
+  "coreActions": [
+    "skill.umbrella.guard",
+    "skill.umbrella.gather_wind",
+    "skill.umbrella.borrow_wind"
+  ],
+  "mentorNpcIds": ["npc.master_shen_yu"]
+}
+

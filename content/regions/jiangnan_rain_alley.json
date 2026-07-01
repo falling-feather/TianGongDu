@@ -1,0 +1,127 @@
+{
+  "schemaVersion": 1,
+  "id": "region.jiangnan_rain_alley",
+  "displayNameKey": "region.jiangnan_rain_alley.name",
+  "tags": ["region", "jiangnan", "rain", "paper_umbrella", "vertical_slice", "m1"],
+  "designerNote": "江南雨巷第一版投放地区入口：索引子地区、主线、NPC、敌人、Boss、建筑交互与资源包。",
+  "status": "mvp",
+  "sourceNote": "依据 doc/07_江南雨巷纵切规格.md 拆解；正式文化资料仍需按 doc/08 二次核验。",
+  "owner": "planning",
+  "chapter": "江南雨巷",
+  "recommendedDurationMinutes": [45, 60],
+  "entrySubregionId": "subregion.jiangnan_rain_alley.water_entry",
+  "subregionIds": [
+    "subregion.jiangnan_rain_alley.water_entry",
+    "subregion.jiangnan_rain_alley.town_awning",
+    "subregion.jiangnan_rain_alley.main_water_lane",
+    "subregion.jiangnan_rain_alley.umbrella_shop",
+    "subregion.jiangnan_rain_alley.bamboo_path",
+    "subregion.jiangnan_rain_alley.dye_paper_court",
+    "subregion.jiangnan_rain_alley.wind_bell_lane",
+    "subregion.jiangnan_rain_alley.night_market",
+    "subregion.jiangnan_rain_alley.old_bridge_lower",
+    "subregion.jiangnan_rain_alley.roof_route",
+    "subregion.jiangnan_rain_alley.rain_curtain_bridge"
+  ],
+  "coreSubregionIds": [
+    "subregion.jiangnan_rain_alley.water_entry",
+    "subregion.jiangnan_rain_alley.main_water_lane",
+    "subregion.jiangnan_rain_alley.umbrella_shop",
+    "subregion.jiangnan_rain_alley.bamboo_path",
+    "subregion.jiangnan_rain_alley.night_market",
+    "subregion.jiangnan_rain_alley.old_bridge_lower",
+    "subregion.jiangnan_rain_alley.rain_curtain_bridge"
+  ],
+  "questIds": [
+    "quest.jiangnan_rain_alley.mainline",
+    "quest.jiangnan_rain_alley.side.bridge_debt",
+    "quest.jiangnan_rain_alley.side.apprentice_shortcut",
+    "quest.jiangnan_rain_alley.side.bamboo_after_wind",
+    "quest.jiangnan_rain_alley.side.blue_pattern",
+    "quest.jiangnan_rain_alley.side.old_umbrella_marks",
+    "quest.jiangnan_rain_alley.side.wind_bell_tuning",
+    "quest.jiangnan_rain_alley.side.account_correction",
+    "quest.jiangnan_rain_alley.side.resident_patch"
+  ],
+  "npcIds": [
+    "npc.master_shen_yu",
+    "npc.market_runner",
+    "npc.alley_resident",
+    "npc.boatman_liujiang",
+    "npc.zhou_bamboo",
+    "npc.tang_oilpaper",
+    "npc.lan_dyer_wen",
+    "npc.apprentice_aqing",
+    "npc.ye_hao",
+    "npc.mei_bridge_keeper",
+    "npc.xu_lan_lantern",
+    "npc.fang_account",
+    "npc.du_repairer",
+    "npc.qiao_thread",
+    "npc.yao_archivist"
+  ],
+  "enemySetIds": ["enemy_set.rain_alley_intro", "enemy_set.jiangnan_rain_alley_m1"],
+  "bossIds": ["boss.rain_alley_broken_umbrella_obsession"],
+  "buildingSetIds": ["building_set.jiangnan_rain_alley_m1"],
+  "interactionSetIds": ["interaction_set.jiangnan_rain_alley_m1"],
+  "assetPackIds": ["asset_pack.jiangnan_rain_alley_m1"],
+  "audioPackIds": ["audio_pack.jiangnan_rain_alley_m1"],
+  "worldEventIds": ["world_event.rain_alley_market_choice"],
+  "pathwayIds": ["pathway.paper_umbrella"],
+  "nodes": [
+    {
+      "id": "node.water_entry",
+      "type": "escort",
+      "displayNameKey": "node.water_entry.name",
+      "purpose": "护送伞骨与桐油，展示执灯基础战斗。"
+    },
+    {
+      "id": "node.umbrella_shop",
+      "type": "hub",
+      "displayNameKey": "node.umbrella_shop.name",
+      "purpose": "师傅 NPC、工艺链、纸伞门径解锁。"
+    },
+    {
+      "id": "node.old_bridge",
+      "type": "combat",
+      "displayNameKey": "node.old_bridge.name",
+      "purpose": "检验格挡、弹反、收风和借风越行。"
+    }
+  ],
+  "fourEyes": {
+    "inheritance": 52,
+    "market": 45,
+    "dailyLife": 60,
+    "ritualFaith": 54
+  },
+  "availableChoices": [
+    {
+      "id": "choice.rush_order",
+      "displayNameKey": "choice.rush_order.name",
+      "effects": {
+        "market": 15,
+        "inheritance": -10,
+        "ritualFaith": -5
+      }
+    },
+    {
+      "id": "choice.full_process",
+      "displayNameKey": "choice.full_process.name",
+      "effects": {
+        "inheritance": 15,
+        "ritualFaith": 10,
+        "market": -5
+      }
+    },
+    {
+      "id": "choice.material_compromise",
+      "displayNameKey": "choice.material_compromise.name",
+      "effects": {
+        "inheritance": 5,
+        "market": 5,
+        "dailyLife": 5
+      },
+      "requiresQuestId": "quest.jiangnan_rain_alley.side.bamboo_after_wind"
+    }
+  ]
+}

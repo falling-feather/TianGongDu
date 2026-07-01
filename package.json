@@ -1,0 +1,11 @@
+{
+  "name": "heavenwrights",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node tools/dev-server.mjs --root prototype/web-demo --host 127.0.0.1 --port 4174",
+    "test": "node --test",
+    "validate:content": "python tools/python/content_validate.py"
+  }
+}

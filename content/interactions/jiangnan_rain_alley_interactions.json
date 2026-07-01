@@ -1,0 +1,305 @@
+{
+  "schemaVersion": 1,
+  "id": "interaction_set.jiangnan_rain_alley_m1",
+  "displayNameKey": "interaction_set.jiangnan_rain_alley_m1.name",
+  "tags": ["interactions", "jiangnan", "rain_alley", "m1"],
+  "designerNote": "江南雨巷 M1 交互集合；触发、效果和反馈目标分离，供原型和未来 Runtime 复用。",
+  "status": "mvp",
+  "sourceNote": "依据 doc/07 第 17-18 章拆解。",
+  "owner": "program",
+  "regionId": "region.jiangnan_rain_alley",
+  "interactionTypes": ["dialogue", "craft", "collect", "choice", "combat_start", "restoration", "travel", "inspect"],
+  "interactions": [
+    {
+      "id": "interaction.jiangnan_rain_alley.water_delivery",
+      "displayNameKey": "interaction.jiangnan_rain_alley.water_delivery.name",
+      "tags": ["interaction", "dialogue", "delivery"],
+      "designerNote": "水路交付伞骨与桐油，完成开场护送。",
+      "status": "mvp",
+      "type": "dialogue",
+      "trigger": "player_interacts_at_dock_shed",
+      "ownerNpcId": "npc.boatman_liujiang",
+      "targetBuildingId": "building.jiangnan_rain_alley.dock_shed",
+      "questStepId": "quest_step.jiangnan_rain_alley.arrive_by_water",
+      "effects": {
+        "setFlags": ["delivery.umbrella_ribs.arrived"],
+        "unlockIds": ["subregion.jiangnan_rain_alley.town_awning"]
+      }
+    },
+    {
+      "id": "interaction.jiangnan_rain_alley.check_delivery",
+      "displayNameKey": "interaction.jiangnan_rain_alley.check_delivery.name",
+      "tags": ["interaction", "dialogue", "check"],
+      "designerNote": "镇口验货和第一轮任务分派，不能丢失主线目标。",
+      "status": "draft",
+      "type": "dialogue",
+      "trigger": "player_interacts_at_town_awning",
+      "ownerNpcId": "npc.market_runner",
+      "targetBuildingId": "building.jiangnan_rain_alley.tea_awning",
+      "questStepId": "quest_step.jiangnan_rain_alley.check_delivery",
+      "effects": {
+        "setFlags": ["npc.market_runner.met", "npc.master_shen_yu.met"],
+        "unlockIds": ["subregion.jiangnan_rain_alley.umbrella_shop"]
+      }
+    },
+    {
+      "id": "interaction.jiangnan_rain_alley.learn_guard",
+      "displayNameKey": "interaction.jiangnan_rain_alley.learn_guard.name",
+      "tags": ["interaction", "dialogue", "tutorial", "skill"],
+      "designerNote": "沈雨教授架伞，把执灯训练转为纸伞门径。",
+      "status": "mvp",
+      "type": "dialogue",
+      "trigger": "player_interacts_at_umbrella_shop",
+      "ownerNpcId": "npc.master_shen_yu",
+      "targetBuildingId": "building.jiangnan_rain_alley.umbrella_shop",
+      "questStepId": "quest_step.jiangnan_rain_alley.learn_guard",
+      "effects": {
+        "grantSkillIds": ["skill.umbrella.guard"],
+        "feedbackTargets": ["mentor_comment", "tutorial_hud"]
+      }
+    },
+    {
+      "id": "interaction.jiangnan_rain_alley.collect_bamboo",
+      "displayNameKey": "interaction.jiangnan_rain_alley.collect_bamboo.name",
+      "tags": ["interaction", "collect", "bamboo"],
+      "designerNote": "竹林选材，材料质量影响伞骨稳定和师傅评价。",
+      "status": "mvp",
+      "type": "collect",
+      "trigger": "player_inspects_bamboo_store",
+      "ownerNpcId": "npc.zhou_bamboo",
+      "targetBuildingId": "building.jiangnan_rain_alley.bamboo_store",
+      "questStepId": "quest_step.jiangnan_rain_alley.choose_bamboo",
+      "choiceIds": ["material.old_bamboo", "material.quick_dry_bamboo", "material.repaired_wind_bamboo"],
+      "effects": {
+        "grantItemIds": ["item.bamboo"],
+        "candidateTraitIds": ["trait.umbrella.even_bamboo_frame", "trait.umbrella.quick_frame", "trait.umbrella.repaired_rib"]
+      }
+    },
+    {
+      "id": "interaction.jiangnan_rain_alley.craft_paper_oil",
+      "displayNameKey": "interaction.jiangnan_rain_alley.craft_paper_oil.name",
+      "tags": ["interaction", "craft", "paper", "oil"],
+      "designerNote": "糊纸和上油工序，失败生成缺陷或返修，不直接卡死。",
+      "status": "mvp",
+      "type": "craft",
+      "trigger": "player_uses_craft_table",
+      "ownerNpcId": "npc.tang_oilpaper",
+      "targetBuildingId": "building.jiangnan_rain_alley.dye_court",
+      "questStepId": "quest_step.jiangnan_rain_alley.paper_and_oil",
+      "requiredItemIds": ["item.bamboo", "item.rain_paper", "item.tung_oil"],
+      "effects": {
+        "candidateTraitIds": ["trait.umbrella.wind_hungry_surface", "trait.umbrella.stable_blue_dye", "trait.umbrella.loose_thread"],
+        "feedbackTargets": ["craft_result_toast", "mentor_comment", "umbrella_visual_variant"]
+      }
+    },
+    {
+      "id": "interaction.jiangnan_rain_alley.market_choice",
+      "displayNameKey": "interaction.jiangnan_rain_alley.market_choice.name",
+      "tags": ["interaction", "choice", "four_eyes"],
+      "designerNote": "夜市急单与完整工序选择；至少影响师傅评价、居民台词和归位视觉。",
+      "status": "mvp",
+      "type": "choice",
+      "trigger": "player_interacts_at_night_market",
+      "ownerNpcId": "npc.market_runner",
+      "targetBuildingId": "building.jiangnan_rain_alley.market_ledger",
+      "questStepId": "quest_step.jiangnan_rain_alley.market_decision",
+      "choiceIds": ["choice.rush_order", "choice.full_process", "choice.material_compromise"],
+      "effects": {
+        "feedbackTargets": ["mentor_comment", "market_resident_line", "restoration_visual_state"],
+        "fourEyeDeltasByChoice": {
+          "choice.rush_order": { "market": 15, "inheritance": -10, "ritualFaith": -5 },
+          "choice.full_process": { "inheritance": 15, "ritualFaith": 10, "market": -5 },
+          "choice.material_compromise": { "market": 5, "inheritance": 5, "dailyLife": 5 }
+        }
+      }
+    },
+    {
+      "id": "interaction.jiangnan_rain_alley.find_rivet",
+      "displayNameKey": "interaction.jiangnan_rain_alley.find_rivet.name",
+      "tags": ["interaction", "collect", "return_route"],
+      "designerNote": "屋檐上层取得风铃铆，打开断桥雨幕。",
+      "status": "mvp",
+      "type": "collect",
+      "trigger": "player_reaches_roof_store",
+      "targetBuildingId": "building.jiangnan_rain_alley.roof_store",
+      "questStepId": "quest_step.jiangnan_rain_alley.find_rivet",
+      "requiredSkillIds": ["skill.umbrella.borrow_wind"],
+      "effects": {
+        "grantItemIds": ["item.wind_bell_rivet"],
+        "unlockIds": ["subregion.jiangnan_rain_alley.rain_curtain_bridge"]
+      }
+    },
+    {
+      "id": "interaction.jiangnan_rain_alley.old_bridge_trial",
+      "displayNameKey": "interaction.jiangnan_rain_alley.old_bridge_trial.name",
+      "tags": ["interaction", "combat_start", "elite"],
+      "designerNote": "旧桥精英战触发，触发前必须给玩家准备空间。",
+      "status": "mvp",
+      "type": "combat_start",
+      "trigger": "player_enters_old_bridge_lower",
+      "targetBuildingId": "building.jiangnan_rain_alley.old_bridge_shed",
+      "questStepId": "quest_step.jiangnan_rain_alley.old_bridge_trial",
+      "enemyIds": ["enemy.bridge_stalker", "enemy.broken_bone_umbrella_spirit"],
+      "effects": {
+        "checkpointId": "checkpoint.old_bridge",
+        "grantSkillIds": ["skill.umbrella.borrow_wind.stabilized"]
+      }
+    },
+    {
+      "id": "interaction.jiangnan_rain_alley.bridge_boss_restore",
+      "displayNameKey": "interaction.jiangnan_rain_alley.bridge_boss_restore.name",
+      "tags": ["interaction", "restoration", "boss"],
+      "designerNote": "Boss 战后归位交互，玩家选择安放旧伞骨或补修方式。",
+      "status": "mvp",
+      "type": "restoration",
+      "trigger": "boss_disorder_reaches_zero",
+      "targetBuildingId": "building.jiangnan_rain_alley.record_table",
+      "questStepId": "quest_step.jiangnan_rain_alley.boss_restoration",
+      "bossId": "boss.rain_alley_broken_umbrella_obsession",
+      "choiceIds": ["choice.rush_order", "choice.full_process", "choice.material_compromise"],
+      "effects": {
+        "setFlags": ["boss.rain_alley_broken_umbrella_obsession.restored"],
+        "feedbackTargets": ["restoration_visual_state", "mentor_comment", "market_resident_line"]
+      }
+    },
+    {
+      "id": "interaction.jiangnan_rain_alley.boat_shortcut",
+      "displayNameKey": "interaction.jiangnan_rain_alley.boat_shortcut.name",
+      "tags": ["interaction", "travel", "boat"],
+      "designerNote": "回访后开放的水路快速移动。",
+      "status": "draft",
+      "type": "travel",
+      "trigger": "player_interacts_at_dock_shed_after_return",
+      "ownerNpcId": "npc.boatman_liujiang",
+      "targetBuildingId": "building.jiangnan_rain_alley.dock_shed",
+      "effects": {
+        "travelTargets": ["subregion.jiangnan_rain_alley.old_bridge_lower", "subregion.jiangnan_rain_alley.main_water_lane"]
+      }
+    },
+    {
+      "id": "interaction.jiangnan_rain_alley.inspect_unsigned_mark",
+      "displayNameKey": "interaction.jiangnan_rain_alley.inspect_unsigned_mark.name",
+      "tags": ["interaction", "inspect", "archive_clue"],
+      "designerNote": "工灯照形，给出无款工印线索和天工录暗线。",
+      "status": "draft",
+      "type": "inspect",
+      "trigger": "player_uses_lamp_on_old_umbrella_mark",
+      "ownerNpcId": "npc.du_repairer",
+      "targetBuildingId": "building.jiangnan_rain_alley.old_bridge_shed",
+      "effects": {
+        "setFlags": ["clue.unsigned_mark"],
+        "feedbackTargets": ["tiangong_record_hint"]
+      }
+    },
+    {
+      "id": "interaction.jiangnan_rain_alley.bridge_debt",
+      "displayNameKey": "interaction.jiangnan_rain_alley.bridge_debt.name",
+      "tags": ["interaction", "dialogue", "side_quest"],
+      "designerNote": "梅守桥支线入口，查询旧桥修补记录。",
+      "status": "draft",
+      "type": "dialogue",
+      "trigger": "player_talks_to_bridge_keeper",
+      "ownerNpcId": "npc.mei_bridge_keeper",
+      "targetBuildingId": "building.jiangnan_rain_alley.old_bridge_shed",
+      "questId": "quest.jiangnan_rain_alley.side.bridge_debt",
+      "effects": {
+        "grantHintIds": ["hint.boss.weak_point.bridge_record"]
+      }
+    },
+    {
+      "id": "interaction.jiangnan_rain_alley.bamboo_after_wind",
+      "displayNameKey": "interaction.jiangnan_rain_alley.bamboo_after_wind.name",
+      "tags": ["interaction", "collect", "side_quest"],
+      "designerNote": "风折竹支线入口，开放折中补修选择。",
+      "status": "mvp",
+      "type": "collect",
+      "trigger": "player_revisits_bamboo_path_after_borrow_wind",
+      "ownerNpcId": "npc.zhou_bamboo",
+      "targetBuildingId": "building.jiangnan_rain_alley.bamboo_store",
+      "questId": "quest.jiangnan_rain_alley.side.bamboo_after_wind",
+      "requiredSkillIds": ["skill.umbrella.borrow_wind"],
+      "effects": {
+        "grantTraitIds": ["trait.umbrella.repaired_rib"],
+        "unlockIds": ["choice.material_compromise"]
+      }
+    },
+    {
+      "id": "interaction.jiangnan_rain_alley.blue_pattern",
+      "displayNameKey": "interaction.jiangnan_rain_alley.blue_pattern.name",
+      "tags": ["interaction", "craft", "visual_variant"],
+      "designerNote": "灯伞花色支线入口，影响夜市和伞面视觉。",
+      "status": "draft",
+      "type": "craft",
+      "trigger": "player_talks_to_dyer",
+      "ownerNpcId": "npc.lan_dyer_wen",
+      "targetBuildingId": "building.jiangnan_rain_alley.dye_court",
+      "questId": "quest.jiangnan_rain_alley.side.blue_pattern",
+      "effects": {
+        "grantAssetVariantIds": ["asset.variant.umbrella.blue_lantern"],
+        "feedbackTargets": ["umbrella_visual_variant", "night_market_display"]
+      }
+    },
+    {
+      "id": "interaction.jiangnan_rain_alley.wind_bell_tuning",
+      "displayNameKey": "interaction.jiangnan_rain_alley.wind_bell_tuning.name",
+      "tags": ["interaction", "inspect", "puzzle"],
+      "designerNote": "风铃校频支线入口，连接音频提示和机关难度。",
+      "status": "draft",
+      "type": "inspect",
+      "trigger": "player_interacts_with_wind_bell_shrine",
+      "ownerNpcId": "npc.xu_lan_lantern",
+      "targetBuildingId": "building.jiangnan_rain_alley.wind_bell_shrine",
+      "questId": "quest.jiangnan_rain_alley.side.wind_bell_tuning",
+      "effects": {
+        "grantItemIds": ["item.wind_bell_rivet"],
+        "setFlags": ["shortcut.wind_bell_lane"]
+      }
+    },
+    {
+      "id": "interaction.jiangnan_rain_alley.account_correction",
+      "displayNameKey": "interaction.jiangnan_rain_alley.account_correction.name",
+      "tags": ["interaction", "dialogue", "ledger"],
+      "designerNote": "账页纠偏支线入口，改变夜市市场反馈。",
+      "status": "draft",
+      "type": "dialogue",
+      "trigger": "player_checks_market_ledger",
+      "ownerNpcId": "npc.fang_account",
+      "targetBuildingId": "building.jiangnan_rain_alley.market_ledger",
+      "questId": "quest.jiangnan_rain_alley.side.account_correction",
+      "effects": {
+        "setFlags": ["feedback.market_ledger_corrected"]
+      }
+    },
+    {
+      "id": "interaction.jiangnan_rain_alley.resident_patch",
+      "displayNameKey": "interaction.jiangnan_rain_alley.resident_patch.name",
+      "tags": ["interaction", "craft", "resident"],
+      "designerNote": "阿棠补伞支线入口，建立生活维度反馈。",
+      "status": "draft",
+      "type": "craft",
+      "trigger": "player_repairs_resident_umbrella",
+      "ownerNpcId": "npc.alley_resident",
+      "questId": "quest.jiangnan_rain_alley.side.resident_patch",
+      "requiredItemIds": ["item.rain_patch"],
+      "effects": {
+        "feedbackTargets": ["resident_gratitude", "daily_life_score"]
+      }
+    },
+    {
+      "id": "interaction.jiangnan_rain_alley.record_tiangong",
+      "displayNameKey": "interaction.jiangnan_rain_alley.record_tiangong.name",
+      "tags": ["interaction", "dialogue", "record"],
+      "designerNote": "战后落款，记录地区、工序、选择、Boss 和工印线索。",
+      "status": "mvp",
+      "type": "dialogue",
+      "trigger": "player_interacts_after_boss_restoration",
+      "ownerNpcId": "npc.yao_archivist",
+      "targetBuildingId": "building.jiangnan_rain_alley.record_table",
+      "questStepId": "quest_step.jiangnan_rain_alley.record_in_tiangong",
+      "effects": {
+        "setFlags": ["record.tiangong.logged", "region.jiangnan_rain_alley.completed"],
+        "feedbackTargets": ["tiangong_record", "next_region_clue"]
+      }
+    }
+  ]
+}

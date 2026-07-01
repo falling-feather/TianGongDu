@@ -1,0 +1,27 @@
+# Dependencies and package managers
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+out/
+coverage/
+
+# Local runtime artifacts
+.cache/
+.tmp/
+*.log
+*.trace
+
+# OS / editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Native build folders
+CMakeFiles/
+CMakeCache.txt
+cmake-build-*/
+

@@ -8,6 +8,8 @@ for (let i = 2; i < process.argv.length; i += 2) {
 }
 
 const root = resolve(args.get("--root") ?? "prototype/web-demo");
+const workspaceRoot = resolve(args.get("--workspace") ?? ".");
+const contentRoot = resolve(workspaceRoot, "content");
 const host = args.get("--host") ?? "127.0.0.1";
 const port = Number(args.get("--port") ?? 4174);
 
@@ -22,6 +24,14 @@ const types = {
 
 function toSafePath(url) {
   const pathname = decodeURIComponent(new URL(url, `http://${host}:${port}`).pathname);
+  if (pathname === "/content" || pathname.startsWith("/content/")) {
+    const contentPath = pathname.replace(/^\/content\/?/, "");
+    const fullContentPath = normalize(join(contentRoot, contentPath));
+    if (!fullContentPath.startsWith(contentRoot + sep) && fullContentPath !== contentRoot) {
+      return null;
+    }
+    return fullContentPath;
+  }
   const rawPath = pathname === "/" ? "/index.html" : pathname;
   const fullPath = normalize(join(root, rawPath));
   if (!fullPath.startsWith(root + sep) && fullPath !== root) {

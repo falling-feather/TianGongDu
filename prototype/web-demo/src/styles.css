@@ -696,7 +696,7 @@ kbd {
 
 .drawer-tabs {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   border-bottom: 1px solid rgba(209, 196, 157, 0.22);
 }
 
@@ -873,6 +873,120 @@ kbd {
   color: #c8d4ca;
   font-size: 12px;
   line-height: 1.45;
+}
+
+.content-status {
+  min-height: 32px;
+  padding: 8px 10px;
+  border: 1px solid rgba(139, 226, 238, 0.24);
+  background: rgba(10, 30, 35, 0.72);
+  color: #cfece9;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.m1-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 9px;
+}
+
+.info-pill {
+  min-height: 46px;
+  padding: 8px;
+  border: 1px solid rgba(219, 207, 168, 0.18);
+  background: rgba(12, 28, 31, 0.68);
+  color: #b9cbc5;
+  font-size: 11px;
+}
+
+.info-pill b {
+  display: block;
+  color: #f1d18f;
+  font-size: 16px;
+}
+
+.quest-track {
+  display: grid;
+  gap: 6px;
+  max-height: 176px;
+  margin-top: 10px;
+  overflow-y: auto;
+}
+
+.quest-step {
+  padding: 7px 9px;
+  border: 1px solid rgba(219, 207, 168, 0.16);
+  background: rgba(10, 24, 27, 0.62);
+}
+
+.quest-step b,
+.quest-step span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quest-step b {
+  color: #e7d3a6;
+  font-size: 12px;
+}
+
+.quest-step span {
+  margin-top: 3px;
+  color: #9fb3ad;
+  font-size: 11px;
+}
+
+.quest-step.active {
+  border-color: rgba(139, 226, 238, 0.52);
+  box-shadow: inset 3px 0 0 rgba(139, 226, 238, 0.7);
+}
+
+.quest-step.done {
+  opacity: 0.58;
+}
+
+.boss-readout {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid rgba(230, 99, 82, 0.32);
+  background: rgba(35, 18, 17, 0.58);
+}
+
+.boss-readout b,
+.boss-readout span,
+.boss-readout i {
+  display: block;
+}
+
+.boss-readout b {
+  color: #f1d18f;
+  font-size: 13px;
+}
+
+.boss-readout span {
+  margin-top: 4px;
+  color: #d9c8b6;
+  font-size: 12px;
+}
+
+.boss-readout i {
+  height: 7px;
+  margin-top: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(240, 216, 176, 0.18);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.boss-readout em {
+  display: block;
+  width: 0%;
+  height: 100%;
+  background: linear-gradient(90deg, #d85f53, #edcf8d);
+  transition: width 180ms ease;
 }
 
 #miniMapNodes {

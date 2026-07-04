@@ -85,6 +85,7 @@
             <button class="active" type="button" data-panel="map">地图</button>
             <button type="button" data-panel="inventory">背包</button>
             <button type="button" data-panel="npcs">人物</button>
+            <button type="button" data-panel="m1">江南M1</button>
             <button type="button" data-panel="journal">记录</button>
           </div>
 
@@ -101,6 +102,14 @@
           <section id="npcsPanel" class="drawer-panel" aria-label="NPC 状态">
             <div id="npcList" class="npc-list"></div>
             <button id="restButton" class="wide-action" type="button">小憩一刻</button>
+          </section>
+
+          <section id="m1Panel" class="drawer-panel" aria-label="江南 M1 内容包状态">
+            <div id="contentStatus" class="content-status">正在读取江南 M1 内容包...</div>
+            <div id="m1Summary" class="m1-summary"></div>
+            <div id="questTrack" class="quest-track"></div>
+            <div id="bossReadout" class="boss-readout"></div>
+            <button id="advanceM1Button" class="wide-action" type="button">推进 M1 流程</button>
           </section>
 
           <section id="journalPanel" class="drawer-panel" aria-label="行脚记录">

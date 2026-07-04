@@ -10,22 +10,30 @@ describe("web demo static surface", () => {
   const html = readFileSync(join(root, "prototype/web-demo/index.html"), "utf8");
   const js = readFileSync(join(root, "prototype/web-demo/src/main-v2.js"), "utf8");
   const css = readFileSync(join(root, "prototype/web-demo/src/styles.css"), "utf8");
+  const devServer = readFileSync(join(root, "tools/dev-server.mjs"), "utf8");
 
   it("renders the demo identity and core UI labels", () => {
-    for (const label of ["天工渡", "江南雨巷", "纸伞门径", "生机", "气力", "风息", "归位进度", "工匠四目", "行脚记录", "重置试炼", "背包", "人物"]) {
+    for (const label of ["天工渡", "江南雨巷", "纸伞门径", "生机", "气力", "风息", "归位进度", "工匠四目", "行脚记录", "重置试炼", "背包", "人物", "江南M1", "推进 M1 流程"]) {
       assert.match(html, new RegExp(label));
     }
   });
 
   it("wires expected controls to interactions", () => {
-    for (const key of ["gatherWind", "borrowWind", "interact", "resetDemo", "getContextTarget", "cooldowns", "keydown", "requestAnimationFrame", "INVENTORY_DEFS", "MAP_NODES", "NPC_DEFS", "advanceTime"]) {
+    for (const key of ["gatherWind", "borrowWind", "interact", "resetDemo", "getContextTarget", "cooldowns", "keydown", "requestAnimationFrame", "INVENTORY_DEFS", "MAP_NODES", "NPC_DEFS", "advanceTime", "loadContentPack", "advanceM1Flow", "startBossEncounter", "damageBoss", "restoreBoss"]) {
       assert.match(js, new RegExp(key));
     }
+  });
+
+  it("serves content JSON to the web demo", () => {
+    assert.match(devServer, /workspaceRoot/);
+    assert.match(devServer, /contentRoot/);
+    assert.match(devServer, /pathname\.startsWith\("\/content\/"\)/);
   });
 
   it("keeps the playfield full viewport and responsive", () => {
     assert.match(css, /width:\s*100vw/);
     assert.match(css, /height:\s*100vh/);
     assert.match(css, /@media\s*\(max-width:\s*900px\)/);
+    assert.match(css, /\.boss-readout/);
   });
 });

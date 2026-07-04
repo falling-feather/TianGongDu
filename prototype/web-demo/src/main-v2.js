@@ -18,6 +18,64 @@ const ACTIONS = {
   guard: { label: "架伞", cooldown: 0.1 }
 };
 
+const CONTENT_URLS = {
+  region: "/content/regions/jiangnan_rain_alley.json",
+  subregions: "/content/subregions/jiangnan_rain_alley_subregions.json",
+  quests: "/content/quests/jiangnan_rain_alley_quests.json",
+  npcs: "/content/npcs/rain_alley_m1_npcs.json",
+  buildings: "/content/buildings/jiangnan_rain_alley_buildings.json",
+  interactions: "/content/interactions/jiangnan_rain_alley_interactions.json",
+  enemies: "/content/enemies/rain_alley_m1_enemies.json",
+  boss: "/content/bosses/rain_alley_boss.json",
+  assets: "/content/assets/jiangnan_rain_alley_assets.json",
+  audio: "/content/audio/jiangnan_rain_alley_audio.json",
+  localization: "/content/localization/zh-CN.json"
+};
+
+const CONTENT_NODE_BY_SUBREGION = {
+  "subregion.jiangnan_rain_alley.water_entry": "water_entry",
+  "subregion.jiangnan_rain_alley.town_awning": "town_awning",
+  "subregion.jiangnan_rain_alley.main_water_lane": "main_alley",
+  "subregion.jiangnan_rain_alley.umbrella_shop": "umbrella_shop",
+  "subregion.jiangnan_rain_alley.bamboo_path": "bamboo_path",
+  "subregion.jiangnan_rain_alley.dye_paper_court": "dye_paper_court",
+  "subregion.jiangnan_rain_alley.wind_bell_lane": "wind_bell_lane",
+  "subregion.jiangnan_rain_alley.night_market": "night_market",
+  "subregion.jiangnan_rain_alley.old_bridge_lower": "old_bridge",
+  "subregion.jiangnan_rain_alley.roof_route": "roof_route",
+  "subregion.jiangnan_rain_alley.rain_curtain_bridge": "rain_curtain"
+};
+
+const STEP_NODE_HINTS = {
+  "quest_step.jiangnan_rain_alley.arrive_by_water": "water_entry",
+  "quest_step.jiangnan_rain_alley.check_delivery": "town_awning",
+  "quest_step.jiangnan_rain_alley.learn_guard": "umbrella_shop",
+  "quest_step.jiangnan_rain_alley.choose_bamboo": "bamboo_path",
+  "quest_step.jiangnan_rain_alley.paper_and_oil": "dye_paper_court",
+  "quest_step.jiangnan_rain_alley.market_decision": "night_market",
+  "quest_step.jiangnan_rain_alley.find_rivet": "roof_route",
+  "quest_step.jiangnan_rain_alley.old_bridge_trial": "old_bridge",
+  "quest_step.jiangnan_rain_alley.boss_restoration": "rain_curtain",
+  "quest_step.jiangnan_rain_alley.record_in_tiangong": "umbrella_shop"
+};
+
+let contentPack = {
+  loaded: false,
+  error: null,
+  strings: {},
+  region: null,
+  subregions: [],
+  mainlineSteps: [],
+  sideQuests: [],
+  npcs: [],
+  buildings: [],
+  interactions: [],
+  enemies: [],
+  boss: null,
+  assets: null,
+  audio: null
+};
+
 const INVENTORY_DEFS = {
   bamboo: { name: "青篾", type: "材料", description: "竹林小径采得的伞骨料，适合做临时补强。" },
   tungOil: { name: "桐油", type: "材料", description: "纸伞铺常备的防雨油，可稳定伞面张力。" },
@@ -49,6 +107,16 @@ const MAP_NODES = [
     discoverRadius: 170
   },
   {
+    id: "town_awning",
+    name: "镇口雨棚",
+    type: "对话",
+    x: 402,
+    y: 534,
+    spawn: { x: 420, y: 530 },
+    description: "茶棚、验货桌和跑单人聚在一处，适合交付材料和确认伞单。",
+    discoverRadius: 160
+  },
+  {
     id: "umbrella_shop",
     name: "纸伞铺",
     type: "据点",
@@ -77,6 +145,28 @@ const MAP_NODES = [
     spawn: { x: 1172, y: 478 },
     description: "青篾散在竹筐旁，路面湿滑但能避开主巷追击。",
     discoverRadius: 175
+  },
+  {
+    id: "dye_paper_court",
+    name: "染纸晒场",
+    type: "工艺",
+    x: 1008,
+    y: 430,
+    spawn: { x: 998, y: 432 },
+    description: "晾纸架和桐油台连在风燥廊上，可验证伞面、上油和湿滞抗性。",
+    discoverRadius: 170,
+    hiddenUntilFlag: "dyeCourtSeen"
+  },
+  {
+    id: "wind_bell_lane",
+    name: "风铃巷",
+    type: "机关",
+    x: 1258,
+    y: 328,
+    spawn: { x: 1236, y: 348 },
+    description: "风铃和漏音井会提示断桥雨幕的风向，需要收风和听音校准。",
+    discoverRadius: 165,
+    hiddenUntilFlag: "windBellLaneSeen"
   },
   {
     id: "night_market",
@@ -237,6 +327,22 @@ function createGatherSpots() {
   return GATHER_SPOTS.map((spot) => ({ ...spot, cooldownLeft: 0, taken: false }));
 }
 
+function createBossState() {
+  return {
+    id: "boss.rain_alley_broken_umbrella_obsession",
+    label: "雨巷破伞执念",
+    active: false,
+    restored: false,
+    x: 1360,
+    y: 282,
+    disorder: 1000,
+    max: 1000,
+    phase: 0,
+    pulse: 0,
+    attackTimer: 2.6
+  };
+}
+
 function createWorld() {
   return {
     width: 1600,
@@ -254,12 +360,14 @@ function createWorld() {
     fourEyes: { ...BASE_FOUR_EYES },
     cooldowns: Object.fromEntries(Object.keys(ACTIONS).map((action) => [action, 0])),
     inventory: { rainPaper: 1, tungOil: 1, rainPatch: 1 },
-    flags: { roofRouteSeen: false, rainCurtainOpen: false, residentGift: false },
-    discovered: new Set(["water_entry", "main_alley", "umbrella_shop", "old_bridge"]),
+    flags: { roofRouteSeen: false, rainCurtainOpen: false, residentGift: false, dyeCourtSeen: false, windBellLaneSeen: false },
+    discovered: new Set(["water_entry", "town_awning", "main_alley", "umbrella_shop", "old_bridge"]),
     visited: new Set(["umbrella_shop"]),
     activePanel: "map",
     currentLocationId: "umbrella_shop",
     talkIndex: {},
+    m1: { stepIndex: 0, completedStepIds: new Set(), loadedOnce: false },
+    boss: createBossState(),
     player: { x: 858, y: 390, vx: 0, vy: 0, vitality: 100, stamina: 100, wind: 52, guard: false, action: "idle", actionTimer: 0, facing: 1 },
     enemies: createEnemies(),
     npcs: createNpcs(),
@@ -301,6 +409,7 @@ const elements = {
     map: document.querySelector("#mapPanel"),
     inventory: document.querySelector("#inventoryPanel"),
     npcs: document.querySelector("#npcsPanel"),
+    m1: document.querySelector("#m1Panel"),
     journal: document.querySelector("#journalPanel")
   },
   miniMapNodes: document.querySelector("#miniMapNodes"),
@@ -308,6 +417,11 @@ const elements = {
   mapDetails: document.querySelector("#mapDetails"),
   inventoryList: document.querySelector("#inventoryList"),
   npcList: document.querySelector("#npcList"),
+  contentStatus: document.querySelector("#contentStatus"),
+  m1Summary: document.querySelector("#m1Summary"),
+  questTrack: document.querySelector("#questTrack"),
+  bossReadout: document.querySelector("#bossReadout"),
+  advanceM1Button: document.querySelector("#advanceM1Button"),
   fourEyes: {
     inheritance: { meter: document.querySelector("#inheritanceMeter"), text: document.querySelector("#inheritanceText") },
     market: { meter: document.querySelector("#marketMeter"), text: document.querySelector("#marketText") },
@@ -356,6 +470,7 @@ elements.fullProcessButton.addEventListener("click", () => choose("full"));
 elements.resetButton.addEventListener("click", resetDemo);
 elements.restButton.addEventListener("click", () => advanceTime(30, "你在檐下小憩一刻，雨势换了声调。"));
 elements.craftButton.addEventListener("click", craftUmbrellaPatch);
+elements.advanceM1Button.addEventListener("click", advanceM1Flow);
 elements.inventoryList.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-use-item]");
   if (button) useItem(button.dataset.useItem);
@@ -399,6 +514,145 @@ function setPanel(panel) {
   syncUi();
 }
 
+async function fetchJson(url) {
+  const response = await fetch(url, { cache: "no-store" });
+  if (!response.ok) throw new Error(`${url} ${response.status}`);
+  return response.json();
+}
+
+async function loadContentPack() {
+  try {
+    const entries = await Promise.all(Object.entries(CONTENT_URLS).map(async ([key, url]) => [key, await fetchJson(url)]));
+    const data = Object.fromEntries(entries);
+    contentPack = {
+      loaded: true,
+      error: null,
+      strings: data.localization.strings ?? {},
+      region: data.region,
+      subregions: data.subregions.subregions ?? [],
+      mainlineSteps: data.quests.steps ?? [],
+      sideQuests: data.quests.sideQuests ?? [],
+      npcs: data.npcs.npcs ?? [],
+      buildings: data.buildings.buildings ?? [],
+      interactions: data.interactions.interactions ?? [],
+      enemies: data.enemies.enemies ?? [],
+      boss: data.boss,
+      assets: data.assets,
+      audio: data.audio
+    };
+    applyContentPackToMap();
+    world.m1.loadedOnce = true;
+    world.objective = "江南 M1 内容包已载入：按“江南M1”推进主线，或直接在地图中探索雨巷节点。";
+    addLog(`载入江南 M1：${contentPack.subregions.length} 个子地区、${contentPack.mainlineSteps.length} 个主线步骤、${contentPack.npcs.length} 名 NPC。`);
+  } catch (error) {
+    contentPack = { ...contentPack, loaded: false, error: error instanceof Error ? error.message : String(error) };
+    world.message = `江南 M1 内容包读取失败：${contentPack.error}`;
+    addLog(world.message);
+  }
+  syncUi();
+}
+
+function t(key, fallback = key) {
+  return contentPack.strings[key] ?? fallback;
+}
+
+function applyContentPackToMap() {
+  for (const subregion of contentPack.subregions) {
+    const nodeId = CONTENT_NODE_BY_SUBREGION[subregion.id];
+    const node = nodeId ? getLocationById(nodeId) : null;
+    if (!node) continue;
+    node.name = t(subregion.displayNameKey, node.name);
+    node.description = `${subregion.purpose} / ${subregion.productionRole === "core" ? "M1核心" : subregion.productionRole}`;
+    node.sourceSubregionId = subregion.id;
+  }
+}
+
+function getCurrentMainlineStep() {
+  return contentPack.mainlineSteps[world.m1.stepIndex] ?? null;
+}
+
+function completeStep(step) {
+  world.m1.completedStepIds.add(step.id);
+  world.m1.stepIndex = Math.min(world.m1.stepIndex + 1, Math.max(contentPack.mainlineSteps.length - 1, 0));
+  addLog(`主线推进：${t(step.displayNameKey, step.id)}。`);
+}
+
+function unlockNode(id) {
+  const node = getLocationById(id);
+  if (!node) return;
+  if (node.hiddenUntilFlag) world.flags[node.hiddenUntilFlag] = true;
+  if (node.requiresFlag === "rainCurtainOpen") world.flags.rainCurtainOpen = true;
+  world.discovered.add(id);
+}
+
+function advanceM1Flow() {
+  if (!contentPack.loaded) {
+    world.message = contentPack.error ? `内容包尚未可用：${contentPack.error}` : "江南 M1 内容包仍在读取。";
+    addLog(world.message);
+    setPanel("m1");
+    return;
+  }
+
+  const step = getCurrentMainlineStep();
+  if (!step) {
+    world.message = "江南 M1 主线步骤已经全部走完。";
+    setPanel("m1");
+    return;
+  }
+
+  const nodeId = STEP_NODE_HINTS[step.id];
+  if (nodeId) unlockNode(nodeId);
+
+  if (step.id === "quest_step.jiangnan_rain_alley.choose_bamboo") {
+    addItem("bamboo", 2);
+    unlockNode("dye_paper_court");
+  }
+  if (step.id === "quest_step.jiangnan_rain_alley.paper_and_oil") {
+    addItem("rainPaper", 1);
+    addItem("tungOil", 1);
+    unlockNode("wind_bell_lane");
+    world.flags.windBellLaneSeen = true;
+  }
+  if (step.id === "quest_step.jiangnan_rain_alley.market_decision" && !world.choice) {
+    choose("material");
+  }
+  if (step.id === "quest_step.jiangnan_rain_alley.find_rivet") {
+    addItem("windBell", 1);
+    world.flags.roofRouteSeen = true;
+    world.flags.windBellLaneSeen = true;
+    unlockNode("roof_route");
+  }
+  if (step.id === "quest_step.jiangnan_rain_alley.old_bridge_trial") {
+    world.enemies.forEach((enemy) => {
+      if (enemy.id === "broken_umbrella_shadow") enemy.disorder = 0;
+    });
+    unlockNode("old_bridge");
+  }
+  if (step.id === "quest_step.jiangnan_rain_alley.boss_restoration") {
+    if (!world.flags.rainCurtainOpen) {
+      if (!hasItem("windBell")) addItem("windBell", 1);
+      useItem("windBell");
+    }
+    startBossEncounter();
+    world.message = "断桥雨幕已打开：用纸刃、伞旋、收风和借风削减 Boss 失序，归零后按 F 归位。";
+    setPanel("m1");
+    return;
+  }
+  if (step.id === "quest_step.jiangnan_rain_alley.record_in_tiangong" && !world.boss.restored) {
+    world.message = "还不能落款：先完成雨巷破伞执念的归位。";
+    setPanel("m1");
+    return;
+  }
+
+  completeStep(step);
+  const nextNode = nodeId ? getLocationById(nodeId) : null;
+  if (nextNode) travelToNode(nextNode.id);
+  world.objective = getCurrentMainlineStep()
+    ? `当前 M1 主线：${t(getCurrentMainlineStep().displayNameKey, getCurrentMainlineStep().id)}。`
+    : "江南 M1 主线已经完成，等待后续可玩关卡扩展。";
+  setPanel("m1");
+}
+
 function addLog(text) {
   world.log = [text, ...world.log.filter((entry) => entry !== text)].slice(0, 6);
 }
@@ -438,15 +692,21 @@ function choose(kind) {
     world.message = "夜市急单已接：营生回声增强，师承对省工略有迟疑。";
     world.restore = Math.max(world.restore, 2);
     addLog("接下远方急单，夜市灯牌亮起。");
-  } else {
+  } else if (kind === "full") {
     applyFourEyeDelta({ inheritance: 15, ritualFaith: 10, market: -5 });
     world.message = "完整工序已定：师谱与礼信更稳，雨巷修复更温润。";
     world.restore = Math.max(world.restore, 3);
     addLog("坚持完整试伞，沈雨点头记下一笔。");
+  } else {
+    applyFourEyeDelta({ market: 5, inheritance: 5, dailyLife: 5 });
+    addItem("bamboo", 1);
+    world.message = "折中补修已定：先补风折竹，再保夜市交付和旧桥稳定。";
+    world.restore = Math.max(world.restore, 3);
+    addLog("选择折中补修，阿青记下风折竹返修法。");
   }
   elements.rushOrderButton.classList.toggle("active", kind === "rush");
   elements.fullProcessButton.classList.toggle("active", kind === "full");
-  setPanel("journal");
+  setPanel(kind === "material" ? "m1" : "journal");
 }
 
 function addItem(id, qty = 1) {
@@ -610,11 +870,73 @@ function travelToNode(id) {
   world.currentLocationId = node.id;
   world.visited.add(node.id);
   advanceTime(8, `沿地图前往${node.name}。`);
+  if (node.id === "rain_curtain") startBossEncounter();
+}
+
+function startBossEncounter() {
+  unlockNode("rain_curtain");
+  const target = getLocationById("rain_curtain");
+  if (target) {
+    world.currentLocationId = "rain_curtain";
+    world.visited.add("rain_curtain");
+    world.player.x = target.spawn?.x ?? target.x;
+    world.player.y = target.spawn?.y ?? target.y;
+  }
+  if (!world.boss.active && !world.boss.restored) {
+    world.boss.active = true;
+    world.boss.disorder = world.boss.max;
+    world.boss.phase = 1;
+    world.boss.attackTimer = 2.2;
+    world.objective = "断桥雨幕已开：削减雨巷破伞执念的失序，归零后按 F 进行归位。";
+    addLog("雨巷破伞执念显形，断桥雨幕进入 Boss 验收。");
+  }
+}
+
+function getBossPhase() {
+  if (world.boss.restored) return { id: "restoration", name: "归位", ratio: 0 };
+  const ratio = world.boss.disorder / world.boss.max;
+  if (ratio <= 0.4) return { id: "p3", name: "裂伞露核", ratio };
+  if (ratio <= 0.7) return { id: "p2", name: "风口错位", ratio };
+  return { id: "p1", name: "伞骨横雨", ratio };
+}
+
+function damageBoss(amount, source, range = 190) {
+  if (!world.boss.active || world.boss.restored || world.boss.disorder <= 0) return false;
+  if (dist(world.player, world.boss) > range) return false;
+  world.boss.disorder = clamp(world.boss.disorder - amount, 0, world.boss.max);
+  world.boss.pulse = 1;
+  const phase = getBossPhase();
+  world.boss.phase = phase.id === "p3" ? 3 : phase.id === "p2" ? 2 : 1;
+  world.message = `${source}击中裂伞核，Boss 失序降至 ${Math.round(world.boss.disorder)}。`;
+  if (world.boss.disorder <= 0) {
+    world.message = "裂伞核已经安静，靠近按 F 完成归位。";
+    addLog("雨巷破伞执念露出归位窗口。");
+  }
+  return true;
+}
+
+function restoreBoss() {
+  world.boss.restored = true;
+  world.boss.active = false;
+  world.restore = 5;
+  completeStepIds(["quest_step.jiangnan_rain_alley.boss_restoration"]);
+  world.m1.stepIndex = Math.max(world.m1.stepIndex, contentPack.mainlineSteps.findIndex((step) => step.id === "quest_step.jiangnan_rain_alley.record_in_tiangong"));
+  world.objective = "雨巷破伞执念已经归位：返回天工录落款，查看江南 M1 数据闭环。";
+  world.message = "断桥雨幕归位，旧桥雨声降了一层。";
+  addLog("Boss 归位完成：归器礼触发，四维回声等待落款。");
+  setPanel("m1");
+}
+
+function completeStepIds(stepIds) {
+  for (const id of stepIds) world.m1.completedStepIds.add(id);
 }
 
 function getContextTarget() {
   const downedEnemy = world.enemies.find((enemy) => !enemy.restored && enemy.disorder <= 0 && dist(world.player, enemy) < 92);
   if (downedEnemy) return { type: "restore", label: `归位 ${downedEnemy.label}`, enemy: downedEnemy };
+  if (world.boss.active && !world.boss.restored && world.boss.disorder <= 0 && dist(world.player, world.boss) < 170) {
+    return { type: "boss_restore", label: "归位 雨巷破伞执念" };
+  }
   const npc = world.npcs.find((item) => item.active && dist(world.player, item) < 86);
   if (npc) return { type: "npc", label: `交谈 ${npc.name}`, npc };
   const gatherSpot = world.gatherSpots.find((spot) => !(spot.taken && spot.once) && spot.cooldownLeft <= 0 && dist(world.player, spot) < spot.radius);
@@ -632,8 +954,12 @@ function interact() {
     world.restore = Math.max(world.restore, 3 + world.enemies.filter((enemy) => enemy.restored).length);
     world.player.wind = clamp(world.player.wind + 12, 0, 100);
     addItem("rainPaper", 1);
-    world.message = `${target.enemy.label}已归位，伞面余风回到工息。`;
+    world.message = `${target.enemy.label}已归位，伞面余风回到工灯。`;
     addLog(`${target.enemy.label}归位，雨声退后一层。`);
+    return;
+  }
+  if (target.type === "boss_restore") {
+    restoreBoss();
     return;
   }
   if (target.type === "npc") {
@@ -658,11 +984,11 @@ function interact() {
     world.flags.roofRouteSeen = true;
     world.discovered.add("roof_route");
     world.vent.pulse = 1;
-    world.message = "工息照见风口，屋檐上层路线显形。";
+    world.message = "工灯照见风口，屋檐上层路线显形。";
     addLog("校准风口，屋檐回访线索浮现。");
     return;
   }
-  world.message = "工息扫过雨线，弱点在伞骨开合的一瞬。";
+  world.message = "工灯扫过雨线，弱点在伞骨开合的一瞬。";
   addLog("雨线显形：可弹反的攻势会带短促亮边。");
 }
 
@@ -726,6 +1052,9 @@ function lightStrike(action = "light") {
       }
     }
   }
+  if (!hit) {
+    hit = damageBoss(action === "spin" ? 72 : 42, ACTIONS[action].label, action === "spin" ? 176 : 132);
+  }
   if (!hit) world.message = action === "spin" ? "伞旋扫开雨幕，但没有命中伞影。" : "纸刃落空，雨魇仍在游移。";
   world.player.action = action;
   world.player.actionTimer = action === "spin" ? 0.36 : 0.22;
@@ -745,6 +1074,9 @@ function gatherWind() {
       hit = true;
       if (enemy.disorder <= 0) addLog(`${enemy.label}被收风卷出破绽。`);
     }
+  }
+  if (!hit) {
+    hit = damageBoss(88, "收风", 310);
   }
   world.message = hit ? "收风卷起雨幕，破绽显形。" : "收风扫过空巷，风息在雨面散开。";
 }
@@ -767,6 +1099,7 @@ function borrowWind() {
   } else {
     world.message = "伞面借风，身位重整。";
   }
+  damageBoss(64, "借风越行", 220);
 }
 
 function update(dt) {
@@ -790,8 +1123,9 @@ function update(dt) {
   }
   updatePlayer(dt);
   updateEnemies(dt);
+  updateBoss(dt);
   discoverNearbyNodes();
-  if (world.enemies.every((enemy) => enemy.restored)) {
+  if (!world.boss.active && world.enemies.every((enemy) => enemy.restored)) {
     world.restore = 5;
     world.message = "雨巷初段归位，纸伞门径通过首轮检验。";
     world.objective = "返回纸伞铺完成《天工录》落款，或打开断桥雨幕继续扩展。";
@@ -855,6 +1189,27 @@ function updateEnemies(dt) {
   }
 }
 
+function updateBoss(dt) {
+  if (!world.boss.active || world.boss.restored) return;
+  world.boss.pulse = Math.max(0, world.boss.pulse - dt * 2.2);
+  world.boss.attackTimer = Math.max(0, world.boss.attackTimer - dt);
+  const phase = getBossPhase();
+  world.boss.phase = phase.id === "p3" ? 3 : phase.id === "p2" ? 2 : 1;
+  if (world.boss.attackTimer > 0 || world.boss.disorder <= 0) return;
+  const close = dist(world.player, world.boss) < 210;
+  if (close && world.player.guard && world.player.stamina > 8) {
+    world.player.wind = clamp(world.player.wind + 18, 0, 100);
+    world.player.stamina = clamp(world.player.stamina - 10, 0, 100);
+    damageBoss(world.boss.phase === 3 ? 64 : 42, "架伞弹雨", 240);
+  } else if (close) {
+    world.player.vitality = clamp(world.player.vitality - (world.boss.phase === 3 ? 18 : 12), 20, 100);
+    world.message = "雨幕坠压逼近，架伞或借风能稳住身位。";
+  } else {
+    world.message = "断桥雨幕在远处聚拢，靠近裂伞核才能削减失序。";
+  }
+  world.boss.attackTimer = world.boss.phase === 3 ? 1.6 : 2.2;
+}
+
 function resolveEnemyAttack(enemy) {
   const player = world.player;
   enemy.attackFlash = 0.24;
@@ -904,6 +1259,7 @@ function syncUi() {
   renderMapPanel();
   renderInventory();
   renderNpcs();
+  renderM1Panel();
   renderJournal();
 }
 
@@ -980,6 +1336,47 @@ function renderNpcs() {
     return row;
   });
   elements.npcList.replaceChildren(...rows);
+}
+
+function renderM1Panel() {
+  elements.contentStatus.textContent = contentPack.loaded
+    ? `已载入 ${contentPack.subregions.length} 个子地区、${contentPack.npcs.length} 名 NPC、${contentPack.enemies.length} 类敌人。`
+    : contentPack.error
+      ? `内容包读取失败：${contentPack.error}`
+      : "正在读取江南 M1 内容包...";
+
+  const coreCount = contentPack.region?.coreSubregionIds?.length ?? 0;
+  elements.m1Summary.replaceChildren(
+    createInfoPill("核心节点", `${coreCount}/7`),
+    createInfoPill("支线", `${contentPack.sideQuests.length}`),
+    createInfoPill("建筑", `${contentPack.buildings.length}`),
+    createInfoPill("音频", `${(contentPack.audio?.tracks?.length ?? 0) + (contentPack.audio?.sfx?.length ?? 0)}`)
+  );
+
+  const steps = contentPack.mainlineSteps.map((step, index) => {
+    const row = document.createElement("div");
+    const done = world.m1.completedStepIds.has(step.id);
+    const active = index === world.m1.stepIndex && !done;
+    row.className = `quest-step ${done ? "done" : ""} ${active ? "active" : ""}`;
+    row.innerHTML = `<b>${index + 1}. ${t(step.displayNameKey, step.id)}</b><span>${step.subregionId ? t(`${step.subregionId}.name`, step.subregionId) : "江南雨巷"}</span>`;
+    return row;
+  });
+  elements.questTrack.replaceChildren(...steps.slice(0, 10));
+
+  const phase = getBossPhase();
+  const bossPercent = Math.round((world.boss.disorder / world.boss.max) * 100);
+  elements.bossReadout.innerHTML = `
+    <b>${world.boss.label}</b>
+    <span>${world.boss.restored ? "已归位" : world.boss.active ? `${phase.name} · 失序 ${bossPercent}%` : "未显形"}</span>
+    <i><em style="width:${world.boss.restored ? 100 : 100 - bossPercent}%"></em></i>
+  `;
+}
+
+function createInfoPill(label, value) {
+  const pill = document.createElement("span");
+  pill.className = "info-pill";
+  pill.innerHTML = `<b>${value}</b>${label}`;
+  return pill;
 }
 
 function renderJournal() {
@@ -1237,18 +1634,89 @@ function drawRoofRoute() {
 function drawRainCurtain() {
   ctx.save();
   const open = world.flags.rainCurtainOpen;
-  ctx.strokeStyle = open ? "rgba(132, 232, 224, 0.32)" : "rgba(147, 197, 210, 0.62)";
-  ctx.lineWidth = open ? 2 : 4;
-  for (let i = 0; i < 24; i += 1) {
-    const x = 1335 + i * 7 + Math.sin(world.time * 3 + i) * 5;
-    ctx.beginPath();
-    ctx.moveTo(x, 128);
-    ctx.lineTo(x - 24, 362);
-    ctx.stroke();
+  const intensity = world.boss.active ? 1 : open ? 0.55 : 0.78;
+  const coreX = world.boss.x;
+  const coreY = world.boss.y - 30;
+  const glow = ctx.createRadialGradient(coreX, coreY, 12, coreX, coreY, 230);
+  glow.addColorStop(0, world.boss.active ? "rgba(224, 117, 92, 0.32)" : "rgba(132, 232, 224, 0.18)");
+  glow.addColorStop(0.42, "rgba(85, 166, 184, 0.16)");
+  glow.addColorStop(1, "rgba(8, 18, 24, 0)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(1190, 88, 360, 340);
+
+  for (let layer = 0; layer < 3; layer += 1) {
+    ctx.strokeStyle = open
+      ? `rgba(132, 232, 224, ${0.14 + layer * 0.08})`
+      : `rgba(147, 197, 210, ${0.28 + layer * 0.14})`;
+    ctx.lineWidth = open ? 1.5 + layer * 0.5 : 2.5 + layer;
+    for (let i = 0; i < 34; i += 1) {
+      const x = 1298 + i * 7 + Math.sin(world.time * (2.8 + layer) + i) * (5 + layer * 3);
+      const y = 104 + layer * 12 + Math.cos(world.time + i) * 8;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.bezierCurveTo(x - 12, y + 82, x - 30, y + 168, x - 38 - layer * 8, y + 268);
+      ctx.stroke();
+    }
   }
+
+  drawBrokenUmbrellaCore(coreX, coreY, intensity);
+  if (world.boss.active || world.boss.restored) drawBossApparition(coreX, coreY);
   ctx.fillStyle = open ? "rgba(129, 232, 220, 0.72)" : "rgba(220, 222, 206, 0.46)";
   ctx.font = "700 20px sans-serif";
-  ctx.fillText(open ? "雨幕短开" : "断桥雨幕", 1302, 122);
+  ctx.fillText(world.boss.active ? getBossPhase().name : open ? "雨幕短开" : "断桥雨幕", 1302, 122);
+  ctx.restore();
+}
+
+function drawBrokenUmbrellaCore(x, y, intensity) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(Math.sin(world.time * 0.7) * 0.04);
+  const radius = 76 + Math.sin(world.time * 2.2) * 4;
+  ctx.strokeStyle = `rgba(238, 223, 180, ${0.2 + intensity * 0.32})`;
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, radius, 28, 0, Math.PI, 0);
+  ctx.stroke();
+  ctx.lineWidth = 2;
+  for (let i = -4; i <= 4; i += 1) {
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(i * 18, -24 - Math.abs(i) * 5);
+    ctx.stroke();
+  }
+  ctx.fillStyle = world.boss.active ? "rgba(218, 91, 76, 0.72)" : "rgba(126, 232, 220, 0.62)";
+  ctx.beginPath();
+  ctx.ellipse(0, -4, 22 + world.boss.pulse * 12, 11 + world.boss.pulse * 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawBossApparition(x, y) {
+  ctx.save();
+  ctx.translate(x, y + 42);
+  const phase = getBossPhase();
+  const restoredAlpha = world.boss.restored ? 0.34 : 1;
+  ctx.globalAlpha = restoredAlpha;
+  const body = ctx.createRadialGradient(0, 0, 8, 0, 0, 132);
+  body.addColorStop(0, phase.id === "p3" ? "rgba(230, 99, 82, 0.64)" : "rgba(142, 214, 219, 0.38)");
+  body.addColorStop(1, "rgba(19, 29, 32, 0)");
+  ctx.fillStyle = body;
+  ctx.beginPath();
+  ctx.ellipse(0, 28, 98, 132, Math.sin(world.time) * 0.08, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = phase.id === "p3" ? "rgba(244, 190, 130, 0.62)" : "rgba(178, 230, 224, 0.44)";
+  ctx.lineWidth = 4;
+  for (let i = 0; i < 7; i += 1) {
+    const angle = -Math.PI * 0.85 + i * 0.28 + Math.sin(world.time + i) * 0.04;
+    ctx.beginPath();
+    ctx.moveTo(0, -12);
+    ctx.quadraticCurveTo(Math.cos(angle) * 72, Math.sin(angle) * 36, Math.cos(angle) * 118, Math.sin(angle) * 96 + 60);
+    ctx.stroke();
+  }
+  ctx.fillStyle = "#f1e7dc";
+  ctx.font = "700 14px sans-serif";
+  const label = world.boss.restored ? "已归位" : `${Math.round(world.boss.disorder)}/${world.boss.max}`;
+  ctx.fillText(label, -38, -112);
   ctx.restore();
 }
 
@@ -1563,5 +2031,6 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
+loadContentPack();
 syncUi();
 requestAnimationFrame(frame);

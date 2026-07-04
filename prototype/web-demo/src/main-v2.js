@@ -59,6 +59,70 @@ const STEP_NODE_HINTS = {
   "quest_step.jiangnan_rain_alley.record_in_tiangong": "umbrella_shop"
 };
 
+const PRODUCTION_WHITEBOX_REFS = new Set([
+  "subregion.jiangnan_rain_alley.water_entry",
+  "subregion.jiangnan_rain_alley.town_awning",
+  "subregion.jiangnan_rain_alley.main_water_lane",
+  "subregion.jiangnan_rain_alley.umbrella_shop",
+  "subregion.jiangnan_rain_alley.bamboo_path",
+  "subregion.jiangnan_rain_alley.dye_paper_court",
+  "subregion.jiangnan_rain_alley.wind_bell_lane",
+  "subregion.jiangnan_rain_alley.night_market",
+  "subregion.jiangnan_rain_alley.old_bridge_lower",
+  "subregion.jiangnan_rain_alley.roof_route",
+  "subregion.jiangnan_rain_alley.rain_curtain_bridge",
+  "tile.water_lane",
+  "tile.workshop",
+  "tile.bamboo_path",
+  "tile.night_market",
+  "tile.old_bridge",
+  "tile.rain_curtain_bridge",
+  "building.jiangnan_rain_alley.umbrella_shop",
+  "building.jiangnan_rain_alley.dock_shed",
+  "building.jiangnan_rain_alley.dye_court",
+  "building.jiangnan_rain_alley.market_ledger",
+  "building.jiangnan_rain_alley.old_bridge_shed",
+  "building.jiangnan_rain_alley.roof_store",
+  "npc.master_shen_yu",
+  "npc.market_runner",
+  "npc.alley_resident",
+  "enemy.rain_wraith",
+  "enemy.broken_umbrella_shadow",
+  "boss.rain_alley_broken_umbrella_obsession",
+  "skill.umbrella.guard",
+  "skill.umbrella.gather_wind",
+  "skill.umbrella.borrow_wind",
+  "skill.umbrella.umbrella_spin",
+  "skill.umbrella.parry_counter",
+  "resource.wind_breath",
+  "ui.four_eyes",
+  "ui.quest",
+  "ui.skill",
+  "ui.material",
+  "ui.restoration",
+  "asset.variant.umbrella.blue_lantern"
+]);
+
+const PRODUCTION_AUDIO_CUE_REFS = new Set([
+  "region.jiangnan_rain_alley",
+  "subregion.jiangnan_rain_alley.water_entry",
+  "subregion.jiangnan_rain_alley.main_water_lane",
+  "subregion.jiangnan_rain_alley.umbrella_shop",
+  "subregion.jiangnan_rain_alley.night_market",
+  "subregion.jiangnan_rain_alley.old_bridge_lower",
+  "subregion.jiangnan_rain_alley.wind_bell_lane",
+  "subregion.jiangnan_rain_alley.rain_curtain_bridge",
+  "boss.rain_alley_broken_umbrella_obsession",
+  "pathway.paper_umbrella",
+  "skill.umbrella.guard",
+  "skill.umbrella.parry_counter",
+  "skill.umbrella.gather_wind",
+  "skill.umbrella.borrow_wind",
+  "interaction.jiangnan_rain_alley.bridge_boss_restore",
+  "interaction.jiangnan_rain_alley.wind_bell_tuning",
+  "trap.ringing_latch"
+]);
+
 let contentPack = {
   loaded: false,
   error: null,
@@ -367,6 +431,10 @@ function createWorld() {
     currentLocationId: "umbrella_shop",
     talkIndex: {},
     m1: { stepIndex: 0, completedStepIds: new Set(), loadedOnce: false },
+    productionCue: {
+      label: "等待资源事件",
+      refs: ["asset_group.jiangnan.skill_vfx", "audio_pack.jiangnan_rain_alley_m1"]
+    },
     boss: createBossState(),
     player: { x: 858, y: 390, vx: 0, vy: 0, vitality: 100, stamina: 100, wind: 52, guard: false, action: "idle", actionTimer: 0, facing: 1 },
     enemies: createEnemies(),
@@ -419,6 +487,7 @@ const elements = {
   npcList: document.querySelector("#npcList"),
   contentStatus: document.querySelector("#contentStatus"),
   m1Summary: document.querySelector("#m1Summary"),
+  productionBoard: document.querySelector("#productionBoard"),
   questTrack: document.querySelector("#questTrack"),
   bossReadout: document.querySelector("#bossReadout"),
   advanceM1Button: document.querySelector("#advanceM1Button"),
@@ -737,6 +806,7 @@ function craftUmbrellaPatch() {
   addItem("rainPatch", 1);
   world.player.stamina = clamp(world.player.stamina + 18, 0, 100);
   applyFourEyeDelta({ inheritance: 3, dailyLife: 2 });
+  emitProductionCue("试伞补片制作", ["asset.variant.umbrella.blue_lantern", "asset_group.jiangnan.skill_vfx", "sfx.umbrella.open"]);
   world.message = "试伞补片完成，伞面张力更稳。";
   addLog("用青篾、雨纹纸和桐油做成一枚试伞补片。");
   setPanel("inventory");
@@ -747,6 +817,7 @@ function useItem(id) {
     if (!removeItem("rainPatch", 1)) return;
     world.player.vitality = clamp(world.player.vitality + 26, 0, 100);
     world.player.stamina = clamp(world.player.stamina + 18, 0, 100);
+    emitProductionCue("试伞补片使用", ["asset_group.jiangnan.skill_vfx", "sfx.umbrella.close", "resource.wind_breath"]);
     world.message = "试伞补片贴合伞面，生机与气力回稳。";
     addLog("使用试伞补片，纸伞重新吃风。");
     return;
@@ -754,6 +825,7 @@ function useItem(id) {
   if (id === "windBell") {
     world.flags.rainCurtainOpen = true;
     world.discovered.add("rain_curtain");
+    emitProductionCue("风铃机关校准", ["sfx.wind_bell.correct", "interaction.jiangnan_rain_alley.wind_bell_tuning", "asset_group.jiangnan.skill_vfx"]);
     world.message = "风铃铆校准完成，断桥雨幕露出可通行的短隙。";
     addLog("风铃铆扣入屋檐风口，断桥雨幕暂时打开。");
     setPanel("map");
@@ -887,6 +959,7 @@ function startBossEncounter() {
     world.boss.disorder = world.boss.max;
     world.boss.phase = 1;
     world.boss.attackTimer = 2.2;
+    emitProductionCue("Boss 显形", ["asset_group.jiangnan.boss_sprites", "bgm.jiangnan_rain_alley.boss", "amb.rain.heavy"]);
     world.objective = "断桥雨幕已开：削减雨巷破伞执念的失序，归零后按 F 进行归位。";
     addLog("雨巷破伞执念显形，断桥雨幕进入 Boss 验收。");
   }
@@ -907,6 +980,7 @@ function damageBoss(amount, source, range = 190) {
   world.boss.pulse = 1;
   const phase = getBossPhase();
   world.boss.phase = phase.id === "p3" ? 3 : phase.id === "p2" ? 2 : 1;
+  emitProductionCue(`Boss ${phase.name}`, ["asset_group.jiangnan.boss_sprites", `bossphase.rain_alley_broken_umbrella_obsession.${phase.id}`, "bgm.jiangnan_rain_alley.boss"]);
   world.message = `${source}击中裂伞核，Boss 失序降至 ${Math.round(world.boss.disorder)}。`;
   if (world.boss.disorder <= 0) {
     world.message = "裂伞核已经安静，靠近按 F 完成归位。";
@@ -919,6 +993,7 @@ function restoreBoss() {
   world.boss.restored = true;
   world.boss.active = false;
   world.restore = 5;
+  emitProductionCue("Boss 归位", ["asset_group.jiangnan.boss_sprites", "sfx.boss.core_restore", "mix.jiangnan_rain_alley.boss_to_restoration"]);
   completeStepIds(["quest_step.jiangnan_rain_alley.boss_restoration"]);
   world.m1.stepIndex = Math.max(world.m1.stepIndex, contentPack.mainlineSteps.findIndex((step) => step.id === "quest_step.jiangnan_rain_alley.record_in_tiangong"));
   world.objective = "雨巷破伞执念已经归位：返回天工录落款，查看江南 M1 数据闭环。";
@@ -1035,10 +1110,12 @@ function pulseGuard() {
   world.player.guard = true;
   world.player.action = "guard";
   world.player.actionTimer = 0.35;
+  emitProductionCue("架伞", ["skill.umbrella.guard", "sfx.umbrella.block", "asset_group.jiangnan.skill_vfx"]);
 }
 
 function lightStrike(action = "light") {
   if (!spend(action)) return;
+  emitProductionCue(action === "spin" ? "伞旋" : "纸刃", [action === "spin" ? "skill.umbrella.umbrella_spin" : "skill.umbrella.parry_counter", "sfx.parry.wind", "asset_group.jiangnan.skill_vfx"]);
   const radius = action === "spin" ? 112 : 76;
   const power = action === "spin" ? 18 : 10;
   let hit = false;
@@ -1062,6 +1139,7 @@ function lightStrike(action = "light") {
 
 function gatherWind() {
   if (!spend("wind")) return;
+  emitProductionCue("收风", ["skill.umbrella.gather_wind", "sfx.gather_wind", "asset_group.jiangnan.skill_vfx"]);
   world.player.action = "gather";
   world.player.actionTimer = 0.42;
   world.vent.pulse = 1;
@@ -1083,6 +1161,7 @@ function gatherWind() {
 
 function borrowWind() {
   if (!spend("dash")) return;
+  emitProductionCue("借风越行", ["skill.umbrella.borrow_wind", "sfx.borrow_wind", "asset_group.jiangnan.skill_vfx"]);
   const towardVent = dist(world.player, world.vent) < 240;
   const target = towardVent ? { x: 1142, y: 246 } : { x: world.player.x + world.player.facing * 116, y: world.player.y - 26 };
   world.player.x = clamp(lerp(world.player.x, target.x, 0.74), 170, 1430);
@@ -1350,8 +1429,10 @@ function renderM1Panel() {
     createInfoPill("核心节点", `${coreCount}/7`),
     createInfoPill("支线", `${contentPack.sideQuests.length}`),
     createInfoPill("建筑", `${contentPack.buildings.length}`),
-    createInfoPill("音频", `${(contentPack.audio?.tracks?.length ?? 0) + (contentPack.audio?.sfx?.length ?? 0)}`)
+    createInfoPill("音频", `${getAudioProductionCount()}`)
   );
+
+  renderProductionBoard();
 
   const steps = contentPack.mainlineSteps.map((step, index) => {
     const row = document.createElement("div");
@@ -1365,11 +1446,202 @@ function renderM1Panel() {
 
   const phase = getBossPhase();
   const bossPercent = Math.round((world.boss.disorder / world.boss.max) * 100);
+  const bossProduction = getBossProductionState();
   elements.bossReadout.innerHTML = `
     <b>${world.boss.label}</b>
     <span>${world.boss.restored ? "已归位" : world.boss.active ? `${phase.name} · 失序 ${bossPercent}%` : "未显形"}</span>
+    <span class="boss-resource">资源：${bossProduction.requiredState} · ${bossProduction.audioId}</span>
     <i><em style="width:${world.boss.restored ? 100 : 100 - bossPercent}%"></em></i>
   `;
+}
+
+function renderProductionBoard() {
+  if (!elements.productionBoard) return;
+  if (!contentPack.loaded) {
+    elements.productionBoard.replaceChildren(createProductionNotice("资源生产接口等待 M1 内容包载入。"));
+    return;
+  }
+
+  const assetGroups = contentPack.assets?.assetGroups ?? [];
+  const audioItems = getAudioProductionItems();
+  const assetDemand = assetGroups.reduce((sum, group) => sum + (group.requiredCount ?? group.referenceIds?.length ?? 0), 0);
+  const audioReady = audioItems.filter((item) => hasAnyProductionRef(item.usageIds, PRODUCTION_AUDIO_CUE_REFS)).length;
+  const bossState = getBossProductionState();
+
+  const header = document.createElement("div");
+  header.className = "production-summary";
+  header.append(
+    createProductionMetric("美术组", `${assetGroups.length}`),
+    createProductionMetric("需求量", `${assetDemand}`),
+    createProductionMetric("音频项", `${audioItems.length}`),
+    createProductionMetric("已接白盒", `${audioReady}`)
+  );
+
+  const cue = document.createElement("div");
+  cue.className = "production-cue";
+  cue.textContent = `${world.productionCue.label}: ${world.productionCue.refs.join(" / ")}`;
+
+  elements.productionBoard.replaceChildren(
+    header,
+    cue,
+    createProductionSection(
+      "美术资源",
+      "白盒绘制已接入场景，真实路径待资源 manifest。",
+      assetGroups.map((group) => createAssetProductionRow(group))
+    ),
+    createProductionSection(
+      "音频资源",
+      "当前只验证触发关系，不播放未入库文件。",
+      audioItems.map((item) => createAudioProductionRow(item))
+    ),
+    createProductionSection(
+      "Boss 阶段",
+      "Canvas placeholder 与正式 Boss sprite 状态对齐。",
+      [createBossProductionRow(bossState)]
+    )
+  );
+}
+
+function createProductionNotice(text) {
+  const node = document.createElement("div");
+  node.className = "production-notice";
+  node.textContent = text;
+  return node;
+}
+
+function createProductionMetric(label, value) {
+  const node = document.createElement("span");
+  node.className = "production-metric";
+  const number = document.createElement("b");
+  number.textContent = value;
+  node.append(number, document.createTextNode(label));
+  return node;
+}
+
+function createProductionSection(title, detail, rows) {
+  const section = document.createElement("section");
+  section.className = "production-section";
+  const head = document.createElement("div");
+  head.className = "production-section-head";
+  const titleNode = document.createElement("b");
+  titleNode.textContent = title;
+  const detailNode = document.createElement("span");
+  detailNode.textContent = detail;
+  head.append(titleNode, detailNode);
+  const list = document.createElement("div");
+  list.className = "production-list";
+  list.append(...rows);
+  section.append(head, list);
+  return section;
+}
+
+function createAssetProductionRow(group) {
+  const coverage = getProductionCoverage(group.referenceIds, PRODUCTION_WHITEBOX_REFS);
+  const required = group.requiredCount ?? coverage.total;
+  const state = getProductionRowState(coverage.ready, required);
+  const row = createProductionRow({
+    name: t(group.displayNameKey, group.id),
+    meta: `${group.assetType ?? "asset"} · ${group.status ?? "draft"} · ${group.owner ?? contentPack.assets?.owner ?? "art"}`,
+    value: `${coverage.ready}/${required}`,
+    detail: group.requiredStates?.length ? `states: ${group.requiredStates.join(", ")}` : `refs: ${coverage.ready}/${coverage.total}`,
+    state
+  });
+  row.dataset.assetGroupId = group.id;
+  return row;
+}
+
+function createAudioProductionRow(item) {
+  const coverage = getProductionCoverage(item.usageIds, PRODUCTION_AUDIO_CUE_REFS);
+  const row = createProductionRow({
+    name: t(item.displayNameKey, item.id),
+    meta: `${item.type ?? "audio"} · ${item.status ?? "draft"} · ${item.bucket}`,
+    value: coverage.total ? `${coverage.ready}/${coverage.total}` : "mix",
+    detail: item.from && item.to ? `${item.from} -> ${item.to}` : `usage: ${coverage.ready}/${coverage.total}`,
+    state: coverage.ready > 0 || item.bucket === "mix" ? "whitebox" : "planned"
+  });
+  row.dataset.audioId = item.id;
+  return row;
+}
+
+function createBossProductionRow(info) {
+  const row = createProductionRow({
+    name: info.name,
+    meta: `${info.assetGroupId} · ${info.audioId}`,
+    value: info.requiredState,
+    detail: info.ready ? "requiredState 已在 boss_sprites 声明，当前仍使用 Canvas placeholder。" : "缺 Boss sprite requiredState 映射。",
+    state: info.ready ? "whitebox" : "planned"
+  });
+  row.dataset.bossResource = info.requiredState;
+  return row;
+}
+
+function createProductionRow({ name, meta, value, detail, state }) {
+  const row = document.createElement("div");
+  row.className = `production-row ${state}`;
+  const main = document.createElement("div");
+  const title = document.createElement("b");
+  title.textContent = name;
+  const metaNode = document.createElement("span");
+  metaNode.textContent = meta;
+  const detailNode = document.createElement("small");
+  detailNode.textContent = detail;
+  main.append(title, metaNode, detailNode);
+  const badge = document.createElement("strong");
+  badge.textContent = value;
+  row.append(main, badge);
+  return row;
+}
+
+function getAudioProductionItems() {
+  const audio = contentPack.audio ?? {};
+  return [
+    ...(audio.tracks ?? []).map((item) => ({ ...item, bucket: "bgm" })),
+    ...(audio.ambient ?? []).map((item) => ({ ...item, bucket: "ambient" })),
+    ...(audio.sfx ?? []).map((item) => ({ ...item, bucket: "sfx" })),
+    ...(audio.mixRules ?? []).map((item) => ({ ...item, bucket: "mix", type: "mix" }))
+  ];
+}
+
+function getAudioProductionCount() {
+  return getAudioProductionItems().length;
+}
+
+function getProductionCoverage(ids = [], readyRefs) {
+  const unique = [...new Set(ids)];
+  const ready = unique.filter((id) => readyRefs.has(id)).length;
+  return { ready, total: unique.length };
+}
+
+function hasAnyProductionRef(ids = [], readyRefs) {
+  return ids.some((id) => readyRefs.has(id));
+}
+
+function getProductionRowState(ready, required) {
+  if (required <= 0 || ready <= 0) return "planned";
+  return ready >= required ? "whitebox" : "partial";
+}
+
+function getBossProductionState() {
+  const phase = getBossPhase();
+  const requiredStateByPhase = {
+    p1: "phase_1",
+    p2: "phase_2",
+    p3: "phase_3",
+    restoration: "restoration"
+  };
+  const requiredState = requiredStateByPhase[phase.id] ?? "phase_1";
+  const bossGroup = contentPack.assets?.assetGroups?.find((group) => group.id === "asset_group.jiangnan.boss_sprites");
+  return {
+    name: `${world.boss.label} · ${phase.name}`,
+    assetGroupId: bossGroup?.id ?? "asset_group.jiangnan.boss_sprites",
+    audioId: world.boss.active ? "bgm.jiangnan_rain_alley.boss" : "sfx.boss.core_restore",
+    requiredState,
+    ready: Boolean(bossGroup?.requiredStates?.includes(requiredState))
+  };
+}
+
+function emitProductionCue(label, refs) {
+  world.productionCue = { label, refs };
 }
 
 function createInfoPill(label, value) {

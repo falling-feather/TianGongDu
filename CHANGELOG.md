@@ -6,6 +6,28 @@
 > 维护者：项目维护者  
 > 关联文档：`README.md`、`doc/02_项目规划与验收.md`、`doc/12_测试与验收指南.md`
 
+## 未发布 - 江南 M1 资源生产面板与事件接口（2026-07-04）
+
+### 已完成
+
+- 更新 `prototype/web-demo/` 的“江南M1”面板，新增资源生产面板，运行时展示 M1 美术资源组、音频项、需求数量、白盒接入状态、Boss 阶段 `requiredState` 和当前资源事件 ID。
+- 新增轻量资源事件层：架伞、纸刃、伞旋、收风、借风、风铃机关、Boss 显形、Boss 阶段伤害和 Boss 归位会更新对应 VFX/SFX/BGM/资产组 ID，先验证触发契约，不播放不存在的正式资源。
+- 将断桥 Boss Canvas placeholder 与 `asset_group.jiangnan.boss_sprites` 的 `phase_1`、`phase_2`、`phase_3`、`restoration` 状态对齐，为后续 Three.js、Axmol 或资源 manifest 替换保留边界。
+- 更新 `doc/01_开发者手册.md` 和 `doc/12_测试与验收指南.md`，明确 `AssetPackDef` / `AudioPackDef` 字段契约、真实资源 manifest 边界、资源事件层职责和浏览器验收路径。
+- 更新 `tests/web-demo.test.mjs`，覆盖资源生产面板容器、渲染函数、资源事件函数、Boss 资源状态函数和样式类。
+
+### 验证
+
+- `npm test` 通过：3 个测试套件、31 个测试用例全部通过。
+- `npm run validate:content` 通过：17 个内容 JSON 文件通过结构校验。
+- 本地 Web 服务 `http://127.0.0.1:4174/` 已启动并完成浏览器 QA：内容包状态显示“已载入 11 个子地区、15 名 NPC、9 类敌人”，资源生产面板生成 28 行生产数据，Boss 从显形、P1/P3 到归位时资源事件分别更新到 `bgm.jiangnan_rain_alley.boss`、`bossphase.*`、`sfx.boss.core_restore` 和 `mix.jiangnan_rain_alley.boss_to_restoration`，console 无错误。
+- 移动视口 390x844 下复验：生产面板、底部热键和操作提示不重叠，长资源 ID 不再溢出；截图保存到 `C:\Users\niu-h\AppData\Local\Temp\heavenwrights-m1-production-mobile.png`，桌面截图保存到 `C:\Users\niu-h\AppData\Local\Temp\heavenwrights-m1-production-desktop.png`。
+
+### 仍需后续
+
+- 将资源生产面板接入真实资源 manifest，补正式文件路径、缩略图、帧规格、锚点、碰撞辅助体、压缩格式和音频混音参数。
+- 后续如正式接入 Three.js 或 Axmol 高精度渲染，需要让表现层通过资源服务读取同一组 ID，不改变任务、Boss 和技能规则。
+
 ## 未发布 - 江南 M1 Web 原型接入（2026-07-04）
 
 ### 已完成

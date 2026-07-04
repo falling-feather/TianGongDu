@@ -989,6 +989,131 @@ kbd {
   transition: width 180ms ease;
 }
 
+.boss-resource {
+  color: #a8d8d0;
+}
+
+.production-board {
+  display: grid;
+  gap: 8px;
+  max-height: 282px;
+  margin-top: 10px;
+  overflow-y: auto;
+  padding-right: 3px;
+}
+
+.production-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.production-metric {
+  min-height: 42px;
+  padding: 7px;
+  border: 1px solid rgba(139, 226, 238, 0.18);
+  background: rgba(10, 30, 35, 0.68);
+  color: #a8c9c4;
+  font-size: 10px;
+}
+
+.production-metric b {
+  display: block;
+  color: #f1d18f;
+  font-size: 14px;
+}
+
+.production-cue,
+.production-notice {
+  padding: 8px 9px;
+  border: 1px solid rgba(232, 185, 92, 0.26);
+  background: rgba(44, 34, 20, 0.62);
+  color: #ecd8a6;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.production-section {
+  border: 1px solid rgba(219, 207, 168, 0.16);
+  background: rgba(8, 21, 24, 0.58);
+}
+
+.production-section-head {
+  display: grid;
+  gap: 3px;
+  padding: 8px 9px;
+  border-bottom: 1px solid rgba(219, 207, 168, 0.12);
+}
+
+.production-section-head b {
+  color: #efdfb5;
+  font-size: 12px;
+}
+
+.production-section-head span {
+  color: #9fb3ad;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.production-list {
+  display: grid;
+  gap: 6px;
+  max-height: 164px;
+  overflow-y: auto;
+  padding: 7px;
+}
+
+.production-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 58px;
+  padding: 8px;
+  border-left: 3px solid rgba(144, 151, 137, 0.7);
+  background: rgba(12, 28, 31, 0.66);
+}
+
+.production-row.whitebox {
+  border-left-color: #68c0bd;
+}
+
+.production-row.partial {
+  border-left-color: #e4ad5a;
+}
+
+.production-row.planned {
+  border-left-color: #778287;
+}
+
+.production-row b,
+.production-row span,
+.production-row small {
+  display: block;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.production-row b {
+  color: #f1d18f;
+  font-size: 12px;
+}
+
+.production-row span,
+.production-row small {
+  margin-top: 3px;
+  color: #9fb3ad;
+  font-size: 10px;
+}
+
+.production-row strong {
+  min-width: 48px;
+  color: #d8e8de;
+  font-size: 11px;
+  text-align: right;
+}
+
 #miniMapNodes {
   position: absolute;
   inset: 0;
@@ -1067,7 +1192,7 @@ kbd {
     right: 12px;
     width: auto;
     bottom: 132px;
-    max-height: 38vh;
+    max-height: 46vh;
   }
 
   .place-card {
@@ -1090,5 +1215,13 @@ kbd {
 
   .drawer-tabs button {
     font-size: 12px;
+  }
+
+  .production-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .production-board {
+    max-height: 220px;
   }
 }

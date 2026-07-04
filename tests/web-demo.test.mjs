@@ -24,6 +24,15 @@ describe("web demo static surface", () => {
     }
   });
 
+  it("surfaces the M1 production interface in the demo", () => {
+    assert.match(html, /productionBoard/);
+    for (const key of ["renderProductionBoard", "emitProductionCue", "getBossProductionState", "getAudioProductionCount", "PRODUCTION_WHITEBOX_REFS", "PRODUCTION_AUDIO_CUE_REFS"]) {
+      assert.match(js, new RegExp(key));
+    }
+    assert.match(js, /asset_group\.jiangnan\.boss_sprites/);
+    assert.match(js, /sfx\.boss\.core_restore/);
+  });
+
   it("serves content JSON to the web demo", () => {
     assert.match(devServer, /workspaceRoot/);
     assert.match(devServer, /contentRoot/);
@@ -35,5 +44,7 @@ describe("web demo static surface", () => {
     assert.match(css, /height:\s*100vh/);
     assert.match(css, /@media\s*\(max-width:\s*900px\)/);
     assert.match(css, /\.boss-readout/);
+    assert.match(css, /\.production-board/);
+    assert.match(css, /\.production-row\.whitebox/);
   });
 });

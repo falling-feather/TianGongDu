@@ -38,8 +38,8 @@
       "designerNote": "水巷、作坊、竹林、夜市、旧桥、断桥雨幕环境 tileset，像素尺度必须一致。",
       "status": "draft",
       "assetType": "tileset",
-      "requiredCount": 6,
-      "referenceIds": ["tile.water_lane", "tile.workshop", "tile.bamboo_path", "tile.night_market", "tile.old_bridge", "tile.rain_curtain_bridge"]
+      "requiredCount": 7,
+      "referenceIds": ["tile.water_lane", "tile.workshop", "tile.bamboo_path", "tile.dye_paper_court", "tile.night_market", "tile.old_bridge", "tile.rain_curtain_bridge"]
     },
     {
       "id": "asset_group.jiangnan.interactive_buildings",

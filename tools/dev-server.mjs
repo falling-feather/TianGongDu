@@ -41,6 +41,13 @@ function toSafePath(url) {
 }
 
 const server = createServer((request, response) => {
+  const pathname = new URL(request.url ?? "/", `http://${host}:${port}`).pathname;
+  if (pathname === "/favicon.ico") {
+    response.writeHead(204, { "cache-control": "no-store" });
+    response.end();
+    return;
+  }
+
   const fullPath = toSafePath(request.url ?? "/");
   if (!fullPath || !existsSync(fullPath) || !statSync(fullPath).isFile()) {
     response.writeHead(404, { "content-type": "text/plain; charset=utf-8" });

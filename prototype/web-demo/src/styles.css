@@ -160,6 +160,9 @@ button {
   width: 284px;
   display: grid;
   gap: 12px;
+  max-height: calc(100vh - 44px);
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .mini-map,
@@ -858,6 +861,109 @@ kbd {
   font-size: 12px;
 }
 
+.craft-board {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.craft-board.is-highlighted {
+  outline: 1px solid rgba(139, 226, 238, 0.82);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 4px rgba(139, 226, 238, 0.12);
+}
+
+.craft-status {
+  padding: 10px;
+  border: 1px solid rgba(139, 226, 238, 0.22);
+  background: rgba(10, 30, 35, 0.62);
+}
+
+.craft-status > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.craft-status b,
+.craft-options b {
+  color: #efdfb5;
+  font-size: 12px;
+}
+
+.craft-status span,
+.craft-options span,
+.craft-options small {
+  display: block;
+  margin-top: 3px;
+  color: #9fb3ad;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.craft-status p {
+  margin: 8px 0;
+  color: #d9e6dc;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.craft-status dl {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
+  margin: 0;
+}
+
+.craft-status dl div {
+  min-height: 42px;
+  padding: 6px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.craft-status dt,
+.craft-status dd {
+  margin: 0;
+  font-size: 10px;
+}
+
+.craft-status dt {
+  color: #9fb3ad;
+}
+
+.craft-status dd {
+  margin-top: 3px;
+  color: #f1d18f;
+  font-weight: 800;
+}
+
+.craft-options {
+  display: grid;
+  gap: 6px;
+}
+
+.craft-options button {
+  min-height: 58px;
+  padding: 8px;
+  border: 1px solid rgba(219, 207, 168, 0.18);
+  border-left: 3px solid #778287;
+  border-radius: 4px;
+  background: rgba(12, 28, 31, 0.68);
+  color: #e8f2ec;
+  text-align: left;
+  cursor: pointer;
+}
+
+.craft-options button.active {
+  border-left-color: #68c0bd;
+  background: rgba(20, 54, 56, 0.72);
+}
+
+.craft-options button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
 .wide-action {
   width: 100%;
   margin-top: 10px;
@@ -1193,6 +1299,8 @@ kbd {
     width: auto;
     bottom: 132px;
     max-height: 46vh;
+    overflow-y: auto;
+    padding-bottom: 8px;
   }
 
   .place-card {
@@ -1223,5 +1331,9 @@ kbd {
 
   .production-board {
     max-height: 220px;
+  }
+
+  .craft-status dl {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

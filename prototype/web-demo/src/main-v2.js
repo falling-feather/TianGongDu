@@ -18,6 +18,58 @@ const ACTIONS = {
   guard: { label: "架伞", cooldown: 0.1 }
 };
 
+const CRAFT_RECIPES = {
+  wind_hungry_surface: {
+    id: "trait.umbrella.wind_hungry_surface",
+    label: "伞面吃风",
+    actionLabel: "糊纸吃风",
+    description: "加强纸面张力，完美架伞和收风更容易积累风息。",
+    requiredItems: { bamboo: 1, rainPaper: 1, tungOil: 1 },
+    craftFields: { paperTension: 82, oilCoverage: 58, dryingState: 68, trialScore: 76 },
+    bonuses: { guardWind: 4, gatherDamage: 12, dashWindDiscount: 0, wetResistance: 4 },
+    fourEyes: { inheritance: 3, ritualFaith: 1 },
+    umbrellaFill: "#f3e8c8",
+    npcReview: "唐油点头：这面纸吃风，雨重时能稳住架势。",
+    productionRefs: ["trait.umbrella.wind_hungry_surface", "interaction.jiangnan_rain_alley.craft_paper_oil", "sfx.umbrella.open"]
+  },
+  stable_blue_dye: {
+    id: "trait.umbrella.stable_blue_dye",
+    label: "蓝染稳色",
+    actionLabel: "上油稳色",
+    description: "蓝染与桐油更均匀，湿滞地面和雨幕压迫更好处理。",
+    requiredItems: { rainPaper: 1, tungOil: 1 },
+    craftFields: { paperTension: 64, oilCoverage: 86, dryingState: 74, trialScore: 72 },
+    bonuses: { guardWind: 1, gatherDamage: 4, dashWindDiscount: 3, wetResistance: 15 },
+    fourEyes: { market: 2, ritualFaith: 3 },
+    umbrellaFill: "#bedbec",
+    variantId: "asset.variant.umbrella.blue_lantern",
+    npcReview: "蓝文把伞面举到灯下：蓝色没有浮，夜市一眼能认出。",
+    productionRefs: ["asset.variant.umbrella.blue_lantern", "trait.umbrella.stable_blue_dye", "interaction.jiangnan_rain_alley.blue_pattern"]
+  },
+  quick_order_finish: {
+    id: "trait.umbrella.quick_frame",
+    label: "急单省工",
+    actionLabel: "急单试伞",
+    description: "省下晾晒时间，交付更快，但伞旋稳定性稍差。",
+    requiredItems: { bamboo: 1, tungOil: 1 },
+    craftFields: { paperTension: 48, oilCoverage: 52, dryingState: 40, trialScore: 54 },
+    bonuses: { guardWind: 0, gatherDamage: -6, dashWindDiscount: 1, wetResistance: -4 },
+    fourEyes: { market: 4, inheritance: -2 },
+    umbrellaFill: "#e5dcc2",
+    npcReview: "沈雨皱眉：能赶货，但线脚偏松，打旧桥前最好返修。",
+    productionRefs: ["trait.umbrella.quick_frame", "trait.umbrella.loose_thread", "sfx.umbrella.close"]
+  }
+};
+
+const CRAFT_INTERACTION_HOTSPOT = {
+  id: "interaction.jiangnan_rain_alley.craft_paper_oil",
+  nodeId: "dye_paper_court",
+  label: "糊纸上油",
+  x: 1036,
+  y: 458,
+  radius: 132
+};
+
 const CONTENT_URLS = {
   region: "/content/regions/jiangnan_rain_alley.json",
   subregions: "/content/subregions/jiangnan_rain_alley_subregions.json",
@@ -74,6 +126,7 @@ const PRODUCTION_WHITEBOX_REFS = new Set([
   "tile.water_lane",
   "tile.workshop",
   "tile.bamboo_path",
+  "tile.dye_paper_court",
   "tile.night_market",
   "tile.old_bridge",
   "tile.rain_curtain_bridge",
@@ -102,6 +155,11 @@ const PRODUCTION_WHITEBOX_REFS = new Set([
   "ui.restoration",
   "asset.variant.umbrella.blue_lantern"
 ]);
+
+for (const recipe of Object.values(CRAFT_RECIPES)) {
+  PRODUCTION_WHITEBOX_REFS.add(recipe.id);
+  for (const ref of recipe.productionRefs) PRODUCTION_WHITEBOX_REFS.add(ref);
+}
 
 const PRODUCTION_AUDIO_CUE_REFS = new Set([
   "region.jiangnan_rain_alley",
@@ -431,6 +489,17 @@ function createWorld() {
     currentLocationId: "umbrella_shop",
     talkIndex: {},
     m1: { stepIndex: 0, completedStepIds: new Set(), loadedOnce: false },
+    craft: {
+      traitId: null,
+      label: "未定伞面",
+      paperTension: 0,
+      oilCoverage: 0,
+      dryingState: 0,
+      trialScore: 0,
+      bonuses: { guardWind: 0, gatherDamage: 0, dashWindDiscount: 0, wetResistance: 0 },
+      umbrellaFill: "#efe7d3",
+      npcReview: "唐油和蓝文还在等你到染纸晒场定伞面。"
+    },
     productionCue: {
       label: "等待资源事件",
       refs: ["asset_group.jiangnan.skill_vfx", "audio_pack.jiangnan_rain_alley_m1"]
@@ -484,6 +553,7 @@ const elements = {
   mapBoard: document.querySelector("#mapBoard"),
   mapDetails: document.querySelector("#mapDetails"),
   inventoryList: document.querySelector("#inventoryList"),
+  craftBoard: document.querySelector("#craftBoard"),
   npcList: document.querySelector("#npcList"),
   contentStatus: document.querySelector("#contentStatus"),
   m1Summary: document.querySelector("#m1Summary"),
@@ -543,6 +613,10 @@ elements.advanceM1Button.addEventListener("click", advanceM1Flow);
 elements.inventoryList.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-use-item]");
   if (button) useItem(button.dataset.useItem);
+});
+elements.craftBoard.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-craft-recipe]");
+  if (button) applyCraftRecipe(button.dataset.craftRecipe);
 });
 elements.mapBoard.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-node]");
@@ -728,6 +802,7 @@ function addLog(text) {
 
 function spend(action) {
   const config = ACTIONS[action];
+  const windCost = getActionWindCost(action);
   if (world.cooldowns[action] > 0) {
     world.message = `${config.label}还在回势。`;
     return false;
@@ -736,14 +811,21 @@ function spend(action) {
     world.message = "气力不足，先稳住身位。";
     return false;
   }
-  if (config.wind && world.player.wind < config.wind) {
+  if (windCost && world.player.wind < windCost) {
     world.message = "风息不足，先架伞接雨势。";
     return false;
   }
   if (config.stamina) world.player.stamina = clamp(world.player.stamina - config.stamina, 0, 100);
-  if (config.wind) world.player.wind = clamp(world.player.wind - config.wind, 0, 100);
+  if (windCost) world.player.wind = clamp(world.player.wind - windCost, 0, 100);
   world.cooldowns[action] = config.cooldown;
   return true;
+}
+
+function getActionWindCost(action) {
+  const base = ACTIONS[action]?.wind ?? 0;
+  if (!base) return 0;
+  if (action === "dash") return Math.max(0, base - (world.craft.bonuses.dashWindDiscount ?? 0));
+  return base;
 }
 
 function applyFourEyeDelta(delta) {
@@ -809,6 +891,42 @@ function craftUmbrellaPatch() {
   emitProductionCue("试伞补片制作", ["asset.variant.umbrella.blue_lantern", "asset_group.jiangnan.skill_vfx", "sfx.umbrella.open"]);
   world.message = "试伞补片完成，伞面张力更稳。";
   addLog("用青篾、雨纹纸和桐油做成一枚试伞补片。");
+  setPanel("inventory");
+}
+
+function applyCraftRecipe(recipeId) {
+  const recipe = CRAFT_RECIPES[recipeId];
+  if (!recipe) return;
+  const missing = Object.entries(recipe.requiredItems)
+    .filter(([itemId, qty]) => !hasItem(itemId, qty))
+    .map(([itemId, qty]) => `${INVENTORY_DEFS[itemId]?.name ?? itemId} x${qty}`);
+  if (missing.length) {
+    world.message = `${recipe.actionLabel}还缺：${missing.join("、")}。`;
+    addLog(`染纸晒场材料不足：${missing.join("、")}。`);
+    setPanel("inventory");
+    return;
+  }
+
+  for (const [itemId, qty] of Object.entries(recipe.requiredItems)) removeItem(itemId, qty);
+  world.craft = {
+    traitId: recipe.id,
+    label: recipe.label,
+    ...recipe.craftFields,
+    bonuses: { ...recipe.bonuses },
+    umbrellaFill: recipe.umbrellaFill,
+    variantId: recipe.variantId ?? null,
+    npcReview: recipe.npcReview
+  };
+  world.player.wind = clamp(world.player.wind + Math.round(recipe.craftFields.trialScore / 5), 0, 100);
+  world.player.stamina = clamp(world.player.stamina + Math.max(0, Math.round(recipe.bonuses.wetResistance / 2)), 0, 100);
+  applyFourEyeDelta(recipe.fourEyes);
+  completeStepIds(["quest_step.jiangnan_rain_alley.paper_and_oil"]);
+  world.m1.stepIndex = Math.max(world.m1.stepIndex, contentPack.mainlineSteps.findIndex((step) => step.id === "quest_step.jiangnan_rain_alley.market_decision"));
+  world.flags.windBellLaneSeen = true;
+  unlockNode("wind_bell_lane");
+  emitProductionCue(recipe.actionLabel, recipe.productionRefs);
+  world.message = `${recipe.label}完成：${recipe.npcReview}`;
+  addLog(`染纸晒场完成${recipe.actionLabel}，获得 ${recipe.id}。`);
   setPanel("inventory");
 }
 
@@ -973,6 +1091,22 @@ function getBossPhase() {
   return { id: "p1", name: "伞骨横雨", ratio };
 }
 
+function getCraftInteractionTarget() {
+  const node = getLocationById(CRAFT_INTERACTION_HOTSPOT.nodeId);
+  if (!node || !isNodeVisible(node) || !isNodeUnlocked(node)) return null;
+  const point = { x: CRAFT_INTERACTION_HOTSPOT.x, y: CRAFT_INTERACTION_HOTSPOT.y };
+  const nodePoint = node.spawn ?? node;
+  const nearHotspot = dist(world.player, point) < CRAFT_INTERACTION_HOTSPOT.radius;
+  const nearNode = dist(world.player, nodePoint) < CRAFT_INTERACTION_HOTSPOT.radius;
+  if (!nearHotspot && !nearNode) return null;
+  return {
+    type: "craft",
+    label: CRAFT_INTERACTION_HOTSPOT.label,
+    point,
+    interactionId: CRAFT_INTERACTION_HOTSPOT.id
+  };
+}
+
 function damageBoss(amount, source, range = 190) {
   if (!world.boss.active || world.boss.restored || world.boss.disorder <= 0) return false;
   if (dist(world.player, world.boss) > range) return false;
@@ -1016,6 +1150,8 @@ function getContextTarget() {
   if (npc) return { type: "npc", label: `交谈 ${npc.name}`, npc };
   const gatherSpot = world.gatherSpots.find((spot) => !(spot.taken && spot.once) && spot.cooldownLeft <= 0 && dist(world.player, spot) < spot.radius);
   if (gatherSpot) return { type: "gather", label: `拾取 ${gatherSpot.name}`, spot: gatherSpot };
+  const craftTarget = getCraftInteractionTarget();
+  if (craftTarget) return craftTarget;
   const rainCurtain = getLocationById("rain_curtain");
   if (dist(world.player, rainCurtain) < 120 && !world.flags.rainCurtainOpen) return { type: "locked_node", label: "校准断桥雨幕", node: rainCurtain };
   if (dist(world.player, world.vent) < 110) return { type: "vent", label: "校准风口" };
@@ -1043,6 +1179,10 @@ function interact() {
   }
   if (target.type === "gather") {
     collectSpot(target.spot);
+    return;
+  }
+  if (target.type === "craft") {
+    openCraftInteraction(target);
     return;
   }
   if (target.type === "locked_node") {
@@ -1074,6 +1214,24 @@ function collectSpot(spot) {
   world.message = spot.message;
   addLog(`${spot.name}：获得${INVENTORY_DEFS[spot.item].name} x${spot.qty}。`);
   setPanel("inventory");
+}
+
+function openCraftInteraction(target) {
+  world.flags.dyeCourtSeen = true;
+  world.currentLocationId = CRAFT_INTERACTION_HOTSPOT.nodeId;
+  world.visited.add(CRAFT_INTERACTION_HOTSPOT.nodeId);
+  emitProductionCue("染纸晒场工艺入口", [
+    target.interactionId,
+    "subregion.jiangnan_rain_alley.dye_paper_court",
+    "building.jiangnan_rain_alley.dye_court"
+  ]);
+  world.message = "染纸晒场已聚焦：选择伞面工艺，立即验证战斗参数、外观和 NPC 评价。";
+  addLog("染纸晒场交互：糊纸、上油、晾晒与试伞进入同一工艺白盒。");
+  setPanel("inventory");
+  if (!elements.craftBoard) return;
+  elements.craftBoard.classList.add("is-highlighted");
+  elements.craftBoard.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  window.setTimeout(() => elements.craftBoard?.classList.remove("is-highlighted"), 1400);
 }
 
 function talkToNpc(npc) {
@@ -1154,7 +1312,7 @@ function gatherWind() {
     }
   }
   if (!hit) {
-    hit = damageBoss(88, "收风", 310);
+    hit = damageBoss(88 + (world.craft.bonuses.gatherDamage ?? 0), "收风", 310);
   }
   world.message = hit ? "收风卷起雨幕，破绽显形。" : "收风扫过空巷，风息在雨面散开。";
 }
@@ -1229,7 +1387,7 @@ function updatePlayer(dt) {
   else if (!player.guard) player.stamina = clamp(player.stamina + dt * 18, 0, 100);
   if (player.guard) {
     player.stamina = clamp(player.stamina - dt * 8, 0, 100);
-    player.wind = clamp(player.wind + dt * 5, 0, 100);
+    player.wind = clamp(player.wind + dt * (5 + (world.craft.bonuses.guardWind ?? 0) * 0.35), 0, 100);
   }
   player.x = clamp(player.x + (mx / len) * speed * dt, 170, 1430);
   player.y = clamp(player.y + (my / len) * speed * dt, 190, 720);
@@ -1277,11 +1435,12 @@ function updateBoss(dt) {
   if (world.boss.attackTimer > 0 || world.boss.disorder <= 0) return;
   const close = dist(world.player, world.boss) < 210;
   if (close && world.player.guard && world.player.stamina > 8) {
-    world.player.wind = clamp(world.player.wind + 18, 0, 100);
+    world.player.wind = clamp(world.player.wind + 18 + (world.craft.bonuses.guardWind ?? 0), 0, 100);
     world.player.stamina = clamp(world.player.stamina - 10, 0, 100);
     damageBoss(world.boss.phase === 3 ? 64 : 42, "架伞弹雨", 240);
   } else if (close) {
-    world.player.vitality = clamp(world.player.vitality - (world.boss.phase === 3 ? 18 : 12), 20, 100);
+    const wetMitigation = Math.max(0, world.craft.bonuses.wetResistance ?? 0) * 0.18;
+    world.player.vitality = clamp(world.player.vitality - Math.max(4, (world.boss.phase === 3 ? 18 : 12) - wetMitigation), 20, 100);
     world.message = "雨幕坠压逼近，架伞或借风能稳住身位。";
   } else {
     world.message = "断桥雨幕在远处聚拢，靠近裂伞核才能削减失序。";
@@ -1294,7 +1453,7 @@ function resolveEnemyAttack(enemy) {
   enemy.attackFlash = 0.24;
   if (dist(player, enemy) > 72) return;
   if (player.guard && player.stamina > 0) {
-    player.wind = clamp(player.wind + 14, 0, 100);
+    player.wind = clamp(player.wind + 14 + (world.craft.bonuses.guardWind ?? 0), 0, 100);
     player.stamina = clamp(player.stamina - 8, 0, 100);
     enemy.disorder = clamp(enemy.disorder - 11, 0, enemy.max);
     world.message = "架伞稳住雨针，风息正在积累。";
@@ -1337,6 +1496,7 @@ function syncUi() {
   renderMiniMap();
   renderMapPanel();
   renderInventory();
+  renderCraftBoard();
   renderNpcs();
   renderM1Panel();
   renderJournal();
@@ -1398,6 +1558,48 @@ function renderInventory() {
     return row;
   });
   elements.inventoryList.replaceChildren(...rows);
+}
+
+function renderCraftBoard() {
+  if (!elements.craftBoard) return;
+  const craft = world.craft;
+  const status = document.createElement("section");
+  status.className = "craft-status";
+  status.innerHTML = `
+    <div>
+      <b>${craft.label}</b>
+      <span>${craft.traitId ?? "trait.pending.paper_surface"}</span>
+    </div>
+    <p>${craft.npcReview}</p>
+    <dl>
+      <div><dt>纸面张力</dt><dd>${craft.paperTension}</dd></div>
+      <div><dt>上油覆盖</dt><dd>${craft.oilCoverage}</dd></div>
+      <div><dt>晾晒状态</dt><dd>${craft.dryingState}</dd></div>
+      <div><dt>试伞评分</dt><dd>${craft.trialScore}</dd></div>
+    </dl>
+  `;
+
+  const options = document.createElement("div");
+  options.className = "craft-options";
+  for (const [id, recipe] of Object.entries(CRAFT_RECIPES)) {
+    const button = document.createElement("button");
+    const missing = Object.entries(recipe.requiredItems).filter(([itemId, qty]) => !hasItem(itemId, qty));
+    button.type = "button";
+    button.dataset.craftRecipe = id;
+    button.disabled = missing.length > 0;
+    button.className = craft.traitId === recipe.id ? "active" : "";
+    const needs = Object.entries(recipe.requiredItems)
+      .map(([itemId, qty]) => `${INVENTORY_DEFS[itemId]?.name ?? itemId}x${qty}`)
+      .join(" / ");
+    button.innerHTML = `
+      <b>${recipe.label}</b>
+      <span>${recipe.description}</span>
+      <small>${needs}${missing.length ? " · 材料不足" : ""}</small>
+    `;
+    options.append(button);
+  }
+
+  elements.craftBoard.replaceChildren(status, options);
 }
 
 function renderNpcs() {
@@ -1713,6 +1915,7 @@ function drawScene() {
   drawBridge();
   drawShop();
   drawBambooGrove();
+  drawDyePaperCourt();
   drawNightMarket();
   drawRoofRoute();
   drawRainCurtain();
@@ -1855,6 +2058,51 @@ function drawBambooGrove() {
     ctx.stroke();
   }
   drawAreaLabel(1195, 390, "竹林小径");
+  ctx.restore();
+}
+
+function drawDyePaperCourt() {
+  ctx.save();
+  const visible = world.flags.dyeCourtSeen || world.discovered.has("dye_paper_court");
+  ctx.globalAlpha = visible ? 1 : 0.44;
+  ctx.fillStyle = "rgba(42, 54, 55, 0.82)";
+  ctx.beginPath();
+  ctx.moveTo(914, 374);
+  ctx.lineTo(1100, 350);
+  ctx.lineTo(1154, 476);
+  ctx.lineTo(954, 510);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = "rgba(81, 128, 144, 0.28)";
+  ctx.fillRect(940, 392, 72, 46);
+  ctx.fillStyle = world.craft.variantId === "asset.variant.umbrella.blue_lantern" ? "rgba(89, 157, 205, 0.72)" : "rgba(214, 225, 202, 0.5)";
+  for (let i = 0; i < 4; i += 1) {
+    ctx.beginPath();
+    ctx.roundRect(972 + i * 34, 368 + (i % 2) * 18, 26, 82, 4);
+    ctx.fill();
+  }
+
+  ctx.strokeStyle = "rgba(235, 216, 166, 0.32)";
+  ctx.lineWidth = 4;
+  for (let i = 0; i < 3; i += 1) {
+    ctx.beginPath();
+    ctx.moveTo(938 + i * 78, 384);
+    ctx.lineTo(984 + i * 78, 500);
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = "rgba(219, 174, 86, 0.32)";
+  ctx.beginPath();
+  ctx.ellipse(1088, 440, 38, 18, -0.2, 0, Math.PI * 2);
+  ctx.fill();
+  drawUmbrella(1050, 474, 42, world.craft.umbrellaFill, -0.16);
+  ctx.strokeStyle = "rgba(139, 226, 238, 0.68)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.ellipse(CRAFT_INTERACTION_HOTSPOT.x, CRAFT_INTERACTION_HOTSPOT.y + 24, 46, 14, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  drawAreaLabel(962, 356, "染纸晒场");
   ctx.restore();
 }
 
@@ -2145,7 +2393,7 @@ function drawPlayer(player) {
     ctx.lineTo(-player.facing * 14, -4);
     ctx.stroke();
   }
-  drawUmbrella(0, -48, player.guard ? 58 : 44, "#efe7d3", player.guard ? 0 : -0.24 * player.facing);
+  drawUmbrella(0, -48, player.guard ? 58 : 44, world.craft.umbrellaFill, player.guard ? 0 : -0.24 * player.facing);
   ctx.fillStyle = "#233947";
   ctx.fillRect(-10, -20, 20, 36);
   ctx.fillStyle = "#c9b187";
@@ -2204,6 +2452,7 @@ function drawContextHalo() {
   if (target.type === "vent") point = world.vent;
   if (target.type === "restore") point = target.enemy;
   if (target.type === "locked_node") point = target.node;
+  if (target.type === "craft") point = target.point;
   if (target.type === "inspect") return;
   ctx.save();
   ctx.strokeStyle = target.type === "restore" ? "rgba(232, 200, 121, 0.72)" : "rgba(139, 226, 238, 0.62)";

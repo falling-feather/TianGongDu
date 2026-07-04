@@ -2,9 +2,35 @@
 
 > 文档定位：记录已完成事实、验证证据和剩余风险。  
 > 适用范围：项目原型、内容数据、文档体系和后续版本记录。  
-> 最后更新：2026-07-01  
+> 最后更新：2026-07-04
 > 维护者：项目维护者  
 > 关联文档：`README.md`、`doc/02_项目规划与验收.md`、`doc/12_测试与验收指南.md`
+
+## 未发布 - 江南 M1 染纸晒场工艺白盒（2026-07-04）
+
+### 已完成
+
+- 更新 `prototype/web-demo/` 的背包与场景逻辑，新增染纸晒场工艺白盒：`伞面吃风`、`蓝染稳色`、`急单省工` 三种配方会消耗材料、写入 `world.craft`、更新工艺四项指标、四维反馈、NPC 评价和资源事件 ID。
+- 将工艺结果接入真实玩法参数：架伞回风、收风伤害、借风风息消耗和雨幕湿滞承受会读取 `world.craft.bonuses`；蓝染稳色会把玩家伞面和晒场预览切到蓝色变体。
+- 新增染纸晒场 Canvas 白盒区域、工艺热点和 `F` 上下文入口；玩家从 M1 推进到竹林选材后，可在地图进入染纸晒场，靠近后按 `F` 聚焦工艺面板。
+- 更新 `content/assets/jiangnan_rain_alley_assets.json`，将 `tile.dye_paper_court` 纳入环境 tileset 需求，并让生产面板白盒接入计数达到 `7/7`。
+- 更新 `doc/01_开发者手册.md` 和 `doc/12_测试与验收指南.md`，沉淀 `CraftRecipeDef`、`world.craft` 消费规则、材料 adapter、资源 manifest 边界和浏览器验收路径。
+- 更新 `tools/dev-server.mjs`，对 `/favicon.ico` 返回 204，避免浏览器默认资源请求污染 QA console。
+- 更新 `tests/web-demo.test.mjs`，覆盖工艺面板、空间交互热点、染纸晒场绘制、蓝染变体和染纸 tileset 资源 ID。
+
+### 验证
+
+- `npm run validate:content` 通过：17 个内容 JSON 文件通过结构校验。
+- `npm test` 通过：3 个测试套件、32 个测试用例全部通过。
+- 本地 Web 服务 `http://127.0.0.1:4175/` 已启动并使用系统 Edge + Playwright 完成最终浏览器 QA：桌面 1280x720 与移动 390x844 均走通“开始巡巷 -> 推进 M1 至竹林选材 -> 地图进入染纸晒场 -> 按 F -> 选择蓝染稳色”。
+- 浏览器 QA 断言通过：`trait.umbrella.stable_blue_dye` 生效，桐油和雨纹纸消耗为 0，`quest_step.jiangnan_rain_alley.paper_and_oil` 完成，风铃巷解锁，资源事件更新到 `asset.variant.umbrella.blue_lantern / trait.umbrella.stable_blue_dye / interaction.jiangnan_rain_alley.blue_pattern`，环境 tileset 显示 `7/7`，console error 为空。
+- 截图证据：桌面截图保存到 `C:\Users\niu-h\AppData\Local\Temp\heavenwrights-m1-craft-desktop.png`，移动截图保存到 `C:\Users\niu-h\AppData\Local\Temp\heavenwrights-m1-craft-mobile.png`；移动端 `craftHotbarOverlap=false`、`productionHotbarOverlap=false`。
+
+### 仍需后续
+
+- 将当前 `CRAFT_RECIPES` 提升为正式内容数据或生成型 `CraftRecipeDef`，并接入统一物品 ID adapter。
+- 正式资源阶段需要为 `tile.dye_paper_court`、`building.jiangnan_rain_alley.dye_court`、`asset.variant.umbrella.blue_lantern` 补贴图、帧规格、锚点、碰撞辅助体和 manifest 路径。
+- 若后续用 Three.js 或 Axmol 提高染纸晒场、雨幕和伞面的表现精度，必须继续通过稳定内容 ID 与资源服务读取表现层，不改变任务、工艺和战斗判定。
 
 ## 未发布 - 江南 M1 资源生产面板与事件接口（2026-07-04）
 

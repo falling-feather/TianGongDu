@@ -13,7 +13,7 @@
   "draftContract": {
     "storage": "in_memory_only",
     "writePolicy": "export_text_then_review",
-    "fieldControlSources": ["largeAreas", "points", "owners", "statuses"],
+    "fieldControlSources": ["largeAreas", "points", "owners", "statuses", "gatherNodes", "craftRecipes", "encounters"],
     "validationLevels": ["error", "warning"],
     "notes": [
       "编辑器首版只生成可 diff 的 JSON 草稿。",
@@ -23,6 +23,7 @@
   "templateIds": [
     "editor_template.jiangnan.character",
     "editor_template.jiangnan.large_area_point",
+    "editor_template.jiangnan.gather_node",
     "editor_template.jiangnan.building_interaction",
     "editor_template.jiangnan.craft_recipe",
     "editor_template.jiangnan.encounter",
@@ -69,7 +70,7 @@
       "targetObjects": ["LargeAreaDef", "PointDef", "ConnectionDef"],
       "outputTargets": ["content/large_areas/jiangnan_large_areas.json", "content/assets/jiangnan_rain_alley_assets.json"],
       "requiredFields": ["id", "displayNameKey", "largeAreaId", "type", "coordinates", "contentRefs", "gates", "revisitStates"],
-      "draftFields": ["id", "displayNameKey", "tags", "designerNote", "status", "owner", "sourceNote", "largeAreaId", "type", "coordinates", "contentRefs", "gates", "revisitStates", "sourceSubregionId", "resourceLoop"],
+      "draftFields": ["id", "displayNameKey", "tags", "designerNote", "status", "owner", "sourceNote", "largeAreaId", "type", "coordinates", "contentRefs", "gates", "revisitStates", "sourceSubregionId", "coverage", "resourceLoop"],
       "draftSeed": {
         "id": "point.jiangnan.draft_area.draft_point",
         "displayNameKey": "point.jiangnan.draft_area.draft_point.name",
@@ -94,6 +95,36 @@
       ],
       "validationRules": ["large_area_exists", "point_count_between_6_and_12", "content_refs_resolve", "migration_from_07_complete", "connection_graph_reachable"],
       "demoPreview": { "surface": "large-map-panel", "summaryFields": ["primaryDimensions", "pointIds", "coverage"] }
+    },
+    {
+      "id": "editor_template.jiangnan.gather_node",
+      "displayNameKey": "editor_template.jiangnan.gather_node.name",
+      "targetObjects": ["GatherNodeDef", "ResourceDropDef", "RefreshRuleDef"],
+      "outputTargets": ["content/gather_nodes/jiangnan_gather_nodes.json", "content/large_areas/jiangnan_large_areas.json", "content/localization/zh-CN.json"],
+      "requiredFields": ["id", "displayNameKey", "largeAreaId", "pointId", "resourceIds", "refreshRule"],
+      "draftFields": ["id", "displayNameKey", "tags", "designerNote", "status", "owner", "sourceNote", "largeAreaId", "pointId", "resourceIds", "refreshRule", "riskRefs", "assetRefIds"],
+      "draftSeed": {
+        "id": "gather.jiangnan.draft.resource_node",
+        "displayNameKey": "gather.jiangnan.draft.resource_node.name",
+        "tags": ["gather", "jiangnan", "draft"],
+        "designerNote": "采集点编辑器生成的江南资源节点草稿。",
+        "status": "draft",
+        "owner": "planning",
+        "sourceNote": "prototype editor draft",
+        "largeAreaId": "large_area.jiangnan.lake_field_outer_dike",
+        "pointId": "point.jiangnan.lake_field_outer_dike.reed_marsh",
+        "resourceIds": ["resource.reed"],
+        "refreshRule": "daily_reed_refresh",
+        "riskRefs": ["encounter.jiangnan.water_lock_pressure"],
+        "assetRefIds": ["tile.water_lane"]
+      },
+      "fieldGroups": [
+        { "id": "placement", "fields": ["largeAreaId", "pointId", "refreshRule"] },
+        { "id": "drops", "fields": ["resourceIds", "riskRefs"] },
+        { "id": "production", "fields": ["assetRefIds", "sourceNote"] }
+      ],
+      "validationRules": ["point_exists", "resource_refs_resolve", "risk_refs_resolve", "asset_refs_resolve"],
+      "demoPreview": { "surface": "large-map-panel", "summaryFields": ["resourceIds", "refreshRule", "riskRefs"] }
     },
     {
       "id": "editor_template.jiangnan.building_interaction",
@@ -133,9 +164,9 @@
       "id": "editor_template.jiangnan.craft_recipe",
       "displayNameKey": "editor_template.jiangnan.craft_recipe.name",
       "targetObjects": ["CraftRecipeDef", "MaterialDef", "TraitDef"],
-      "outputTargets": ["content/interactions/jiangnan_rain_alley_interactions.json", "content/assets/jiangnan_rain_alley_assets.json"],
-      "requiredFields": ["id", "displayNameKey", "stationId", "requiredItems", "craftFields", "resultTraitId", "gameplayBonuses"],
-      "draftFields": ["id", "displayNameKey", "tags", "designerNote", "status", "owner", "sourceNote", "largeAreaId", "pointId", "stationId", "requiredItems", "craftFields", "qualityThresholds", "failureOutputIds", "resultTraitId", "assetVariantId", "gameplayBonuses", "npcReviewTargets"],
+      "outputTargets": ["content/recipes/jiangnan_craft_recipes.json", "content/interactions/jiangnan_rain_alley_interactions.json", "content/assets/jiangnan_rain_alley_assets.json"],
+      "requiredFields": ["id", "displayNameKey", "stationId", "requiredItems", "craftFields", "resultIds", "gameplayBonuses"],
+      "draftFields": ["id", "displayNameKey", "tags", "designerNote", "status", "owner", "sourceNote", "largeAreaId", "pointId", "interactionId", "stationId", "requiredItems", "craftFields", "qualityThresholds", "failureOutputIds", "resultIds", "assetVariantId", "gameplayBonuses", "npcReviewTargets"],
       "draftSeed": {
         "id": "recipe.jiangnan.draft.paper_surface",
         "displayNameKey": "recipe.jiangnan.draft.paper_surface.name",
@@ -146,12 +177,13 @@
         "sourceNote": "prototype editor draft",
         "largeAreaId": "large_area.jiangnan.dye_paper_yard",
         "pointId": "point.jiangnan.dye_paper_yard.oiling_table",
+        "interactionId": "interaction.jiangnan_rain_alley.craft_paper_oil",
         "stationId": "building.jiangnan_rain_alley.dye_court",
         "requiredItems": ["item.rain_paper:2", "item.tung_oil:1"],
         "craftFields": ["paperTension", "oilCoverage", "dryingState"],
         "qualityThresholds": { "mvp": 60, "excellent": 85 },
         "failureOutputIds": ["defect.umbrella.wet_edge"],
-        "resultTraitId": "trait.umbrella.wind_hungry_surface",
+        "resultIds": ["trait.umbrella.wind_hungry_surface"],
         "assetVariantId": "asset.variant.umbrella.blue_lantern",
         "gameplayBonuses": { "guardWind": 4, "wetResistance": 8 },
         "npcReviewTargets": ["npc.master_shen_yu", "npc.tang_oilpaper"]
@@ -159,16 +191,16 @@
       "fieldGroups": [
         { "id": "inputs", "fields": ["requiredItems", "stationId", "largeAreaId", "pointId"] },
         { "id": "process", "fields": ["craftFields", "qualityThresholds", "failureOutputIds"] },
-        { "id": "outputs", "fields": ["resultTraitId", "assetVariantId", "gameplayBonuses", "npcReviewTargets"] }
+        { "id": "outputs", "fields": ["resultIds", "assetVariantId", "gameplayBonuses", "npcReviewTargets"] }
       ],
       "validationRules": ["material_refs_resolve", "station_point_exists", "trait_or_variant_exists", "gameplay_bonus_bounds"],
-      "demoPreview": { "surface": "craft-board", "summaryFields": ["requiredItems", "resultTraitId", "gameplayBonuses"] }
+      "demoPreview": { "surface": "craft-board", "summaryFields": ["requiredItems", "resultIds", "gameplayBonuses"] }
     },
     {
       "id": "editor_template.jiangnan.encounter",
       "displayNameKey": "editor_template.jiangnan.encounter.name",
       "targetObjects": ["EncounterDef", "EnemyDef", "BossPhaseDef"],
-      "outputTargets": ["content/enemies/rain_alley_m1_enemies.json", "content/bosses/rain_alley_boss.json"],
+      "outputTargets": ["content/encounters/jiangnan_encounters.json", "content/enemies/rain_alley_m1_enemies.json", "content/bosses/rain_alley_boss.json"],
       "requiredFields": ["id", "displayNameKey", "largeAreaId", "pointId", "enemyIds", "learningGoal", "rewards", "repeatability"],
       "draftFields": ["id", "displayNameKey", "tags", "designerNote", "status", "owner", "sourceNote", "largeAreaId", "pointId", "spawnRules", "enemyIds", "trapIds", "learningGoal", "failureHandling", "rewards", "repeatability"],
       "draftSeed": {

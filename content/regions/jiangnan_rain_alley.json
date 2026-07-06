@@ -22,6 +22,9 @@
     "large_area.jiangnan.lake_field_outer_dike"
   ],
   "largeAreaSetIds": ["large_area_set.jiangnan_chapter_v1"],
+  "gatherNodeSetIds": ["gather_node_set.jiangnan_chapter_v1"],
+  "craftRecipeSetIds": ["craft_recipe_set.jiangnan_chapter_v1"],
+  "encounterSetIds": ["encounter_set.jiangnan_chapter_v1"],
   "pointIds": [
     "point.jiangnan.misty_bamboo_alley.mo_workshop",
     "point.jiangnan.misty_bamboo_alley.shen_old_shop",

@@ -44,7 +44,7 @@
         "npcIds": ["npc.master_shen_yu", "npc.apprentice_aqing", "npc.ye_hao", "npc.qiao_thread", "npc.alley_resident", "npc.yao_archivist"],
         "buildingIds": ["building.jiangnan_rain_alley.umbrella_shop", "building.jiangnan_rain_alley.tea_awning", "building.jiangnan_rain_alley.record_table"],
         "gatherNodeIds": ["gather.jiangnan.old_umbrella_rack", "gather.jiangnan.awning_drip", "gather.jiangnan.rib_store_scrap"],
-        "craftRecipeIds": ["recipe.jiangnan.umbrella_rib_refit", "trait.umbrella.wind_hungry_surface"],
+        "craftRecipeIds": ["recipe.jiangnan.umbrella_rib_refit", "recipe.jiangnan.paper_oil_finish"],
         "encounterIds": ["encounter.jiangnan.workshop_defense", "encounter.jiangnan.thread_shadow"],
         "questIds": ["quest.jiangnan_rain_alley.mainline", "quest.jiangnan_rain_alley.side.apprentice_shortcut", "quest.jiangnan_rain_alley.side.resident_patch"],
         "revisitHooks": ["skill.umbrella.borrow_wind", "four_eye.dailyLife.high", "four_eye.inheritance.high"]
@@ -112,7 +112,7 @@
         "npcIds": ["npc.zhou_bamboo", "npc.apprentice_aqing"],
         "buildingIds": ["building.jiangnan_rain_alley.bamboo_store"],
         "gatherNodeIds": ["gather.jiangnan.old_bamboo", "gather.jiangnan.quick_dry_bamboo", "gather.jiangnan.windbreak_bamboo"],
-        "craftRecipeIds": ["recipe.jiangnan.bamboo_frame_balance", "trait.umbrella.even_bamboo_frame"],
+        "craftRecipeIds": ["recipe.jiangnan.bamboo_frame_balance"],
         "encounterIds": ["encounter.jiangnan.bamboo_husk_patrol", "encounter.jiangnan.wet_forest_mini_boss"],
         "questIds": ["quest.jiangnan_rain_alley.side.bamboo_after_wind"],
         "revisitHooks": ["resource.regrowth.daily", "skill.umbrella.gather_wind", "trait.umbrella.repaired_rib"]
@@ -144,7 +144,7 @@
         "npcIds": ["npc.tang_oilpaper", "npc.lan_dyer_wen", "npc.xu_lan_lantern"],
         "buildingIds": ["building.jiangnan_rain_alley.dye_court"],
         "gatherNodeIds": ["gather.jiangnan.rain_paper", "gather.jiangnan.blue_dye", "gather.jiangnan.tung_oil_sample"],
-        "craftRecipeIds": ["trait.umbrella.wind_hungry_surface", "trait.umbrella.stable_blue_dye", "trait.umbrella.quick_frame"],
+        "craftRecipeIds": ["recipe.jiangnan.paper_oil_finish", "recipe.jiangnan.blue_pattern_dye", "recipe.jiangnan.wind_dry_schedule"],
         "encounterIds": ["encounter.jiangnan.mildew_walker_pressure", "encounter.jiangnan.steam_valve_puzzle"],
         "questIds": ["quest.jiangnan_rain_alley.side.blue_pattern"],
         "revisitHooks": ["asset.variant.umbrella.blue_lantern", "weather.heavy_rain", "four_eye.ritualFaith.high"]
@@ -181,7 +181,7 @@
         "npcIds": ["npc.mei_bridge_keeper", "npc.du_repairer", "npc.xu_lan_lantern", "npc.yao_archivist"],
         "buildingIds": ["building.jiangnan_rain_alley.wind_bell_shrine", "building.jiangnan_rain_alley.old_bridge_shed", "building.jiangnan_rain_alley.roof_store", "building.jiangnan_rain_alley.record_table"],
         "gatherNodeIds": ["gather.jiangnan.wind_bell_rivet", "gather.jiangnan.old_bridge_splinter", "gather.jiangnan.unsigned_rubbing"],
-        "craftRecipeIds": ["recipe.jiangnan.bridge_patch", "trait.umbrella.repaired_rib"],
+        "craftRecipeIds": ["recipe.jiangnan.bridge_patch"],
         "encounterIds": ["encounter.jiangnan.bridge_stalker", "encounter.jiangnan.broken_bone_spirit", "boss.rain_alley_broken_umbrella_obsession"],
         "questIds": ["quest.jiangnan_rain_alley.side.bridge_debt", "quest.jiangnan_rain_alley.side.wind_bell_tuning", "quest.jiangnan_rain_alley.side.old_umbrella_marks"],
         "revisitHooks": ["boss.replay.old_bridge", "record.tiangong.unsigned_mark", "skill.umbrella.borrow_wind"]
@@ -248,9 +248,9 @@
     { "id": "point.jiangnan.wet_bamboo_forest.wetland_trail", "displayNameKey": "point.jiangnan.wet_bamboo_forest.wetland_trail.name", "largeAreaId": "large_area.jiangnan.wet_bamboo_forest", "type": "exploration", "coordinates": { "x": 1390, "y": 470 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.bamboo_path", "contentRefs": ["trap.wet_slip_plane", "resource.creek_water"], "gates": ["none"], "revisitStates": ["shortcut_to_outer_dike"] },
     { "id": "point.jiangnan.wet_bamboo_forest.husk_ambush", "displayNameKey": "point.jiangnan.wet_bamboo_forest.husk_ambush.name", "largeAreaId": "large_area.jiangnan.wet_bamboo_forest", "type": "encounter", "coordinates": { "x": 1450, "y": 420 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.bamboo_path", "contentRefs": ["enemy.bamboo_husk", "encounter.jiangnan.wet_forest_mini_boss"], "gates": ["quest_step.jiangnan_rain_alley.choose_bamboo.complete"], "revisitStates": ["combat_material_drop"] },
 
-    { "id": "point.jiangnan.dye_paper_yard.dye_vats", "displayNameKey": "point.jiangnan.dye_paper_yard.dye_vats.name", "largeAreaId": "large_area.jiangnan.dye_paper_yard", "type": "craft", "coordinates": { "x": 950, "y": 430 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.dye_paper_court", "contentRefs": ["npc.lan_dyer_wen", "gather.jiangnan.blue_dye", "trait.umbrella.stable_blue_dye"], "gates": ["quest_step.jiangnan_rain_alley.choose_bamboo.complete"], "revisitStates": ["color_variant_unlock"] },
+    { "id": "point.jiangnan.dye_paper_yard.dye_vats", "displayNameKey": "point.jiangnan.dye_paper_yard.dye_vats.name", "largeAreaId": "large_area.jiangnan.dye_paper_yard", "type": "craft", "coordinates": { "x": 950, "y": 430 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.dye_paper_court", "contentRefs": ["npc.lan_dyer_wen", "gather.jiangnan.blue_dye", "recipe.jiangnan.blue_pattern_dye"], "gates": ["quest_step.jiangnan_rain_alley.choose_bamboo.complete"], "revisitStates": ["color_variant_unlock"] },
     { "id": "point.jiangnan.dye_paper_yard.paper_racks", "displayNameKey": "point.jiangnan.dye_paper_yard.paper_racks.name", "largeAreaId": "large_area.jiangnan.dye_paper_yard", "type": "gather", "coordinates": { "x": 1030, "y": 410 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.dye_paper_court", "contentRefs": ["gather.jiangnan.rain_paper", "interaction.jiangnan_rain_alley.craft_paper_oil"], "gates": ["none"], "revisitStates": ["rain_paper_refresh"] },
-    { "id": "point.jiangnan.dye_paper_yard.oiling_table", "displayNameKey": "point.jiangnan.dye_paper_yard.oiling_table.name", "largeAreaId": "large_area.jiangnan.dye_paper_yard", "type": "craft", "coordinates": { "x": 1036, "y": 458 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.dye_paper_court", "contentRefs": ["npc.tang_oilpaper", "trait.umbrella.wind_hungry_surface", "trait.umbrella.quick_frame"], "gates": ["item.tung_oil"], "revisitStates": ["craft_whitebox_entry"] },
+    { "id": "point.jiangnan.dye_paper_yard.oiling_table", "displayNameKey": "point.jiangnan.dye_paper_yard.oiling_table.name", "largeAreaId": "large_area.jiangnan.dye_paper_yard", "type": "craft", "coordinates": { "x": 1036, "y": 458 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.dye_paper_court", "contentRefs": ["npc.tang_oilpaper", "recipe.jiangnan.paper_oil_finish", "recipe.jiangnan.wind_dry_schedule"], "gates": ["item.tung_oil"], "revisitStates": ["craft_whitebox_entry"] },
     { "id": "point.jiangnan.dye_paper_yard.wind_drying_shed", "displayNameKey": "point.jiangnan.dye_paper_yard.wind_drying_shed.name", "largeAreaId": "large_area.jiangnan.dye_paper_yard", "type": "puzzle", "coordinates": { "x": 1105, "y": 385 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.dye_paper_court", "contentRefs": ["trap.wet_slip_plane", "skill.umbrella.gather_wind"], "gates": ["trait.umbrella.wind_hungry_surface"], "revisitStates": ["drying_score_trial"] },
     { "id": "point.jiangnan.dye_paper_yard.blue_pattern_corner", "displayNameKey": "point.jiangnan.dye_paper_yard.blue_pattern_corner.name", "largeAreaId": "large_area.jiangnan.dye_paper_yard", "type": "quest", "coordinates": { "x": 1135, "y": 470 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.dye_paper_court", "contentRefs": ["quest.jiangnan_rain_alley.side.blue_pattern", "asset.variant.umbrella.blue_lantern"], "gates": ["time.evening"], "revisitStates": ["lantern_stage_feedback"] },
     { "id": "point.jiangnan.dye_paper_yard.mildew_court", "displayNameKey": "point.jiangnan.dye_paper_yard.mildew_court.name", "largeAreaId": "large_area.jiangnan.dye_paper_yard", "type": "encounter", "coordinates": { "x": 1160, "y": 530 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.dye_paper_court", "contentRefs": ["enemy.rain_mildew_walker", "encounter.jiangnan.mildew_walker_pressure"], "gates": ["weather.heavy_rain"], "revisitStates": ["wet_resistance_test"] },

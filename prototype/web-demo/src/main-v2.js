@@ -82,6 +82,9 @@ const CONTENT_URLS = {
   assets: "/content/assets/jiangnan_rain_alley_assets.json",
   audio: "/content/audio/jiangnan_rain_alley_audio.json",
   largeAreas: "/content/large_areas/jiangnan_large_areas.json",
+  gatherNodes: "/content/gather_nodes/jiangnan_gather_nodes.json",
+  craftRecipes: "/content/recipes/jiangnan_craft_recipes.json",
+  encounters: "/content/encounters/jiangnan_encounters.json",
   editors: "/content/editors/jiangnan_editor_templates.json",
   localization: "/content/localization/zh-CN.json"
 };
@@ -201,6 +204,10 @@ let contentPack = {
   largeAreas: [],
   points: [],
   selfSupplyLoops: [],
+  gatherNodes: [],
+  craftRecipes: [],
+  craftTraits: [],
+  encounters: [],
   editors: []
 };
 
@@ -722,6 +729,10 @@ async function loadContentPack() {
       largeAreas: data.largeAreas.largeAreas ?? [],
       points: data.largeAreas.points ?? [],
       selfSupplyLoops: data.largeAreas.selfSupplyLoops ?? [],
+      gatherNodes: data.gatherNodes.gatherNodes ?? [],
+      craftRecipes: data.craftRecipes.recipes ?? [],
+      craftTraits: data.craftRecipes.traits ?? [],
+      encounters: data.encounters.encounters ?? [],
       editors: data.editors.templates ?? [],
       editorContract: data.editors
     };
@@ -729,7 +740,7 @@ async function loadContentPack() {
     syncEditorDraftAfterLoad();
     world.m1.loadedOnce = true;
     world.objective = "江南内容库已载入：可在“大地图”查看 6 区 36 点位，或在“编辑器”预览内容模板。";
-    addLog(`载入江南内容库：${contentPack.subregions.length} 个旧子地区、${contentPack.largeAreas.length} 个大区、${contentPack.points.length} 个点位、${contentPack.editors.length} 个编辑器模板。`);
+    addLog(`载入江南内容库：${contentPack.subregions.length} 个旧子地区、${contentPack.largeAreas.length} 个大区、${contentPack.points.length} 个点位、${contentPack.gatherNodes.length} 个采集点、${contentPack.craftRecipes.length} 条配方、${contentPack.encounters.length} 个遭遇、${contentPack.editors.length} 个编辑器模板。`);
   } catch (error) {
     contentPack = { ...contentPack, loaded: false, error: error instanceof Error ? error.message : String(error) };
     world.message = `江南 M1 内容包读取失败：${contentPack.error}`;
@@ -1695,6 +1706,124 @@ function renderLargeMapPanel() {
   renderLargeMapDetails();
 }
 
+function normalizeContentRef(ref) {
+  return String(ref ?? "").split(":")[0];
+}
+
+function getContentRefCatalog() {
+  return [
+    { kind: "大区", items: contentPack.largeAreas },
+    { kind: "点位", items: contentPack.points },
+    { kind: "旧节点", items: contentPack.subregions },
+    { kind: "主线", items: contentPack.mainlineSteps },
+    { kind: "支线", items: contentPack.sideQuests },
+    { kind: "人物", items: contentPack.npcs },
+    { kind: "建筑", items: contentPack.buildings },
+    { kind: "交互", items: contentPack.interactions },
+    { kind: "敌人", items: contentPack.enemies },
+    { kind: "Boss", items: [contentPack.boss].filter(Boolean) },
+    { kind: "采集", items: contentPack.gatherNodes },
+    { kind: "配方", items: contentPack.craftRecipes },
+    { kind: "特质", items: contentPack.craftTraits },
+    { kind: "遭遇", items: contentPack.encounters },
+    { kind: "循环", items: contentPack.selfSupplyLoops },
+    { kind: "资源组", items: contentPack.assets?.assetGroups ?? [] },
+    { kind: "资源变体", items: contentPack.assets?.variants ?? [] },
+    { kind: "音轨", items: contentPack.audio?.tracks ?? [] },
+    { kind: "环境音", items: contentPack.audio?.ambient ?? [] },
+    { kind: "音效", items: contentPack.audio?.sfx ?? [] }
+  ];
+}
+
+function inferContentRefKind(ref) {
+  const normalized = normalizeContentRef(ref);
+  const prefixKinds = [
+    ["gather.", "采集"],
+    ["recipe.", "配方"],
+    ["trait.", "特质"],
+    ["encounter.", "遭遇"],
+    ["npc.", "人物"],
+    ["building.", "建筑"],
+    ["interaction.", "交互"],
+    ["quest_step.", "主线"],
+    ["quest.", "任务"],
+    ["enemy.", "敌人"],
+    ["trap.", "机关"],
+    ["boss.", "Boss"],
+    ["asset_group.", "资源组"],
+    ["asset.", "资源"],
+    ["resource.", "资源"],
+    ["skill.", "技能"],
+    ["record.", "记录"],
+    ["travel.", "旅行"],
+    ["time.", "时辰"],
+    ["weather.", "天气"],
+    ["daily_commission.", "日常委托"]
+  ];
+  return prefixKinds.find(([prefix]) => normalized.startsWith(prefix))?.[1] ?? "引用";
+}
+
+function resolveContentRef(ref) {
+  const id = normalizeContentRef(ref);
+  for (const group of getContentRefCatalog()) {
+    const item = group.items.find((entry) => entry?.id === id);
+    if (item) {
+      return {
+        id,
+        kind: group.kind,
+        label: t(item.displayNameKey, item.label ?? item.name ?? id),
+        status: item.status ?? null,
+        resolved: true
+      };
+    }
+  }
+  return {
+    id,
+    kind: inferContentRefKind(id),
+    label: t(`${id}.name`, id),
+    status: null,
+    resolved: false
+  };
+}
+
+function createContentRefChip(ref) {
+  const resolved = resolveContentRef(ref);
+  const chip = document.createElement("span");
+  chip.className = `content-ref-chip ${resolved.resolved ? "" : "unresolved"}`;
+  chip.textContent = `${resolved.kind}:${resolved.label}`;
+  chip.title = resolved.status ? `${resolved.id} · ${resolved.status}` : resolved.id;
+  return chip;
+}
+
+function createContentRefList(refs) {
+  const list = document.createElement("div");
+  list.className = "content-ref-list";
+  for (const ref of refs ?? []) list.append(createContentRefChip(ref));
+  return list;
+}
+
+function createCoverageRows(activeArea) {
+  const coverage = activeArea.coverage ?? {};
+  const groups = [
+    { label: "人物", refs: coverage.npcIds },
+    { label: "建筑", refs: coverage.buildingIds },
+    { label: "采集", refs: coverage.gatherNodeIds },
+    { label: "配方", refs: coverage.craftRecipeIds },
+    { label: "遭遇", refs: coverage.encounterIds },
+    { label: "任务", refs: coverage.questIds }
+  ];
+  return groups
+    .filter((group) => group.refs?.length)
+    .map((group) => {
+      const row = document.createElement("div");
+      row.className = "coverage-row";
+      const label = document.createElement("b");
+      label.textContent = `${group.label} ${group.refs.length}`;
+      row.append(label, createContentRefList(group.refs));
+      return row;
+    });
+}
+
 function renderLargeMapDetails() {
   const activeArea = contentPack.largeAreas.find((area) => area.id === world.largeMapFocusId) ?? contentPack.largeAreas[0];
   if (!activeArea) {
@@ -1707,13 +1836,15 @@ function renderLargeMapDetails() {
     .map((point) => {
       const row = document.createElement("div");
       row.className = "point-row";
-      row.innerHTML = `
-        <div>
-          <b>${t(point.displayNameKey, point.id)}</b>
-          <span>${point.type} · ${point.gates.join(" / ")}</span>
-        </div>
-        <strong>${point.contentRefs.length} refs</strong>
-      `;
+      const body = document.createElement("div");
+      const title = document.createElement("b");
+      title.textContent = t(point.displayNameKey, point.id);
+      const meta = document.createElement("span");
+      meta.textContent = `${point.type} · ${point.gates.join(" / ")}`;
+      body.append(title, meta, createContentRefList(point.contentRefs));
+      const count = document.createElement("strong");
+      count.textContent = `${point.contentRefs.length} refs`;
+      row.append(body, count);
       return row;
     });
 
@@ -1734,8 +1865,14 @@ function renderLargeMapDetails() {
   summary.innerHTML = `
     <b>${t(activeArea.displayNameKey, activeArea.id)}</b>
     <span>${activeArea.resourceLoop.inputs.join(" / ")} -> ${activeArea.resourceLoop.outputs.join(" / ")}</span>
+    <small>采集 ${(activeArea.coverage?.gatherNodeIds ?? []).length} · 配方 ${(activeArea.coverage?.craftRecipeIds ?? []).length} · 遭遇 ${(activeArea.coverage?.encounterIds ?? []).length}</small>
     <small>迁移：${(activeArea.oldSubregionIds ?? []).join("、") || "13 新增大区"}</small>
   `;
+
+  const coverage = document.createElement("section");
+  coverage.className = "large-area-detail-section";
+  coverage.innerHTML = "<h3>内容覆盖</h3>";
+  coverage.append(...createCoverageRows(activeArea));
 
   const points = document.createElement("section");
   points.className = "large-area-detail-section";
@@ -1747,7 +1884,7 @@ function renderLargeMapDetails() {
   loops.innerHTML = "<h3>自给循环</h3>";
   loops.append(...loopRows.length ? loopRows : [createProductionNotice("该区自给循环待下一批细化。")]);
 
-  elements.largeMapDetails.replaceChildren(summary, points, loops);
+  elements.largeMapDetails.replaceChildren(summary, coverage, points, loops);
 }
 
 function focusLargeArea(id) {
@@ -1975,6 +2112,10 @@ function createContentIdSet() {
     ...contentPack.buildings.map((item) => item.id),
     ...contentPack.interactions.map((item) => item.id),
     ...contentPack.enemies.map((item) => item.id),
+    ...contentPack.gatherNodes.map((item) => item.id),
+    ...contentPack.craftRecipes.map((item) => item.id),
+    ...contentPack.craftTraits.map((item) => item.id),
+    ...contentPack.encounters.map((item) => item.id),
     contentPack.boss?.id
   ].filter(Boolean));
 
@@ -1991,6 +2132,7 @@ function createContentIdSet() {
 }
 
 function validateEditorRefs(field, refs, idSet, validation) {
+  const requiredContentPrefixes = ["gather.", "recipe.", "trait.", "encounter."];
   const allowedPlaceholderPrefixes = [
     "asset.",
     "asset_group.",
@@ -2001,9 +2143,7 @@ function validateEditorRefs(field, refs, idSet, validation) {
     "choice.",
     "daily_commission.",
     "defect.",
-    "encounter.",
     "four_eye.",
-    "gather.",
     "interaction.",
     "item.",
     "manifest.",
@@ -2012,21 +2152,24 @@ function validateEditorRefs(field, refs, idSet, validation) {
     "pathway.",
     "quest.",
     "quest_step.",
-    "recipe.",
     "record.",
     "resource.",
     "skill.",
     "subregion.",
     "tile.",
     "time.",
-    "trait.",
     "trap.",
     "travel.",
     "weather."
   ];
   for (const ref of refs) {
     const normalized = String(ref).split(":")[0];
-    if (!normalized || idSet.has(normalized) || allowedPlaceholderPrefixes.some((prefix) => normalized.startsWith(prefix))) continue;
+    if (!normalized || idSet.has(normalized)) continue;
+    if (requiredContentPrefixes.some((prefix) => normalized.startsWith(prefix))) {
+      validation.push({ level: "error", message: `${field} 正式内容引用未解析：${normalized}` });
+      continue;
+    }
+    if (allowedPlaceholderPrefixes.some((prefix) => normalized.startsWith(prefix))) continue;
     validation.push({ level: "warning", message: `${field} 引用尚未在当前内容库解析：${normalized}` });
   }
 }
@@ -2054,7 +2197,7 @@ function validateEditorDraft(template, draft, parseErrors = []) {
   for (const field of ["pointId", "homePointId"]) {
     if (draft[field] && !pointIds.has(draft[field])) validation.push({ level: "error", message: `${field} 未匹配已加载点位：${draft[field]}` });
   }
-  for (const field of ["contentRefs", "referenceIds", "usageIds", "assetRefIds", "serviceIds", "questIds", "interactionIds", "enemyIds", "trapIds", "rewardIds", "rewards", "unlockIds", "outcomeIds", "tiangongRecordIds"]) {
+  for (const field of ["contentRefs", "referenceIds", "usageIds", "assetRefIds", "resourceIds", "riskRefs", "requiredItems", "resultIds", "failureOutputIds", "serviceIds", "questIds", "interactionIds", "enemyIds", "trapIds", "npcReviewTargets", "rewardIds", "rewards", "unlockIds", "outcomeIds", "tiangongRecordIds"]) {
     if (Array.isArray(draft[field])) validateEditorRefs(field, draft[field], idSet, validation);
   }
   if (Array.isArray(draft.feedbackTargets) && draft.feedbackTargets.length > 0 && draft.feedbackTargets.length < 3) {
@@ -2118,6 +2261,8 @@ function getEditorControlOptions(field) {
   if (field === "owner") return EDITOR_OWNER_OPTIONS.map((value) => ({ value, label: value }));
   if (field === "largeAreaId" || field === "homeLargeAreaId") return contentPack.largeAreas.map((area) => ({ value: area.id, label: t(area.displayNameKey, area.id) }));
   if (field === "pointId" || field === "homePointId") return contentPack.points.map((point) => ({ value: point.id, label: t(point.displayNameKey, point.id) }));
+  if (field === "stationId" || field === "buildingId" || field === "homeBuildingId") return contentPack.buildings.map((building) => ({ value: building.id, label: t(building.displayNameKey, building.id) }));
+  if (field === "interactionId") return contentPack.interactions.map((interaction) => ({ value: interaction.id, label: t(interaction.displayNameKey, interaction.id) }));
   return null;
 }
 
@@ -2289,7 +2434,7 @@ function renderEditorPanel() {
 
 function renderM1Panel() {
   elements.contentStatus.textContent = contentPack.loaded
-    ? `已载入 ${contentPack.subregions.length} 个旧子地区、${contentPack.largeAreas.length} 个大区、${contentPack.points.length} 个点位。`
+    ? `已载入 ${contentPack.subregions.length} 个旧子地区、${contentPack.largeAreas.length} 个大区、${contentPack.points.length} 个点位、${contentPack.gatherNodes.length} 个采集点、${contentPack.craftRecipes.length} 条配方、${contentPack.encounters.length} 个遭遇。`
     : contentPack.error
       ? `内容包读取失败：${contentPack.error}`
       : "正在读取江南 M1 内容包...";
@@ -2299,6 +2444,9 @@ function renderM1Panel() {
     createInfoPill("核心节点", `${coreCount}/7`),
     createInfoPill("大区", `${contentPack.largeAreas.length}/6`),
     createInfoPill("点位", `${contentPack.points.length}`),
+    createInfoPill("采集", `${contentPack.gatherNodes.length}`),
+    createInfoPill("配方", `${contentPack.craftRecipes.length}`),
+    createInfoPill("遭遇", `${contentPack.encounters.length}`),
     createInfoPill("支线", `${contentPack.sideQuests.length}`),
     createInfoPill("编辑器", `${contentPack.editors.length}`),
     createInfoPill("音频", `${getAudioProductionCount()}`)
@@ -3231,6 +3379,10 @@ function getDemoQaSnapshot() {
       buildings: contentPack.buildings.length,
       mainlineSteps: contentPack.mainlineSteps.length,
       sideQuests: contentPack.sideQuests.length,
+      gatherNodes: contentPack.gatherNodes.length,
+      craftRecipes: contentPack.craftRecipes.length,
+      craftTraits: contentPack.craftTraits.length,
+      encounters: contentPack.encounters.length,
       editorTemplates: contentPack.editors.length
     }
   };

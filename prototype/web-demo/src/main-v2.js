@@ -3,6 +3,8 @@ const ctx = canvas.getContext("2d", { alpha: false });
 
 const DAY_MINUTES = 24 * 60;
 const TIME_SCALE = 1.8;
+const MAX_RENDER_DPR = 1.5;
+const UI_SYNC_MAX_HZ = 12;
 const BASE_FOUR_EYES = {
   inheritance: 52,
   market: 45,
@@ -500,6 +502,14 @@ function createWorld() {
     discovered: new Set(["water_entry", "town_awning", "main_alley", "umbrella_shop", "old_bridge"]),
     visited: new Set(["umbrella_shop"]),
     activePanel: "map",
+    ui: {
+      forceRefresh: true,
+      dirtyReason: "boot",
+      lastRenderTime: -Infinity,
+      lastStateSignature: "",
+      activePanelRendered: null,
+      maxHz: UI_SYNC_MAX_HZ
+    },
     currentLocationId: "umbrella_shop",
     largeMapFocusId: "large_area.jiangnan.misty_bamboo_alley",
     talkIndex: {},
@@ -602,11 +612,104 @@ const elements = {
 for (let i = 0; i < 8; i += 1) elements.windPips.append(document.createElement("i"));
 for (let i = 0; i < 5; i += 1) elements.restoreRow.append(document.createElement("i"));
 
+let canvasRenderDpr = 1;
+
+function markUiDirty(reason = "state") {
+  if (!world.ui) return;
+  world.ui.forceRefresh = true;
+  world.ui.dirtyReason = reason;
+}
+
+function getUiSyncIntervalMs() {
+  return 1000 / Math.max(1, world.ui?.maxHz ?? UI_SYNC_MAX_HZ);
+}
+
+function shouldSyncUi(now = performance.now()) {
+  if (!world.ui) return true;
+  if (world.ui.forceRefresh) return true;
+  if (world.ui.activePanelRendered !== world.activePanel) return true;
+  return now - world.ui.lastRenderTime >= getUiSyncIntervalMs();
+}
+
+function buildUiSignature() {
+  const player = world.player;
+  const inventory = Object.entries(world.inventory).sort().map(([id, count]) => `${id}:${count}`).join(",");
+  const cooldowns = Object.entries(world.cooldowns).map(([id, value]) => `${id}:${Math.ceil(value * 10)}`).join(",");
+  const fourEyes = Object.entries(world.fourEyes).map(([id, value]) => `${id}:${Math.round(value)}`).join(",");
+  const flags = Object.entries(world.flags).map(([id, value]) => `${id}:${Number(value)}`).join(",");
+  const discovered = [...world.discovered].sort().join(",");
+  const contentCounts = [
+    contentPack.loaded,
+    contentPack.error ?? "",
+    contentPack.largeAreas.length,
+    contentPack.points.length,
+    contentPack.largeAreaRoutes.length,
+    contentPack.gatherNodes.length,
+    contentPack.craftRecipes.length,
+    contentPack.encounters.length,
+    contentPack.editors.length
+  ].join(":");
+  const editorDirty = Object.entries(world.editorDraft.dirtyByTemplateId)
+    .filter(([, dirty]) => dirty)
+    .map(([id]) => id)
+    .sort()
+    .join(",");
+  return [
+    world.started,
+    world.activePanel,
+    world.currentLocationId,
+    world.largeMapFocusId,
+    world.editorDraft.selectedTemplateId,
+    Math.round(player.x / 4),
+    Math.round(player.y / 4),
+    Math.round(player.vitality),
+    Math.round(player.stamina),
+    Math.round(player.wind),
+    player.action,
+    Math.floor(world.totalMinutes),
+    Math.round(world.weather * 4),
+    world.restore,
+    world.choice,
+    world.message,
+    world.objective,
+    world.context,
+    world.log.join("~"),
+    inventory,
+    cooldowns,
+    fourEyes,
+    flags,
+    discovered,
+    world.m1.stepIndex,
+    world.m1.completedStepIds.size,
+    world.craft.traitId,
+    editorDirty,
+    contentCounts
+  ].join("|");
+}
+
+function renderVisiblePanel() {
+  if (world.activePanel === "map") renderMapPanel();
+  if (world.activePanel === "inventory") {
+    renderInventory();
+    renderCraftBoard();
+  }
+  if (world.activePanel === "npcs") renderNpcs();
+  if (world.activePanel === "largeMap") renderLargeMapPanel();
+  if (world.activePanel === "editor") renderEditorPanel();
+  if (world.activePanel === "m1") renderM1Panel();
+  if (world.activePanel === "journal") renderJournal();
+}
+
 function resize() {
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  canvas.width = Math.floor(canvas.clientWidth * dpr);
-  canvas.height = Math.floor(canvas.clientHeight * dpr);
+  const dpr = Math.min(window.devicePixelRatio || 1, MAX_RENDER_DPR);
+  const nextWidth = Math.max(1, Math.floor(canvas.clientWidth * dpr));
+  const nextHeight = Math.max(1, Math.floor(canvas.clientHeight * dpr));
+  if (canvas.width === nextWidth && canvas.height === nextHeight && canvasRenderDpr === dpr) return;
+  canvas.width = nextWidth;
+  canvas.height = nextHeight;
+  canvasRenderDpr = dpr;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  markUiDirty("resize");
 }
 
 window.addEventListener("resize", resize);
@@ -691,6 +794,7 @@ function startGame(panel = "map") {
 
 function setPanel(panel) {
   world.activePanel = panel;
+  markUiDirty("panel");
   for (const button of elements.panelTabs) {
     const active = button.dataset.panel === panel;
     button.classList.toggle("active", active);
@@ -748,6 +852,7 @@ async function loadContentPack() {
     world.message = `江南 M1 内容包读取失败：${contentPack.error}`;
     addLog(world.message);
   }
+  markUiDirty("content-pack");
   syncUi();
 }
 
@@ -854,6 +959,7 @@ function advanceM1Flow() {
 
 function addLog(text) {
   world.log = [text, ...world.log.filter((entry) => entry !== text)].slice(0, 6);
+  markUiDirty("journal");
 }
 
 function spend(action) {
@@ -918,12 +1024,14 @@ function choose(kind) {
 
 function addItem(id, qty = 1) {
   world.inventory[id] = (world.inventory[id] ?? 0) + qty;
+  markUiDirty("inventory");
 }
 
 function removeItem(id, qty = 1) {
   if ((world.inventory[id] ?? 0) < qty) return false;
   world.inventory[id] -= qty;
   if (world.inventory[id] <= 0) delete world.inventory[id];
+  markUiDirty("inventory");
   return true;
 }
 
@@ -1048,6 +1156,7 @@ function advanceTime(minutes, message) {
   }
   syncNpcSchedules();
   discoverNearbyNodes();
+  markUiDirty("time");
   syncUi();
 }
 
@@ -1395,13 +1504,13 @@ function borrowWind() {
   damageBoss(64, "借风越行", 220);
 }
 
-function update(dt) {
+function update(dt, now = performance.now()) {
   world.time += dt;
   world.weather += dt * 0.8;
   if (!world.started) {
     syncNpcSchedules();
     world.context = getContextTarget().label;
-    syncUi();
+    if (shouldSyncUi(now)) syncUi(now);
     return;
   }
   world.totalMinutes += dt * TIME_SCALE;
@@ -1424,7 +1533,7 @@ function update(dt) {
     world.objective = "返回纸伞铺完成《天工录》落款，或打开断桥雨幕继续扩展。";
   }
   world.context = getContextTarget().label;
-  syncUi();
+  if (shouldSyncUi(now)) syncUi(now);
 }
 
 function updatePlayer(dt) {
@@ -1520,7 +1629,17 @@ function resolveEnemyAttack(enemy) {
   }
 }
 
-function syncUi() {
+function syncUi(now = performance.now()) {
+  const nextSignature = buildUiSignature();
+  if (
+    world.ui &&
+    !world.ui.forceRefresh &&
+    world.ui.activePanelRendered === world.activePanel &&
+    world.ui.lastStateSignature === nextSignature
+  ) {
+    world.ui.lastRenderTime = now;
+    return;
+  }
   const player = world.player;
   elements.vitalityMeter.style.width = `${player.vitality}%`;
   elements.staminaMeter.style.width = `${player.stamina}%`;
@@ -1550,14 +1669,14 @@ function syncUi() {
     button.dataset.cooldown = cooldown > 0.05 ? `${cooldown.toFixed(1)}s` : "";
   }
   renderMiniMap();
-  renderMapPanel();
-  renderInventory();
-  renderCraftBoard();
-  renderNpcs();
-  renderLargeMapPanel();
-  renderEditorPanel();
-  renderM1Panel();
-  renderJournal();
+  renderVisiblePanel();
+  if (world.ui) {
+    world.ui.lastRenderTime = now;
+    world.ui.lastStateSignature = nextSignature;
+    world.ui.activePanelRendered = world.activePanel;
+    world.ui.forceRefresh = false;
+    world.ui.dirtyReason = "";
+  }
 }
 
 function renderMiniMap() {
@@ -1987,6 +2106,7 @@ function renderLargeMapDetails() {
 
 function focusLargeArea(id) {
   world.largeMapFocusId = id;
+  markUiDirty("large-map-focus");
   const area = contentPack.largeAreas.find((item) => item.id === id);
   if (area) {
     world.message = `大地图聚焦：${t(area.displayNameKey, id)}，${area.pointIds.length} 个点位已入库。`;
@@ -2007,6 +2127,7 @@ function syncEditorDraftAfterLoad() {
 
 function selectEditorTemplate(id) {
   world.editorDraft.selectedTemplateId = id;
+  markUiDirty("editor-template");
   const template = contentPack.editors.find((item) => item.id === id);
   if (template) {
     ensureEditorDraft(template);
@@ -2328,6 +2449,7 @@ function exportEditorDraft() {
   const draft = buildEditableContentModel(template, { withValidation: true });
   world.editorDraft.exportedTextByTemplateId[template.id] = JSON.stringify(draft, null, 2);
   world.editorDraft.dirtyByTemplateId[template.id] = false;
+  markUiDirty("editor-export");
   world.message = draft.editorValidation.passed ? "编辑器草稿已导出；正式写入仍需走内容校验。" : "编辑器草稿含校验错误，已导出为待修正文档。";
   addLog(`导出编辑器草稿：${draft.id}。`);
   refreshEditorPanelDetail();
@@ -2343,6 +2465,7 @@ function resetEditorDraft() {
   delete world.editorDraft.exportedTextByTemplateId[template.id];
   delete world.editorDraft.dirtyByTemplateId[template.id];
   ensureEditorDraft(template);
+  markUiDirty("editor-reset");
   world.message = "编辑器草稿已重置。";
   renderEditorPanel();
   elements.stateLine.textContent = world.message;
@@ -2481,6 +2604,7 @@ function updateEditorDraftFromControl(event) {
   world.editorDraft.draftsByTemplateId[template.id][control.dataset.editorField] = control.value;
   world.editorDraft.dirtyByTemplateId[template.id] = true;
   world.editorDraft.exportedTextByTemplateId[template.id] = "";
+  markUiDirty("editor-draft");
   refreshEditorValidation(template);
   refreshEditorDraftPreview(template);
 }
@@ -3470,6 +3594,13 @@ function getDemoQaSnapshot() {
     editorDraft: selectedTemplate ? getEditorDraftValues(selectedTemplate) : null,
     editorValidation: selectedTemplate ? world.editorDraft.validationByTemplateId[selectedTemplate.id] ?? [] : [],
     editorPreview,
+    performance: {
+      uiMaxHz: world.ui?.maxHz ?? UI_SYNC_MAX_HZ,
+      uiDirty: Boolean(world.ui?.forceRefresh),
+      activePanelRendered: world.ui?.activePanelRendered ?? null,
+      lastUiRenderMs: Math.round(world.ui?.lastRenderTime ?? 0),
+      renderDpr: canvasRenderDpr
+    },
     contentCounts: {
       largeAreas: contentPack.largeAreas.length,
       points: contentPack.points.length,
@@ -3502,6 +3633,7 @@ function installDemoQaBridge() {
       world.editorDraft.draftsByTemplateId[template.id][field] = value;
       world.editorDraft.dirtyByTemplateId[template.id] = true;
       world.editorDraft.exportedTextByTemplateId[template.id] = "";
+      markUiDirty("qa-editor-field");
       refreshEditorValidation(template);
       renderEditorPanel();
       return getDemoQaSnapshot();
@@ -3522,7 +3654,7 @@ let lastTime = performance.now();
 function frame(now) {
   const dt = Math.min((now - lastTime) / 1000, 0.05);
   lastTime = now;
-  update(dt);
+  update(dt, now);
   draw();
   requestAnimationFrame(frame);
 }

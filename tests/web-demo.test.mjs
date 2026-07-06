@@ -25,6 +25,18 @@ describe("web demo static surface", () => {
     }
   });
 
+  it("keeps UI and canvas performance safeguards in the runtime loop", () => {
+    for (const key of ["MAX_RENDER_DPR", "UI_SYNC_MAX_HZ", "canvasRenderDpr", "markUiDirty", "shouldSyncUi", "buildUiSignature", "renderVisiblePanel"]) {
+      assert.match(js, new RegExp(key));
+    }
+    assert.match(js, /world\.ui/);
+    assert.match(js, /activePanelRendered/);
+    assert.match(js, /lastStateSignature/);
+    assert.match(js, /update\(dt,\s*now\)/);
+    assert.match(js, /renderVisiblePanel\(\)/);
+    assert.match(js, /performance:\s*\{/);
+  });
+
   it("surfaces the 13 large-map and editor content tools", () => {
     for (const key of ["largeMapPanel", "largeMapBoard", "largeMapDetails", "editorPanel", "editorBoard", "exportEditorButton", "resetEditorButton"]) {
       assert.match(html, new RegExp(key));

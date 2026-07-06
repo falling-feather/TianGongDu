@@ -29,13 +29,18 @@ describe("web demo static surface", () => {
     for (const key of ["largeMapPanel", "largeMapBoard", "largeMapDetails", "editorPanel", "editorBoard", "exportEditorButton", "resetEditorButton"]) {
       assert.match(html, new RegExp(key));
     }
-    for (const key of ["largeAreas", "editors", "renderLargeMapPanel", "focusLargeArea", "renderEditorPanel", "selectEditorTemplate", "buildEditableContentModel", "exportEditorDraft", "resetEditorDraft"]) {
+    for (const key of ["largeAreas", "editors", "renderLargeMapPanel", "focusLargeArea", "renderEditorPanel", "selectEditorTemplate", "buildEditableContentModel", "exportEditorDraft", "resetEditorDraft", "updateEditorDraftFromControl", "validateEditorDraft", "createEditorFieldControl", "createEditorValidationList"]) {
+      assert.match(js, new RegExp(key));
+    }
+    for (const key of ["draftsByTemplateId", "validationByTemplateId", "exportedTextByTemplateId", "data-editor-field", "data-editor-preview", "__heavenwrightsDemo", "getDemoQaSnapshot"]) {
       assert.match(js, new RegExp(key));
     }
     assert.match(js, /\/content\/large_areas\/jiangnan_large_areas\.json/);
     assert.match(js, /\/content\/editors\/jiangnan_editor_templates\.json/);
     assert.match(css, /\.large-area-card/);
     assert.match(css, /\.editor-template-list/);
+    assert.match(css, /\.editor-form/);
+    assert.match(css, /\.editor-validation-error/);
   });
 
   it("surfaces the M1 production interface in the demo", () => {
@@ -45,6 +50,8 @@ describe("web demo static surface", () => {
     }
     assert.match(js, /asset_group\.jiangnan\.boss_sprites/);
     assert.match(js, /sfx\.boss\.core_restore/);
+    assert.match(assetPack, /building\.jiangnan_rain_alley\.outer_dike_sluice/);
+    assert.match(assetPack, /npc\.outer_dike_ahu/);
   });
 
   it("wires the dye court craft whitebox to gameplay and assets", () => {

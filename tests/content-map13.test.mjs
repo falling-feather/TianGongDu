@@ -25,7 +25,10 @@ describe("jiangnan chapter large-map content", () => {
     assert.equal(region.subregionIds.length, 11);
     assert.equal(region.largeAreaIds.length, 6);
     assert.equal(region.pointIds.length, 36);
-    assert.equal(region.corePointIds.length, 7);
+    assert.equal(region.corePointIds.length, 8);
+    assert.ok(region.corePointIds.includes("point.jiangnan.lake_field_outer_dike.water_lock"));
+    assert.ok(region.questIds.includes("quest.jiangnan.outer_dike.sluice_supply"));
+    assert.ok(region.npcIds.includes("npc.outer_dike_ahu"));
     assert.ok(region.largeAreaSetIds.includes(largeAreaPack.id));
     assert.ok(region.editorProfileIds.includes(editorTemplates.id));
   });
@@ -45,6 +48,10 @@ describe("jiangnan chapter large-map content", () => {
       assert.ok(area.resourceLoop.inputs.length >= 1, `${area.id} needs self-supply inputs`);
       assert.ok(area.resourceLoop.outputs.length >= 1, `${area.id} needs self-supply outputs`);
     }
+    const outerDike = largeAreaPack.largeAreas.find((area) => area.id === "large_area.jiangnan.lake_field_outer_dike");
+    assert.ok(outerDike.coverage.questIds.includes("quest.jiangnan.outer_dike.sluice_supply"));
+    assert.ok(outerDike.coverage.npcIds.includes("npc.outer_dike_ahu"));
+    assert.ok(outerDike.coverage.buildingIds.includes("building.jiangnan_rain_alley.outer_dike_sluice"));
   });
 
   it("maps every 07 subregion into 13 point definitions without deleting the old baseline", () => {
@@ -96,12 +103,19 @@ describe("jiangnan chapter large-map content", () => {
 
   it("describes seven standard editor templates with content output targets", () => {
     assert.equal(editorTemplates.templates.length, 7);
+    assert.equal(editorTemplates.draftContract.storage, "in_memory_only");
+    assert.equal(editorTemplates.draftContract.writePolicy, "export_text_then_review");
+    assert.ok(editorTemplates.draftContract.validationLevels.includes("error"));
     assert.deepEqual(editorTemplates.templateIds, editorTemplates.templates.map((template) => template.id));
     for (const template of editorTemplates.templates) {
       assert.ok(localization[template.displayNameKey], `${template.displayNameKey} missing localization`);
       assert.ok(template.targetObjects.length >= 1, `${template.id} needs target objects`);
       assert.ok(template.outputTargets.every((target) => target.startsWith("content/")), `${template.id} must output into content/`);
       assert.ok(template.requiredFields.includes("id"), `${template.id} needs id field`);
+      assert.ok(template.draftFields.includes("id"), `${template.id} needs editable id field`);
+      assert.ok(template.draftFields.includes("displayNameKey"), `${template.id} needs editable displayNameKey field`);
+      assert.ok(template.draftSeed?.id, `${template.id} needs a seed draft id`);
+      assert.ok(template.draftSeed?.displayNameKey?.endsWith(".name"), `${template.id} seed needs localization key shape`);
       assert.ok(template.validationRules.length >= 2, `${template.id} needs validation rules`);
       assert.ok(template.demoPreview.surface, `${template.id} needs demo preview surface`);
     }

@@ -79,16 +79,18 @@ describe("jiangnan rain alley M1 content pack", () => {
 
   it("defines the mainline, side quests, and return interactions", () => {
     assert.equal(quests.mainlineQuest.id, "quest.jiangnan_rain_alley.mainline");
-    assert.equal(quests.mainlineQuest.stepIds.length, 10);
-    assert.equal(quests.steps.length, 10);
-    assert.equal(quests.sideQuests.length, 8);
+    assert.equal(quests.mainlineQuest.stepIds.length, 11);
+    assert.equal(quests.steps.length, 11);
+    assert.equal(quests.sideQuests.length, 9);
     assert.ok(quests.mainlineQuest.choiceIds.includes("choice.material_compromise"));
+    assert.ok(quests.mainlineQuest.stepIds.includes("quest_step.jiangnan_rain_alley.outer_dike_sluice"));
     assert.ok(quests.sideQuests.some((quest) => quest.id === "quest.jiangnan_rain_alley.side.bamboo_after_wind"));
+    assert.ok(quests.sideQuests.some((quest) => quest.id === "quest.jiangnan.outer_dike.sluice_supply"));
     assert.ok(quests.repeatableInteractions.length >= 6);
   });
 
   it("defines NPCs with functional roles, emotional roles, schedules, and four-eye lean", () => {
-    assert.equal(npcs.npcs.length, 15);
+    assert.equal(npcs.npcs.length, 18);
     const requiredNpcIds = [
       "npc.master_shen_yu",
       "npc.market_runner",
@@ -97,7 +99,10 @@ describe("jiangnan rain alley M1 content pack", () => {
       "npc.apprentice_aqing",
       "npc.ye_hao",
       "npc.mei_bridge_keeper",
-      "npc.du_repairer"
+      "npc.du_repairer",
+      "npc.outer_dike_ahu",
+      "npc.outer_dike_tongzhou",
+      "npc.outer_dike_patrol"
     ];
     for (const id of requiredNpcIds) {
       assert.ok(npcs.npcs.some((npc) => npc.id === id), `${id} missing`);
@@ -114,12 +119,17 @@ describe("jiangnan rain alley M1 content pack", () => {
   });
 
   it("keeps buildings and interactions separated by responsibility", () => {
-    assert.equal(buildings.buildings.length, 10);
+    assert.equal(buildings.buildings.length, 12);
     assert.ok(buildings.buildings.every((building) => building.regionId === region.id));
+    assert.ok(buildings.buildings.some((building) => building.id === "building.jiangnan_rain_alley.outer_dike_sluice"));
+    assert.ok(buildings.buildings.some((building) => building.id === "building.jiangnan_rain_alley.outer_dike_boatyard"));
     const interactionTypes = new Set(interactions.interactions.map((interaction) => interaction.type));
     for (const type of interactions.interactionTypes) {
       assert.ok(interactionTypes.has(type), `${type} interaction missing`);
     }
+    assert.ok(interactions.interactions.some((item) => item.id === "interaction.jiangnan_rain_alley.outer_dike_sluice"));
+    assert.ok(interactions.interactions.some((item) => item.id === "interaction.jiangnan_rain_alley.outer_dike_boat_repair"));
+    assert.ok(interactions.interactions.some((item) => item.id === "interaction.jiangnan_rain_alley.outer_dike_patrol"));
     const marketChoice = interactions.interactions.find((item) => item.id === "interaction.jiangnan_rain_alley.market_choice");
     assert.ok(marketChoice);
     assert.equal(marketChoice.effects.feedbackTargets.length, 3);
@@ -147,7 +157,9 @@ describe("jiangnan rain alley M1 content pack", () => {
   it("defines art and audio production interfaces", () => {
     assert.equal(assets.assetGroups.length, 9);
     assert.ok(assets.assetGroups.some((group) => group.id === "asset_group.jiangnan.subregion_concepts" && group.requiredCount === 11));
-    assert.ok(assets.assetGroups.some((group) => group.id === "asset_group.jiangnan.npc_portraits" && group.requiredCount === 15));
+    assert.ok(assets.assetGroups.some((group) => group.id === "asset_group.jiangnan.interactive_buildings" && group.requiredCount === 12));
+    assert.ok(assets.assetGroups.some((group) => group.id === "asset_group.jiangnan.npc_portraits" && group.requiredCount === 18));
+    assert.ok(assets.assetGroups.some((group) => group.referenceIds.includes("npc.outer_dike_ahu")));
     assert.equal(audio.tracks.length, 4);
     assert.equal(audio.ambient.length, 3);
     assert.equal(audio.sfx.length, 9);

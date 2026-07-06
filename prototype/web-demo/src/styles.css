@@ -1229,6 +1229,17 @@ kbd {
   padding-right: 3px;
 }
 
+.large-map-board {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-height: none;
+  overflow: visible;
+  padding-right: 0;
+}
+
+.editor-template-list {
+  max-height: 220px;
+}
+
 .large-area-card,
 .editor-template-list button {
   min-height: 62px;
@@ -1372,6 +1383,79 @@ kbd {
   color: #a8e3df;
 }
 
+.editor-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  margin-top: 9px;
+}
+
+.editor-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.editor-field span {
+  color: #b9c9c3;
+  font-size: 10px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.editor-field input,
+.editor-field select,
+.editor-field textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid rgba(219, 207, 168, 0.18);
+  background: rgba(4, 13, 16, 0.78);
+  color: #eef6ec;
+  font: inherit;
+  font-size: 11px;
+}
+
+.editor-field input,
+.editor-field select {
+  height: 30px;
+}
+
+.editor-field textarea {
+  min-height: 54px;
+  resize: vertical;
+}
+
+.editor-validation {
+  display: grid;
+  gap: 5px;
+  margin-top: 9px;
+}
+
+.editor-validation p {
+  margin: 0;
+  padding: 6px 7px;
+  border: 1px solid rgba(219, 207, 168, 0.16);
+  background: rgba(12, 28, 31, 0.72);
+  font-size: 10px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.editor-validation-error {
+  border-color: rgba(230, 110, 91, 0.38) !important;
+  color: #ffb3a5;
+}
+
+.editor-validation-warning {
+  border-color: rgba(232, 185, 92, 0.32) !important;
+  color: #efd390;
+}
+
+.editor-validation-ok {
+  border-color: rgba(105, 201, 169, 0.34) !important;
+  color: #a7e2c9;
+}
+
 .editor-detail pre {
   max-height: 170px;
   overflow: auto;
@@ -1446,6 +1530,13 @@ kbd {
 
   .drawer-panel {
     min-height: 190px;
+  }
+
+  .large-map-board {
+    grid-template-columns: 1fr;
+    max-height: 220px;
+    overflow-y: auto;
+    padding-right: 3px;
   }
 
   .map-board {

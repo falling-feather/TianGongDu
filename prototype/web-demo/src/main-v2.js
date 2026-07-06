@@ -496,7 +496,13 @@ function createWorld() {
     largeMapFocusId: "large_area.jiangnan.misty_bamboo_alley",
     talkIndex: {},
     m1: { stepIndex: 0, completedStepIds: new Set(), loadedOnce: false },
-    editorDraft: { selectedTemplateId: null, dirty: false, exportedText: "" },
+    editorDraft: {
+      selectedTemplateId: null,
+      draftsByTemplateId: {},
+      validationByTemplateId: {},
+      exportedTextByTemplateId: {},
+      dirtyByTemplateId: {}
+    },
     craft: {
       traitId: null,
       label: "未定伞面",
@@ -599,6 +605,7 @@ window.addEventListener("resize", resize);
 resize();
 
 window.addEventListener("keydown", (event) => {
+  if (event.target?.matches?.("input, textarea, select")) return;
   const key = event.key.toLowerCase();
   if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(key)) event.preventDefault();
   keys.add(key);
@@ -650,6 +657,8 @@ elements.editorBoard.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-editor-template]");
   if (button) selectEditorTemplate(button.dataset.editorTemplate);
 });
+elements.editorBoard.addEventListener("input", updateEditorDraftFromControl);
+elements.editorBoard.addEventListener("change", updateEditorDraftFromControl);
 
 for (const button of elements.panelTabs) {
   button.addEventListener("click", () => setPanel(button.dataset.panel));
@@ -1761,22 +1770,98 @@ function syncEditorDraftAfterLoad() {
   if (!world.editorDraft.selectedTemplateId) {
     world.editorDraft.selectedTemplateId = contentPack.editors[0].id;
   }
+  for (const template of contentPack.editors) ensureEditorDraft(template);
 }
 
 function selectEditorTemplate(id) {
   world.editorDraft.selectedTemplateId = id;
-  world.editorDraft.dirty = true;
   const template = contentPack.editors.find((item) => item.id === id);
   if (template) {
+    ensureEditorDraft(template);
     world.message = `编辑器模板：${t(template.displayNameKey, id)} 已选中。`;
     addLog(`选择编辑器模板：${t(template.displayNameKey, id)}。`);
   }
-  refreshEditorPanelDetail();
+  renderEditorPanel();
   elements.stateLine.textContent = world.message;
   renderJournal();
 }
 
-function buildEditableContentModel(template) {
+const EDITOR_STATUS_OPTIONS = ["draft", "mvp", "locked", "deprecated"];
+const EDITOR_OWNER_OPTIONS = ["planning", "tools", "program", "art", "audio", "qa"];
+const EDITOR_TEXTAREA_FIELDS = new Set([
+  "designerNote",
+  "sourceNote",
+  "learningGoal",
+  "failureHandling",
+  "trigger"
+]);
+const EDITOR_JSON_FIELDS = new Set([
+  "coordinates",
+  "routine",
+  "fourEyeLean",
+  "resourceLoop",
+  "qualityThresholds",
+  "gameplayBonuses",
+  "fourEyeDeltas"
+]);
+const EDITOR_ARRAY_FIELD_HINTS = [
+  "Ids",
+  "Items",
+  "Fields",
+  "Rules",
+  "Criteria",
+  "Targets",
+  "Refs",
+  "Tags",
+  "States",
+  "Rewards",
+  "Conditions",
+  "Drops",
+  "Inputs",
+  "Outputs"
+];
+const EDITOR_ARRAY_FIELDS = new Set([
+  "assetRefIds",
+  "choiceIds",
+  "conditions",
+  "contentRefs",
+  "craftFields",
+  "effects",
+  "enemyIds",
+  "failureOutputIds",
+  "feedbackTargets",
+  "gates",
+  "interactionIds",
+  "largeAreaIds",
+  "npcReviewTargets",
+  "outcomeIds",
+  "pointIds",
+  "referenceIds",
+  "requiredItems",
+  "requiredStates",
+  "roles",
+  "serviceIds",
+  "spawnRules",
+  "stepIds",
+  "tags",
+  "trapIds",
+  "unlockIds",
+  "usageIds",
+  "revisitStates"
+]);
+
+function cloneEditorValue(value) {
+  if (value == null) return value;
+  return JSON.parse(JSON.stringify(value));
+}
+
+function getEditorFieldNames(template) {
+  const base = contentPack.editorContract?.requiredBaseFields ?? ["schemaVersion", "id", "displayNameKey", "tags", "designerNote", "status", "owner", "sourceNote"];
+  return [...new Set([...(template.draftFields ?? []), ...base, ...(template.requiredFields ?? [])])];
+}
+
+function createEditorSeed(template) {
+  const seed = cloneEditorValue(template.draftSeed) ?? {};
   return {
     schemaVersion: 1,
     id: `draft.${template.id.replace("editor_template.jiangnan.", "")}.example`,
@@ -1786,20 +1871,224 @@ function buildEditableContentModel(template) {
     status: "draft",
     owner: "planning",
     sourceNote: "prototype/web-demo editor preview",
-    targetObjects: template.targetObjects,
-    requiredFields: template.requiredFields,
-    validationRules: template.validationRules,
-    outputTargets: template.outputTargets
+    ...seed
   };
+}
+
+function formatEditorInputValue(value) {
+  if (value == null) return "";
+  if (Array.isArray(value)) return value.join(", ");
+  if (typeof value === "object") return JSON.stringify(value, null, 2);
+  return String(value);
+}
+
+function ensureEditorDraft(template) {
+  if (!world.editorDraft.draftsByTemplateId) {
+    world.editorDraft.draftsByTemplateId = {};
+    world.editorDraft.validationByTemplateId = {};
+    world.editorDraft.exportedTextByTemplateId = {};
+    world.editorDraft.dirtyByTemplateId = {};
+  }
+  if (!world.editorDraft.draftsByTemplateId[template.id]) {
+    const seed = createEditorSeed(template);
+    const fields = getEditorFieldNames(template);
+    world.editorDraft.draftsByTemplateId[template.id] = Object.fromEntries(fields.map((field) => [field, formatEditorInputValue(seed[field])]));
+    world.editorDraft.dirtyByTemplateId[template.id] = false;
+  }
+}
+
+function isEditorArrayField(field) {
+  if (EDITOR_ARRAY_FIELDS.has(field)) return true;
+  const normalized = field.toLowerCase();
+  return EDITOR_ARRAY_FIELD_HINTS.some((hint) => normalized.endsWith(hint.toLowerCase()) || normalized.includes(hint.toLowerCase()));
+}
+
+function parseEditorFieldValue(field, rawValue) {
+  const value = String(rawValue ?? "").trim();
+  if (!value) return isEditorArrayField(field) ? [] : "";
+  if (EDITOR_JSON_FIELDS.has(field)) return JSON.parse(value);
+  if (field === "requiredCount" || field === "schemaVersion") return Number(value);
+  if (isEditorArrayField(field)) {
+    if (value.startsWith("[")) return JSON.parse(value);
+    return value
+      .split(/[\n,]/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  if ((value.startsWith("{") && value.endsWith("}")) || (value.startsWith("[") && value.endsWith("]"))) {
+    return JSON.parse(value);
+  }
+  return value;
+}
+
+function getEditorDraftValues(template) {
+  ensureEditorDraft(template);
+  return world.editorDraft.draftsByTemplateId[template.id] ?? {};
+}
+
+function buildEditableContentModel(template, options = {}) {
+  const values = getEditorDraftValues(template);
+  const seed = createEditorSeed(template);
+  const draft = {
+    schemaVersion: 1,
+    editorTemplateId: template.id,
+    targetObjects: template.targetObjects,
+    outputTargets: template.outputTargets,
+    validationRules: template.validationRules,
+    ...seed
+  };
+
+  const parseErrors = [];
+  for (const field of getEditorFieldNames(template)) {
+    try {
+      draft[field] = parseEditorFieldValue(field, values[field]);
+    } catch (error) {
+      parseErrors.push(`${field}: ${error instanceof Error ? error.message : String(error)}`);
+      draft[field] = values[field] ?? "";
+    }
+  }
+
+  if (options.withValidation) {
+    const validation = validateEditorDraft(template, draft, parseErrors);
+    return { ...draft, editorValidation: summarizeEditorValidation(validation) };
+  }
+  return draft;
+}
+
+function hasEditorValue(value) {
+  if (Array.isArray(value)) return value.length > 0;
+  if (value && typeof value === "object") return Object.keys(value).length > 0;
+  return value != null && String(value).trim().length > 0;
+}
+
+function createContentIdSet() {
+  const ids = new Set([
+    contentPack.region?.id,
+    contentPack.assets?.id,
+    contentPack.audio?.id,
+    ...contentPack.largeAreas.map((item) => item.id),
+    ...contentPack.points.map((item) => item.id),
+    ...contentPack.subregions.map((item) => item.id),
+    ...contentPack.mainlineSteps.map((item) => item.id),
+    ...contentPack.sideQuests.map((item) => item.id),
+    ...contentPack.npcs.map((item) => item.id),
+    ...contentPack.buildings.map((item) => item.id),
+    ...contentPack.interactions.map((item) => item.id),
+    ...contentPack.enemies.map((item) => item.id),
+    contentPack.boss?.id
+  ].filter(Boolean));
+
+  for (const group of contentPack.assets?.assetGroups ?? []) {
+    ids.add(group.id);
+    for (const ref of group.referenceIds ?? []) ids.add(ref);
+  }
+  for (const variant of contentPack.assets?.variants ?? []) ids.add(variant.id);
+  for (const track of contentPack.audio?.tracks ?? []) ids.add(track.id);
+  for (const item of contentPack.audio?.ambient ?? []) ids.add(item.id);
+  for (const item of contentPack.audio?.sfx ?? []) ids.add(item.id);
+  for (const loop of contentPack.selfSupplyLoops ?? []) ids.add(loop.id);
+  return ids;
+}
+
+function validateEditorRefs(field, refs, idSet, validation) {
+  const allowedPlaceholderPrefixes = [
+    "asset.",
+    "asset_group.",
+    "audio.",
+    "bgm.",
+    "sfx.",
+    "amb.",
+    "choice.",
+    "daily_commission.",
+    "defect.",
+    "encounter.",
+    "four_eye.",
+    "gather.",
+    "interaction.",
+    "item.",
+    "manifest.",
+    "npc.",
+    "outcome.",
+    "pathway.",
+    "quest.",
+    "quest_step.",
+    "recipe.",
+    "record.",
+    "resource.",
+    "skill.",
+    "subregion.",
+    "tile.",
+    "time.",
+    "trait.",
+    "trap.",
+    "travel.",
+    "weather."
+  ];
+  for (const ref of refs) {
+    const normalized = String(ref).split(":")[0];
+    if (!normalized || idSet.has(normalized) || allowedPlaceholderPrefixes.some((prefix) => normalized.startsWith(prefix))) continue;
+    validation.push({ level: "warning", message: `${field} 引用尚未在当前内容库解析：${normalized}` });
+  }
+}
+
+function validateEditorDraft(template, draft, parseErrors = []) {
+  const validation = [];
+  const fields = new Set([...(contentPack.editorContract?.requiredBaseFields ?? []), ...(template.requiredFields ?? [])]);
+  for (const field of fields) {
+    if (!hasEditorValue(draft[field])) validation.push({ level: "error", message: `缺少必填字段：${field}` });
+  }
+  for (const error of parseErrors) validation.push({ level: "error", message: `字段格式错误：${error}` });
+  if (draft.id && !/^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$/.test(String(draft.id))) {
+    validation.push({ level: "error", message: "id 必须是稳定英文命名空间，例如 npc.jiangnan.name" });
+  }
+  if (draft.displayNameKey && !String(draft.displayNameKey).endsWith(".name")) {
+    validation.push({ level: "warning", message: "displayNameKey 建议以 .name 结尾并写入本地化表" });
+  }
+
+  const largeAreaIds = new Set(contentPack.largeAreas.map((item) => item.id));
+  const pointIds = new Set(contentPack.points.map((item) => item.id));
+  const idSet = createContentIdSet();
+  for (const field of ["largeAreaId", "homeLargeAreaId"]) {
+    if (draft[field] && !largeAreaIds.has(draft[field])) validation.push({ level: "error", message: `${field} 未匹配已加载大区：${draft[field]}` });
+  }
+  for (const field of ["pointId", "homePointId"]) {
+    if (draft[field] && !pointIds.has(draft[field])) validation.push({ level: "error", message: `${field} 未匹配已加载点位：${draft[field]}` });
+  }
+  for (const field of ["contentRefs", "referenceIds", "usageIds", "assetRefIds", "serviceIds", "questIds", "interactionIds", "enemyIds", "trapIds", "rewardIds", "rewards", "unlockIds", "outcomeIds", "tiangongRecordIds"]) {
+    if (Array.isArray(draft[field])) validateEditorRefs(field, draft[field], idSet, validation);
+  }
+  if (Array.isArray(draft.feedbackTargets) && draft.feedbackTargets.length > 0 && draft.feedbackTargets.length < 3) {
+    validation.push({ level: "warning", message: "关键选择/交互建议至少提供 3 个反馈目标" });
+  }
+  if (!validation.some((item) => item.level === "error")) {
+    validation.push({ level: "ok", message: "草稿满足首版编辑器基础校验，可导出文本进入人工审查。" });
+  }
+  return validation;
+}
+
+function summarizeEditorValidation(validation) {
+  return {
+    passed: !validation.some((item) => item.level === "error"),
+    errors: validation.filter((item) => item.level === "error").map((item) => item.message),
+    warnings: validation.filter((item) => item.level === "warning").map((item) => item.message),
+    notes: validation.filter((item) => item.level === "ok").map((item) => item.message)
+  };
+}
+
+function refreshEditorValidation(template) {
+  const draft = buildEditableContentModel(template);
+  const validation = validateEditorDraft(template, draft);
+  world.editorDraft.validationByTemplateId[template.id] = validation;
+  return validation;
 }
 
 function exportEditorDraft() {
   const template = contentPack.editors.find((item) => item.id === world.editorDraft.selectedTemplateId);
   if (!template) return;
-  const draft = buildEditableContentModel(template);
-  world.editorDraft.exportedText = JSON.stringify(draft, null, 2);
-  world.editorDraft.dirty = false;
-  world.message = "编辑器草稿已导出到预览区；正式写入仍需走内容校验。";
+  const draft = buildEditableContentModel(template, { withValidation: true });
+  world.editorDraft.exportedTextByTemplateId[template.id] = JSON.stringify(draft, null, 2);
+  world.editorDraft.dirtyByTemplateId[template.id] = false;
+  world.message = draft.editorValidation.passed ? "编辑器草稿已导出；正式写入仍需走内容校验。" : "编辑器草稿含校验错误，已导出为待修正文档。";
   addLog(`导出编辑器草稿：${draft.id}。`);
   refreshEditorPanelDetail();
   elements.stateLine.textContent = world.message;
@@ -1807,13 +2096,15 @@ function exportEditorDraft() {
 }
 
 function resetEditorDraft() {
-  world.editorDraft = {
-    selectedTemplateId: contentPack.editors[0]?.id ?? null,
-    dirty: false,
-    exportedText: ""
-  };
+  const template = getSelectedEditorTemplate();
+  if (!template) return;
+  delete world.editorDraft.draftsByTemplateId[template.id];
+  delete world.editorDraft.validationByTemplateId[template.id];
+  delete world.editorDraft.exportedTextByTemplateId[template.id];
+  delete world.editorDraft.dirtyByTemplateId[template.id];
+  ensureEditorDraft(template);
   world.message = "编辑器草稿已重置。";
-  refreshEditorPanelDetail();
+  renderEditorPanel();
   elements.stateLine.textContent = world.message;
   renderJournal();
 }
@@ -1822,11 +2113,80 @@ function getSelectedEditorTemplate() {
   return contentPack.editors.find((item) => item.id === world.editorDraft.selectedTemplateId) ?? contentPack.editors[0];
 }
 
+function getEditorControlOptions(field) {
+  if (field === "status") return EDITOR_STATUS_OPTIONS.map((value) => ({ value, label: value }));
+  if (field === "owner") return EDITOR_OWNER_OPTIONS.map((value) => ({ value, label: value }));
+  if (field === "largeAreaId" || field === "homeLargeAreaId") return contentPack.largeAreas.map((area) => ({ value: area.id, label: t(area.displayNameKey, area.id) }));
+  if (field === "pointId" || field === "homePointId") return contentPack.points.map((point) => ({ value: point.id, label: t(point.displayNameKey, point.id) }));
+  return null;
+}
+
+function getEditorControlKind(field) {
+  if (getEditorControlOptions(field)) return "select";
+  if (EDITOR_TEXTAREA_FIELDS.has(field) || EDITOR_JSON_FIELDS.has(field) || isEditorArrayField(field)) return "textarea";
+  return "input";
+}
+
+function createEditorFieldControl(template, field, value) {
+  const row = document.createElement("label");
+  row.className = "editor-field";
+  row.dataset.editorFieldRow = field;
+
+  const label = document.createElement("span");
+  label.textContent = field;
+  row.append(label);
+
+  const options = getEditorControlOptions(field);
+  let control;
+  if (options) {
+    control = document.createElement("select");
+    for (const option of options) {
+      const item = document.createElement("option");
+      item.value = option.value;
+      item.textContent = option.label;
+      control.append(item);
+    }
+  } else if (getEditorControlKind(field) === "textarea") {
+    control = document.createElement("textarea");
+    control.rows = EDITOR_JSON_FIELDS.has(field) ? 4 : 2;
+  } else {
+    control = document.createElement("input");
+    control.type = field === "requiredCount" || field === "schemaVersion" ? "number" : "text";
+  }
+  control.dataset.editorField = field;
+  control.dataset.editorTemplate = template.id;
+  control.value = value ?? "";
+  row.append(control);
+  return row;
+}
+
+function createEditorValidationList(template) {
+  const validation = world.editorDraft.validationByTemplateId[template.id] ?? refreshEditorValidation(template);
+  const list = document.createElement("div");
+  list.className = "editor-validation";
+  list.dataset.editorValidation = "true";
+  for (const item of validation) {
+    const row = document.createElement("p");
+    row.className = `editor-validation-${item.level}`;
+    row.textContent = item.message;
+    list.append(row);
+  }
+  return list;
+}
+
+function createEditorPreview(template) {
+  const pre = document.createElement("pre");
+  pre.dataset.editorPreview = "true";
+  pre.textContent = world.editorDraft.exportedTextByTemplateId[template.id] || JSON.stringify(buildEditableContentModel(template, { withValidation: true }), null, 2);
+  return pre;
+}
+
 function createEditorDetail(selected) {
   const detail = document.createElement("section");
   detail.className = "editor-detail";
   detail.dataset.editorDetail = "true";
   if (selected) {
+    ensureEditorDraft(selected);
     const fields = selected.requiredFields.map((field) => `<code>${field}</code>`).join("");
     const rules = selected.validationRules.map((rule) => `<code>${rule}</code>`).join("");
     const groups = selected.fieldGroups
@@ -1838,8 +2198,15 @@ function createEditorDetail(selected) {
       <div class="editor-chip-row">${fields}</div>
       <div class="editor-chip-row rules">${rules}</div>
       <ul>${groups}</ul>
-      <pre>${world.editorDraft.exportedText || JSON.stringify(buildEditableContentModel(selected), null, 2)}</pre>
     `;
+    const form = document.createElement("div");
+    form.className = "editor-form";
+    form.dataset.editorForm = "true";
+    const values = getEditorDraftValues(selected);
+    for (const field of getEditorFieldNames(selected)) {
+      form.append(createEditorFieldControl(selected, field, values[field]));
+    }
+    detail.append(form, createEditorValidationList(selected), createEditorPreview(selected));
   }
   return detail;
 }
@@ -1847,7 +2214,9 @@ function createEditorDetail(selected) {
 function refreshEditorPanelDetail() {
   if (!contentPack.loaded || !elements.editorBoard || !elements.editorStatus) return;
   const selected = getSelectedEditorTemplate();
-  elements.editorStatus.textContent = `已载入 ${contentPack.editors.length} 类编辑器模板；输出格式：${contentPack.editorContract?.outputFormat ?? "json"}。`;
+  if (selected) ensureEditorDraft(selected);
+  const dirty = selected ? world.editorDraft.dirtyByTemplateId[selected.id] : false;
+  elements.editorStatus.textContent = `已载入 ${contentPack.editors.length} 类编辑器模板；输出格式：${contentPack.editorContract?.outputFormat ?? "json"}；当前草稿${dirty ? "未导出" : "已同步"}。`;
   for (const button of elements.editorBoard.querySelectorAll("button[data-editor-template]")) {
     button.classList.toggle("active", button.dataset.editorTemplate === selected?.id);
   }
@@ -1860,6 +2229,35 @@ function refreshEditorPanelDetail() {
   }
 }
 
+function updateEditorDraftFromControl(event) {
+  const control = event.target.closest?.("[data-editor-field]");
+  if (!control) return;
+  const templateId = control.dataset.editorTemplate;
+  const template = contentPack.editors.find((item) => item.id === templateId);
+  if (!template) return;
+  ensureEditorDraft(template);
+  world.editorDraft.draftsByTemplateId[template.id][control.dataset.editorField] = control.value;
+  world.editorDraft.dirtyByTemplateId[template.id] = true;
+  world.editorDraft.exportedTextByTemplateId[template.id] = "";
+  refreshEditorValidation(template);
+  refreshEditorDraftPreview(template);
+}
+
+function refreshEditorDraftPreview(template) {
+  const validation = elements.editorBoard.querySelector("[data-editor-validation]");
+  if (validation) validation.replaceWith(createEditorValidationList(template));
+  const preview = elements.editorBoard.querySelector("[data-editor-preview]");
+  if (preview) preview.textContent = JSON.stringify(buildEditableContentModel(template, { withValidation: true }), null, 2);
+  refreshEditorStatusLine(template);
+}
+
+function refreshEditorStatusLine(template) {
+  const dirty = world.editorDraft.dirtyByTemplateId[template.id];
+  const validation = world.editorDraft.validationByTemplateId[template.id] ?? [];
+  const hasError = validation.some((item) => item.level === "error");
+  elements.editorStatus.textContent = `已载入 ${contentPack.editors.length} 类编辑器模板；${dirty ? "当前草稿未导出" : "当前草稿已同步"}；${hasError ? "存在校验错误" : "基础校验通过"}。`;
+}
+
 function renderEditorPanel() {
   if (!elements.editorBoard || !elements.editorStatus) return;
   if (!contentPack.loaded) {
@@ -1869,7 +2267,8 @@ function renderEditorPanel() {
   }
   syncEditorDraftAfterLoad();
   const selected = getSelectedEditorTemplate();
-  elements.editorStatus.textContent = `已载入 ${contentPack.editors.length} 类编辑器模板；输出格式：${contentPack.editorContract?.outputFormat ?? "json"}。`;
+  if (selected) ensureEditorDraft(selected);
+  elements.editorStatus.textContent = `已载入 ${contentPack.editors.length} 类编辑器模板；输出格式：${contentPack.editorContract?.outputFormat ?? "json"}；当前草稿${world.editorDraft.dirtyByTemplateId[selected?.id] ? "未导出" : "已同步"}。`;
 
   const templateList = document.createElement("div");
   templateList.className = "editor-template-list";
@@ -2814,6 +3213,60 @@ function drawVignette() {
   ctx.fillRect(camera.x, camera.y, camera.width, camera.height);
 }
 
+function getDemoQaSnapshot() {
+  const selectedTemplate = getSelectedEditorTemplate();
+  const editorPreview = elements.editorBoard?.querySelector("[data-editor-preview]")?.textContent ?? "";
+  return {
+    started: world.started,
+    activePanel: world.activePanel,
+    largeMapFocusId: world.largeMapFocusId,
+    selectedEditorTemplateId: selectedTemplate?.id ?? null,
+    editorDraft: selectedTemplate ? getEditorDraftValues(selectedTemplate) : null,
+    editorValidation: selectedTemplate ? world.editorDraft.validationByTemplateId[selectedTemplate.id] ?? [] : [],
+    editorPreview,
+    contentCounts: {
+      largeAreas: contentPack.largeAreas.length,
+      points: contentPack.points.length,
+      npcs: contentPack.npcs.length,
+      buildings: contentPack.buildings.length,
+      mainlineSteps: contentPack.mainlineSteps.length,
+      sideQuests: contentPack.sideQuests.length,
+      editorTemplates: contentPack.editors.length
+    }
+  };
+}
+
+function installDemoQaBridge() {
+  if (typeof window === "undefined") return;
+  window.__heavenwrightsDemo = {
+    version: "qa-bridge-v1",
+    focusLargeArea,
+    selectEditorTemplate,
+    setPanel,
+    setEditorField(templateId, field, value) {
+      const template = contentPack.editors.find((item) => item.id === templateId);
+      if (!template) throw new Error(`Unknown editor template: ${templateId}`);
+      world.editorDraft.selectedTemplateId = template.id;
+      ensureEditorDraft(template);
+      world.editorDraft.draftsByTemplateId[template.id][field] = value;
+      world.editorDraft.dirtyByTemplateId[template.id] = true;
+      world.editorDraft.exportedTextByTemplateId[template.id] = "";
+      refreshEditorValidation(template);
+      renderEditorPanel();
+      return getDemoQaSnapshot();
+    },
+    exportCurrentEditorDraft() {
+      exportEditorDraft();
+      return getDemoQaSnapshot();
+    },
+    resetCurrentEditorDraft() {
+      resetEditorDraft();
+      return getDemoQaSnapshot();
+    },
+    snapshot: getDemoQaSnapshot
+  };
+}
+
 let lastTime = performance.now();
 function frame(now) {
   const dt = Math.min((now - lastTime) / 1000, 0.05);
@@ -2823,6 +3276,7 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
+installDemoQaBridge();
 loadContentPack();
 syncUi();
 requestAnimationFrame(frame);

@@ -205,6 +205,16 @@
     "point.jiangnan.lake_field_outer_dike.boat_repair_bank.name": "舟修岸",
     "point.jiangnan.lake_field_outer_dike.herb_field.name": "香草田",
     "point.jiangnan.lake_field_outer_dike.fishing_weir.name": "鱼篱",
+    "quest_step.jiangnan_rain_alley.outer_dike_sluice.name": "外圩水闸补给",
+    "quest.jiangnan.outer_dike.sluice_supply.name": "外圩水闸补给线",
+    "npc.outer_dike_ahu.name": "田娘阿穗",
+    "npc.outer_dike_tongzhou.name": "童舟",
+    "npc.outer_dike_patrol.name": "巡圩差役",
+    "building.jiangnan_rain_alley.outer_dike_sluice.name": "外圩水闸",
+    "building.jiangnan_rain_alley.outer_dike_boatyard.name": "小舟坞",
+    "interaction.jiangnan_rain_alley.outer_dike_sluice.name": "调水闸门",
+    "interaction.jiangnan_rain_alley.outer_dike_boat_repair.name": "修补渡舟",
+    "interaction.jiangnan_rain_alley.outer_dike_patrol.name": "巡圩清障",
     "loop.jiangnan.paper_umbrella_supply.name": "纸伞自给循环",
     "loop.jiangnan.market_order_supply.name": "水市订单循环",
     "loop.jiangnan.bridge_combat_revisit.name": "旧桥战斗回访循环",
@@ -215,6 +225,13 @@
     "editor_template.jiangnan.craft_recipe.name": "工艺与配方编辑器",
     "editor_template.jiangnan.encounter.name": "敌人与遭遇编辑器",
     "editor_template.jiangnan.quest_flow.name": "任务与流程编辑器",
-    "editor_template.jiangnan.asset_ref.name": "资源引用编辑器"
+    "editor_template.jiangnan.asset_ref.name": "资源引用编辑器",
+    "npc.jiangnan.draft_character.name": "草稿人物",
+    "point.jiangnan.draft_area.draft_point.name": "草稿点位",
+    "interaction.jiangnan.draft.local_service.name": "草稿交互",
+    "recipe.jiangnan.draft.paper_surface.name": "草稿工艺配方",
+    "encounter.jiangnan.draft.patrol.name": "草稿遭遇",
+    "quest.jiangnan.draft.local_loop.name": "草稿任务流程",
+    "asset_ref.jiangnan.draft.environment_tile.name": "草稿资源引用"
   }
 }

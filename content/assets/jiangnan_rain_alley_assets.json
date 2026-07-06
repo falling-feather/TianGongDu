@@ -45,10 +45,10 @@
       "id": "asset_group.jiangnan.interactive_buildings",
       "displayNameKey": "asset_group.jiangnan.interactive_buildings.name",
       "tags": ["asset_group", "building", "interactive"],
-      "designerNote": "10 个核心建筑外观和交互状态，需区分可进入、可交互、背景建筑。",
+      "designerNote": "12 个核心建筑外观和交互状态，需区分可进入、可交互、背景建筑；湖田外圩水闸与小舟坞先按占位规格进入生产。",
       "status": "draft",
       "assetType": "building_sprite",
-      "requiredCount": 10,
+      "requiredCount": 12,
       "referenceIds": [
         "building.jiangnan_rain_alley.umbrella_shop",
         "building.jiangnan_rain_alley.dock_shed",
@@ -59,17 +59,19 @@
         "building.jiangnan_rain_alley.market_ledger",
         "building.jiangnan_rain_alley.old_bridge_shed",
         "building.jiangnan_rain_alley.roof_store",
-        "building.jiangnan_rain_alley.record_table"
+        "building.jiangnan_rain_alley.record_table",
+        "building.jiangnan_rain_alley.outer_dike_sluice",
+        "building.jiangnan_rain_alley.outer_dike_boatyard"
       ]
     },
     {
       "id": "asset_group.jiangnan.npc_portraits",
       "displayNameKey": "asset_group.jiangnan.npc_portraits.name",
       "tags": ["asset_group", "npc", "portrait"],
-      "designerNote": "15 名关键 NPC 半身像，后续补表情和行走小人。",
+      "designerNote": "18 名关键 NPC 半身像，后续补表情和行走小人；湖田外圩新增三名 NPC 先按占位规格进入生产。",
       "status": "draft",
       "assetType": "portrait",
-      "requiredCount": 15,
+      "requiredCount": 18,
       "referenceIds": [
         "npc.master_shen_yu",
         "npc.market_runner",
@@ -85,7 +87,10 @@
         "npc.fang_account",
         "npc.du_repairer",
         "npc.qiao_thread",
-        "npc.yao_archivist"
+        "npc.yao_archivist",
+        "npc.outer_dike_ahu",
+        "npc.outer_dike_tongzhou",
+        "npc.outer_dike_patrol"
       ]
     },
     {

@@ -23,6 +23,7 @@
       "quest_step.jiangnan_rain_alley.choose_bamboo",
       "quest_step.jiangnan_rain_alley.paper_and_oil",
       "quest_step.jiangnan_rain_alley.market_decision",
+      "quest_step.jiangnan_rain_alley.outer_dike_sluice",
       "quest_step.jiangnan_rain_alley.find_rivet",
       "quest_step.jiangnan_rain_alley.old_bridge_trial",
       "quest_step.jiangnan_rain_alley.boss_restoration",
@@ -85,6 +86,16 @@
       "subregionId": "subregion.jiangnan_rain_alley.night_market",
       "completionCriteria": ["choice.rush_order|choice.full_process|choice.material_compromise"],
       "unlockIds": ["feedback.mentor_comment", "feedback.market_resident_line", "feedback.restoration_visual_state"]
+    },
+    {
+      "id": "quest_step.jiangnan_rain_alley.outer_dike_sluice",
+      "displayNameKey": "quest_step.jiangnan_rain_alley.outer_dike_sluice.name",
+      "tags": ["quest_step", "outer_dike", "self_supply", "water_level"],
+      "designerNote": "外圩水闸补给段，把湖田外圩接入主线中段，验证地区自给、舟修和水位变化。",
+      "largeAreaId": "large_area.jiangnan.lake_field_outer_dike",
+      "pointId": "point.jiangnan.lake_field_outer_dike.water_lock",
+      "completionCriteria": ["interaction.jiangnan_rain_alley.outer_dike_sluice.completed"],
+      "unlockIds": ["quest.jiangnan.outer_dike.sluice_supply", "travel.boat_shortcut.outer_dike", "daily_commission.outer_dike_supply"]
     },
     {
       "id": "quest_step.jiangnan_rain_alley.find_rivet",
@@ -203,6 +214,22 @@
       "startSubregionId": "subregion.jiangnan_rain_alley.main_water_lane",
       "rewardIds": ["item.rain_patch", "feedback.resident_gratitude"],
       "fourEyeEffects": { "dailyLife": 3 }
+    },
+    {
+      "id": "quest.jiangnan.outer_dike.sluice_supply",
+      "displayNameKey": "quest.jiangnan.outer_dike.sluice_supply.name",
+      "tags": ["quest", "side", "outer_dike", "self_supply"],
+      "designerNote": "湖田外圩水闸补给任务，串联田娘阿穗、童舟和巡圩差役，建立外圩最小可玩闭环。",
+      "largeAreaId": "large_area.jiangnan.lake_field_outer_dike",
+      "startNpcId": "npc.outer_dike_ahu",
+      "startPointId": "point.jiangnan.lake_field_outer_dike.paddy_gate",
+      "stepIds": [
+        "quest_step.jiangnan_rain_alley.outer_dike_sluice",
+        "interaction.jiangnan_rain_alley.outer_dike_boat_repair",
+        "interaction.jiangnan_rain_alley.outer_dike_patrol"
+      ],
+      "rewardIds": ["resource.survival_supply", "travel.boat_shortcut.outer_dike", "daily_commission.outer_dike_supply"],
+      "fourEyeEffects": { "dailyLife": 4, "market": 1, "inheritance": 1 }
     }
   ],
   "repeatableInteractions": [

@@ -136,6 +136,36 @@
       "ownerRoles": ["level_design", "art"]
     },
     {
+      "id": "building.jiangnan_rain_alley.outer_dike_sluice",
+      "displayNameKey": "building.jiangnan_rain_alley.outer_dike_sluice.name",
+      "tags": ["building", "outer_dike", "sluice", "self_supply"],
+      "designerNote": "外圩水闸，承载水位控制、民生补给和巡检战斗入口。",
+      "status": "mvp",
+      "regionId": "region.jiangnan_rain_alley",
+      "largeAreaId": "large_area.jiangnan.lake_field_outer_dike",
+      "pointId": "point.jiangnan.lake_field_outer_dike.water_lock",
+      "type": "sluice",
+      "npcIds": ["npc.outer_dike_ahu", "npc.outer_dike_patrol"],
+      "interactionIds": ["interaction.jiangnan_rain_alley.outer_dike_sluice", "interaction.jiangnan_rain_alley.outer_dike_patrol"],
+      "assetGroupIds": ["asset_group.jiangnan.environment_tilesets", "asset_group.jiangnan.ui_icons"],
+      "ownerRoles": ["planning", "art", "program"]
+    },
+    {
+      "id": "building.jiangnan_rain_alley.outer_dike_boatyard",
+      "displayNameKey": "building.jiangnan_rain_alley.outer_dike_boatyard.name",
+      "tags": ["building", "outer_dike", "boat_repair", "travel"],
+      "designerNote": "小舟坞，承载芦苇舟修、外圩捷径和水市连接。",
+      "status": "mvp",
+      "regionId": "region.jiangnan_rain_alley",
+      "largeAreaId": "large_area.jiangnan.lake_field_outer_dike",
+      "pointId": "point.jiangnan.lake_field_outer_dike.boat_repair_bank",
+      "type": "travel_support",
+      "npcIds": ["npc.outer_dike_tongzhou"],
+      "interactionIds": ["interaction.jiangnan_rain_alley.outer_dike_boat_repair"],
+      "assetGroupIds": ["asset_group.jiangnan.environment_tilesets", "asset_group.jiangnan.subregion_concepts"],
+      "ownerRoles": ["planning", "art"]
+    },
+    {
       "id": "building.jiangnan_rain_alley.record_table",
       "displayNameKey": "building.jiangnan_rain_alley.record_table.name",
       "tags": ["building", "record", "post_boss"],

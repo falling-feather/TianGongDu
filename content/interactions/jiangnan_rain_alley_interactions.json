@@ -286,6 +286,59 @@
       }
     },
     {
+      "id": "interaction.jiangnan_rain_alley.outer_dike_sluice",
+      "displayNameKey": "interaction.jiangnan_rain_alley.outer_dike_sluice.name",
+      "tags": ["interaction", "inspect", "outer_dike", "water_level"],
+      "designerNote": "外圩水闸调度，完成外圩涨水主线段并开放自给补给循环。",
+      "status": "mvp",
+      "type": "inspect",
+      "trigger": "player_interacts_at_outer_dike_sluice",
+      "ownerNpcId": "npc.outer_dike_ahu",
+      "targetBuildingId": "building.jiangnan_rain_alley.outer_dike_sluice",
+      "questStepId": "quest_step.jiangnan_rain_alley.outer_dike_sluice",
+      "effects": {
+        "setFlags": ["interaction.jiangnan_rain_alley.outer_dike_sluice.completed", "resource.refresh.outer_dike"],
+        "unlockIds": ["daily_commission.outer_dike_supply", "interaction.jiangnan_rain_alley.outer_dike_boat_repair"],
+        "feedbackTargets": ["outer_dike_waterline", "resident_line", "tiangong_record"]
+      }
+    },
+    {
+      "id": "interaction.jiangnan_rain_alley.outer_dike_boat_repair",
+      "displayNameKey": "interaction.jiangnan_rain_alley.outer_dike_boat_repair.name",
+      "tags": ["interaction", "travel", "outer_dike", "boat_repair"],
+      "designerNote": "小舟坞修船，用芦苇和旧钉开启湖田外圩到河埠水市的捷径。",
+      "status": "mvp",
+      "type": "travel",
+      "trigger": "player_repairs_outer_dike_boat",
+      "ownerNpcId": "npc.outer_dike_tongzhou",
+      "targetBuildingId": "building.jiangnan_rain_alley.outer_dike_boatyard",
+      "questId": "quest.jiangnan.outer_dike.sluice_supply",
+      "requiredItemIds": ["resource.reed", "resource.old_nail"],
+      "effects": {
+        "travelTargets": ["point.jiangnan.river_market.ferry_dock", "point.jiangnan.lake_field_outer_dike.paddy_gate"],
+        "setFlags": ["travel.boat_shortcut.outer_dike"],
+        "feedbackTargets": ["boat_shortcut_map", "market_order_board"]
+      }
+    },
+    {
+      "id": "interaction.jiangnan_rain_alley.outer_dike_patrol",
+      "displayNameKey": "interaction.jiangnan_rain_alley.outer_dike_patrol.name",
+      "tags": ["interaction", "combat_start", "outer_dike", "patrol"],
+      "designerNote": "巡圩防守战入口，保护水闸不被潮锈拖拽，作为湖田外圩小 Boss 前置。",
+      "status": "mvp",
+      "type": "combat_start",
+      "trigger": "player_accepts_outer_dike_patrol",
+      "ownerNpcId": "npc.outer_dike_patrol",
+      "targetBuildingId": "building.jiangnan_rain_alley.outer_dike_sluice",
+      "questId": "quest.jiangnan.outer_dike.sluice_supply",
+      "enemyIds": ["enemy.rain_wraith", "enemy.rain_tax_collector"],
+      "effects": {
+        "checkpointId": "checkpoint.outer_dike_sluice",
+        "grantItemIds": ["resource.herb_patch", "resource.survival_supply"],
+        "feedbackTargets": ["outer_dike_waterline", "patrol_report", "daily_commission_board"]
+      }
+    },
+    {
       "id": "interaction.jiangnan_rain_alley.record_tiangong",
       "displayNameKey": "interaction.jiangnan_rain_alley.record_tiangong.name",
       "tags": ["interaction", "dialogue", "record"],

@@ -66,6 +66,7 @@
     "point.jiangnan.wet_bamboo_forest.green_grove",
     "point.jiangnan.dye_paper_yard.oiling_table",
     "point.jiangnan.river_market.ledger_awning",
+    "point.jiangnan.lake_field_outer_dike.water_lock",
     "point.jiangnan.wind_bell_old_bridge.lower_bridge_cave",
     "point.jiangnan.wind_bell_old_bridge.rain_curtain_gate"
   ],
@@ -106,7 +107,8 @@
     "quest.jiangnan_rain_alley.side.old_umbrella_marks",
     "quest.jiangnan_rain_alley.side.wind_bell_tuning",
     "quest.jiangnan_rain_alley.side.account_correction",
-    "quest.jiangnan_rain_alley.side.resident_patch"
+    "quest.jiangnan_rain_alley.side.resident_patch",
+    "quest.jiangnan.outer_dike.sluice_supply"
   ],
   "npcIds": [
     "npc.master_shen_yu",
@@ -123,7 +125,10 @@
     "npc.fang_account",
     "npc.du_repairer",
     "npc.qiao_thread",
-    "npc.yao_archivist"
+    "npc.yao_archivist",
+    "npc.outer_dike_ahu",
+    "npc.outer_dike_tongzhou",
+    "npc.outer_dike_patrol"
   ],
   "enemySetIds": ["enemy_set.rain_alley_intro", "enemy_set.jiangnan_rain_alley_m1"],
   "bossIds": ["boss.rain_alley_broken_umbrella_obsession"],

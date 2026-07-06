@@ -294,6 +294,66 @@
         "night": "subregion.jiangnan_rain_alley.rain_curtain_bridge"
       },
       "relationship": { "trust": 0, "tension": 0 }
+    },
+    {
+      "id": "npc.outer_dike_ahu",
+      "displayNameKey": "npc.outer_dike_ahu.name",
+      "tags": ["npc", "outer_dike", "sluice", "daily_life"],
+      "designerNote": "田娘阿穗，负责外圩水位、粮食补给和民生反馈，是湖田外圩主入口 NPC。",
+      "roles": ["sluice_keeper", "resident_witness", "side_quest"],
+      "emotionalRole": "圩田管事",
+      "personality": ["爽利", "谨慎", "护短"],
+      "homeBuildingId": "building.jiangnan_rain_alley.outer_dike_sluice",
+      "homeLargeAreaId": "large_area.jiangnan.lake_field_outer_dike",
+      "homePointId": "point.jiangnan.lake_field_outer_dike.paddy_gate",
+      "questIds": ["quest.jiangnan.outer_dike.sluice_supply"],
+      "fourEyeLean": ["dailyLife", "inheritance"],
+      "routine": {
+        "day": "point.jiangnan.lake_field_outer_dike.paddy_gate",
+        "evening": "point.jiangnan.lake_field_outer_dike.herb_field",
+        "night": "offstage"
+      },
+      "relationship": { "trust": 0, "tension": 1 }
+    },
+    {
+      "id": "npc.outer_dike_tongzhou",
+      "displayNameKey": "npc.outer_dike_tongzhou.name",
+      "tags": ["npc", "outer_dike", "boat_repair", "travel"],
+      "designerNote": "童舟，小舟修理少年，负责外圩舟修、芦苇材料和水路捷径升级。",
+      "roles": ["boatwright", "travel_upgrade", "material_vendor"],
+      "emotionalRole": "舟修少年",
+      "personality": ["灵活", "嘴硬", "手巧"],
+      "homeBuildingId": "building.jiangnan_rain_alley.outer_dike_boatyard",
+      "homeLargeAreaId": "large_area.jiangnan.lake_field_outer_dike",
+      "homePointId": "point.jiangnan.lake_field_outer_dike.boat_repair_bank",
+      "questIds": ["quest.jiangnan.outer_dike.sluice_supply"],
+      "fourEyeLean": ["market", "dailyLife"],
+      "routine": {
+        "day": "point.jiangnan.lake_field_outer_dike.boat_repair_bank",
+        "evening": "point.jiangnan.river_market.ferry_dock",
+        "night": "offstage"
+      },
+      "relationship": { "trust": 0, "tension": 0 }
+    },
+    {
+      "id": "npc.outer_dike_patrol",
+      "displayNameKey": "npc.outer_dike_patrol.name",
+      "tags": ["npc", "outer_dike", "patrol", "combat_gate"],
+      "designerNote": "巡圩差役，负责水闸安全、野外巡检和外圩小 Boss 入口。",
+      "roles": ["patrol", "combat_gate", "commissioner"],
+      "emotionalRole": "巡圩差役",
+      "personality": ["多疑", "尽责"],
+      "homeBuildingId": "building.jiangnan_rain_alley.outer_dike_sluice",
+      "homeLargeAreaId": "large_area.jiangnan.lake_field_outer_dike",
+      "homePointId": "point.jiangnan.lake_field_outer_dike.water_lock",
+      "questIds": ["quest.jiangnan.outer_dike.sluice_supply"],
+      "fourEyeLean": ["dailyLife", "ritualFaith"],
+      "routine": {
+        "day": "point.jiangnan.lake_field_outer_dike.water_lock",
+        "evening": "point.jiangnan.lake_field_outer_dike.reed_marsh",
+        "night": "point.jiangnan.wind_bell_old_bridge.lower_bridge_cave"
+      },
+      "relationship": { "trust": 0, "tension": 2 }
     }
   ]
 }

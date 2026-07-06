@@ -14,7 +14,7 @@ describe("web demo static surface", () => {
   const assetPack = readFileSync(join(root, "content/assets/jiangnan_rain_alley_assets.json"), "utf8");
 
   it("renders the demo identity and core UI labels", () => {
-    for (const label of ["天工渡", "江南雨巷", "纸伞门径", "生机", "气力", "风息", "归位进度", "工匠四目", "行脚记录", "重置试炼", "背包", "人物", "江南M1", "推进 M1 流程"]) {
+    for (const label of ["天工渡", "江南雨巷", "纸伞门径", "生机", "气力", "风息", "归位进度", "工匠四目", "行脚记录", "重置试炼", "背包", "人物", "大地图", "编辑器", "江南M1", "推进 M1 流程"]) {
       assert.match(html, new RegExp(label));
     }
   });
@@ -23,6 +23,19 @@ describe("web demo static surface", () => {
     for (const key of ["gatherWind", "borrowWind", "interact", "resetDemo", "getContextTarget", "cooldowns", "keydown", "requestAnimationFrame", "INVENTORY_DEFS", "MAP_NODES", "NPC_DEFS", "advanceTime", "loadContentPack", "advanceM1Flow", "startBossEncounter", "damageBoss", "restoreBoss"]) {
       assert.match(js, new RegExp(key));
     }
+  });
+
+  it("surfaces the 13 large-map and editor content tools", () => {
+    for (const key of ["largeMapPanel", "largeMapBoard", "largeMapDetails", "editorPanel", "editorBoard", "exportEditorButton", "resetEditorButton"]) {
+      assert.match(html, new RegExp(key));
+    }
+    for (const key of ["largeAreas", "editors", "renderLargeMapPanel", "focusLargeArea", "renderEditorPanel", "selectEditorTemplate", "buildEditableContentModel", "exportEditorDraft", "resetEditorDraft"]) {
+      assert.match(js, new RegExp(key));
+    }
+    assert.match(js, /\/content\/large_areas\/jiangnan_large_areas\.json/);
+    assert.match(js, /\/content\/editors\/jiangnan_editor_templates\.json/);
+    assert.match(css, /\.large-area-card/);
+    assert.match(css, /\.editor-template-list/);
   });
 
   it("surfaces the M1 production interface in the demo", () => {

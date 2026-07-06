@@ -699,7 +699,7 @@ kbd {
 
 .drawer-tabs {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(58px, 1fr));
   border-bottom: 1px solid rgba(209, 196, 157, 0.22);
 }
 
@@ -1218,6 +1218,171 @@ kbd {
   color: #d8e8de;
   font-size: 11px;
   text-align: right;
+}
+
+.large-map-board,
+.editor-template-list {
+  display: grid;
+  gap: 7px;
+  max-height: 190px;
+  overflow-y: auto;
+  padding-right: 3px;
+}
+
+.large-area-card,
+.editor-template-list button {
+  min-height: 62px;
+  border: 1px solid rgba(219, 207, 168, 0.17);
+  border-left: 4px solid var(--area-color, #d6b56c);
+  background: rgba(10, 27, 31, 0.68);
+  color: #eaf3e9;
+  cursor: pointer;
+  text-align: left;
+}
+
+.large-area-card.active,
+.editor-template-list button.active {
+  background: rgba(53, 42, 24, 0.78);
+  border-color: rgba(232, 185, 92, 0.46);
+}
+
+.large-area-card b,
+.large-area-card span,
+.large-area-card small,
+.editor-template-list b,
+.editor-template-list span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.large-area-card b,
+.editor-template-list b {
+  color: #f2d891;
+  font-size: 12px;
+}
+
+.large-area-card span,
+.large-area-card small,
+.editor-template-list span {
+  margin-top: 4px;
+  color: #9fb3ad;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.large-map-details,
+.editor-detail {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.large-area-detail-head,
+.large-area-detail-section,
+.editor-detail {
+  border: 1px solid rgba(139, 226, 238, 0.16);
+  background: rgba(8, 22, 25, 0.68);
+  padding: 9px;
+}
+
+.large-area-detail-head b,
+.large-area-detail-section h3,
+.editor-detail h3 {
+  margin: 0;
+  color: #efdfb5;
+  font-size: 12px;
+}
+
+.large-area-detail-head span,
+.large-area-detail-head small,
+.loop-row span,
+.point-row span,
+.editor-detail p,
+.editor-detail li span {
+  display: block;
+  margin-top: 4px;
+  color: #9fb3ad;
+  font-size: 10px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.point-row,
+.loop-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 42px;
+  margin-top: 6px;
+  padding: 7px;
+  background: rgba(12, 28, 31, 0.72);
+}
+
+.point-row b,
+.loop-row b {
+  display: block;
+  color: #e8d6a3;
+  font-size: 11px;
+}
+
+.point-row strong {
+  color: #a8d7d1;
+  font-size: 10px;
+}
+
+.editor-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.wide-action.ghost {
+  background: rgba(21, 34, 37, 0.86);
+  color: #c9d6d1;
+}
+
+.editor-detail ul {
+  display: grid;
+  gap: 5px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.editor-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.editor-chip-row code {
+  padding: 3px 5px;
+  border: 1px solid rgba(232, 185, 92, 0.2);
+  background: rgba(44, 34, 20, 0.58);
+  color: #ecd8a6;
+  font-size: 10px;
+}
+
+.editor-chip-row.rules code {
+  border-color: rgba(104, 192, 189, 0.24);
+  background: rgba(13, 48, 51, 0.6);
+  color: #a8e3df;
+}
+
+.editor-detail pre {
+  max-height: 170px;
+  overflow: auto;
+  margin: 8px 0 0;
+  padding: 8px;
+  border: 1px solid rgba(219, 207, 168, 0.16);
+  background: rgba(4, 12, 14, 0.72);
+  color: #d9e8de;
+  font-size: 10px;
+  line-height: 1.45;
+  white-space: pre-wrap;
 }
 
 #miniMapNodes {

@@ -81,6 +81,8 @@ const CONTENT_URLS = {
   boss: "/content/bosses/rain_alley_boss.json",
   assets: "/content/assets/jiangnan_rain_alley_assets.json",
   audio: "/content/audio/jiangnan_rain_alley_audio.json",
+  largeAreas: "/content/large_areas/jiangnan_large_areas.json",
+  editors: "/content/editors/jiangnan_editor_templates.json",
   localization: "/content/localization/zh-CN.json"
 };
 
@@ -195,7 +197,11 @@ let contentPack = {
   enemies: [],
   boss: null,
   assets: null,
-  audio: null
+  audio: null,
+  largeAreas: [],
+  points: [],
+  selfSupplyLoops: [],
+  editors: []
 };
 
 const INVENTORY_DEFS = {
@@ -487,8 +493,10 @@ function createWorld() {
     visited: new Set(["umbrella_shop"]),
     activePanel: "map",
     currentLocationId: "umbrella_shop",
+    largeMapFocusId: "large_area.jiangnan.misty_bamboo_alley",
     talkIndex: {},
     m1: { stepIndex: 0, completedStepIds: new Set(), loadedOnce: false },
+    editorDraft: { selectedTemplateId: null, dirty: false, exportedText: "" },
     craft: {
       traitId: null,
       label: "未定伞面",
@@ -546,6 +554,8 @@ const elements = {
     map: document.querySelector("#mapPanel"),
     inventory: document.querySelector("#inventoryPanel"),
     npcs: document.querySelector("#npcsPanel"),
+    largeMap: document.querySelector("#largeMapPanel"),
+    editor: document.querySelector("#editorPanel"),
     m1: document.querySelector("#m1Panel"),
     journal: document.querySelector("#journalPanel")
   },
@@ -555,6 +565,12 @@ const elements = {
   inventoryList: document.querySelector("#inventoryList"),
   craftBoard: document.querySelector("#craftBoard"),
   npcList: document.querySelector("#npcList"),
+  largeMapBoard: document.querySelector("#largeMapBoard"),
+  largeMapDetails: document.querySelector("#largeMapDetails"),
+  editorStatus: document.querySelector("#editorStatus"),
+  editorBoard: document.querySelector("#editorBoard"),
+  exportEditorButton: document.querySelector("#exportEditorButton"),
+  resetEditorButton: document.querySelector("#resetEditorButton"),
   contentStatus: document.querySelector("#contentStatus"),
   m1Summary: document.querySelector("#m1Summary"),
   productionBoard: document.querySelector("#productionBoard"),
@@ -594,6 +610,8 @@ window.addEventListener("keydown", (event) => {
   if (key === "m") setPanel("map");
   if (key === "i") setPanel("inventory");
   if (key === "n") setPanel("npcs");
+  if (key === "l") setPanel("largeMap");
+  if (key === "o") setPanel("editor");
   if (key === "j") setPanel("journal");
   if (key === "t") advanceTime(30, "你在檐下小憩一刻，雨势换了声调。");
 });
@@ -610,6 +628,8 @@ elements.resetButton.addEventListener("click", resetDemo);
 elements.restButton.addEventListener("click", () => advanceTime(30, "你在檐下小憩一刻，雨势换了声调。"));
 elements.craftButton.addEventListener("click", craftUmbrellaPatch);
 elements.advanceM1Button.addEventListener("click", advanceM1Flow);
+elements.exportEditorButton.addEventListener("click", exportEditorDraft);
+elements.resetEditorButton.addEventListener("click", resetEditorDraft);
 elements.inventoryList.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-use-item]");
   if (button) useItem(button.dataset.useItem);
@@ -621,6 +641,14 @@ elements.craftBoard.addEventListener("click", (event) => {
 elements.mapBoard.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-node]");
   if (button) travelToNode(button.dataset.node);
+});
+elements.largeMapBoard.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-large-area]");
+  if (button) focusLargeArea(button.dataset.largeArea);
+});
+elements.editorBoard.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-editor-template]");
+  if (button) selectEditorTemplate(button.dataset.editorTemplate);
 });
 
 for (const button of elements.panelTabs) {
@@ -681,12 +709,18 @@ async function loadContentPack() {
       enemies: data.enemies.enemies ?? [],
       boss: data.boss,
       assets: data.assets,
-      audio: data.audio
+      audio: data.audio,
+      largeAreas: data.largeAreas.largeAreas ?? [],
+      points: data.largeAreas.points ?? [],
+      selfSupplyLoops: data.largeAreas.selfSupplyLoops ?? [],
+      editors: data.editors.templates ?? [],
+      editorContract: data.editors
     };
     applyContentPackToMap();
+    syncEditorDraftAfterLoad();
     world.m1.loadedOnce = true;
-    world.objective = "江南 M1 内容包已载入：按“江南M1”推进主线，或直接在地图中探索雨巷节点。";
-    addLog(`载入江南 M1：${contentPack.subregions.length} 个子地区、${contentPack.mainlineSteps.length} 个主线步骤、${contentPack.npcs.length} 名 NPC。`);
+    world.objective = "江南内容库已载入：可在“大地图”查看 6 区 36 点位，或在“编辑器”预览内容模板。";
+    addLog(`载入江南内容库：${contentPack.subregions.length} 个旧子地区、${contentPack.largeAreas.length} 个大区、${contentPack.points.length} 个点位、${contentPack.editors.length} 个编辑器模板。`);
   } catch (error) {
     contentPack = { ...contentPack, loaded: false, error: error instanceof Error ? error.message : String(error) };
     world.message = `江南 M1 内容包读取失败：${contentPack.error}`;
@@ -1498,6 +1532,8 @@ function syncUi() {
   renderInventory();
   renderCraftBoard();
   renderNpcs();
+  renderLargeMapPanel();
+  renderEditorPanel();
   renderM1Panel();
   renderJournal();
 }
@@ -1619,9 +1655,242 @@ function renderNpcs() {
   elements.npcList.replaceChildren(...rows);
 }
 
+function renderLargeMapPanel() {
+  if (!elements.largeMapBoard || !elements.largeMapDetails) return;
+  if (!contentPack.loaded) {
+    elements.largeMapBoard.replaceChildren(createProductionNotice("等待江南大地图内容库载入。"));
+    elements.largeMapDetails.textContent = "六大区、点位和自给循环会从 /content/large_areas 读取。";
+    return;
+  }
+
+  if (!world.largeMapFocusId || !contentPack.largeAreas.some((area) => area.id === world.largeMapFocusId)) {
+    world.largeMapFocusId = contentPack.largeAreas[0]?.id ?? null;
+  }
+
+  const cards = contentPack.largeAreas.map((area) => {
+    const pointCount = area.pointIds?.length ?? 0;
+    const legacyCount = area.oldSubregionIds?.length ?? 0;
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = `large-area-card ${area.id === world.largeMapFocusId ? "active" : ""}`;
+    card.dataset.largeArea = area.id;
+    card.style.setProperty("--area-color", area.themeColor ?? "#d6b56c");
+    card.innerHTML = `
+      <b>${t(area.displayNameKey, area.id)}</b>
+      <span>${area.primaryDimensions.join(" / ")} · ${area.durationMinutes.join("-")} 分钟</span>
+      <small>${pointCount} 点位 · ${legacyCount} 个 07 节点</small>
+    `;
+    return card;
+  });
+  elements.largeMapBoard.replaceChildren(...cards);
+  renderLargeMapDetails();
+}
+
+function renderLargeMapDetails() {
+  const activeArea = contentPack.largeAreas.find((area) => area.id === world.largeMapFocusId) ?? contentPack.largeAreas[0];
+  if (!activeArea) {
+    elements.largeMapDetails.textContent = "大地图数据为空。";
+    return;
+  }
+  const pointRows = (activeArea.pointIds ?? [])
+    .map((pointId) => contentPack.points.find((point) => point.id === pointId))
+    .filter(Boolean)
+    .map((point) => {
+      const row = document.createElement("div");
+      row.className = "point-row";
+      row.innerHTML = `
+        <div>
+          <b>${t(point.displayNameKey, point.id)}</b>
+          <span>${point.type} · ${point.gates.join(" / ")}</span>
+        </div>
+        <strong>${point.contentRefs.length} refs</strong>
+      `;
+      return row;
+    });
+
+  const loopRows = contentPack.selfSupplyLoops
+    .filter((loop) => loop.largeAreaIds.includes(activeArea.id))
+    .map((loop) => {
+      const row = document.createElement("div");
+      row.className = "loop-row";
+      row.innerHTML = `
+        <b>${t(loop.displayNameKey, loop.id)}</b>
+        <span>${loop.steps.join(" -> ")}</span>
+      `;
+      return row;
+    });
+
+  const summary = document.createElement("section");
+  summary.className = "large-area-detail-head";
+  summary.innerHTML = `
+    <b>${t(activeArea.displayNameKey, activeArea.id)}</b>
+    <span>${activeArea.resourceLoop.inputs.join(" / ")} -> ${activeArea.resourceLoop.outputs.join(" / ")}</span>
+    <small>迁移：${(activeArea.oldSubregionIds ?? []).join("、") || "13 新增大区"}</small>
+  `;
+
+  const points = document.createElement("section");
+  points.className = "large-area-detail-section";
+  points.innerHTML = "<h3>内部点位</h3>";
+  points.append(...pointRows);
+
+  const loops = document.createElement("section");
+  loops.className = "large-area-detail-section";
+  loops.innerHTML = "<h3>自给循环</h3>";
+  loops.append(...loopRows.length ? loopRows : [createProductionNotice("该区自给循环待下一批细化。")]);
+
+  elements.largeMapDetails.replaceChildren(summary, points, loops);
+}
+
+function focusLargeArea(id) {
+  world.largeMapFocusId = id;
+  const area = contentPack.largeAreas.find((item) => item.id === id);
+  if (area) {
+    world.message = `大地图聚焦：${t(area.displayNameKey, id)}，${area.pointIds.length} 个点位已入库。`;
+    addLog(`查看大地图：${t(area.displayNameKey, id)}。`);
+  }
+  for (const card of elements.largeMapBoard.querySelectorAll("button[data-large-area]")) {
+    card.classList.toggle("active", card.dataset.largeArea === id);
+  }
+  renderLargeMapDetails();
+  elements.stateLine.textContent = world.message;
+  renderJournal();
+}
+
+function syncEditorDraftAfterLoad() {
+  if (!contentPack.editors.length) return;
+  if (!world.editorDraft.selectedTemplateId) {
+    world.editorDraft.selectedTemplateId = contentPack.editors[0].id;
+  }
+}
+
+function selectEditorTemplate(id) {
+  world.editorDraft.selectedTemplateId = id;
+  world.editorDraft.dirty = true;
+  const template = contentPack.editors.find((item) => item.id === id);
+  if (template) {
+    world.message = `编辑器模板：${t(template.displayNameKey, id)} 已选中。`;
+    addLog(`选择编辑器模板：${t(template.displayNameKey, id)}。`);
+  }
+  refreshEditorPanelDetail();
+  elements.stateLine.textContent = world.message;
+  renderJournal();
+}
+
+function buildEditableContentModel(template) {
+  return {
+    schemaVersion: 1,
+    id: `draft.${template.id.replace("editor_template.jiangnan.", "")}.example`,
+    displayNameKey: `${template.id}.draft.name`,
+    tags: ["draft", "editor_export", "jiangnan"],
+    designerNote: `由 ${t(template.displayNameKey, template.id)} 生成的内存草稿，需通过校验后才可写入 content/。`,
+    status: "draft",
+    owner: "planning",
+    sourceNote: "prototype/web-demo editor preview",
+    targetObjects: template.targetObjects,
+    requiredFields: template.requiredFields,
+    validationRules: template.validationRules,
+    outputTargets: template.outputTargets
+  };
+}
+
+function exportEditorDraft() {
+  const template = contentPack.editors.find((item) => item.id === world.editorDraft.selectedTemplateId);
+  if (!template) return;
+  const draft = buildEditableContentModel(template);
+  world.editorDraft.exportedText = JSON.stringify(draft, null, 2);
+  world.editorDraft.dirty = false;
+  world.message = "编辑器草稿已导出到预览区；正式写入仍需走内容校验。";
+  addLog(`导出编辑器草稿：${draft.id}。`);
+  refreshEditorPanelDetail();
+  elements.stateLine.textContent = world.message;
+  renderJournal();
+}
+
+function resetEditorDraft() {
+  world.editorDraft = {
+    selectedTemplateId: contentPack.editors[0]?.id ?? null,
+    dirty: false,
+    exportedText: ""
+  };
+  world.message = "编辑器草稿已重置。";
+  refreshEditorPanelDetail();
+  elements.stateLine.textContent = world.message;
+  renderJournal();
+}
+
+function getSelectedEditorTemplate() {
+  return contentPack.editors.find((item) => item.id === world.editorDraft.selectedTemplateId) ?? contentPack.editors[0];
+}
+
+function createEditorDetail(selected) {
+  const detail = document.createElement("section");
+  detail.className = "editor-detail";
+  detail.dataset.editorDetail = "true";
+  if (selected) {
+    const fields = selected.requiredFields.map((field) => `<code>${field}</code>`).join("");
+    const rules = selected.validationRules.map((rule) => `<code>${rule}</code>`).join("");
+    const groups = selected.fieldGroups
+      .map((group) => `<li><b>${group.id}</b><span>${group.fields.join(" / ")}</span></li>`)
+      .join("");
+    detail.innerHTML = `
+      <h3>${t(selected.displayNameKey, selected.id)}</h3>
+      <p>${selected.outputTargets.join(" / ")}</p>
+      <div class="editor-chip-row">${fields}</div>
+      <div class="editor-chip-row rules">${rules}</div>
+      <ul>${groups}</ul>
+      <pre>${world.editorDraft.exportedText || JSON.stringify(buildEditableContentModel(selected), null, 2)}</pre>
+    `;
+  }
+  return detail;
+}
+
+function refreshEditorPanelDetail() {
+  if (!contentPack.loaded || !elements.editorBoard || !elements.editorStatus) return;
+  const selected = getSelectedEditorTemplate();
+  elements.editorStatus.textContent = `已载入 ${contentPack.editors.length} 类编辑器模板；输出格式：${contentPack.editorContract?.outputFormat ?? "json"}。`;
+  for (const button of elements.editorBoard.querySelectorAll("button[data-editor-template]")) {
+    button.classList.toggle("active", button.dataset.editorTemplate === selected?.id);
+  }
+  const existingDetail = elements.editorBoard.querySelector("[data-editor-detail]");
+  const nextDetail = createEditorDetail(selected);
+  if (existingDetail) {
+    existingDetail.replaceWith(nextDetail);
+  } else {
+    elements.editorBoard.append(nextDetail);
+  }
+}
+
+function renderEditorPanel() {
+  if (!elements.editorBoard || !elements.editorStatus) return;
+  if (!contentPack.loaded) {
+    elements.editorStatus.textContent = "等待编辑器模板载入...";
+    elements.editorBoard.replaceChildren(createProductionNotice("编辑器会读取 /content/editors/jiangnan_editor_templates.json。"));
+    return;
+  }
+  syncEditorDraftAfterLoad();
+  const selected = getSelectedEditorTemplate();
+  elements.editorStatus.textContent = `已载入 ${contentPack.editors.length} 类编辑器模板；输出格式：${contentPack.editorContract?.outputFormat ?? "json"}。`;
+
+  const templateList = document.createElement("div");
+  templateList.className = "editor-template-list";
+  for (const template of contentPack.editors) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.dataset.editorTemplate = template.id;
+    button.className = template.id === selected?.id ? "active" : "";
+    button.innerHTML = `
+      <b>${t(template.displayNameKey, template.id)}</b>
+      <span>${template.targetObjects.join(" / ")}</span>
+    `;
+    templateList.append(button);
+  }
+
+  elements.editorBoard.replaceChildren(templateList, createEditorDetail(selected));
+}
+
 function renderM1Panel() {
   elements.contentStatus.textContent = contentPack.loaded
-    ? `已载入 ${contentPack.subregions.length} 个子地区、${contentPack.npcs.length} 名 NPC、${contentPack.enemies.length} 类敌人。`
+    ? `已载入 ${contentPack.subregions.length} 个旧子地区、${contentPack.largeAreas.length} 个大区、${contentPack.points.length} 个点位。`
     : contentPack.error
       ? `内容包读取失败：${contentPack.error}`
       : "正在读取江南 M1 内容包...";
@@ -1629,8 +1898,10 @@ function renderM1Panel() {
   const coreCount = contentPack.region?.coreSubregionIds?.length ?? 0;
   elements.m1Summary.replaceChildren(
     createInfoPill("核心节点", `${coreCount}/7`),
+    createInfoPill("大区", `${contentPack.largeAreas.length}/6`),
+    createInfoPill("点位", `${contentPack.points.length}`),
     createInfoPill("支线", `${contentPack.sideQuests.length}`),
-    createInfoPill("建筑", `${contentPack.buildings.length}`),
+    createInfoPill("编辑器", `${contentPack.editors.length}`),
     createInfoPill("音频", `${getAudioProductionCount()}`)
   );
 

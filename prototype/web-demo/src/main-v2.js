@@ -203,6 +203,7 @@ let contentPack = {
   audio: null,
   largeAreas: [],
   points: [],
+  largeAreaRoutes: [],
   selfSupplyLoops: [],
   gatherNodes: [],
   craftRecipes: [],
@@ -728,6 +729,7 @@ async function loadContentPack() {
       audio: data.audio,
       largeAreas: data.largeAreas.largeAreas ?? [],
       points: data.largeAreas.points ?? [],
+      largeAreaRoutes: data.largeAreas.routes ?? [],
       selfSupplyLoops: data.largeAreas.selfSupplyLoops ?? [],
       gatherNodes: data.gatherNodes.gatherNodes ?? [],
       craftRecipes: data.craftRecipes.recipes ?? [],
@@ -739,8 +741,8 @@ async function loadContentPack() {
     applyContentPackToMap();
     syncEditorDraftAfterLoad();
     world.m1.loadedOnce = true;
-    world.objective = "江南内容库已载入：可在“大地图”查看 6 区 36 点位，或在“编辑器”预览内容模板。";
-    addLog(`载入江南内容库：${contentPack.subregions.length} 个旧子地区、${contentPack.largeAreas.length} 个大区、${contentPack.points.length} 个点位、${contentPack.gatherNodes.length} 个采集点、${contentPack.craftRecipes.length} 条配方、${contentPack.encounters.length} 个遭遇、${contentPack.editors.length} 个编辑器模板。`);
+    world.objective = `江南内容库已载入：可在“大地图”查看 ${contentPack.largeAreas.length} 区 ${contentPack.points.length} 点位与 ${contentPack.largeAreaRoutes.length} 条路线，或在“编辑器”预览内容模板。`;
+    addLog(`载入江南内容库：${contentPack.subregions.length} 个旧子地区、${contentPack.largeAreas.length} 个大区、${contentPack.points.length} 个点位、${contentPack.largeAreaRoutes.length} 条路线、${contentPack.gatherNodes.length} 个采集点、${contentPack.craftRecipes.length} 条配方、${contentPack.encounters.length} 个遭遇、${contentPack.editors.length} 个编辑器模板。`);
   } catch (error) {
     contentPack = { ...contentPack, loaded: false, error: error instanceof Error ? error.message : String(error) };
     world.message = `江南 M1 内容包读取失败：${contentPack.error}`;
@@ -1675,11 +1677,80 @@ function renderNpcs() {
   elements.npcList.replaceChildren(...rows);
 }
 
+function getLargeAreaRoutes(areaId) {
+  return contentPack.largeAreaRoutes.filter((route) => route.fromLargeAreaId === areaId || route.toLargeAreaId === areaId);
+}
+
+function getAreaContentDensity(area) {
+  const coverage = area.coverage ?? {};
+  return ["npcIds", "buildingIds", "gatherNodeIds", "craftRecipeIds", "encounterIds", "questIds", "revisitHooks"]
+    .reduce((total, key) => total + (coverage[key]?.length ?? 0), 0);
+}
+
+function getAreaAnchor(area) {
+  const anchor = area.mapAnchor ?? { x: 0.5, y: 0.5 };
+  return {
+    x: clamp(anchor.x * 100, 8, 92),
+    y: clamp(anchor.y * 100, 12, 88)
+  };
+}
+
+function createLargeMapRouteLayer() {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("class", "large-map-route-layer");
+  svg.setAttribute("viewBox", "0 0 100 100");
+  svg.setAttribute("preserveAspectRatio", "none");
+  const areaById = new Map(contentPack.largeAreas.map((area) => [area.id, area]));
+  contentPack.largeAreaRoutes.forEach((route, index) => {
+    const from = areaById.get(route.fromLargeAreaId);
+    const to = areaById.get(route.toLargeAreaId);
+    if (!from || !to) return;
+    const start = getAreaAnchor(from);
+    const end = getAreaAnchor(to);
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const length = Math.hypot(dx, dy) || 1;
+    const curve = (index % 2 === 0 ? 1 : -1) * (5 + (index % 3) * 1.5);
+    const controlX = (start.x + end.x) * 0.5 + (-dy / length) * curve;
+    const controlY = (start.y + end.y) * 0.5 + (dx / length) * curve;
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    const isActive = route.fromLargeAreaId === world.largeMapFocusId || route.toLargeAreaId === world.largeMapFocusId;
+    path.setAttribute("class", `large-map-route ${isActive ? "is-active" : ""}`);
+    path.setAttribute("d", `M ${start.x.toFixed(1)} ${start.y.toFixed(1)} Q ${controlX.toFixed(1)} ${controlY.toFixed(1)} ${end.x.toFixed(1)} ${end.y.toFixed(1)}`);
+    path.setAttribute("vector-effect", "non-scaling-stroke");
+    path.dataset.route = route.id;
+    const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+    title.textContent = `${t(route.displayNameKey, route.id)} · ${route.travelMode}`;
+    path.append(title);
+    svg.append(path);
+  });
+  return svg;
+}
+
+function createLargeAreaNode(area) {
+  const pointCount = area.pointIds?.length ?? 0;
+  const routeCount = getLargeAreaRoutes(area.id).length;
+  const anchor = getAreaAnchor(area);
+  const node = document.createElement("button");
+  node.type = "button";
+  node.className = `large-area-node ${area.id === world.largeMapFocusId ? "active" : ""}`;
+  node.dataset.largeArea = area.id;
+  node.style.left = `${anchor.x}%`;
+  node.style.top = `${anchor.y}%`;
+  node.style.setProperty("--area-color", area.themeColor ?? "#d6b56c");
+  node.innerHTML = `
+    <b>${t(area.displayNameKey, area.id)}</b>
+    <span>${pointCount} 点 · ${routeCount} 线</span>
+    <small>${area.primaryDimensions.join(" / ")}</small>
+  `;
+  return node;
+}
+
 function renderLargeMapPanel() {
   if (!elements.largeMapBoard || !elements.largeMapDetails) return;
   if (!contentPack.loaded) {
     elements.largeMapBoard.replaceChildren(createProductionNotice("等待江南大地图内容库载入。"));
-    elements.largeMapDetails.textContent = "六大区、点位和自给循环会从 /content/large_areas 读取。";
+    elements.largeMapDetails.textContent = "六大区、点位、路线和自给循环会从 /content/large_areas 读取。";
     return;
   }
 
@@ -1687,22 +1758,20 @@ function renderLargeMapPanel() {
     world.largeMapFocusId = contentPack.largeAreas[0]?.id ?? null;
   }
 
-  const cards = contentPack.largeAreas.map((area) => {
-    const pointCount = area.pointIds?.length ?? 0;
-    const legacyCount = area.oldSubregionIds?.length ?? 0;
-    const card = document.createElement("button");
-    card.type = "button";
-    card.className = `large-area-card ${area.id === world.largeMapFocusId ? "active" : ""}`;
-    card.dataset.largeArea = area.id;
-    card.style.setProperty("--area-color", area.themeColor ?? "#d6b56c");
-    card.innerHTML = `
-      <b>${t(area.displayNameKey, area.id)}</b>
-      <span>${area.primaryDimensions.join(" / ")} · ${area.durationMinutes.join("-")} 分钟</span>
-      <small>${pointCount} 点位 · ${legacyCount} 个 07 节点</small>
-    `;
-    return card;
-  });
-  elements.largeMapBoard.replaceChildren(...cards);
+  const atlas = document.createElement("div");
+  atlas.className = "large-map-atlas";
+  atlas.append(createLargeMapRouteLayer(), ...contentPack.largeAreas.map(createLargeAreaNode));
+
+  const legend = document.createElement("div");
+  legend.className = "large-map-legend";
+  legend.innerHTML = `
+    <span><b>${contentPack.largeAreas.length}</b> 大区</span>
+    <span><b>${contentPack.points.length}</b> 点位</span>
+    <span><b>${contentPack.largeAreaRoutes.length}</b> 路线</span>
+    <span><b>${contentPack.selfSupplyLoops.length}</b> 循环</span>
+  `;
+
+  elements.largeMapBoard.replaceChildren(atlas, legend);
   renderLargeMapDetails();
 }
 
@@ -1714,6 +1783,7 @@ function getContentRefCatalog() {
   return [
     { kind: "大区", items: contentPack.largeAreas },
     { kind: "点位", items: contentPack.points },
+    { kind: "路线", items: contentPack.largeAreaRoutes },
     { kind: "旧节点", items: contentPack.subregions },
     { kind: "主线", items: contentPack.mainlineSteps },
     { kind: "支线", items: contentPack.sideQuests },
@@ -1751,6 +1821,7 @@ function inferContentRefKind(ref) {
     ["trap.", "机关"],
     ["boss.", "Boss"],
     ["asset_group.", "资源组"],
+    ["route.", "路线"],
     ["asset.", "资源"],
     ["resource.", "资源"],
     ["skill.", "技能"],
@@ -1824,6 +1895,26 @@ function createCoverageRows(activeArea) {
     });
 }
 
+function createRouteRows(activeArea) {
+  const areaById = new Map(contentPack.largeAreas.map((area) => [area.id, area]));
+  return getLargeAreaRoutes(activeArea.id).map((route) => {
+    const row = document.createElement("div");
+    row.className = "route-row";
+    const from = areaById.get(route.fromLargeAreaId);
+    const to = areaById.get(route.toLargeAreaId);
+    const body = document.createElement("div");
+    const title = document.createElement("b");
+    title.textContent = t(route.displayNameKey, route.id);
+    const meta = document.createElement("span");
+    meta.textContent = `${t(from?.displayNameKey, route.fromLargeAreaId)} -> ${t(to?.displayNameKey, route.toLargeAreaId)} · ${route.travelMode}`;
+    body.append(title, meta, createContentRefList(route.contentRefs));
+    const gate = document.createElement("strong");
+    gate.textContent = (route.gateIds ?? []).join(" / ") || "none";
+    row.append(body, gate);
+    return row;
+  });
+}
+
 function renderLargeMapDetails() {
   const activeArea = contentPack.largeAreas.find((area) => area.id === world.largeMapFocusId) ?? contentPack.largeAreas[0];
   if (!activeArea) {
@@ -1848,6 +1939,7 @@ function renderLargeMapDetails() {
       return row;
     });
 
+  const routeRows = createRouteRows(activeArea);
   const loopRows = contentPack.selfSupplyLoops
     .filter((loop) => loop.largeAreaIds.includes(activeArea.id))
     .map((loop) => {
@@ -1865,9 +1957,15 @@ function renderLargeMapDetails() {
   summary.innerHTML = `
     <b>${t(activeArea.displayNameKey, activeArea.id)}</b>
     <span>${activeArea.resourceLoop.inputs.join(" / ")} -> ${activeArea.resourceLoop.outputs.join(" / ")}</span>
+    <small>点位 ${(activeArea.pointIds ?? []).length} · 路线 ${routeRows.length} · 内容钩 ${getAreaContentDensity(activeArea)}</small>
     <small>采集 ${(activeArea.coverage?.gatherNodeIds ?? []).length} · 配方 ${(activeArea.coverage?.craftRecipeIds ?? []).length} · 遭遇 ${(activeArea.coverage?.encounterIds ?? []).length}</small>
     <small>迁移：${(activeArea.oldSubregionIds ?? []).join("、") || "13 新增大区"}</small>
   `;
+
+  const routes = document.createElement("section");
+  routes.className = "large-area-detail-section";
+  routes.innerHTML = "<h3>跨区路线</h3>";
+  routes.append(...routeRows.length ? routeRows : [createProductionNotice("该区跨区路线待下一批细化。")]);
 
   const coverage = document.createElement("section");
   coverage.className = "large-area-detail-section";
@@ -1884,7 +1982,7 @@ function renderLargeMapDetails() {
   loops.innerHTML = "<h3>自给循环</h3>";
   loops.append(...loopRows.length ? loopRows : [createProductionNotice("该区自给循环待下一批细化。")]);
 
-  elements.largeMapDetails.replaceChildren(summary, coverage, points, loops);
+  elements.largeMapDetails.replaceChildren(summary, routes, coverage, points, loops);
 }
 
 function focusLargeArea(id) {
@@ -1894,10 +1992,7 @@ function focusLargeArea(id) {
     world.message = `大地图聚焦：${t(area.displayNameKey, id)}，${area.pointIds.length} 个点位已入库。`;
     addLog(`查看大地图：${t(area.displayNameKey, id)}。`);
   }
-  for (const card of elements.largeMapBoard.querySelectorAll("button[data-large-area]")) {
-    card.classList.toggle("active", card.dataset.largeArea === id);
-  }
-  renderLargeMapDetails();
+  renderLargeMapPanel();
   elements.stateLine.textContent = world.message;
   renderJournal();
 }
@@ -2105,6 +2200,7 @@ function createContentIdSet() {
     contentPack.audio?.id,
     ...contentPack.largeAreas.map((item) => item.id),
     ...contentPack.points.map((item) => item.id),
+    ...contentPack.largeAreaRoutes.map((item) => item.id),
     ...contentPack.subregions.map((item) => item.id),
     ...contentPack.mainlineSteps.map((item) => item.id),
     ...contentPack.sideQuests.map((item) => item.id),
@@ -2154,6 +2250,7 @@ function validateEditorRefs(field, refs, idSet, validation) {
     "quest_step.",
     "record.",
     "resource.",
+    "route.",
     "skill.",
     "subregion.",
     "tile.",
@@ -2434,7 +2531,7 @@ function renderEditorPanel() {
 
 function renderM1Panel() {
   elements.contentStatus.textContent = contentPack.loaded
-    ? `已载入 ${contentPack.subregions.length} 个旧子地区、${contentPack.largeAreas.length} 个大区、${contentPack.points.length} 个点位、${contentPack.gatherNodes.length} 个采集点、${contentPack.craftRecipes.length} 条配方、${contentPack.encounters.length} 个遭遇。`
+    ? `已载入 ${contentPack.subregions.length} 个旧子地区、${contentPack.largeAreas.length} 个大区、${contentPack.points.length} 个点位、${contentPack.largeAreaRoutes.length} 条路线、${contentPack.gatherNodes.length} 个采集点、${contentPack.craftRecipes.length} 条配方、${contentPack.encounters.length} 个遭遇。`
     : contentPack.error
       ? `内容包读取失败：${contentPack.error}`
       : "正在读取江南 M1 内容包...";
@@ -2444,6 +2541,7 @@ function renderM1Panel() {
     createInfoPill("核心节点", `${coreCount}/7`),
     createInfoPill("大区", `${contentPack.largeAreas.length}/6`),
     createInfoPill("点位", `${contentPack.points.length}`),
+    createInfoPill("路线", `${contentPack.largeAreaRoutes.length}`),
     createInfoPill("采集", `${contentPack.gatherNodes.length}`),
     createInfoPill("配方", `${contentPack.craftRecipes.length}`),
     createInfoPill("遭遇", `${contentPack.encounters.length}`),
@@ -3375,6 +3473,7 @@ function getDemoQaSnapshot() {
     contentCounts: {
       largeAreas: contentPack.largeAreas.length,
       points: contentPack.points.length,
+      largeAreaRoutes: contentPack.largeAreaRoutes.length,
       npcs: contentPack.npcs.length,
       buildings: contentPack.buildings.length,
       mainlineSteps: contentPack.mainlineSteps.length,

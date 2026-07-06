@@ -26,6 +26,7 @@ const editorTemplates = readJson("editors/jiangnan_editor_templates.json");
 
 const pointIds = new Set(largeAreaPack.points.map((point) => point.id));
 const largeAreaIds = new Set(largeAreaPack.largeAreaIds);
+const routeIds = new Set(largeAreaPack.routeIds ?? []);
 const buildingIds = new Set(buildings.buildings.map((building) => building.id));
 const interactionIds = new Set(interactions.interactions.map((interaction) => interaction.id));
 const enemyIds = new Set(enemies.enemies.map((enemy) => enemy.id));
@@ -49,9 +50,11 @@ describe("jiangnan chapter large-map content", () => {
     assert.deepEqual(region.chapterTargetDurationMinutes, [300, 600]);
     assert.equal(region.subregionIds.length, 11);
     assert.equal(region.largeAreaIds.length, 6);
-    assert.equal(region.pointIds.length, 36);
+    assert.equal(region.pointIds.length, 48);
+    assert.deepEqual(region.routeIds, largeAreaPack.routeIds);
     assert.equal(region.corePointIds.length, 8);
     assert.ok(region.corePointIds.includes("point.jiangnan.lake_field_outer_dike.water_lock"));
+    assert.ok(region.pointIds.includes("point.jiangnan.lake_field_outer_dike.watch_hut"));
     assert.ok(region.questIds.includes("quest.jiangnan.outer_dike.sluice_supply"));
     assert.ok(region.npcIds.includes("npc.outer_dike_ahu"));
     assert.ok(region.largeAreaSetIds.includes(largeAreaPack.id));
@@ -68,7 +71,7 @@ describe("jiangnan chapter large-map content", () => {
       assert.ok(region.largeAreaIds.includes(area.id), `${area.id} missing from region index`);
       assert.ok(localization[area.displayNameKey], `${area.displayNameKey} missing localization`);
       assert.ok(area.primaryDimensions.length >= 2, `${area.id} needs gameplay dimensions`);
-      assert.equal(area.pointIds.length, 6, `${area.id} should expose six first-pass points`);
+      assert.equal(area.pointIds.length, 8, `${area.id} should expose eight first-pass points`);
       assert.equal(area.durationMinutes.length, 2, `${area.id} needs duration range`);
       assert.ok(area.coverage.npcIds.length >= 2, `${area.id} needs NPC coverage`);
       assert.ok(area.coverage.gatherNodeIds.length >= 1, `${area.id} needs gathering hooks`);
@@ -86,6 +89,26 @@ describe("jiangnan chapter large-map content", () => {
     assert.ok(outerDike.coverage.gatherNodeIds.some((id) => gatherNodeIds.has(id)));
     assert.ok(outerDike.coverage.craftRecipeIds.some((id) => craftRecipeIds.has(id)));
     assert.ok(outerDike.coverage.encounterIds.some((id) => encounterIds.has(id)));
+  });
+
+  it("defines reusable cross-area routes with valid endpoints and localized labels", () => {
+    assert.equal(largeAreaPack.routes.length, 8);
+    assert.deepEqual(largeAreaPack.routeIds, largeAreaPack.routes.map((route) => route.id));
+    for (const route of largeAreaPack.routes) {
+      assert.ok(routeIds.has(route.id), `${route.id} missing from routeIds`);
+      assert.ok(localization[route.displayNameKey], `${route.displayNameKey} missing localization`);
+      assert.ok(largeAreaIds.has(route.fromLargeAreaId), `${route.id} has invalid fromLargeAreaId`);
+      assert.ok(largeAreaIds.has(route.toLargeAreaId), `${route.id} has invalid toLargeAreaId`);
+      assert.notEqual(route.fromLargeAreaId, route.toLargeAreaId, `${route.id} should connect two areas`);
+      assert.ok(route.travelMode, `${route.id} needs a travelMode`);
+      assert.ok(Array.isArray(route.gateIds), `${route.id} gateIds must be an array`);
+      assert.ok(route.contentRefs.length >= 2, `${route.id} needs content refs`);
+      for (const ref of route.contentRefs) {
+        if (ref.startsWith("point.")) assert.ok(pointIds.has(ref), `${route.id} references unknown point ${ref}`);
+        assertFormalRef(ref);
+      }
+    }
+    assert.ok(largeAreaPack.routes.some((route) => route.toLargeAreaId === "large_area.jiangnan.lake_field_outer_dike"));
   });
 
   it("maps every 07 subregion into 13 point definitions without deleting the old baseline", () => {

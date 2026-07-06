@@ -1230,7 +1230,8 @@ kbd {
 }
 
 .large-map-board {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
+  gap: 8px;
   max-height: none;
   overflow: visible;
   padding-right: 0;
@@ -1240,7 +1241,121 @@ kbd {
   max-height: 220px;
 }
 
-.large-area-card,
+.large-map-atlas {
+  position: relative;
+  min-height: 236px;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border: 1px solid rgba(219, 207, 168, 0.2);
+  background:
+    radial-gradient(circle at 18% 28%, rgba(135, 196, 130, 0.24), transparent 22%),
+    radial-gradient(circle at 78% 36%, rgba(123, 196, 135, 0.2), transparent 21%),
+    linear-gradient(26deg, transparent 42%, rgba(93, 170, 190, 0.22) 43% 48%, transparent 49%),
+    linear-gradient(152deg, transparent 38%, rgba(88, 151, 182, 0.16) 39% 44%, transparent 45%),
+    repeating-linear-gradient(90deg, rgba(220, 232, 220, 0.07) 0 1px, transparent 1px 28px),
+    repeating-linear-gradient(0deg, rgba(220, 232, 220, 0.055) 0 1px, transparent 1px 24px),
+    rgba(8, 22, 25, 0.84);
+}
+
+.large-map-atlas::after {
+  content: "";
+  position: absolute;
+  inset: 10px;
+  pointer-events: none;
+  border: 1px solid rgba(238, 213, 154, 0.12);
+}
+
+.large-map-route-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.large-map-route {
+  fill: none;
+  stroke: rgba(134, 190, 184, 0.38);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-dasharray: 4 3;
+}
+
+.large-map-route.is-active {
+  stroke: rgba(239, 202, 123, 0.92);
+  stroke-width: 2.8;
+  stroke-dasharray: 0;
+  filter: drop-shadow(0 0 6px rgba(235, 190, 94, 0.36));
+}
+
+.large-area-node {
+  position: absolute;
+  z-index: 2;
+  width: clamp(94px, 28%, 124px);
+  min-height: 60px;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(219, 207, 168, 0.24);
+  border-top: 4px solid var(--area-color, #d6b56c);
+  border-radius: 5px;
+  background: rgba(8, 22, 25, 0.9);
+  color: #eaf3e9;
+  cursor: pointer;
+  text-align: left;
+  box-shadow: 0 12px 22px rgba(0, 0, 0, 0.25);
+}
+
+.large-area-node.active {
+  border-color: rgba(232, 185, 92, 0.72);
+  background: rgba(54, 43, 25, 0.94);
+  box-shadow:
+    0 0 0 2px rgba(232, 185, 92, 0.12),
+    0 12px 26px rgba(0, 0, 0, 0.32);
+}
+
+.large-area-node b,
+.large-area-node span,
+.large-area-node small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.large-area-node b {
+  color: #f2d891;
+  font-size: 12px;
+}
+
+.large-area-node span,
+.large-area-node small {
+  margin-top: 4px;
+  color: #9fb3ad;
+  font-size: 10px;
+  line-height: 1.25;
+}
+
+.large-map-legend {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.large-map-legend span {
+  min-height: 38px;
+  padding: 6px;
+  border: 1px solid rgba(139, 226, 238, 0.16);
+  background: rgba(10, 30, 35, 0.62);
+  color: #9fb3ad;
+  font-size: 10px;
+}
+
+.large-map-legend b {
+  display: block;
+  color: #f1d18f;
+  font-size: 14px;
+}
+
 .editor-template-list button {
   min-height: 62px;
   border: 1px solid rgba(219, 207, 168, 0.17);
@@ -1251,29 +1366,22 @@ kbd {
   text-align: left;
 }
 
-.large-area-card.active,
 .editor-template-list button.active {
   background: rgba(53, 42, 24, 0.78);
   border-color: rgba(232, 185, 92, 0.46);
 }
 
-.large-area-card b,
-.large-area-card span,
-.large-area-card small,
 .editor-template-list b,
 .editor-template-list span {
   display: block;
   overflow-wrap: anywhere;
 }
 
-.large-area-card b,
 .editor-template-list b {
   color: #f2d891;
   font-size: 12px;
 }
 
-.large-area-card span,
-.large-area-card small,
 .editor-template-list span {
   margin-top: 4px;
   color: #9fb3ad;
@@ -1307,6 +1415,7 @@ kbd {
 .large-area-detail-head span,
 .large-area-detail-head small,
 .loop-row span,
+.route-row span,
 .point-row span,
 .editor-detail p,
 .editor-detail li span {
@@ -1319,6 +1428,7 @@ kbd {
 }
 
 .point-row,
+.route-row,
 .loop-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -1331,15 +1441,23 @@ kbd {
 }
 
 .point-row b,
+.route-row b,
 .loop-row b {
   display: block;
   color: #e8d6a3;
   font-size: 11px;
 }
 
-.point-row strong {
+.point-row strong,
+.route-row strong {
   color: #a8d7d1;
   font-size: 10px;
+}
+
+.route-row strong {
+  max-width: 82px;
+  overflow-wrap: anywhere;
+  text-align: right;
 }
 
 .coverage-row {
@@ -1571,9 +1689,22 @@ kbd {
 
   .large-map-board {
     grid-template-columns: 1fr;
-    max-height: 220px;
-    overflow-y: auto;
-    padding-right: 3px;
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
+  }
+
+  .large-map-atlas {
+    min-height: 220px;
+  }
+
+  .large-area-node {
+    width: 96px;
+    min-height: 56px;
+  }
+
+  .large-map-legend {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .map-board {

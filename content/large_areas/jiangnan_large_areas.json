@@ -18,6 +18,98 @@
     "large_area.jiangnan.wind_bell_old_bridge",
     "large_area.jiangnan.lake_field_outer_dike"
   ],
+  "routeIds": [
+    "route.jiangnan.misty_to_river_water_lane",
+    "route.jiangnan.misty_to_wet_bamboo",
+    "route.jiangnan.wet_bamboo_to_dye_paper",
+    "route.jiangnan.dye_paper_to_river_market",
+    "route.jiangnan.misty_to_old_bridge_roof",
+    "route.jiangnan.old_bridge_to_dye_paper",
+    "route.jiangnan.river_to_outer_dike_boat",
+    "route.jiangnan.outer_dike_to_wet_bamboo_trail"
+  ],
+  "routes": [
+    {
+      "id": "route.jiangnan.misty_to_river_water_lane",
+      "displayNameKey": "route.jiangnan.misty_to_river_water_lane.name",
+      "fromLargeAreaId": "large_area.jiangnan.misty_bamboo_alley",
+      "toLargeAreaId": "large_area.jiangnan.river_market",
+      "travelMode": "water_lane",
+      "gateIds": ["none"],
+      "contentRefs": ["point.jiangnan.misty_bamboo_alley.connected_awning", "point.jiangnan.river_market.tide_measure_pier", "travel.boat_shortcut"],
+      "designerNote": "把 07 水巷主路扩展为烟雨竹巷到河埠水市的常用低风险动线，用于跑单、采集回流和早期教学。"
+    },
+    {
+      "id": "route.jiangnan.misty_to_wet_bamboo",
+      "displayNameKey": "route.jiangnan.misty_to_wet_bamboo.name",
+      "fromLargeAreaId": "large_area.jiangnan.misty_bamboo_alley",
+      "toLargeAreaId": "large_area.jiangnan.wet_bamboo_forest",
+      "travelMode": "bamboo_path",
+      "gateIds": ["quest_step.jiangnan_rain_alley.learn_guard.complete"],
+      "contentRefs": ["point.jiangnan.misty_bamboo_alley.rainline_school", "point.jiangnan.wet_bamboo_forest.listen_wind_platform", "skill.umbrella.gather_wind"],
+      "designerNote": "承接纸伞架伞训练后的采竹路线，强调技能门槛和材料回收。"
+    },
+    {
+      "id": "route.jiangnan.wet_bamboo_to_dye_paper",
+      "displayNameKey": "route.jiangnan.wet_bamboo_to_dye_paper.name",
+      "fromLargeAreaId": "large_area.jiangnan.wet_bamboo_forest",
+      "toLargeAreaId": "large_area.jiangnan.dye_paper_yard",
+      "travelMode": "craft_supply",
+      "gateIds": ["item.bamboo"],
+      "contentRefs": ["point.jiangnan.wet_bamboo_forest.mossy_bamboo_bridge", "point.jiangnan.dye_paper_yard.indigo_wash_channel", "recipe.jiangnan.bamboo_frame_balance"],
+      "designerNote": "把竹材、蓝染和纸面工序连成可循环生产线，服务工艺编辑器和采集刷新。"
+    },
+    {
+      "id": "route.jiangnan.dye_paper_to_river_market",
+      "displayNameKey": "route.jiangnan.dye_paper_to_river_market.name",
+      "fromLargeAreaId": "large_area.jiangnan.dye_paper_yard",
+      "toLargeAreaId": "large_area.jiangnan.river_market",
+      "travelMode": "market_delivery",
+      "gateIds": ["time.evening"],
+      "contentRefs": ["point.jiangnan.dye_paper_yard.blue_pattern_corner", "point.jiangnan.river_market.boat_lamp_row", "recipe.jiangnan.lantern_umbrella"],
+      "designerNote": "夜市灯伞订单的回流路线，后续可挂接限时委托和视觉变体展示。"
+    },
+    {
+      "id": "route.jiangnan.misty_to_old_bridge_roof",
+      "displayNameKey": "route.jiangnan.misty_to_old_bridge_roof.name",
+      "fromLargeAreaId": "large_area.jiangnan.misty_bamboo_alley",
+      "toLargeAreaId": "large_area.jiangnan.wind_bell_old_bridge",
+      "travelMode": "roof_shortcut",
+      "gateIds": ["skill.umbrella.borrow_wind"],
+      "contentRefs": ["point.jiangnan.misty_bamboo_alley.roof_lane", "point.jiangnan.wind_bell_old_bridge.bell_rope_rooftop", "skill.umbrella.borrow_wind"],
+      "designerNote": "把屋檐上层从单点回访升级为跨区捷径，作为高机动路线和风铃铆钉追踪入口。"
+    },
+    {
+      "id": "route.jiangnan.old_bridge_to_dye_paper",
+      "displayNameKey": "route.jiangnan.old_bridge_to_dye_paper.name",
+      "fromLargeAreaId": "large_area.jiangnan.wind_bell_old_bridge",
+      "toLargeAreaId": "large_area.jiangnan.dye_paper_yard",
+      "travelMode": "bridge_service",
+      "gateIds": ["choice.any_market_decision"],
+      "contentRefs": ["point.jiangnan.wind_bell_old_bridge.bridge_debt_marker", "point.jiangnan.dye_paper_yard.oil_smoke_store", "quest.jiangnan_rain_alley.side.bridge_debt"],
+      "designerNote": "让旧桥债务线和染纸油料线互相牵引，方便支线状态反映到工艺供应。"
+    },
+    {
+      "id": "route.jiangnan.river_to_outer_dike_boat",
+      "displayNameKey": "route.jiangnan.river_to_outer_dike_boat.name",
+      "fromLargeAreaId": "large_area.jiangnan.river_market",
+      "toLargeAreaId": "large_area.jiangnan.lake_field_outer_dike",
+      "travelMode": "boat_route",
+      "gateIds": ["quest_step.jiangnan_rain_alley.arrive_by_water.complete"],
+      "contentRefs": ["point.jiangnan.river_market.ferry_dock", "point.jiangnan.lake_field_outer_dike.watch_hut", "travel.boat_shortcut"],
+      "designerNote": "将河埠码头和湖田外圩连接成可展示的船路，为后续大地图旅行和补给线服务。"
+    },
+    {
+      "id": "route.jiangnan.outer_dike_to_wet_bamboo_trail",
+      "displayNameKey": "route.jiangnan.outer_dike_to_wet_bamboo_trail.name",
+      "fromLargeAreaId": "large_area.jiangnan.lake_field_outer_dike",
+      "toLargeAreaId": "large_area.jiangnan.wet_bamboo_forest",
+      "travelMode": "reed_trail",
+      "gateIds": ["none"],
+      "contentRefs": ["point.jiangnan.lake_field_outer_dike.rain_grain_stack", "point.jiangnan.wet_bamboo_forest.mossy_bamboo_bridge", "gather.jiangnan.reed"],
+      "designerNote": "让外圩采集循环有一条自然回到青篁湿林的路线，支撑自给循环的空间闭合。"
+    }
+  ],
   "largeAreas": [
     {
       "id": "large_area.jiangnan.misty_bamboo_alley",
@@ -38,7 +130,9 @@
         "point.jiangnan.misty_bamboo_alley.connected_awning",
         "point.jiangnan.misty_bamboo_alley.rib_store",
         "point.jiangnan.misty_bamboo_alley.tiangong_desk",
-        "point.jiangnan.misty_bamboo_alley.roof_lane"
+        "point.jiangnan.misty_bamboo_alley.roof_lane",
+        "point.jiangnan.misty_bamboo_alley.rainline_school",
+        "point.jiangnan.misty_bamboo_alley.commission_board"
       ],
       "coverage": {
         "npcIds": ["npc.master_shen_yu", "npc.apprentice_aqing", "npc.ye_hao", "npc.qiao_thread", "npc.alley_resident", "npc.yao_archivist"],
@@ -74,7 +168,9 @@
         "point.jiangnan.river_market.lantern_stage",
         "point.jiangnan.river_market.damp_warehouse",
         "point.jiangnan.river_market.boat_repair_shed",
-        "point.jiangnan.river_market.food_alley"
+        "point.jiangnan.river_market.food_alley",
+        "point.jiangnan.river_market.tide_measure_pier",
+        "point.jiangnan.river_market.boat_lamp_row"
       ],
       "coverage": {
         "npcIds": ["npc.market_runner", "npc.fang_account", "npc.boatman_liujiang", "npc.lan_dyer_wen", "npc.xu_lan_lantern"],
@@ -106,7 +202,9 @@
         "point.jiangnan.wet_bamboo_forest.windbreak_bamboo",
         "point.jiangnan.wet_bamboo_forest.creek_cut_table",
         "point.jiangnan.wet_bamboo_forest.wetland_trail",
-        "point.jiangnan.wet_bamboo_forest.husk_ambush"
+        "point.jiangnan.wet_bamboo_forest.husk_ambush",
+        "point.jiangnan.wet_bamboo_forest.listen_wind_platform",
+        "point.jiangnan.wet_bamboo_forest.mossy_bamboo_bridge"
       ],
       "coverage": {
         "npcIds": ["npc.zhou_bamboo", "npc.apprentice_aqing"],
@@ -138,7 +236,9 @@
         "point.jiangnan.dye_paper_yard.oiling_table",
         "point.jiangnan.dye_paper_yard.wind_drying_shed",
         "point.jiangnan.dye_paper_yard.blue_pattern_corner",
-        "point.jiangnan.dye_paper_yard.mildew_court"
+        "point.jiangnan.dye_paper_yard.mildew_court",
+        "point.jiangnan.dye_paper_yard.indigo_wash_channel",
+        "point.jiangnan.dye_paper_yard.oil_smoke_store"
       ],
       "coverage": {
         "npcIds": ["npc.tang_oilpaper", "npc.lan_dyer_wen", "npc.xu_lan_lantern"],
@@ -175,7 +275,9 @@
         "point.jiangnan.wind_bell_old_bridge.old_bridge_shed",
         "point.jiangnan.wind_bell_old_bridge.roof_bridge_line",
         "point.jiangnan.wind_bell_old_bridge.rain_curtain_gate",
-        "point.jiangnan.wind_bell_old_bridge.unsigned_mark_wall"
+        "point.jiangnan.wind_bell_old_bridge.unsigned_mark_wall",
+        "point.jiangnan.wind_bell_old_bridge.bell_rope_rooftop",
+        "point.jiangnan.wind_bell_old_bridge.bridge_debt_marker"
       ],
       "coverage": {
         "npcIds": ["npc.mei_bridge_keeper", "npc.du_repairer", "npc.xu_lan_lantern", "npc.yao_archivist"],
@@ -207,7 +309,9 @@
         "point.jiangnan.lake_field_outer_dike.water_lock",
         "point.jiangnan.lake_field_outer_dike.boat_repair_bank",
         "point.jiangnan.lake_field_outer_dike.herb_field",
-        "point.jiangnan.lake_field_outer_dike.fishing_weir"
+        "point.jiangnan.lake_field_outer_dike.fishing_weir",
+        "point.jiangnan.lake_field_outer_dike.watch_hut",
+        "point.jiangnan.lake_field_outer_dike.rain_grain_stack"
       ],
       "coverage": {
         "npcIds": ["npc.outer_dike_ahu", "npc.outer_dike_tongzhou", "npc.outer_dike_patrol", "npc.boatman_liujiang"],
@@ -233,6 +337,8 @@
     { "id": "point.jiangnan.misty_bamboo_alley.rib_store", "displayNameKey": "point.jiangnan.misty_bamboo_alley.rib_store.name", "largeAreaId": "large_area.jiangnan.misty_bamboo_alley", "type": "encounter", "coordinates": { "x": 760, "y": 330 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.umbrella_shop", "contentRefs": ["encounter.jiangnan.workshop_defense", "enemy.broken_umbrella_shadow", "gather.jiangnan.rib_store_scrap"], "gates": ["quest_step.jiangnan_rain_alley.learn_guard.complete"], "revisitStates": ["thread_shadow_trial"] },
     { "id": "point.jiangnan.misty_bamboo_alley.tiangong_desk", "displayNameKey": "point.jiangnan.misty_bamboo_alley.tiangong_desk.name", "largeAreaId": "large_area.jiangnan.misty_bamboo_alley", "type": "record", "coordinates": { "x": 735, "y": 185 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.rain_curtain_bridge", "contentRefs": ["npc.yao_archivist", "interaction.jiangnan_rain_alley.record_tiangong", "record.tiangong.jiangnan_entry"], "gates": ["boss.rain_alley_broken_umbrella_obsession.restored"], "revisitStates": ["chapter_summary", "unsigned_mark_followup"] },
     { "id": "point.jiangnan.misty_bamboo_alley.roof_lane", "displayNameKey": "point.jiangnan.misty_bamboo_alley.roof_lane.name", "largeAreaId": "large_area.jiangnan.misty_bamboo_alley", "type": "revisit", "coordinates": { "x": 1120, "y": 210 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.roof_route", "contentRefs": ["interaction.jiangnan_rain_alley.find_rivet", "skill.umbrella.borrow_wind", "gather.jiangnan.wind_bell_rivet"], "gates": ["skill.umbrella.borrow_wind"], "revisitStates": ["shortcut_to_old_bridge", "hidden_rivet"] },
+    { "id": "point.jiangnan.misty_bamboo_alley.rainline_school", "displayNameKey": "point.jiangnan.misty_bamboo_alley.rainline_school.name", "largeAreaId": "large_area.jiangnan.misty_bamboo_alley", "type": "training", "coordinates": { "x": 585, "y": 360 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.main_water_lane", "contentRefs": ["npc.apprentice_aqing", "encounter.jiangnan.thread_shadow", "skill.umbrella.guard"], "gates": ["quest_step.jiangnan_rain_alley.learn_guard.complete"], "revisitStates": ["guard_drill", "thread_shadow_replay"] },
+    { "id": "point.jiangnan.misty_bamboo_alley.commission_board", "displayNameKey": "point.jiangnan.misty_bamboo_alley.commission_board.name", "largeAreaId": "large_area.jiangnan.misty_bamboo_alley", "type": "commission", "coordinates": { "x": 470, "y": 470 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.town_awning", "contentRefs": ["npc.alley_resident", "quest.jiangnan_rain_alley.side.resident_patch", "gather.jiangnan.awning_drip"], "gates": ["none"], "revisitStates": ["resident_daily_board", "dailyLife_feedback"] },
 
     { "id": "point.jiangnan.river_market.ferry_dock", "displayNameKey": "point.jiangnan.river_market.ferry_dock.name", "largeAreaId": "large_area.jiangnan.river_market", "type": "travel", "coordinates": { "x": 250, "y": 640 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.water_entry", "contentRefs": ["building.jiangnan_rain_alley.dock_shed", "npc.boatman_liujiang", "interaction.jiangnan_rain_alley.boat_shortcut"], "gates": ["none"], "revisitStates": ["boat_shortcut", "water_resource_refresh"] },
     { "id": "point.jiangnan.river_market.ledger_awning", "displayNameKey": "point.jiangnan.river_market.ledger_awning.name", "largeAreaId": "large_area.jiangnan.river_market", "type": "choice", "coordinates": { "x": 980, "y": 600 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.night_market", "contentRefs": ["building.jiangnan_rain_alley.market_ledger", "npc.fang_account", "interaction.jiangnan_rain_alley.market_choice"], "gates": ["time.evening"], "revisitStates": ["market_order_board", "account_correction"] },
@@ -240,6 +346,8 @@
     { "id": "point.jiangnan.river_market.damp_warehouse", "displayNameKey": "point.jiangnan.river_market.damp_warehouse.name", "largeAreaId": "large_area.jiangnan.river_market", "type": "encounter", "coordinates": { "x": 930, "y": 540 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.night_market", "contentRefs": ["encounter.jiangnan.market_crowd_skirmish", "enemy.rain_tax_collector", "recipe.jiangnan.cargo_damp_proof"], "gates": ["choice.any_market_decision"], "revisitStates": ["warehouse_defense_replay"] },
     { "id": "point.jiangnan.river_market.boat_repair_shed", "displayNameKey": "point.jiangnan.river_market.boat_repair_shed.name", "largeAreaId": "large_area.jiangnan.river_market", "type": "service", "coordinates": { "x": 330, "y": 610 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.water_entry", "contentRefs": ["npc.boatman_liujiang", "recipe.jiangnan.boat_repair_material", "travel.boat_shortcut"], "gates": ["quest_step.jiangnan_rain_alley.arrive_by_water.complete"], "revisitStates": ["fast_travel_upgrade"] },
     { "id": "point.jiangnan.river_market.food_alley", "displayNameKey": "point.jiangnan.river_market.food_alley.name", "largeAreaId": "large_area.jiangnan.river_market", "type": "supply", "coordinates": { "x": 1140, "y": 670 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.night_market", "contentRefs": ["resource.simple_meal", "npc.alley_resident", "daily_commission.supply"], "gates": ["time.evening"], "revisitStates": ["low_cost_supply", "rumor_old_bridge"] },
+    { "id": "point.jiangnan.river_market.tide_measure_pier", "displayNameKey": "point.jiangnan.river_market.tide_measure_pier.name", "largeAreaId": "large_area.jiangnan.river_market", "type": "puzzle", "coordinates": { "x": 390, "y": 690 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.water_entry", "contentRefs": ["gather.jiangnan.rope_post", "encounter.jiangnan.tide_anchor_account_shadow", "trap.tide_anchor"], "gates": ["weather.heavy_rain"], "revisitStates": ["tide_anchor_reading", "boat_route_hint"] },
+    { "id": "point.jiangnan.river_market.boat_lamp_row", "displayNameKey": "point.jiangnan.river_market.boat_lamp_row.name", "largeAreaId": "large_area.jiangnan.river_market", "type": "craft", "coordinates": { "x": 1045, "y": 705 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.night_market", "contentRefs": ["recipe.jiangnan.lantern_umbrella", "npc.xu_lan_lantern", "asset.variant.umbrella.blue_lantern"], "gates": ["time.evening"], "revisitStates": ["lamp_order_display", "ritualFaith_feedback"] },
 
     { "id": "point.jiangnan.wet_bamboo_forest.bamboo_store", "displayNameKey": "point.jiangnan.wet_bamboo_forest.bamboo_store.name", "largeAreaId": "large_area.jiangnan.wet_bamboo_forest", "type": "service", "coordinates": { "x": 1180, "y": 390 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.bamboo_path", "contentRefs": ["building.jiangnan_rain_alley.bamboo_store", "npc.zhou_bamboo", "interaction.jiangnan_rain_alley.collect_bamboo"], "gates": ["quest_step.jiangnan_rain_alley.learn_guard.complete"], "revisitStates": ["bamboo_trade", "rare_bamboo_hint"] },
     { "id": "point.jiangnan.wet_bamboo_forest.green_grove", "displayNameKey": "point.jiangnan.wet_bamboo_forest.green_grove.name", "largeAreaId": "large_area.jiangnan.wet_bamboo_forest", "type": "gather", "coordinates": { "x": 1280, "y": 390 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.bamboo_path", "contentRefs": ["gather.jiangnan.old_bamboo", "trait.umbrella.even_bamboo_frame"], "gates": ["none"], "revisitStates": ["daily_regrowth"] },
@@ -247,6 +355,8 @@
     { "id": "point.jiangnan.wet_bamboo_forest.creek_cut_table", "displayNameKey": "point.jiangnan.wet_bamboo_forest.creek_cut_table.name", "largeAreaId": "large_area.jiangnan.wet_bamboo_forest", "type": "craft", "coordinates": { "x": 1220, "y": 475 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.bamboo_path", "contentRefs": ["recipe.jiangnan.bamboo_frame_balance", "npc.zhou_bamboo"], "gates": ["item.bamboo"], "revisitStates": ["rib_balance_minigame"] },
     { "id": "point.jiangnan.wet_bamboo_forest.wetland_trail", "displayNameKey": "point.jiangnan.wet_bamboo_forest.wetland_trail.name", "largeAreaId": "large_area.jiangnan.wet_bamboo_forest", "type": "exploration", "coordinates": { "x": 1390, "y": 470 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.bamboo_path", "contentRefs": ["trap.wet_slip_plane", "resource.creek_water"], "gates": ["none"], "revisitStates": ["shortcut_to_outer_dike"] },
     { "id": "point.jiangnan.wet_bamboo_forest.husk_ambush", "displayNameKey": "point.jiangnan.wet_bamboo_forest.husk_ambush.name", "largeAreaId": "large_area.jiangnan.wet_bamboo_forest", "type": "encounter", "coordinates": { "x": 1450, "y": 420 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.bamboo_path", "contentRefs": ["enemy.bamboo_husk", "encounter.jiangnan.wet_forest_mini_boss"], "gates": ["quest_step.jiangnan_rain_alley.choose_bamboo.complete"], "revisitStates": ["combat_material_drop"] },
+    { "id": "point.jiangnan.wet_bamboo_forest.listen_wind_platform", "displayNameKey": "point.jiangnan.wet_bamboo_forest.listen_wind_platform.name", "largeAreaId": "large_area.jiangnan.wet_bamboo_forest", "type": "training", "coordinates": { "x": 1335, "y": 545 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.bamboo_path", "contentRefs": ["skill.umbrella.gather_wind", "encounter.jiangnan.bamboo_husk_patrol", "gather.jiangnan.windbreak_bamboo"], "gates": ["skill.umbrella.gather_wind"], "revisitStates": ["wind_reading_trial", "bamboo_patrol_hint"] },
+    { "id": "point.jiangnan.wet_bamboo_forest.mossy_bamboo_bridge", "displayNameKey": "point.jiangnan.wet_bamboo_forest.mossy_bamboo_bridge.name", "largeAreaId": "large_area.jiangnan.wet_bamboo_forest", "type": "exploration", "coordinates": { "x": 1465, "y": 520 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.bamboo_path", "contentRefs": ["gather.jiangnan.quick_dry_bamboo", "trap.wet_slip_plane", "recipe.jiangnan.bamboo_frame_balance"], "gates": ["none"], "revisitStates": ["outer_dike_shortcut", "wet_slip_training"] },
 
     { "id": "point.jiangnan.dye_paper_yard.dye_vats", "displayNameKey": "point.jiangnan.dye_paper_yard.dye_vats.name", "largeAreaId": "large_area.jiangnan.dye_paper_yard", "type": "craft", "coordinates": { "x": 950, "y": 430 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.dye_paper_court", "contentRefs": ["npc.lan_dyer_wen", "gather.jiangnan.blue_dye", "recipe.jiangnan.blue_pattern_dye"], "gates": ["quest_step.jiangnan_rain_alley.choose_bamboo.complete"], "revisitStates": ["color_variant_unlock"] },
     { "id": "point.jiangnan.dye_paper_yard.paper_racks", "displayNameKey": "point.jiangnan.dye_paper_yard.paper_racks.name", "largeAreaId": "large_area.jiangnan.dye_paper_yard", "type": "gather", "coordinates": { "x": 1030, "y": 410 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.dye_paper_court", "contentRefs": ["gather.jiangnan.rain_paper", "interaction.jiangnan_rain_alley.craft_paper_oil"], "gates": ["none"], "revisitStates": ["rain_paper_refresh"] },
@@ -254,6 +364,8 @@
     { "id": "point.jiangnan.dye_paper_yard.wind_drying_shed", "displayNameKey": "point.jiangnan.dye_paper_yard.wind_drying_shed.name", "largeAreaId": "large_area.jiangnan.dye_paper_yard", "type": "puzzle", "coordinates": { "x": 1105, "y": 385 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.dye_paper_court", "contentRefs": ["trap.wet_slip_plane", "skill.umbrella.gather_wind"], "gates": ["trait.umbrella.wind_hungry_surface"], "revisitStates": ["drying_score_trial"] },
     { "id": "point.jiangnan.dye_paper_yard.blue_pattern_corner", "displayNameKey": "point.jiangnan.dye_paper_yard.blue_pattern_corner.name", "largeAreaId": "large_area.jiangnan.dye_paper_yard", "type": "quest", "coordinates": { "x": 1135, "y": 470 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.dye_paper_court", "contentRefs": ["quest.jiangnan_rain_alley.side.blue_pattern", "asset.variant.umbrella.blue_lantern"], "gates": ["time.evening"], "revisitStates": ["lantern_stage_feedback"] },
     { "id": "point.jiangnan.dye_paper_yard.mildew_court", "displayNameKey": "point.jiangnan.dye_paper_yard.mildew_court.name", "largeAreaId": "large_area.jiangnan.dye_paper_yard", "type": "encounter", "coordinates": { "x": 1160, "y": 530 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.dye_paper_court", "contentRefs": ["enemy.rain_mildew_walker", "encounter.jiangnan.mildew_walker_pressure"], "gates": ["weather.heavy_rain"], "revisitStates": ["wet_resistance_test"] },
+    { "id": "point.jiangnan.dye_paper_yard.indigo_wash_channel", "displayNameKey": "point.jiangnan.dye_paper_yard.indigo_wash_channel.name", "largeAreaId": "large_area.jiangnan.dye_paper_yard", "type": "gather", "coordinates": { "x": 915, "y": 505 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.dye_paper_court", "contentRefs": ["gather.jiangnan.blue_dye", "recipe.jiangnan.blue_pattern_dye", "npc.lan_dyer_wen"], "gates": ["none"], "revisitStates": ["blue_dye_refresh", "color_stability_hint"] },
+    { "id": "point.jiangnan.dye_paper_yard.oil_smoke_store", "displayNameKey": "point.jiangnan.dye_paper_yard.oil_smoke_store.name", "largeAreaId": "large_area.jiangnan.dye_paper_yard", "type": "risk", "coordinates": { "x": 1085, "y": 535 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.dye_paper_court", "contentRefs": ["gather.jiangnan.tung_oil_sample", "recipe.jiangnan.paper_oil_finish", "npc.tang_oilpaper"], "gates": ["item.tung_oil"], "revisitStates": ["oil_sample_refresh", "wet_edge_warning"] },
 
     { "id": "point.jiangnan.wind_bell_old_bridge.wind_bell_shrine", "displayNameKey": "point.jiangnan.wind_bell_old_bridge.wind_bell_shrine.name", "largeAreaId": "large_area.jiangnan.wind_bell_old_bridge", "type": "puzzle", "coordinates": { "x": 1180, "y": 240 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.wind_bell_lane", "contentRefs": ["building.jiangnan_rain_alley.wind_bell_shrine", "interaction.jiangnan_rain_alley.wind_bell_tuning", "trap.ringing_latch"], "gates": ["trait.umbrella.wind_hungry_surface"], "revisitStates": ["retune_challenge"] },
     { "id": "point.jiangnan.wind_bell_old_bridge.lower_bridge_cave", "displayNameKey": "point.jiangnan.wind_bell_old_bridge.lower_bridge_cave.name", "largeAreaId": "large_area.jiangnan.wind_bell_old_bridge", "type": "combat", "coordinates": { "x": 1300, "y": 300 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.old_bridge_lower", "contentRefs": ["enemy.bridge_stalker", "interaction.jiangnan_rain_alley.old_bridge_trial"], "gates": ["choice.any_market_decision"], "revisitStates": ["elite_replay"] },
@@ -261,13 +373,17 @@
     { "id": "point.jiangnan.wind_bell_old_bridge.roof_bridge_line", "displayNameKey": "point.jiangnan.wind_bell_old_bridge.roof_bridge_line.name", "largeAreaId": "large_area.jiangnan.wind_bell_old_bridge", "type": "revisit", "coordinates": { "x": 1360, "y": 210 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.roof_route", "contentRefs": ["skill.umbrella.borrow_wind", "interaction.jiangnan_rain_alley.find_rivet"], "gates": ["skill.umbrella.borrow_wind"], "revisitStates": ["upper_bridge_shortcut"] },
     { "id": "point.jiangnan.wind_bell_old_bridge.rain_curtain_gate", "displayNameKey": "point.jiangnan.wind_bell_old_bridge.rain_curtain_gate.name", "largeAreaId": "large_area.jiangnan.wind_bell_old_bridge", "type": "boss", "coordinates": { "x": 1420, "y": 240 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.rain_curtain_bridge", "contentRefs": ["boss.rain_alley_broken_umbrella_obsession", "interaction.jiangnan_rain_alley.bridge_boss_restore"], "gates": ["item.wind_bell_rivet"], "revisitStates": ["boss_replay", "restoration_outcome"] },
     { "id": "point.jiangnan.wind_bell_old_bridge.unsigned_mark_wall", "displayNameKey": "point.jiangnan.wind_bell_old_bridge.unsigned_mark_wall.name", "largeAreaId": "large_area.jiangnan.wind_bell_old_bridge", "type": "record", "coordinates": { "x": 1345, "y": 360 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.rain_curtain_bridge", "contentRefs": ["enemy.unsigned_mark_echo", "npc.yao_archivist", "record.tiangong.unsigned_mark"], "gates": ["boss.rain_alley_broken_umbrella_obsession.restored"], "revisitStates": ["chapter_two_hook"] },
+    { "id": "point.jiangnan.wind_bell_old_bridge.bell_rope_rooftop", "displayNameKey": "point.jiangnan.wind_bell_old_bridge.bell_rope_rooftop.name", "largeAreaId": "large_area.jiangnan.wind_bell_old_bridge", "type": "revisit", "coordinates": { "x": 1215, "y": 180 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.roof_route", "contentRefs": ["gather.jiangnan.wind_bell_rivet", "skill.umbrella.borrow_wind", "interaction.jiangnan_rain_alley.find_rivet"], "gates": ["skill.umbrella.borrow_wind"], "revisitStates": ["upper_roof_chain", "rivet_precision_trial"] },
+    { "id": "point.jiangnan.wind_bell_old_bridge.bridge_debt_marker", "displayNameKey": "point.jiangnan.wind_bell_old_bridge.bridge_debt_marker.name", "largeAreaId": "large_area.jiangnan.wind_bell_old_bridge", "type": "quest", "coordinates": { "x": 1285, "y": 380 }, "sourceSubregionId": "subregion.jiangnan_rain_alley.old_bridge_lower", "contentRefs": ["quest.jiangnan_rain_alley.side.bridge_debt", "npc.mei_bridge_keeper", "encounter.jiangnan.bridge_stalker"], "gates": ["choice.any_market_decision"], "revisitStates": ["debt_echo", "elite_replay_hint"] },
 
     { "id": "point.jiangnan.lake_field_outer_dike.paddy_gate", "displayNameKey": "point.jiangnan.lake_field_outer_dike.paddy_gate.name", "largeAreaId": "large_area.jiangnan.lake_field_outer_dike", "type": "exploration", "coordinates": { "x": 190, "y": 330 }, "sourceSubregionId": null, "contentRefs": ["quest.jiangnan.outer_dike.sluice_supply", "npc.outer_dike_ahu", "resource.oil_seed"], "gates": ["chapter.open_30_minutes"], "revisitStates": ["water_level_shift"] },
     { "id": "point.jiangnan.lake_field_outer_dike.reed_marsh", "displayNameKey": "point.jiangnan.lake_field_outer_dike.reed_marsh.name", "largeAreaId": "large_area.jiangnan.lake_field_outer_dike", "type": "gather", "coordinates": { "x": 120, "y": 420 }, "sourceSubregionId": null, "contentRefs": ["gather.jiangnan.reed", "recipe.jiangnan.boat_repair_material"], "gates": ["none"], "revisitStates": ["daily_reed_refresh"] },
     { "id": "point.jiangnan.lake_field_outer_dike.water_lock", "displayNameKey": "point.jiangnan.lake_field_outer_dike.water_lock.name", "largeAreaId": "large_area.jiangnan.lake_field_outer_dike", "type": "encounter", "coordinates": { "x": 285, "y": 380 }, "sourceSubregionId": null, "contentRefs": ["building.jiangnan_rain_alley.outer_dike_sluice", "interaction.jiangnan_rain_alley.outer_dike_sluice", "interaction.jiangnan_rain_alley.outer_dike_patrol", "encounter.jiangnan.outer_dike_mini_boss"], "gates": ["weather.heavy_rain"], "revisitStates": ["sluice_challenge"] },
     { "id": "point.jiangnan.lake_field_outer_dike.boat_repair_bank", "displayNameKey": "point.jiangnan.lake_field_outer_dike.boat_repair_bank.name", "largeAreaId": "large_area.jiangnan.lake_field_outer_dike", "type": "craft", "coordinates": { "x": 230, "y": 510 }, "sourceSubregionId": null, "contentRefs": ["building.jiangnan_rain_alley.outer_dike_boatyard", "npc.outer_dike_tongzhou", "interaction.jiangnan_rain_alley.outer_dike_boat_repair", "recipe.jiangnan.boat_repair_material"], "gates": ["gather.jiangnan.reed"], "revisitStates": ["water_route_upgrade"] },
     { "id": "point.jiangnan.lake_field_outer_dike.herb_field", "displayNameKey": "point.jiangnan.lake_field_outer_dike.herb_field.name", "largeAreaId": "large_area.jiangnan.lake_field_outer_dike", "type": "supply", "coordinates": { "x": 150, "y": 560 }, "sourceSubregionId": null, "contentRefs": ["gather.jiangnan.herb_patch", "recipe.jiangnan.herb_patch"], "gates": ["none"], "revisitStates": ["combat_consumable_refresh"] },
-    { "id": "point.jiangnan.lake_field_outer_dike.fishing_weir", "displayNameKey": "point.jiangnan.lake_field_outer_dike.fishing_weir.name", "largeAreaId": "large_area.jiangnan.lake_field_outer_dike", "type": "supply", "coordinates": { "x": 310, "y": 590 }, "sourceSubregionId": null, "contentRefs": ["gather.jiangnan.fish_catch", "recipe.jiangnan.simple_meal"], "gates": ["time.morning"], "revisitStates": ["simple_meal_loop"] }
+    { "id": "point.jiangnan.lake_field_outer_dike.fishing_weir", "displayNameKey": "point.jiangnan.lake_field_outer_dike.fishing_weir.name", "largeAreaId": "large_area.jiangnan.lake_field_outer_dike", "type": "supply", "coordinates": { "x": 310, "y": 590 }, "sourceSubregionId": null, "contentRefs": ["gather.jiangnan.fish_catch", "recipe.jiangnan.simple_meal"], "gates": ["time.morning"], "revisitStates": ["simple_meal_loop"] },
+    { "id": "point.jiangnan.lake_field_outer_dike.watch_hut", "displayNameKey": "point.jiangnan.lake_field_outer_dike.watch_hut.name", "largeAreaId": "large_area.jiangnan.lake_field_outer_dike", "type": "patrol", "coordinates": { "x": 85, "y": 355 }, "sourceSubregionId": null, "contentRefs": ["npc.outer_dike_patrol", "interaction.jiangnan_rain_alley.outer_dike_patrol", "encounter.jiangnan.water_lock_pressure"], "gates": ["weather.heavy_rain"], "revisitStates": ["patrol_rotation", "sluice_pressure_warning"] },
+    { "id": "point.jiangnan.lake_field_outer_dike.rain_grain_stack", "displayNameKey": "point.jiangnan.lake_field_outer_dike.rain_grain_stack.name", "largeAreaId": "large_area.jiangnan.lake_field_outer_dike", "type": "supply", "coordinates": { "x": 260, "y": 560 }, "sourceSubregionId": null, "contentRefs": ["recipe.jiangnan.simple_meal", "gather.jiangnan.oil_seed", "daily_commission.supply"], "gates": ["time.morning"], "revisitStates": ["supply_cache", "self_supply_demo"] }
   ],
   "migrationFrom07": [
     { "subregionId": "subregion.jiangnan_rain_alley.water_entry", "largeAreaId": "large_area.jiangnan.river_market", "pointIds": ["point.jiangnan.river_market.ferry_dock"] },

@@ -29,7 +29,7 @@ describe("web demo static surface", () => {
     for (const key of ["largeMapPanel", "largeMapBoard", "largeMapDetails", "editorPanel", "editorBoard", "exportEditorButton", "resetEditorButton"]) {
       assert.match(html, new RegExp(key));
     }
-    for (const key of ["largeAreas", "gatherNodes", "craftRecipes", "craftTraits", "encounters", "editors", "renderLargeMapPanel", "focusLargeArea", "renderLargeMapDetails", "resolveContentRef", "createContentRefChip", "createCoverageRows", "renderEditorPanel", "selectEditorTemplate", "buildEditableContentModel", "exportEditorDraft", "resetEditorDraft", "updateEditorDraftFromControl", "validateEditorDraft", "createEditorFieldControl", "createEditorValidationList"]) {
+    for (const key of ["largeAreas", "largeAreaRoutes", "gatherNodes", "craftRecipes", "craftTraits", "encounters", "editors", "renderLargeMapPanel", "createLargeMapRouteLayer", "createLargeAreaNode", "createRouteRows", "focusLargeArea", "renderLargeMapDetails", "resolveContentRef", "createContentRefChip", "createCoverageRows", "renderEditorPanel", "selectEditorTemplate", "buildEditableContentModel", "exportEditorDraft", "resetEditorDraft", "updateEditorDraftFromControl", "validateEditorDraft", "createEditorFieldControl", "createEditorValidationList"]) {
       assert.match(js, new RegExp(key));
     }
     for (const key of ["draftsByTemplateId", "validationByTemplateId", "exportedTextByTemplateId", "data-editor-field", "data-editor-preview", "__heavenwrightsDemo", "getDemoQaSnapshot"]) {
@@ -40,7 +40,10 @@ describe("web demo static surface", () => {
     assert.match(js, /\/content\/recipes\/jiangnan_craft_recipes\.json/);
     assert.match(js, /\/content\/encounters\/jiangnan_encounters\.json/);
     assert.match(js, /\/content\/editors\/jiangnan_editor_templates\.json/);
-    assert.match(css, /\.large-area-card/);
+    assert.match(css, /\.large-map-atlas/);
+    assert.match(css, /\.large-area-node/);
+    assert.match(css, /\.large-map-route/);
+    assert.match(css, /\.route-row/);
     assert.match(css, /\.content-ref-chip/);
     assert.match(css, /\.coverage-row/);
     assert.match(css, /\.editor-template-list/);

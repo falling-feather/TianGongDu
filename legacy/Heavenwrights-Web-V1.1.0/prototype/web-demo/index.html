@@ -10,7 +10,7 @@
     <main id="app" aria-label="天工渡江南雨巷可玩原型">
       <canvas id="scene" aria-label="江南雨巷类 2.5D 探索场景"></canvas>
 
-      <section id="cover" class="cover" aria-label="游戏封面">
+      <section id="cover" class="cover" aria-label="游戏封面" aria-hidden="false">
         <div class="cover-copy">
           <p class="eyebrow">江南雨巷 / 纸伞门径</p>
           <h1>天工渡</h1>
@@ -78,6 +78,7 @@
           <h1>纸伞门径</h1>
           <p id="objective">沿雨巷探索，拜访纸伞匠，收集修伞材料并校准屋檐风口。</p>
           <span id="stateLine">纸伞匠沈雨正在观察你的架伞节奏。</span>
+          <ol id="milestoneList" class="milestone-list" aria-label="阶段路线"></ol>
         </section>
 
         <section class="drawer" aria-label="系统页面">
@@ -193,6 +194,18 @@
         <span><kbd>O</kbd> 编辑器</span>
         <span><kbd>T</kbd> 小憩</span>
       </div>
+
+      <section id="runOverlay" class="run-overlay hidden" aria-live="assertive" aria-label="试炼状态" aria-hidden="true" inert>
+        <div class="run-overlay-card">
+          <p id="runOverlayEyebrow" class="eyebrow">纸伞门径试炼</p>
+          <h2 id="runOverlayTitle">整备完成</h2>
+          <p id="runOverlayText">回到雨巷，继续完成阶段路线。</p>
+          <div class="run-overlay-actions">
+            <button id="runOverlayAction" type="button">继续巡巷</button>
+            <button id="runOverlayReset" type="button">重新开始</button>
+          </div>
+        </div>
+      </section>
     </main>
 
     <script type="module" src="./src/main-v2.js"></script>

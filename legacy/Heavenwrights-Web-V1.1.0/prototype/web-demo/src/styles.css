@@ -691,6 +691,91 @@ kbd {
   min-height: 46px;
 }
 
+.milestone-list {
+  display: grid;
+  gap: 5px;
+  margin: 12px 0 0;
+  padding: 10px 12px 10px 28px;
+  border-top: 1px solid rgba(209, 196, 157, 0.18);
+  color: #b9cbc7;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.milestone-list li::marker {
+  color: rgba(228, 173, 90, 0.68);
+}
+
+.milestone-list li.done {
+  color: #8fd6a3;
+  text-decoration: line-through;
+  text-decoration-color: rgba(143, 214, 163, 0.42);
+}
+
+.milestone-list li.active {
+  color: #f3dfaa;
+  font-weight: 800;
+}
+
+.run-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(5, 12, 13, 0.72);
+  backdrop-filter: blur(7px);
+}
+
+.run-overlay.hidden {
+  display: none;
+}
+
+.run-overlay-card {
+  width: min(460px, 100%);
+  padding: clamp(22px, 4vw, 38px);
+  border: 1px solid rgba(238, 213, 154, 0.42);
+  background:
+    linear-gradient(145deg, rgba(42, 56, 51, 0.96), rgba(8, 22, 25, 0.98));
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.58);
+}
+
+.run-overlay-card h2 {
+  margin: 0;
+  color: #f4e8c9;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(28px, 5vw, 42px);
+}
+
+.run-overlay-card > p:not(.eyebrow) {
+  margin: 14px 0 22px;
+  color: #dce9df;
+  line-height: 1.7;
+}
+
+.run-overlay-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.run-overlay-actions button {
+  min-height: 42px;
+  flex: 1;
+  min-width: 132px;
+  border: 1px solid rgba(238, 213, 154, 0.42);
+  border-radius: 4px;
+  background: rgba(54, 43, 25, 0.94);
+  color: #f6ecd5;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.run-overlay-actions button + button {
+  background: rgba(12, 31, 34, 0.92);
+}
+
 .drawer {
   border: 1px solid rgba(209, 196, 157, 0.3);
   background: var(--panel-strong);
@@ -735,7 +820,7 @@ kbd {
 
 .map-board {
   position: relative;
-  height: 180px;
+  height: 220px;
   overflow: hidden;
   border: 1px solid rgba(224, 219, 182, 0.18);
   background:
@@ -758,8 +843,8 @@ kbd {
 
 .map-node {
   position: absolute;
-  width: 58px;
-  height: 38px;
+  width: 54px;
+  height: 36px;
   transform: translate(-50%, -50%);
   border: 1px solid rgba(235, 216, 166, 0.4);
   border-radius: 4px;
@@ -1708,7 +1793,7 @@ kbd {
   }
 
   .map-board {
-    height: 150px;
+    height: 190px;
   }
 }
 

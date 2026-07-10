@@ -5,6 +5,8 @@ const DAY_MINUTES = 24 * 60;
 const TIME_SCALE = 1.8;
 const MAX_RENDER_DPR = 1.5;
 const UI_SYNC_MAX_HZ = 12;
+const DEBUG_MODE = new URLSearchParams(window.location.search).get("debug") === "1";
+const PAUSING_PANELS = new Set(["inventory", "npcs", "largeMap", "editor", "m1", "journal"]);
 const BASE_FOUR_EYES = {
   inheritance: 52,
   market: 45,
@@ -117,6 +119,49 @@ const STEP_NODE_HINTS = {
   "quest_step.jiangnan_rain_alley.boss_restoration": "rain_curtain",
   "quest_step.jiangnan_rain_alley.record_in_tiangong": "umbrella_shop"
 };
+
+const PLAYABLE_MILESTONES = [
+  {
+    id: "arrival",
+    label: "入镇验货并学会架伞",
+    stepIds: [
+      "quest_step.jiangnan_rain_alley.arrive_by_water",
+      "quest_step.jiangnan_rain_alley.check_delivery",
+      "quest_step.jiangnan_rain_alley.learn_guard"
+    ]
+  },
+  {
+    id: "craft",
+    label: "采集青篾并完成伞面工艺",
+    stepIds: [
+      "quest_step.jiangnan_rain_alley.choose_bamboo",
+      "quest_step.jiangnan_rain_alley.paper_and_oil"
+    ]
+  },
+  {
+    id: "market",
+    label: "处理夜市订单并取得风铃铆",
+    stepIds: [
+      "quest_step.jiangnan_rain_alley.market_decision",
+      "quest_step.jiangnan_rain_alley.find_rivet"
+    ]
+  },
+  {
+    id: "bridge",
+    label: "归位旧桥伞影与断桥雨幕",
+    stepIds: [
+      "quest_step.jiangnan_rain_alley.old_bridge_trial",
+      "quest_step.jiangnan_rain_alley.boss_restoration"
+    ]
+  },
+  {
+    id: "record",
+    label: "返回纸伞铺完成《天工录》落款",
+    stepIds: ["quest_step.jiangnan_rain_alley.record_in_tiangong"]
+  }
+];
+
+const PLAYABLE_MAINLINE_STEP_IDS = new Set(PLAYABLE_MILESTONES.flatMap((milestone) => milestone.stepIds));
 
 const PRODUCTION_WHITEBOX_REFS = new Set([
   "subregion.jiangnan_rain_alley.water_entry",
@@ -340,6 +385,20 @@ const MAP_NODES = [
   }
 ];
 
+const MAP_PANEL_POSITIONS = {
+  water_entry: { x: 10, y: 76 },
+  town_awning: { x: 26, y: 76 },
+  main_alley: { x: 35, y: 52 },
+  old_bridge: { x: 43, y: 84 },
+  umbrella_shop: { x: 52, y: 42 },
+  night_market: { x: 62, y: 82 },
+  dye_paper_court: { x: 66, y: 58 },
+  roof_route: { x: 68, y: 20 },
+  wind_bell_lane: { x: 82, y: 42 },
+  bamboo_path: { x: 82, y: 70 },
+  rain_curtain: { x: 92, y: 20 }
+};
+
 const GATHER_SPOTS = [
   {
     id: "oil_jars",
@@ -491,7 +550,9 @@ function createWorld() {
     choice: null,
     restore: 1,
     started: false,
-    message: "纸伞匠沈雨正在观察你的架伞节奏。",
+    runState: "playing",
+    stageCompleteAnnounced: false,
+    message: "渡牒已验：先到镇口雨棚确认材料，再去纸伞铺学架伞。",
     context: "检视雨线",
     objective: "沿雨巷探索，拜访纸伞匠，收集修伞材料并校准屋檐风口。",
     log: ["抵达听雨轩，雨线里有细小伞骨声。"],
@@ -507,10 +568,11 @@ function createWorld() {
       dirtyReason: "boot",
       lastRenderTime: -Infinity,
       lastStateSignature: "",
+      lastPanelSignature: "",
       activePanelRendered: null,
       maxHz: UI_SYNC_MAX_HZ
     },
-    currentLocationId: "umbrella_shop",
+    currentLocationId: "water_entry",
     largeMapFocusId: "large_area.jiangnan.misty_bamboo_alley",
     talkIndex: {},
     m1: { stepIndex: 0, completedStepIds: new Set(), loadedOnce: false },
@@ -537,7 +599,7 @@ function createWorld() {
       refs: ["asset_group.jiangnan.skill_vfx", "audio_pack.jiangnan_rain_alley_m1"]
     },
     boss: createBossState(),
-    player: { x: 858, y: 390, vx: 0, vy: 0, vitality: 100, stamina: 100, wind: 52, guard: false, action: "idle", actionTimer: 0, facing: 1 },
+    player: { x: 298, y: 626, vx: 0, vy: 0, vitality: 100, stamina: 100, wind: 52, guard: false, action: "idle", actionTimer: 0, facing: 1 },
     enemies: createEnemies(),
     npcs: createNpcs(),
     gatherSpots: createGatherSpots(),
@@ -565,6 +627,7 @@ const elements = {
   restoreRow: document.querySelector("#restoreRow"),
   objective: document.querySelector("#objective"),
   stateLine: document.querySelector("#stateLine"),
+  milestoneList: document.querySelector("#milestoneList"),
   contextPrompt: document.querySelector("#contextPrompt"),
   eventLog: document.querySelector("#eventLog"),
   rushOrderButton: document.querySelector("#rushOrderButton"),
@@ -600,6 +663,12 @@ const elements = {
   productionBoard: document.querySelector("#productionBoard"),
   questTrack: document.querySelector("#questTrack"),
   bossReadout: document.querySelector("#bossReadout"),
+  runOverlay: document.querySelector("#runOverlay"),
+  runOverlayEyebrow: document.querySelector("#runOverlayEyebrow"),
+  runOverlayTitle: document.querySelector("#runOverlayTitle"),
+  runOverlayText: document.querySelector("#runOverlayText"),
+  runOverlayAction: document.querySelector("#runOverlayAction"),
+  runOverlayReset: document.querySelector("#runOverlayReset"),
   advanceM1Button: document.querySelector("#advanceM1Button"),
   fourEyes: {
     inheritance: { meter: document.querySelector("#inheritanceMeter"), text: document.querySelector("#inheritanceText") },
@@ -611,6 +680,7 @@ const elements = {
 
 for (let i = 0; i < 8; i += 1) elements.windPips.append(document.createElement("i"));
 for (let i = 0; i < 5; i += 1) elements.restoreRow.append(document.createElement("i"));
+elements.advanceM1Button.hidden = !DEBUG_MODE;
 
 let canvasRenderDpr = 1;
 
@@ -638,6 +708,7 @@ function buildUiSignature() {
   const fourEyes = Object.entries(world.fourEyes).map(([id, value]) => `${id}:${Math.round(value)}`).join(",");
   const flags = Object.entries(world.flags).map(([id, value]) => `${id}:${Number(value)}`).join(",");
   const discovered = [...world.discovered].sort().join(",");
+  const completedSteps = [...world.m1.completedStepIds].sort().join(",");
   const contentCounts = [
     contentPack.loaded,
     contentPack.error ?? "",
@@ -656,6 +727,7 @@ function buildUiSignature() {
     .join(",");
   return [
     world.started,
+    world.runState,
     world.activePanel,
     world.currentLocationId,
     world.largeMapFocusId,
@@ -680,11 +752,64 @@ function buildUiSignature() {
     flags,
     discovered,
     world.m1.stepIndex,
-    world.m1.completedStepIds.size,
+    completedSteps,
     world.craft.traitId,
     editorDirty,
     contentCounts
   ].join("|");
+}
+
+function buildPanelSignature() {
+  const discovered = [...world.discovered].sort().join(",");
+  const flags = Object.entries(world.flags).map(([id, value]) => `${id}:${Number(value)}`).join(",");
+  const inventory = Object.entries(world.inventory).sort().map(([id, count]) => `${id}:${count}`).join(",");
+  const completed = [...world.m1.completedStepIds].sort().join(",");
+  const contentCounts = [
+    contentPack.loaded,
+    contentPack.error ?? "",
+    contentPack.largeAreas.length,
+    contentPack.points.length,
+    contentPack.largeAreaRoutes.length,
+    contentPack.gatherNodes.length,
+    contentPack.craftRecipes.length,
+    contentPack.encounters.length,
+    contentPack.editors.length
+  ].join(":");
+
+  if (world.activePanel === "map") {
+    return ["map", world.currentLocationId, discovered, flags].join("|");
+  }
+  if (world.activePanel === "inventory") {
+    return ["inventory", inventory, JSON.stringify(world.craft), world.currentLocationId].join("|");
+  }
+  if (world.activePanel === "npcs") {
+    return ["npcs", getPeriod().id, JSON.stringify(world.talkIndex), flags, world.choice, world.boss.restored].join("|");
+  }
+  if (world.activePanel === "largeMap") {
+    return ["largeMap", world.largeMapFocusId, contentCounts].join("|");
+  }
+  if (world.activePanel === "editor") {
+    return [
+      "editor",
+      world.editorDraft.selectedTemplateId,
+      JSON.stringify(world.editorDraft.dirtyByTemplateId),
+      JSON.stringify(world.editorDraft.validationByTemplateId),
+      contentCounts
+    ].join("|");
+  }
+  if (world.activePanel === "m1") {
+    return [
+      "m1",
+      completed,
+      world.boss.active,
+      world.boss.restored,
+      Math.round(world.boss.disorder),
+      world.productionCue.label,
+      world.productionCue.refs.join(","),
+      contentCounts
+    ].join("|");
+  }
+  return ["journal", world.log.join("~")].join("|");
 }
 
 function renderVisiblePanel() {
@@ -748,6 +873,8 @@ elements.craftButton.addEventListener("click", craftUmbrellaPatch);
 elements.advanceM1Button.addEventListener("click", advanceM1Flow);
 elements.exportEditorButton.addEventListener("click", exportEditorDraft);
 elements.resetEditorButton.addEventListener("click", resetEditorDraft);
+elements.runOverlayAction.addEventListener("click", handleRunOverlayAction);
+elements.runOverlayReset.addEventListener("click", resetDemo);
 elements.inventoryList.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-use-item]");
   if (button) useItem(button.dataset.useItem);
@@ -787,7 +914,15 @@ for (const button of elements.hotbarButtons) {
 
 function startGame(panel = "map") {
   world.started = true;
+  world.runState = "playing";
   elements.cover.classList.add("hidden");
+  elements.cover.inert = true;
+  elements.cover.setAttribute("aria-hidden", "true");
+  elements.runOverlay.classList.add("hidden");
+  elements.runOverlay.inert = true;
+  elements.runOverlay.setAttribute("aria-hidden", "true");
+  completeStepIds(["quest_step.jiangnan_rain_alley.arrive_by_water"]);
+  refreshMainlineObjective();
   setPanel(panel);
   addLog("纸伞门径试炼开始，雨巷地图已经展开。");
 }
@@ -804,6 +939,10 @@ function setPanel(panel) {
     node.classList.toggle("active", key === panel);
   }
   syncUi();
+}
+
+function isGameplayPaused() {
+  return world.started && PAUSING_PANELS.has(world.activePanel);
 }
 
 async function fetchJson(url) {
@@ -845,7 +984,8 @@ async function loadContentPack() {
     applyContentPackToMap();
     syncEditorDraftAfterLoad();
     world.m1.loadedOnce = true;
-    world.objective = `江南内容库已载入：可在“大地图”查看 ${contentPack.largeAreas.length} 区 ${contentPack.points.length} 点位与 ${contentPack.largeAreaRoutes.length} 条路线，或在“编辑器”预览内容模板。`;
+    refreshMainlineObjective();
+    world.message = `江南内容库已载入：${contentPack.largeAreas.length} 区、${contentPack.points.length} 点位、${contentPack.largeAreaRoutes.length} 条路线。当前阶段路线已同步。`;
     addLog(`载入江南内容库：${contentPack.subregions.length} 个旧子地区、${contentPack.largeAreas.length} 个大区、${contentPack.points.length} 个点位、${contentPack.largeAreaRoutes.length} 条路线、${contentPack.gatherNodes.length} 个采集点、${contentPack.craftRecipes.length} 条配方、${contentPack.encounters.length} 个遭遇、${contentPack.editors.length} 个编辑器模板。`);
   } catch (error) {
     contentPack = { ...contentPack, loaded: false, error: error instanceof Error ? error.message : String(error) };
@@ -872,12 +1012,34 @@ function applyContentPackToMap() {
 }
 
 function getCurrentMainlineStep() {
-  return contentPack.mainlineSteps[world.m1.stepIndex] ?? null;
+  return getPlayableMainlineSteps()[world.m1.stepIndex] ?? null;
+}
+
+function getPlayableMainlineSteps() {
+  return contentPack.mainlineSteps.filter((step) => PLAYABLE_MAINLINE_STEP_IDS.has(step.id));
+}
+
+function getFirstIncompleteMainlineStepIndex() {
+  const steps = getPlayableMainlineSteps();
+  const index = steps.findIndex((step) => !world.m1.completedStepIds.has(step.id));
+  return index < 0 ? steps.length : index;
+}
+
+function refreshMainlineObjective() {
+  if (!contentPack.loaded || contentPack.mainlineSteps.length === 0) return;
+  world.m1.stepIndex = getFirstIncompleteMainlineStepIndex();
+  const step = getCurrentMainlineStep();
+  if (!step) {
+    world.objective = "江南雨巷阶段路线已完成，可继续自由探索或重新试炼。";
+    finishPlayableMilestone();
+    return;
+  }
+  world.objective = `当前阶段目标：${t(step.displayNameKey, step.id)}。打开地图可快速前往对应区域。`;
+  markUiDirty("mainline-objective");
 }
 
 function completeStep(step) {
-  world.m1.completedStepIds.add(step.id);
-  world.m1.stepIndex = Math.min(world.m1.stepIndex + 1, Math.max(contentPack.mainlineSteps.length - 1, 0));
+  completeStepIds([step.id]);
   addLog(`主线推进：${t(step.displayNameKey, step.id)}。`);
 }
 
@@ -965,6 +1127,7 @@ function addLog(text) {
 function spend(action) {
   const config = ACTIONS[action];
   const windCost = getActionWindCost(action);
+  if (!world.started || world.runState === "downed" || world.runState === "complete" || isGameplayPaused()) return false;
   if (world.cooldowns[action] > 0) {
     world.message = `${config.label}还在回势。`;
     return false;
@@ -1017,6 +1180,7 @@ function choose(kind) {
     world.restore = Math.max(world.restore, 3);
     addLog("选择折中补修，阿青记下风折竹返修法。");
   }
+  completeStepIds(["quest_step.jiangnan_rain_alley.market_decision"]);
   elements.rushOrderButton.classList.toggle("active", kind === "rush");
   elements.fullProcessButton.classList.toggle("active", kind === "full");
   setPanel(kind === "material" ? "m1" : "journal");
@@ -1085,7 +1249,6 @@ function applyCraftRecipe(recipeId) {
   world.player.stamina = clamp(world.player.stamina + Math.max(0, Math.round(recipe.bonuses.wetResistance / 2)), 0, 100);
   applyFourEyeDelta(recipe.fourEyes);
   completeStepIds(["quest_step.jiangnan_rain_alley.paper_and_oil"]);
-  world.m1.stepIndex = Math.max(world.m1.stepIndex, contentPack.mainlineSteps.findIndex((step) => step.id === "quest_step.jiangnan_rain_alley.market_decision"));
   world.flags.windBellLaneSeen = true;
   unlockNode("wind_bell_lane");
   emitProductionCue(recipe.actionLabel, recipe.productionRefs);
@@ -1224,6 +1387,8 @@ function travelToNode(id) {
   world.player.y = target.y;
   world.currentLocationId = node.id;
   world.visited.add(node.id);
+  if (node.id === "water_entry") completeStepIds(["quest_step.jiangnan_rain_alley.arrive_by_water"]);
+  if (node.id === "town_awning") completeStepIds(["quest_step.jiangnan_rain_alley.check_delivery"]);
   advanceTime(8, `沿地图前往${node.name}。`);
   if (node.id === "rain_curtain") startBossEncounter();
 }
@@ -1294,15 +1459,23 @@ function restoreBoss() {
   world.restore = 5;
   emitProductionCue("Boss 归位", ["asset_group.jiangnan.boss_sprites", "sfx.boss.core_restore", "mix.jiangnan_rain_alley.boss_to_restoration"]);
   completeStepIds(["quest_step.jiangnan_rain_alley.boss_restoration"]);
-  world.m1.stepIndex = Math.max(world.m1.stepIndex, contentPack.mainlineSteps.findIndex((step) => step.id === "quest_step.jiangnan_rain_alley.record_in_tiangong"));
   world.objective = "雨巷破伞执念已经归位：返回天工录落款，查看江南 M1 数据闭环。";
   world.message = "断桥雨幕归位，旧桥雨声降了一层。";
+  world.context = "返回纸伞铺落款";
   addLog("Boss 归位完成：归器礼触发，四维回声等待落款。");
   setPanel("m1");
 }
 
 function completeStepIds(stepIds) {
-  for (const id of stepIds) world.m1.completedStepIds.add(id);
+  let changed = false;
+  for (const id of stepIds) {
+    if (world.m1.completedStepIds.has(id)) continue;
+    world.m1.completedStepIds.add(id);
+    changed = true;
+  }
+  if (!changed) return;
+  refreshMainlineObjective();
+  markUiDirty("mainline-progress");
 }
 
 function getContextTarget() {
@@ -1310,6 +1483,14 @@ function getContextTarget() {
   if (downedEnemy) return { type: "restore", label: `归位 ${downedEnemy.label}`, enemy: downedEnemy };
   if (world.boss.active && !world.boss.restored && world.boss.disorder <= 0 && dist(world.player, world.boss) < 170) {
     return { type: "boss_restore", label: "归位 雨巷破伞执念" };
+  }
+  if (
+    world.boss.restored &&
+    !world.m1.completedStepIds.has("quest_step.jiangnan_rain_alley.record_in_tiangong") &&
+    world.currentLocationId === "umbrella_shop" &&
+    dist(world.player, world.shop) < 180
+  ) {
+    return { type: "record", label: "落款 《天工录》" };
   }
   const npc = world.npcs.find((item) => item.active && dist(world.player, item) < 86);
   if (npc) return { type: "npc", label: `交谈 ${npc.name}`, npc };
@@ -1332,10 +1513,19 @@ function interact() {
     addItem("rainPaper", 1);
     world.message = `${target.enemy.label}已归位，伞面余风回到工灯。`;
     addLog(`${target.enemy.label}归位，雨声退后一层。`);
+    if (world.enemies.every((enemy) => enemy.restored)) {
+      completeStepIds(["quest_step.jiangnan_rain_alley.old_bridge_trial"]);
+    }
     return;
   }
   if (target.type === "boss_restore") {
     restoreBoss();
+    return;
+  }
+  if (target.type === "record") {
+    completeStepIds(["quest_step.jiangnan_rain_alley.record_in_tiangong"]);
+    world.message = "《天工录》落款：可传、可用、可售、可安。";
+    addLog("江南雨巷阶段完成：《天工录》写入纸伞门径与旧桥归位记录。");
     return;
   }
   if (target.type === "npc") {
@@ -1378,6 +1568,11 @@ function collectSpot(spot) {
   spot.cooldownLeft = spot.once ? Infinity : spot.cooldown;
   world.message = spot.message;
   addLog(`${spot.name}：获得${INVENTORY_DEFS[spot.item].name} x${spot.qty}。`);
+  if (spot.item === "bamboo") {
+    completeStepIds(["quest_step.jiangnan_rain_alley.choose_bamboo"]);
+    unlockNode("dye_paper_court");
+  }
+  if (spot.item === "windBell") completeStepIds(["quest_step.jiangnan_rain_alley.find_rivet"]);
   setPanel("inventory");
 }
 
@@ -1407,6 +1602,13 @@ function talkToNpc(npc) {
   world.talkIndex[npc.id] = index + 1;
   world.message = `${npc.name}：${line}`;
   addLog(world.message);
+  if (npc.id === "master_shen") {
+    if (world.boss.restored) {
+      completeStepIds(["quest_step.jiangnan_rain_alley.record_in_tiangong"]);
+      world.message = "沈雨为《天工录》落款：可传、可用、可售、可安。";
+      addLog("江南雨巷阶段完成：《天工录》写入纸伞门径与旧桥归位记录。");
+    }
+  }
   if (npc.id === "market_runner" && getClockMinutes() >= 17 * 60 && !hasItem("orderSlip")) {
     addItem("orderSlip", 1);
     addLog("夜市跑单人递来一张夜市凭单。");
@@ -1422,14 +1624,110 @@ function talkToNpc(npc) {
 
 function resetDemo() {
   world = createWorld();
+  keys.clear();
   elements.cover.classList.remove("hidden");
+  elements.cover.inert = false;
+  elements.cover.setAttribute("aria-hidden", "false");
+  elements.runOverlay.classList.add("hidden");
+  elements.runOverlay.inert = true;
+  elements.runOverlay.setAttribute("aria-hidden", "true");
   elements.rushOrderButton.classList.remove("active");
   elements.fullProcessButton.classList.remove("active");
   syncUi();
+  elements.startButton.focus();
+}
+
+function showRunOverlay({ eyebrow, title, text, actionLabel }) {
+  elements.runOverlayEyebrow.textContent = eyebrow;
+  elements.runOverlayTitle.textContent = title;
+  elements.runOverlayText.textContent = text;
+  elements.runOverlayAction.textContent = actionLabel;
+  elements.runOverlay.classList.remove("hidden");
+  elements.runOverlay.inert = false;
+  elements.runOverlay.setAttribute("aria-hidden", "false");
+  elements.runOverlayAction.focus();
+  markUiDirty("run-overlay");
+}
+
+function finishPlayableMilestone() {
+  if (world.stageCompleteAnnounced) return;
+  world.stageCompleteAnnounced = true;
+  world.runState = "complete";
+  showRunOverlay({
+    eyebrow: "阶段成果 · 江南雨巷",
+    title: "《天工录》落款完成",
+    text: "纸伞门径、材料工艺、夜市选择、旧桥战斗与 Boss 归位已经连成一条可玩的短闭环。",
+    actionLabel: "继续自由探索"
+  });
+}
+
+function downPlayer(reason) {
+  if (world.runState === "downed") return;
+  world.runState = "downed";
+  world.player.vitality = 0;
+  world.player.guard = false;
+  world.player.action = "idle";
+  world.player.actionTimer = 0;
+  keys.clear();
+  world.message = reason;
+  addLog("伞骨失稳：本次战斗中断，可从当前阶段重新整备。" );
+  showRunOverlay({
+    eyebrow: "试炼中断",
+    title: "伞骨失稳",
+    text: `${reason} 已完成的主线、材料与选择会保留。`,
+    actionLabel: "从阶段据点整备"
+  });
+}
+
+function retryFromCheckpoint() {
+  world.runState = "playing";
+  world.player.vitality = 100;
+  world.player.stamina = 100;
+  world.player.wind = Math.max(52, world.player.wind);
+  world.player.guard = false;
+  world.player.action = "idle";
+  world.player.actionTimer = 0;
+  for (const enemy of world.enemies) {
+    enemy.windup = 0;
+    enemy.attackCooldown = 1.2;
+  }
+  if (world.boss.active && !world.boss.restored) {
+    const node = getLocationById("rain_curtain");
+    world.player.x = node.spawn?.x ?? node.x;
+    world.player.y = node.spawn?.y ?? node.y;
+    world.currentLocationId = "rain_curtain";
+    world.boss.attackTimer = 2.8;
+  } else {
+    const node = getLocationById("umbrella_shop");
+    world.player.x = node.spawn?.x ?? node.x;
+    world.player.y = node.spawn?.y ?? node.y;
+    world.currentLocationId = "umbrella_shop";
+  }
+  elements.runOverlay.classList.add("hidden");
+  elements.runOverlay.inert = true;
+  elements.runOverlay.setAttribute("aria-hidden", "true");
+  world.message = "重新整备完成：阶段进度已保留。";
+  addLog("从阶段据点重新出发。" );
+  markUiDirty("retry");
+}
+
+function handleRunOverlayAction() {
+  if (world.runState === "downed") {
+    retryFromCheckpoint();
+    return;
+  }
+  world.runState = "free_roam";
+  elements.runOverlay.classList.add("hidden");
+  elements.runOverlay.inert = true;
+  elements.runOverlay.setAttribute("aria-hidden", "true");
+  world.message = "落款完成后仍可回访雨巷、工艺白盒和内容编辑器。";
+  markUiDirty("free-roam");
 }
 
 function pulseGuard() {
   if (!spend("guard")) return;
+  completeStepIds(["quest_step.jiangnan_rain_alley.learn_guard"]);
+  unlockNode("bamboo_path");
   world.player.guard = true;
   world.player.action = "guard";
   world.player.actionTimer = 0.35;
@@ -1510,6 +1808,16 @@ function update(dt, now = performance.now()) {
   if (!world.started) {
     syncNpcSchedules();
     world.context = getContextTarget().label;
+    if (shouldSyncUi(now)) syncUi(now);
+    return;
+  }
+  if (world.runState === "downed" || world.runState === "complete") {
+    world.context = world.runState === "downed" ? "重新整备" : "阶段已完成";
+    if (shouldSyncUi(now)) syncUi(now);
+    return;
+  }
+  if (isGameplayPaused()) {
+    world.context = "菜单暂停";
     if (shouldSyncUi(now)) syncUi(now);
     return;
   }
@@ -1605,8 +1913,9 @@ function updateBoss(dt) {
     damageBoss(world.boss.phase === 3 ? 64 : 42, "架伞弹雨", 240);
   } else if (close) {
     const wetMitigation = Math.max(0, world.craft.bonuses.wetResistance ?? 0) * 0.18;
-    world.player.vitality = clamp(world.player.vitality - Math.max(4, (world.boss.phase === 3 ? 18 : 12) - wetMitigation), 20, 100);
-    world.message = "雨幕坠压逼近，架伞或借风能稳住身位。";
+    world.player.vitality = clamp(world.player.vitality - Math.max(4, (world.boss.phase === 3 ? 18 : 12) - wetMitigation), 0, 100);
+    if (world.player.vitality <= 0) downPlayer("断桥雨幕压散了架势。");
+    else world.message = "雨幕坠压逼近，架伞或借风能稳住身位。";
   } else {
     world.message = "断桥雨幕在远处聚拢，靠近裂伞核才能削减失序。";
   }
@@ -1624,13 +1933,28 @@ function resolveEnemyAttack(enemy) {
     world.message = "架伞稳住雨针，风息正在积累。";
     if (enemy.disorder <= 0) addLog(`${enemy.label}被架伞定住。`);
   } else {
-    player.vitality = clamp(player.vitality - enemy.damage, 25, 100);
-    world.message = `${enemy.label}的雨针擦过伞肩，生机下降。`;
+    player.vitality = clamp(player.vitality - enemy.damage, 0, 100);
+    if (player.vitality <= 0) downPlayer(`${enemy.label}的雨针击穿了伞势。`);
+    else world.message = `${enemy.label}的雨针擦过伞肩，生机下降。`;
   }
+}
+
+function renderMilestoneList() {
+  const completed = PLAYABLE_MILESTONES.map((milestone) => milestone.stepIds.every((id) => world.m1.completedStepIds.has(id)));
+  const activeIndex = completed.findIndex((done) => !done);
+  const rows = PLAYABLE_MILESTONES.map((milestone, index) => {
+    const row = document.createElement("li");
+    row.textContent = milestone.label;
+    row.classList.toggle("done", completed[index]);
+    row.classList.toggle("active", index === activeIndex);
+    return row;
+  });
+  elements.milestoneList.replaceChildren(...rows);
 }
 
 function syncUi(now = performance.now()) {
   const nextSignature = buildUiSignature();
+  const nextPanelSignature = buildPanelSignature();
   if (
     world.ui &&
     !world.ui.forceRefresh &&
@@ -1640,6 +1964,10 @@ function syncUi(now = performance.now()) {
     world.ui.lastRenderTime = now;
     return;
   }
+  const shouldRenderPanel = Boolean(
+    world.ui?.activePanelRendered !== world.activePanel ||
+    world.ui?.lastPanelSignature !== nextPanelSignature
+  );
   const player = world.player;
   elements.vitalityMeter.style.width = `${player.vitality}%`;
   elements.staminaMeter.style.width = `${player.stamina}%`;
@@ -1660,6 +1988,7 @@ function syncUi(now = performance.now()) {
   }
   elements.objective.textContent = world.objective;
   elements.stateLine.textContent = world.message;
+  renderMilestoneList();
   elements.contextPrompt.querySelector("span").textContent = world.context;
   for (const button of elements.hotbarButtons) {
     const action = button.dataset.action;
@@ -1669,10 +1998,11 @@ function syncUi(now = performance.now()) {
     button.dataset.cooldown = cooldown > 0.05 ? `${cooldown.toFixed(1)}s` : "";
   }
   renderMiniMap();
-  renderVisiblePanel();
+  if (shouldRenderPanel) renderVisiblePanel();
   if (world.ui) {
     world.ui.lastRenderTime = now;
     world.ui.lastStateSignature = nextSignature;
+    if (shouldRenderPanel) world.ui.lastPanelSignature = nextPanelSignature;
     world.ui.activePanelRendered = world.activePanel;
     world.ui.forceRefresh = false;
     world.ui.dirtyReason = "";
@@ -1705,8 +2035,9 @@ function renderMapPanel() {
     button.type = "button";
     button.className = `map-node ${node.id === world.currentLocationId ? "current" : ""} ${isNodeUnlocked(node) ? "" : "locked"}`;
     button.dataset.node = node.id;
-    button.style.left = `${(node.x / world.width) * 100}%`;
-    button.style.top = `${(node.y / world.height) * 100}%`;
+    const panelPosition = MAP_PANEL_POSITIONS[node.id] ?? { x: (node.x / world.width) * 100, y: (node.y / world.height) * 100 };
+    button.style.left = `${panelPosition.x}%`;
+    button.style.top = `${panelPosition.y}%`;
     button.innerHTML = `<b>${node.name.slice(0, 2)}</b><span>${node.type}</span>`;
     return button;
   });
@@ -2679,7 +3010,7 @@ function renderM1Panel() {
   const steps = contentPack.mainlineSteps.map((step, index) => {
     const row = document.createElement("div");
     const done = world.m1.completedStepIds.has(step.id);
-    const active = index === world.m1.stepIndex && !done;
+    const active = step.id === getCurrentMainlineStep()?.id && !done;
     row.className = `quest-step ${done ? "done" : ""} ${active ? "active" : ""}`;
     row.innerHTML = `<b>${index + 1}. ${t(step.displayNameKey, step.id)}</b><span>${step.subregionId ? t(`${step.subregionId}.name`, step.subregionId) : "江南雨巷"}</span>`;
     return row;
@@ -3588,6 +3919,20 @@ function getDemoQaSnapshot() {
   const editorPreview = elements.editorBoard?.querySelector("[data-editor-preview]")?.textContent ?? "";
   return {
     started: world.started,
+    runState: world.runState,
+    objective: world.objective,
+    completedStepIds: [...world.m1.completedStepIds].sort(),
+    player: {
+      vitality: Math.round(world.player.vitality),
+      stamina: Math.round(world.player.stamina),
+      wind: Math.round(world.player.wind),
+      locationId: world.currentLocationId
+    },
+    boss: {
+      active: world.boss.active,
+      restored: world.boss.restored,
+      disorder: Math.round(world.boss.disorder)
+    },
     activePanel: world.activePanel,
     largeMapFocusId: world.largeMapFocusId,
     selectedEditorTemplateId: selectedTemplate?.id ?? null,

@@ -7,16 +7,27 @@ node_modules/
 .pnpm-store/
 coverage/
 
-# Godot generated state and exports
-.godot/
-.mono/
-export/
-exports/
-
-# .NET build outputs
+# C++ / CMake / Emscripten build outputs
+build/
+build-*/
+out/
 bin/
 obj/
 TestResults/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+*.ninja
+*.wasm.map
+*.symbols
+
+# Web shell outputs and local service data
+dist/
+.workbox/
+.parcel-cache/
+.vite/
+server-data/
 
 # Python tools
 __pycache__/

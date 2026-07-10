@@ -11,5 +11,5 @@ trim_trailing_whitespace = true
 [*.py]
 indent_size = 4
 
-[*.cs]
+[*.{c,cc,cpp,cxx,h,hh,hpp,hxx}]
 indent_size = 4

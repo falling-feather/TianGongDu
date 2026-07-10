@@ -1,0 +1,64 @@
+{
+  "$schema": "../schemas/technical-baseline.schema.json",
+  "schemaVersion": "1.0.0",
+  "decisionVersion": "2.1.0",
+  "productTarget": "browser-first-cross-platform-action-rpg",
+  "gameCore": {
+    "language": "C++20",
+    "simulationHz": 60,
+    "rendererIndependentState": true
+  },
+  "runtimeHost": {
+    "engine": "Axmol",
+    "version": "2.11.4",
+    "releaseLine": "2.11.x-lts",
+    "webSupportGate": "f1-required-preview-validation",
+    "webCompiler": "Emscripten",
+    "compilerVersionPolicy": "pin-exact-version-after-f1",
+    "graphicsBaseline": "WebGL2",
+    "wasmTarget": "wasm32"
+  },
+  "browserVariants": [
+    {
+      "id": "web_single_thread",
+      "required": true,
+      "requirements": ["WebAssembly", "WebGL2", "IndexedDB"]
+    },
+    {
+      "id": "web_pthreads",
+      "required": false,
+      "requirements": ["SharedArrayBuffer", "COOP", "COEP", "WebWorkers"]
+    }
+  ],
+  "webShell": {
+    "playfield": "canvas",
+    "hudAndMenus": "DOM",
+    "installability": "PWA",
+    "offlineCache": "ServiceWorkerCacheStorage",
+    "localSave": "IndexedDB",
+    "cppPersistenceBridge": "EmscriptenIDBFSOrAsyncIndexedDB"
+  },
+  "platformTargets": [
+    { "id": "web_desktop", "release": "1.0-required" },
+    { "id": "windows_x64", "release": "post-web-vertical-slice-beta" },
+    { "id": "android_arm64", "release": "planned-after-touch-gate" },
+    { "id": "ios_arm64", "release": "planned-after-platform-review" }
+  ],
+  "cloudSync": {
+    "optional": true,
+    "guestMode": true,
+    "localFirst": true,
+    "protocol": "revisioned-snapshot-plus-idempotent-operation-journal",
+    "conflictPolicy": "domain-merge-with-explicit-user-choice-for-narrative-conflicts",
+    "serviceLanguage": "C++20",
+    "serviceFramework": "Drogon",
+    "database": "PostgreSQL",
+    "authentication": "external-OIDC-provider"
+  },
+  "contentDelivery": {
+    "format": "hashed-tgdpack-bundles",
+    "transport": "HTTPS-CDN",
+    "cache": "ServiceWorker-plus-HTTP-cache",
+    "integrity": "manifest-sha256-and-release-signature"
+  }
+}

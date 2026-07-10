@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tiangongdu.example/schemas/technical-baseline.schema.json",
+  "title": "TianGongDu Technical Baseline",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "decisionVersion", "productTarget", "gameCore", "runtimeHost", "browserVariants", "webShell", "platformTargets", "cloudSync", "contentDelivery"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "decisionVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "productTarget": { "const": "browser-first-cross-platform-action-rpg" },
+    "gameCore": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["language", "simulationHz", "rendererIndependentState"],
+      "properties": {
+        "language": { "const": "C++20" },
+        "simulationHz": { "const": 60 },
+        "rendererIndependentState": { "const": true }
+      }
+    },
+    "runtimeHost": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["engine", "version", "releaseLine", "webSupportGate", "webCompiler", "compilerVersionPolicy", "graphicsBaseline", "wasmTarget"],
+      "properties": {
+        "engine": { "const": "Axmol" },
+        "version": { "type": "string", "minLength": 1 },
+        "releaseLine": { "const": "2.11.x-lts" },
+        "webSupportGate": { "const": "f1-required-preview-validation" },
+        "webCompiler": { "const": "Emscripten" },
+        "compilerVersionPolicy": { "const": "pin-exact-version-after-f1" },
+        "graphicsBaseline": { "const": "WebGL2" },
+        "wasmTarget": { "const": "wasm32" }
+      }
+    },
+    "browserVariants": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "required", "requirements"],
+        "properties": {
+          "id": { "enum": ["web_single_thread", "web_pthreads"] },
+          "required": { "type": "boolean" },
+          "requirements": { "type": "array", "minItems": 3, "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+        }
+      }
+    },
+    "webShell": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["playfield", "hudAndMenus", "installability", "offlineCache", "localSave", "cppPersistenceBridge"],
+      "properties": {
+        "playfield": { "const": "canvas" },
+        "hudAndMenus": { "const": "DOM" },
+        "installability": { "const": "PWA" },
+        "offlineCache": { "const": "ServiceWorkerCacheStorage" },
+        "localSave": { "const": "IndexedDB" },
+        "cppPersistenceBridge": { "type": "string", "minLength": 1 }
+      }
+    },
+    "platformTargets": {
+      "type": "array",
+      "minItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "release"],
+        "properties": {
+          "id": { "enum": ["web_desktop", "windows_x64", "android_arm64", "ios_arm64"] },
+          "release": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "cloudSync": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["optional", "guestMode", "localFirst", "protocol", "conflictPolicy", "serviceLanguage", "serviceFramework", "database", "authentication"],
+      "properties": {
+        "optional": { "const": true },
+        "guestMode": { "const": true },
+        "localFirst": { "const": true },
+        "protocol": { "type": "string", "minLength": 1 },
+        "conflictPolicy": { "type": "string", "minLength": 1 },
+        "serviceLanguage": { "const": "C++20" },
+        "serviceFramework": { "const": "Drogon" },
+        "database": { "const": "PostgreSQL" },
+        "authentication": { "const": "external-OIDC-provider" }
+      }
+    },
+    "contentDelivery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "transport", "cache", "integrity"],
+      "properties": {
+        "format": { "const": "hashed-tgdpack-bundles" },
+        "transport": { "const": "HTTPS-CDN" },
+        "cache": { "const": "ServiceWorker-plus-HTTP-cache" },
+        "integrity": { "const": "manifest-sha256-and-release-signature" }
+      }
+    }
+  }
+}

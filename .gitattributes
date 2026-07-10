@@ -12,3 +12,6 @@
 *.glb binary
 *.ttf binary
 *.otf binary
+*.wasm binary
+*.tgdpack binary
+*.bin binary

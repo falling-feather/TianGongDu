@@ -1,6 +1,6 @@
 # ADR-0001｜桌面原生优先与 Godot .NET 宿主
 
-> 状态：Accepted
+> 状态：Superseded by ADR-0005
 > 日期：2026-07-10
 > 决策者：项目技术/产品基线
 > 取代：旧归档分支 ADR-0001（Axmol + C++ + WebAssembly/Web 优先）

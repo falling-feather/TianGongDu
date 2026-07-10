@@ -42,6 +42,34 @@ const requiredTemplates = [
   "template_subregion"
 ];
 
+const activeArchitectureDecisions = [
+  "ADR-0005-Cpp网页首发与Axmol宿主.md",
+  "ADR-0006-Cpp分层核心与Wasm平台边界.md",
+  "ADR-0007-浏览器内容包与存档同步契约.md",
+  "ADR-0008-本地优先与多端云同步.md"
+];
+
+const supersededArchitectureDecisions = [
+  ["ADR-0001-桌面原生与Godot宿主.md", "ADR-0005"],
+  ["ADR-0002-混合组件与分层核心.md", "ADR-0006"],
+  ["ADR-0003-内容包与存档版本契约.md", "ADR-0007"],
+  ["ADR-0004-离线优先更新与受限模组.md", "ADR-0008"]
+];
+
+const architectureSkeleton = [
+  "apps/web-shell",
+  "apps/native-shell",
+  "apps/content-workbench",
+  "src/contracts",
+  "src/runtime",
+  "src/gameplay",
+  "src/presentation-axmol",
+  "src/platform",
+  "src/content-core",
+  "src/sync-contracts",
+  "server/sync-service"
+];
+
 function countDuplicates(items) {
   const seen = new Set();
   const duplicates = new Set();
@@ -77,6 +105,39 @@ async function validateDocumentHierarchy(root, errors) {
   }
   for (const file of developerDocuments) {
     pushIf(errors, !actualDeveloperDocs.includes(file), `缺少开发者二级文档：${file}`);
+  }
+
+  const adrRoot = join(developerRoot, "adr");
+  const adrFiles = await readdir(adrRoot);
+  for (const file of activeArchitectureDecisions) {
+    pushIf(errors, !adrFiles.includes(file), `缺少当前 ADR：${file}`);
+    if (adrFiles.includes(file)) {
+      const source = await readFile(join(adrRoot, file), "utf8");
+      pushIf(errors, !source.includes("> 状态：Accepted"), `当前 ADR 未标记 Accepted：${file}`);
+    }
+  }
+  for (const [file, replacement] of supersededArchitectureDecisions) {
+    pushIf(errors, !adrFiles.includes(file), `缺少历史 ADR：${file}`);
+    if (adrFiles.includes(file)) {
+      const source = await readFile(join(adrRoot, file), "utf8");
+      pushIf(errors, !source.includes(`> 状态：Superseded by ${replacement}`), `历史 ADR 未正确指向 ${replacement}：${file}`);
+    }
+  }
+}
+
+async function validateCurrentArchitectureText(root, errors) {
+  const currentFiles = [
+    "README.md",
+    join("docs", "00-项目总纲.md"),
+    join("docs", "01-开发者文档.md"),
+    ...developerDocuments.slice(0, 9).map((file) => join("docs", "01-developer", file))
+  ];
+  const forbidden = ["Godot", ".NET", "C#", "PCK"];
+  for (const relativePath of currentFiles) {
+    const source = await readFile(join(root, relativePath), "utf8");
+    for (const term of forbidden) {
+      pushIf(errors, source.includes(term), `当前技术文档仍含已取代术语 ${term}：${relativePath}`);
+    }
   }
 }
 
@@ -116,13 +177,18 @@ export async function validateProject(projectRoot = defaultRoot) {
   const schemaPath = join(root, "content", "schemas", "v1-content-catalog.schema.json");
   const templateRegistryPath = join(root, "content", "templates", "template-registry.json");
   const templateSchemaPath = join(root, "content", "schemas", "template-registry.schema.json");
+  const technicalBaselinePath = join(root, "content", "design", "technical-baseline.json");
+  const technicalSchemaPath = join(root, "content", "schemas", "technical-baseline.schema.json");
   const catalog = JSON.parse(await readFile(catalogPath, "utf8"));
   const templateRegistry = JSON.parse(await readFile(templateRegistryPath, "utf8"));
+  const technicalBaseline = JSON.parse(await readFile(technicalBaselinePath, "utf8"));
   JSON.parse(await readFile(schemaPath, "utf8"));
   JSON.parse(await readFile(templateSchemaPath, "utf8"));
+  JSON.parse(await readFile(technicalSchemaPath, "utf8"));
 
   await validateDocumentHierarchy(root, errors);
   await validateLocalMarkdownLinks(root, errors);
+  await validateCurrentArchitectureText(root, errors);
 
   pushIf(errors, catalog.combatSystems.length < 2, "1.0 至少需要 2 套战斗系统。");
   pushIf(errors, catalog.weapons.length < 2, "1.0 至少需要 2 条武器体系。");
@@ -140,6 +206,26 @@ export async function validateProject(projectRoot = defaultRoot) {
     pushIf(errors, template.requiredModules.length < 3, `${template.id} 的必需模块少于 3 个。`);
     pushIf(errors, template.generatedArtifacts.length < 3, `${template.id} 的生成产物少于 3 个。`);
     pushIf(errors, template.validators.length < 3, `${template.id} 的验证规则少于 3 个。`);
+  }
+
+  pushIf(errors, technicalBaseline.productTarget !== "browser-first-cross-platform-action-rpg", "技术基线必须以浏览器首发、多端复用为目标。");
+  pushIf(errors, technicalBaseline.gameCore.language !== "C++20", "游戏核心必须使用 C++20。");
+  pushIf(errors, technicalBaseline.gameCore.simulationHz !== 60, "游戏核心必须维持 60 Hz 固定模拟。");
+  pushIf(errors, technicalBaseline.runtimeHost.engine !== "Axmol", "运行时宿主必须为 Axmol 基线。");
+  pushIf(errors, technicalBaseline.runtimeHost.webCompiler !== "Emscripten", "网页构建必须通过 Emscripten 输出 WebAssembly。");
+  pushIf(errors, technicalBaseline.runtimeHost.graphicsBaseline !== "WebGL2", "网页渲染基线必须为 WebGL2。");
+  pushIf(errors, technicalBaseline.webShell.hudAndMenus !== "DOM", "HUD 与菜单必须使用可访问的 DOM 层。");
+  pushIf(errors, technicalBaseline.webShell.localSave !== "IndexedDB", "浏览器本地存档必须落在 IndexedDB。");
+  pushIf(errors, technicalBaseline.cloudSync.optional !== true || technicalBaseline.cloudSync.localFirst !== true, "云同步必须可选且遵循本地优先。");
+  pushIf(errors, technicalBaseline.cloudSync.serviceLanguage !== "C++20", "同步服务基线必须使用 C++20。");
+  pushIf(errors, !technicalBaseline.platformTargets.some((target) => target.id === "web_desktop" && target.release === "1.0-required"), "Web 桌面浏览器必须是 1.0 必选平台。");
+  pushIf(errors, !technicalBaseline.browserVariants.some((variant) => variant.id === "web_single_thread" && variant.required), "单线程 WebAssembly 构建必须作为兼容基线。");
+  for (const relativePath of architectureSkeleton) {
+    try {
+      await access(join(root, relativePath));
+    } catch {
+      errors.push(`缺少技术架构目录：${relativePath}`);
+    }
   }
 
   const regionIds = new Set(catalog.regions.map((region) => region.id));
@@ -222,6 +308,13 @@ export async function validateProject(projectRoot = defaultRoot) {
       bosses: catalog.bosses.length,
       npcs: catalog.npcs.length,
       templates: templateRegistry.templates.length,
+      coreLanguage: technicalBaseline.gameCore.language,
+      engine: technicalBaseline.runtimeHost.engine,
+      webTarget: technicalBaseline.runtimeHost.wasmTarget,
+      cloudSync: technicalBaseline.cloudSync.optional,
+      activeArchitectureDecisions: activeArchitectureDecisions.length,
+      platformTargets: technicalBaseline.platformTargets.length,
+      architectureModules: architectureSkeleton.length,
       mainMinutes: actualMainMinutes
     }
   };

@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tiangongdu.example/schemas/v1-content-catalog.schema.json",
+  "title": "TianGongDu 1.0 Content Catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "release",
+    "contentTargets",
+    "combatSystems",
+    "weapons",
+    "regions",
+    "bosses",
+    "npcs"
+  ],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "release": { "const": "1.0" },
+    "contentTargets": {
+      "type": "object",
+      "required": ["mainMinutes", "regions", "subregions", "bosses", "coreNpcs", "combatSystems", "weaponFamilies"],
+      "properties": {
+        "mainMinutes": { "type": "integer", "minimum": 900 },
+        "mainAndSideMinutes": { "type": "integer", "minimum": 1200 },
+        "completionistMinutes": { "type": "integer", "minimum": 1500 },
+        "regions": { "type": "integer", "minimum": 3 },
+        "subregions": { "type": "integer", "minimum": 15 },
+        "bosses": { "type": "integer", "minimum": 10 },
+        "coreNpcs": { "type": "integer", "minimum": 20 },
+        "combatSystems": { "type": "integer", "minimum": 2 },
+        "weaponFamilies": { "type": "integer", "minimum": 2 },
+        "mainChapters": { "type": "integer", "minimum": 18 },
+        "sideQuestChains": { "type": "integer", "minimum": 15 },
+        "pointsOfInterest": { "type": "integer", "minimum": 100 }
+      }
+    },
+    "combatSystems": {
+      "type": "array",
+      "minItems": 2,
+      "items": { "$ref": "#/$defs/combatSystem" }
+    },
+    "weapons": {
+      "type": "array",
+      "minItems": 2,
+      "items": { "$ref": "#/$defs/weapon" }
+    },
+    "regions": {
+      "type": "array",
+      "minItems": 3,
+      "items": { "$ref": "#/$defs/region" }
+    },
+    "bosses": {
+      "type": "array",
+      "minItems": 10,
+      "items": { "$ref": "#/$defs/boss" }
+    },
+    "npcs": {
+      "type": "array",
+      "minItems": 20,
+      "items": { "$ref": "#/$defs/npc" }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$"
+    },
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "combatSystem": {
+      "type": "object",
+      "required": ["id", "name", "purpose", "coreLoop", "progressionStages", "sharedResources"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "purpose": { "$ref": "#/$defs/nonEmptyString" },
+        "coreLoop": { "type": "array", "minItems": 4, "items": { "$ref": "#/$defs/nonEmptyString" } },
+        "progressionStages": { "type": "array", "minItems": 3, "items": { "$ref": "#/$defs/nonEmptyString" } },
+        "sharedResources": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/nonEmptyString" } }
+      }
+    },
+    "weapon": {
+      "type": "object",
+      "required": ["id", "name", "combatIdentity", "stances", "craftDomains", "masteryCapstone", "futureHooks"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "combatIdentity": { "$ref": "#/$defs/nonEmptyString" },
+        "stances": { "type": "array", "minItems": 3, "items": { "$ref": "#/$defs/nonEmptyString" } },
+        "craftDomains": { "type": "array", "minItems": 3, "items": { "$ref": "#/$defs/nonEmptyString" } },
+        "masteryCapstone": { "$ref": "#/$defs/nonEmptyString" },
+        "futureHooks": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/nonEmptyString" } }
+      }
+    },
+    "subregion": {
+      "type": "object",
+      "required": ["id", "name", "role", "signatureMechanic", "bossIds", "npcIds"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "role": { "$ref": "#/$defs/nonEmptyString" },
+        "signatureMechanic": { "$ref": "#/$defs/nonEmptyString" },
+        "bossIds": { "type": "array", "items": { "$ref": "#/$defs/id" } },
+        "npcIds": { "type": "array", "items": { "$ref": "#/$defs/id" } }
+      }
+    },
+    "region": {
+      "type": "object",
+      "required": ["id", "name", "theme", "mainMinutes", "sideMinutes", "completionistMinutes", "mainChapters", "sideQuestChains", "pointsOfInterest", "subregions"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "theme": { "$ref": "#/$defs/nonEmptyString" },
+        "mainMinutes": { "type": "integer", "minimum": 300 },
+        "sideMinutes": { "type": "integer", "minimum": 90 },
+        "completionistMinutes": { "type": "integer", "minimum": 480 },
+        "mainChapters": { "type": "integer", "minimum": 6 },
+        "sideQuestChains": { "type": "integer", "minimum": 5 },
+        "pointsOfInterest": { "type": "integer", "minimum": 30 },
+        "subregions": { "type": "array", "minItems": 5, "items": { "$ref": "#/$defs/subregion" } }
+      }
+    },
+    "boss": {
+      "type": "object",
+      "required": ["id", "name", "regionId", "rank", "phases", "coreMechanic", "resolution"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "regionId": { "$ref": "#/$defs/id" },
+        "rank": { "enum": ["elite", "chapter", "region"] },
+        "phases": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/nonEmptyString" } },
+        "coreMechanic": { "$ref": "#/$defs/nonEmptyString" },
+        "resolution": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "npc": {
+      "type": "object",
+      "required": ["id", "name", "regionId", "role", "relationshipArc", "interactionSystems", "questChain"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "regionId": { "$ref": "#/$defs/id" },
+        "role": { "$ref": "#/$defs/nonEmptyString" },
+        "relationshipArc": { "type": "array", "minItems": 3, "items": { "$ref": "#/$defs/nonEmptyString" } },
+        "interactionSystems": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/id" } },
+        "questChain": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    }
+  }
+}

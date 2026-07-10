@@ -8,4 +8,7 @@
 *.wav binary
 *.mp3 binary
 *.ogg binary
-
+*.blend binary
+*.glb binary
+*.ttf binary
+*.otf binary

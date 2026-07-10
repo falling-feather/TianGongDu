@@ -1,0 +1,86 @@
+{
+  "$schema": "../schemas/template-registry.schema.json",
+  "schemaVersion": "1.0.0",
+  "templates": [
+    {
+      "id": "template_core_npc",
+      "version": "1.0.0",
+      "contentType": "coreNpc",
+      "requiredModules": ["identity", "schedule", "relationship", "interactions", "narrative", "worldResponse"],
+      "optionalModules": ["combatant", "tradeProvider", "companionCapability", "craftProvider"],
+      "generatedArtifacts": ["contentSource", "localizationKeys", "scheduleFixture", "relationshipFixture", "previewProfile"],
+      "previewProfile": "character_studio",
+      "validators": ["stable_id", "relationship_arc", "interaction_depth", "schedule_reachability", "save_roundtrip"]
+    },
+    {
+      "id": "template_standard_enemy",
+      "version": "1.0.0",
+      "contentType": "enemy",
+      "requiredModules": ["identity", "combatant", "perception", "combatArchetype", "lanternIntersection", "reward"],
+      "optionalModules": ["groupRole", "environmentAffinity", "retreatPolicy"],
+      "generatedArtifacts": ["contentSource", "localizationKeys", "combatFixture", "previewProfile"],
+      "previewProfile": "combat_lab",
+      "validators": ["stable_id", "readability_budget", "ability_references", "ai_liveness", "performance_tier"]
+    },
+    {
+      "id": "template_chapter_boss",
+      "version": "1.0.0",
+      "contentType": "chapterBoss",
+      "requiredModules": ["identity", "combatant", "phaseGraph", "evidenceGraph", "arena", "retry", "resolution"],
+      "optionalModules": ["companionRoles", "publicWork", "cinematic", "alternateResolution"],
+      "generatedArtifacts": ["contentSource", "localizationKeys", "phaseTraversalFixture", "retryFixture", "previewProfile"],
+      "previewProfile": "boss_graph",
+      "validators": ["stable_id", "phase_reachability", "resolution_reachability", "retry_completeness", "assist_mode_path"]
+    },
+    {
+      "id": "template_region_boss",
+      "version": "1.0.0",
+      "contentType": "regionBoss",
+      "requiredModules": ["identity", "combatant", "phaseGraph", "evidenceGraph", "multiZoneArena", "retry", "regionResolution"],
+      "optionalModules": ["crowdProtection", "companionRoles", "publicWork", "cinematic", "alternateResolution"],
+      "generatedArtifacts": ["contentSource", "localizationKeys", "phaseTraversalFixture", "regionStateFixture", "performanceScenario", "previewProfile"],
+      "previewProfile": "boss_graph",
+      "validators": ["stable_id", "phase_complexity", "resolution_reachability", "world_state_commit", "performance_tier"]
+    },
+    {
+      "id": "template_quest_chain",
+      "version": "1.0.0",
+      "contentType": "questChain",
+      "requiredModules": ["identity", "objectiveGraph", "entryExit", "persistence", "feedback", "worldConsequences"],
+      "optionalModules": ["combat", "relationship", "craft", "timedWindow", "alternateFailure"],
+      "generatedArtifacts": ["contentSource", "localizationKeys", "graphTraversalFixture", "saveFixture", "previewProfile"],
+      "previewProfile": "quest_graph",
+      "validators": ["stable_id", "graph_reachability", "idempotent_rewards", "interrupt_resume", "consequence_depth"]
+    },
+    {
+      "id": "template_dialogue",
+      "version": "1.0.0",
+      "contentType": "dialogue",
+      "requiredModules": ["identity", "speakerRules", "dialogueGraph", "events", "localization"],
+      "optionalModules": ["voice", "movement", "cinematic", "relationshipConditions"],
+      "generatedArtifacts": ["contentSource", "localizationKeys", "lineIds", "graphTraversalFixture", "previewProfile"],
+      "previewProfile": "dialogue_graph",
+      "validators": ["stable_line_id", "graph_reachability", "format_parameters", "subtitle_timing", "interrupt_resume"]
+    },
+    {
+      "id": "template_weapon_family",
+      "version": "1.0.0",
+      "contentType": "weaponFamily",
+      "requiredModules": ["identity", "inputContract", "stances", "abilitySet", "craftDomains", "progression"],
+      "optionalModules": ["weatherAffinity", "companionSynergy", "fieldRetuning"],
+      "generatedArtifacts": ["contentSource", "localizationKeys", "combatFixtures", "balanceReport", "previewProfile"],
+      "previewProfile": "combat_lab",
+      "validators": ["stable_id", "input_completeness", "stance_distinction", "ability_timeline", "progression_reachability"]
+    },
+    {
+      "id": "template_subregion",
+      "version": "1.0.0",
+      "contentType": "subregion",
+      "requiredModules": ["identity", "streamingCells", "travelLinks", "scheduleAnchors", "encounterSlots", "resolutionVariants", "budgets"],
+      "optionalModules": ["weather", "publicWork", "interiorSet", "vehicleRoute"],
+      "generatedArtifacts": ["contentSource", "localizationKeys", "streamingFixture", "performanceScenarios", "previewProfile"],
+      "previewProfile": "region_workbench",
+      "validators": ["stable_id", "route_connectivity", "streaming_boundaries", "content_density", "resolution_diff", "performance_tier"]
+    }
+  ]
+}

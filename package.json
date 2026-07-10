@@ -1,11 +1,13 @@
 {
-  "name": "heavenwrights",
-  "version": "0.0.1",
+  "name": "tiangongdu-design-foundation",
+  "version": "2.0.0-foundation.1",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
-    "dev": "node tools/dev-server.mjs --root prototype/web-demo --host 127.0.0.1 --port 4174",
-    "test": "node --test",
-    "validate:content": "python tools/python/content_validate.py"
+    "test": "node tests/design-foundation.test.mjs",
+    "validate:design": "node tools/validate-design.mjs"
   }
 }

@@ -1,12 +1,28 @@
-# Dependencies and package managers
+# Local Codex state
+.agents/
+.codex/
+
+# Node validation tools
 node_modules/
 .pnpm-store/
-
-# Build outputs
-dist/
-build/
-out/
 coverage/
+
+# Godot generated state and exports
+.godot/
+.mono/
+export/
+exports/
+
+# .NET build outputs
+bin/
+obj/
+TestResults/
+
+# Python tools
+__pycache__/
+.pytest_cache/
+.venv/
+*.pyc
 
 # Local runtime artifacts
 .cache/
@@ -14,14 +30,8 @@ coverage/
 *.log
 *.trace
 
-# OS / editor files
+# OS and editors
 .DS_Store
 Thumbs.db
 .idea/
 .vscode/
-
-# Native build folders
-CMakeFiles/
-CMakeCache.txt
-cmake-build-*/
-

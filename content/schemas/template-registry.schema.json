@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tiangongdu.example/schemas/template-registry.schema.json",
+  "title": "TianGongDu Content Template Registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "templates"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "templates": {
+      "type": "array",
+      "minItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "version", "contentType", "requiredModules", "optionalModules", "generatedArtifacts", "previewProfile", "validators"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^template_[a-z0-9_]+$" },
+          "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+          "contentType": { "type": "string", "minLength": 1 },
+          "requiredModules": { "type": "array", "minItems": 3, "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+          "optionalModules": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+          "generatedArtifacts": { "type": "array", "minItems": 3, "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+          "previewProfile": { "type": "string", "minLength": 1 },
+          "validators": { "type": "array", "minItems": 3, "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+        }
+      }
+    }
+  }
+}

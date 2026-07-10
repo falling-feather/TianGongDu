@@ -1,6 +1,6 @@
 {
   "$schema": "../schemas/v1-content-catalog.schema.json",
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "1.1.0",
   "release": "1.0",
   "contentTargets": {
     "mainMinutes": 945,
@@ -14,6 +14,7 @@
     "weaponFamilies": 2,
     "mainChapters": 21,
     "sideQuestChains": 18,
+    "enemyFamilies": 25,
     "pointsOfInterest": 120
   },
   "combatSystems": [
@@ -239,6 +240,89 @@
       ]
     }
   ],
+  "mainChapters": [
+    { "id": "jn_chapter_01", "name": "渡口有雨", "regionId": "region_jiangnan", "minutes": 35 },
+    { "id": "jn_chapter_02", "name": "一伞四骨", "regionId": "region_jiangnan", "minutes": 45 },
+    { "id": "jn_chapter_03", "name": "听雨不闻钟", "regionId": "region_jiangnan", "minutes": 40 },
+    { "id": "jn_chapter_04", "name": "青色入河", "regionId": "region_jiangnan", "minutes": 45 },
+    { "id": "jn_chapter_05", "name": "旧桥记账", "regionId": "region_jiangnan", "minutes": 45 },
+    { "id": "jn_chapter_06", "name": "外圩三闸", "regionId": "region_jiangnan", "minutes": 60 },
+    { "id": "jn_chapter_07", "name": "谁来落款", "regionId": "region_jiangnan", "minutes": 45 },
+    { "id": "lq_chapter_01", "name": "炉前问剑", "regionId": "region_longquan", "minutes": 35 },
+    { "id": "lq_chapter_02", "name": "磁砂择矿", "regionId": "region_longquan", "minutes": 40 },
+    { "id": "lq_chapter_03", "name": "第八矿道", "regionId": "region_longquan", "minutes": 45 },
+    { "id": "lq_chapter_04", "name": "百炼争鸣", "regionId": "region_longquan", "minutes": 45 },
+    { "id": "lq_chapter_05", "name": "云脊移炉", "regionId": "region_longquan", "minutes": 45 },
+    { "id": "lq_chapter_06", "name": "地火无鞘", "regionId": "region_longquan", "minutes": 65 },
+    { "id": "lq_chapter_07", "name": "用途为锋", "regionId": "region_longquan", "minutes": 40 },
+    { "id": "hz_chapter_01", "name": "一纸入埠", "regionId": "region_huizhou", "minutes": 35 },
+    { "id": "hz_chapter_02", "name": "梁影封门", "regionId": "region_huizhou", "minutes": 40 },
+    { "id": "hz_chapter_03", "name": "砚溪问水", "regionId": "region_huizhou", "minutes": 45 },
+    { "id": "hz_chapter_04", "name": "木契食字", "regionId": "region_huizhou", "minutes": 50 },
+    { "id": "hz_chapter_05", "name": "书院异议", "regionId": "region_huizhou", "minutes": 45 },
+    { "id": "hz_chapter_06", "name": "白岳商途", "regionId": "region_huizhou", "minutes": 60 },
+    { "id": "hz_chapter_07", "name": "留白有名", "regionId": "region_huizhou", "minutes": 40 }
+  ],
+  "questChains": [
+    { "id": "jn_quest_umbrella_four_seasons", "name": "一柄伞的四季", "regionId": "region_jiangnan", "estimatedMinutes": 30, "participantNpcIds": ["npc_shen_yan"] },
+    { "id": "jn_quest_unsigned_ledger", "name": "无款者的账页", "regionId": "region_jiangnan", "estimatedMinutes": 25, "participantNpcIds": ["npc_ji_qing"] },
+    { "id": "jn_quest_twelve_bridges", "name": "一日跑遍十二桥", "regionId": "region_jiangnan", "estimatedMinutes": 25, "participantNpcIds": ["npc_luo_qinghe", "npc_qi_zhaoshui"] },
+    { "id": "jn_quest_unfading_indigo", "name": "不褪的青", "regionId": "region_jiangnan", "estimatedMinutes": 25, "participantNpcIds": ["npc_a_tang"] },
+    { "id": "jn_quest_silent_timekeeping", "name": "没有声音的报时", "regionId": "region_jiangnan", "estimatedMinutes": 20, "participantNpcIds": ["npc_mo_ming"] },
+    { "id": "jn_quest_water_to_whom", "name": "水到谁家", "regionId": "region_jiangnan", "estimatedMinutes": 25, "participantNpcIds": ["npc_lu_tuan", "npc_chu_granny"] },
+    { "id": "lq_quest_source_of_edge", "name": "锋从何处来", "regionId": "region_longquan", "estimatedMinutes": 30, "participantNpcIds": ["npc_xie_linfeng"] },
+    { "id": "lq_quest_sevenfold_materials", "name": "七曜不是七种铁", "regionId": "region_longquan", "estimatedMinutes": 25, "participantNpcIds": ["npc_ning_yulu"] },
+    { "id": "lq_quest_eighth_mine", "name": "第八条矿道", "regionId": "region_longquan", "estimatedMinutes": 25, "participantNpcIds": ["npc_shi_qi"] },
+    { "id": "lq_quest_sword_beyond_duel", "name": "剑不只向人", "regionId": "region_longquan", "estimatedMinutes": 25, "participantNpcIds": ["npc_gu_hanxing"] },
+    { "id": "lq_quest_grinding_not_gap", "name": "磨掉的不是缺口", "regionId": "region_longquan", "estimatedMinutes": 20, "participantNpcIds": ["npc_ye_xiaoli"] },
+    { "id": "lq_quest_three_feet_cloud", "name": "云上三尺", "regionId": "region_longquan", "estimatedMinutes": 25, "participantNpcIds": ["npc_han_wenquan", "npc_zong_lishou", "npc_wen_lan"] },
+    { "id": "hz_quest_hundred_days_ink", "name": "一两墨的百日", "regionId": "region_huizhou", "estimatedMinutes": 25, "participantNpcIds": ["npc_cheng_monian"] },
+    { "id": "hz_quest_small_print_big_road", "name": "小字里的大路", "regionId": "region_huizhou", "estimatedMinutes": 30, "participantNpcIds": ["npc_wang_shuyan", "npc_luo_qiheng"] },
+    { "id": "hz_quest_no_spare_timber", "name": "梁上没有多余的木", "regionId": "region_huizhou", "estimatedMinutes": 25, "participantNpcIds": ["npc_fang_jiusi"] },
+    { "id": "hz_quest_stone_remembers_water", "name": "石头如何记住水", "regionId": "region_huizhou", "estimatedMinutes": 25, "participantNpcIds": ["npc_xu_yanqiu"] },
+    { "id": "hz_quest_before_tree_falls", "name": "树倒以前", "regionId": "region_huizhou", "estimatedMinutes": 20, "participantNpcIds": ["npc_wu_zhaolin"] },
+    { "id": "hz_quest_three_lives_cart", "name": "一车货有三条命", "regionId": "region_huizhou", "estimatedMinutes": 25, "participantNpcIds": ["npc_zhu_xiuyun", "npc_xiaoman"] }
+  ],
+  "enemyFamilies": [
+    { "id": "jn_enemy_leaking_umbrella_doll", "name": "漏雨伞偶", "regionId": "region_jiangnan", "tacticalRole": "正面守势与开合反击教学" },
+    { "id": "jn_enemy_towline_water_hand", "name": "牵索水役", "regionId": "region_jiangnan", "tacticalRole": "拖拽和站位破坏" },
+    { "id": "jn_enemy_faded_paper_egret", "name": "褪色纸鹭", "regionId": "region_jiangnan", "tacticalRole": "空中骚扰与俯冲窗口" },
+    { "id": "jn_enemy_anchor_hook_boat_shadow", "name": "锚钩舟影", "regionId": "region_jiangnan", "tacticalRole": "中距离封路和牵引" },
+    { "id": "jn_enemy_dye_mist_performer", "name": "染雾伶", "regionId": "region_jiangnan", "tacticalRole": "区域状态和颜色假目标" },
+    { "id": "jn_enemy_bridge_crab", "name": "桥螯", "regionId": "region_jiangnan", "tacticalRole": "支撑破坏与低位夹击" },
+    { "id": "jn_enemy_drifting_ledger_pack", "name": "漂账行囊", "regionId": "region_jiangnan", "tacticalRole": "偷取后逃跑的追击目标" },
+    { "id": "jn_enemy_sluice_wheel_guard", "name": "闸轮守具", "regionId": "region_jiangnan", "tacticalRole": "重型机关与节点保护" },
+    { "id": "lq_enemy_magnetic_sand_beast", "name": "磁砂兽", "regionId": "region_longquan", "tacticalRole": "磁性牵引与冲锋改道" },
+    { "id": "lq_enemy_mine_lamp_wisp", "name": "矿灯游影", "regionId": "region_longquan", "tacticalRole": "视野控制与假安全点" },
+    { "id": "lq_enemy_broken_blade_attendant", "name": "断刃侍", "regionId": "region_longquan", "tacticalRole": "精确反击与断纹读向" },
+    { "id": "lq_enemy_slag_lion", "name": "炉渣猊", "regionId": "region_longquan", "tacticalRole": "重冲锋与冷却开纹" },
+    { "id": "lq_enemy_hammer_echo_puppet", "name": "锤声傀", "regionId": "region_longquan", "tacticalRole": "节拍冲击和工位压迫" },
+    { "id": "lq_enemy_quench_centipede", "name": "淬火蜒", "regionId": "region_longquan", "tacticalRole": "温差区域和持续爬行压力" },
+    { "id": "lq_enemy_wind_furnace_cart", "name": "风炉车", "regionId": "region_longquan", "tacticalRole": "移动机关与护送阻碍" },
+    { "id": "lq_enemy_sword_pattern_bee", "name": "剑纹蜂", "regionId": "region_longquan", "tacticalRole": "标记、集火和空中编队" },
+    { "id": "lq_enemy_earthfire_cast", "name": "地火铸像", "regionId": "region_longquan", "tacticalRole": "多部位重型压制" },
+    { "id": "hz_enemy_ink_moth", "name": "墨蠹", "regionId": "region_huizhou", "tacticalRole": "删除临时规则和证据干扰" },
+    { "id": "hz_enemy_shadow_beam", "name": "梁影", "regionId": "region_huizhou", "tacticalRole": "空间封锁和支撑威胁" },
+    { "id": "hz_enemy_inkstone_crab", "name": "砚壳螯", "regionId": "region_huizhou", "tacticalRole": "硬壳与水位联动" },
+    { "id": "hz_enemy_wood_contract_ape", "name": "木契猿", "regionId": "region_huizhou", "tacticalRole": "路线伏击与标记偷换" },
+    { "id": "hz_enemy_paper_armored_hand", "name": "纸甲役", "regionId": "region_huizhou", "tacticalRole": "可拆层甲与条款护盾" },
+    { "id": "hz_enemy_mist_road_merchant_shadow", "name": "雾路商影", "regionId": "region_huizhou", "tacticalRole": "导航诱导和队伍分离" },
+    { "id": "hz_enemy_brushstroke_egret", "name": "笔锋鹭", "regionId": "region_huizhou", "tacticalRole": "远程划界和禁区绘制" },
+    { "id": "hz_enemy_white_contract_guard", "name": "白契守兽", "regionId": "region_huizhou", "tacticalRole": "动态规则与条件免疫" }
+  ],
+  "f1VerticalSlice": {
+    "id": "f1_rainy_umbrella_trial",
+    "channel": "prototype_f1",
+    "profileNamespace": "prototype_f1",
+    "startFixtureId": "fixture_f1_rainy_umbrella_start",
+    "chapterId": "jn_chapter_02",
+    "subregionIds": ["jn_rain_ferry", "jn_umbrella_lane"],
+    "npcIds": ["npc_shen_yan"],
+    "enemyFamilyIds": ["jn_enemy_leaking_umbrella_doll", "jn_enemy_faded_paper_egret"],
+    "bossId": "jn_boss_umbrella_wraith",
+    "playableTargetMinutes": 27,
+    "endToEndTestBudgetMinutes": 30
+  },
   "bosses": [
     {
       "id": "jn_boss_umbrella_wraith",
@@ -247,7 +331,7 @@
       "rank": "chapter",
       "phases": ["春骨试张", "夏雨覆街", "秋风翻檐", "冬纸归白"],
       "coreMechanic": "在四种天气中调校伞面、格挡节奏与工印顺序。",
-      "resolution": "找回被混装的四家伞骨谱并重新署名。"
+      "resolutionSummary": "找回被混装的四家伞骨谱并重新署名。"
     },
     {
       "id": "jn_boss_rain_market_bell",
@@ -256,7 +340,7 @@
       "rank": "elite",
       "phases": ["乱价鸣", "百摊回声", "歇市静音"],
       "coreMechanic": "根据摊主叫卖节拍识别真声源，保护群众而非清场。",
-      "resolution": "修复报时铎与市约之间脱节的轮值记录。"
+      "resolutionSummary": "修复报时铎与市约之间脱节的轮值记录。"
     },
     {
       "id": "jn_boss_dye_vat_mirror",
@@ -265,7 +349,7 @@
       "rank": "elite",
       "phases": ["浮色", "夺色", "固色"],
       "coreMechanic": "引导三股水流稀释错误媒染剂，并用颜色证据拆解分身。",
-      "resolution": "公开真正的污染来源并让受损染户共同复工。"
+      "resolutionSummary": "公开真正的污染来源并让受损染户共同复工。"
     },
     {
       "id": "jn_boss_tide_anchor_ledger",
@@ -274,7 +358,7 @@
       "rank": "chapter",
       "phases": ["旧账拖锚", "桥汊封流", "账页还潮"],
       "coreMechanic": "在旧桥水位变化中核对虚实锚点；它是账册记忆，不是外圩实体。",
-      "resolution": "补齐失踪船工的工钱与锚具去向。"
+      "resolutionSummary": "补齐失踪船工的工钱与锚具去向。"
     },
     {
       "id": "jn_boss_outer_dike_anchor",
@@ -283,7 +367,7 @@
       "rank": "region",
       "phases": ["潮闸失锁", "三室倒灌", "万缆同牵", "无款归位"],
       "coreMechanic": "协同三座闸室、居民撤护与伞器导流，击破实体潮锚结构。",
-      "resolution": "确认无款工印是被删去的公共维修责任，而非单一恶人署名。"
+      "resolutionSummary": "确认无款工印是被删去的公共维修责任，而非单一恶人署名。"
     },
     {
       "id": "lq_boss_stone_lion",
@@ -292,7 +376,7 @@
       "rank": "elite",
       "phases": ["吞砂", "吐火", "冷却开纹"],
       "coreMechanic": "利用磁砂改变冲锋路径，并在冷却窗检查石腹炉胆。",
-      "resolution": "恢复守溪熔炉的安全泄压用途。"
+      "resolutionSummary": "恢复守溪熔炉的安全泄压用途。"
     },
     {
       "id": "lq_boss_broken_blade_guard",
@@ -301,7 +385,7 @@
       "rank": "chapter",
       "phases": ["试锋问名", "断纹追身", "双刃合证"],
       "coreMechanic": "读出断刃纹路方向，用守势诱导其完成缺失剑招。",
-      "resolution": "证明事故来自错误矿批而非学徒偷工。"
+      "resolutionSummary": "证明事故来自错误矿批而非学徒偷工。"
     },
     {
       "id": "lq_boss_thousand_hammers",
@@ -310,7 +394,7 @@
       "rank": "chapter",
       "phases": ["一锤百应", "工坊争鸣", "同炉同拍"],
       "coreMechanic": "在多工位冲击波中建立正确锻打节拍。",
-      "resolution": "把被竞争打散的联合大单重新分工。"
+      "resolutionSummary": "把被竞争打散的联合大单重新分工。"
     },
     {
       "id": "lq_boss_drinking_fire_well",
@@ -319,7 +403,7 @@
       "rank": "elite",
       "phases": ["井吸", "火雨", "退火雾"],
       "coreMechanic": "控制移动炉车、风向和井口压力，避免山火扩散。",
-      "resolution": "恢复旧井作为公共退火池的身份。"
+      "resolutionSummary": "恢复旧井作为公共退火池的身份。"
     },
     {
       "id": "lq_boss_sheathless_master",
@@ -328,7 +412,7 @@
       "rank": "region",
       "phases": ["百剑出炉", "藏锋无鞘", "地火改序", "百炼归一"],
       "coreMechanic": "在战斗中重调剑器的硬度、韧性与架势，拒绝只追求锋利。",
-      "resolution": "让三派师承承认用途标准高于门派署名。"
+      "resolutionSummary": "让三派师承承认用途标准高于门派署名。"
     },
     {
       "id": "hz_boss_shadow_beam_bailiff",
@@ -337,7 +421,7 @@
       "rank": "elite",
       "phases": ["量梁", "封门", "题刻见证"],
       "coreMechanic": "在建筑受力变化中选择支撑点，避免破坏居民房屋。",
-      "resolution": "纠正误抄的修缮责任与封屋决定。"
+      "resolutionSummary": "纠正误抄的修缮责任与封屋决定。"
     },
     {
       "id": "hz_boss_dry_inkstone_boat",
@@ -346,7 +430,7 @@
       "rank": "chapter",
       "phases": ["旱溪磨骨", "墨浪载舟", "砚田回水"],
       "coreMechanic": "重接水磨和田渠，让石舟在水路上失去攻击性。",
-      "resolution": "平衡砚石开采、灌溉与村社收益。"
+      "resolutionSummary": "平衡砚石开采、灌溉与村社收益。"
     },
     {
       "id": "hz_boss_ink_contract_moth",
@@ -355,7 +439,7 @@
       "rank": "chapter",
       "phases": ["食字", "伪契成林", "年轮复文"],
       "coreMechanic": "用年轮和墨谱找回被啃去的条款，战场规则随契文恢复。",
-      "resolution": "重订林场限伐与灾后取木条款。"
+      "resolutionSummary": "重订林场限伐与灾后取木条款。"
     },
     {
       "id": "hz_boss_white_contract_tiger",
@@ -364,7 +448,7 @@
       "rank": "region",
       "phases": ["雾中索债", "商队离契", "百印争途", "白契留名"],
       "coreMechanic": "调度商队、重写临时契约并在山雾中维持补给线。",
-      "resolution": "揭示白契不是空白授权，而是为无名劳作者保留的共同署名栏。"
+      "resolutionSummary": "揭示白契不是空白授权，而是为无名劳作者保留的共同署名栏。"
     }
   ],
   "npcs": [
@@ -375,7 +459,8 @@
       "role": "纸伞师父与玩家首位工艺导师",
       "relationshipArc": ["试手", "托谱", "并肩署名"],
       "interactionSystems": ["schedule", "mentorship", "craft", "combat_training"],
-      "questChain": "一柄伞的四季"
+      "questChainId": "jn_quest_umbrella_four_seasons",
+      "questRole": "owner"
     },
     {
       "id": "npc_ji_qing",
@@ -384,7 +469,8 @@
       "role": "天工院年轻勘验员",
       "relationshipArc": ["互相质疑", "交换证据", "共同裁定"],
       "interactionSystems": ["dialogue", "evidence_board", "field_coop", "relationship"],
-      "questChain": "无款者的账页"
+      "questChainId": "jn_quest_unsigned_ledger",
+      "questRole": "owner"
     },
     {
       "id": "npc_luo_qinghe",
@@ -393,7 +479,8 @@
       "role": "听雨市跑行与消息中介",
       "relationshipArc": ["带路收钱", "互通行情", "替你担保"],
       "interactionSystems": ["trade", "rumor", "schedule", "relationship"],
-      "questChain": "一日跑遍十二桥"
+      "questChainId": "jn_quest_twelve_bridges",
+      "questRole": "owner"
     },
     {
       "id": "npc_a_tang",
@@ -402,7 +489,8 @@
       "role": "染坊学徒与颜色研究伙伴",
       "relationshipArc": ["藏错", "共试", "自立配方"],
       "interactionSystems": ["craft", "field_coop", "gift", "schedule"],
-      "questChain": "不褪的青"
+      "questChainId": "jn_quest_unfading_indigo",
+      "questRole": "owner"
     },
     {
       "id": "npc_chu_granny",
@@ -411,7 +499,8 @@
       "role": "镇口茶摊主人与口述史保存者",
       "relationshipArc": ["听客", "熟客", "代守旧事"],
       "interactionSystems": ["dialogue", "rumor", "meal", "memory_archive"],
-      "questChain": "茶凉前的三段旧话"
+      "questChainId": "jn_quest_water_to_whom",
+      "questRole": "co_protagonist"
     },
     {
       "id": "npc_lu_tuan",
@@ -420,7 +509,8 @@
       "role": "河工领班与外圩责任人",
       "relationshipArc": ["拒绝外行", "接受协查", "交付闸钥"],
       "interactionSystems": ["schedule", "public_works", "field_coop", "relationship"],
-      "questChain": "水到谁家"
+      "questChainId": "jn_quest_water_to_whom",
+      "questRole": "owner"
     },
     {
       "id": "npc_mo_ming",
@@ -429,7 +519,8 @@
       "role": "失声的调铎匠",
       "relationshipArc": ["手势相识", "共校声纹", "重登钟楼"],
       "interactionSystems": ["gesture_dialogue", "audio_puzzle", "craft", "schedule"],
-      "questChain": "没有声音的报时"
+      "questChainId": "jn_quest_silent_timekeeping",
+      "questRole": "owner"
     },
     {
       "id": "npc_qi_zhaoshui",
@@ -438,7 +529,8 @@
       "role": "天工渡驿使与跨区联络人",
       "relationshipArc": ["公事接引", "私下托信", "共同远行"],
       "interactionSystems": ["travel", "mail", "dialogue", "relationship"],
-      "questChain": "三封不该迟到的信"
+      "questChainId": "jn_quest_twelve_bridges",
+      "questRole": "co_protagonist"
     },
     {
       "id": "npc_xie_linfeng",
@@ -447,7 +539,8 @@
       "role": "守旧剑匠与剑器主导师",
       "relationshipArc": ["拒绝授艺", "以剑问用", "共立新规"],
       "interactionSystems": ["mentorship", "forge", "combat_training", "relationship"],
-      "questChain": "锋从何处来"
+      "questChainId": "lq_quest_source_of_edge",
+      "questRole": "owner"
     },
     {
       "id": "npc_ning_yulu",
@@ -456,7 +549,8 @@
       "role": "材料师与矿批调查者",
       "relationshipArc": ["数据往来", "共担试验", "公开报告"],
       "interactionSystems": ["research", "craft", "evidence_board", "field_coop"],
-      "questChain": "七曜不是七种铁"
+      "questChainId": "lq_quest_sevenfold_materials",
+      "questRole": "owner"
     },
     {
       "id": "npc_shi_qi",
@@ -465,7 +559,8 @@
       "role": "矿工领路人与救援队骨干",
       "relationshipArc": ["付费领路", "井下托命", "共享矿图"],
       "interactionSystems": ["exploration", "rescue", "schedule", "relationship"],
-      "questChain": "第八条矿道"
+      "questChainId": "lq_quest_eighth_mine",
+      "questRole": "owner"
     },
     {
       "id": "npc_gu_hanxing",
@@ -474,7 +569,8 @@
       "role": "试剑人和竞技挑战者",
       "relationshipArc": ["试锋对手", "互换心得", "双器协战"],
       "interactionSystems": ["duel", "combat_training", "companion", "relationship"],
-      "questChain": "剑不只向人"
+      "questChainId": "lq_quest_sword_beyond_duel",
+      "questRole": "owner"
     },
     {
       "id": "npc_ye_xiaoli",
@@ -483,7 +579,8 @@
       "role": "磨剑学徒与轻喜剧视角",
       "relationshipArc": ["闯祸求助", "独立接单", "带新人"],
       "interactionSystems": ["craft", "errand", "schedule", "gift"],
-      "questChain": "磨掉的不是缺口"
+      "questChainId": "lq_quest_grinding_not_gap",
+      "questRole": "owner"
     },
     {
       "id": "npc_wen_lan",
@@ -492,7 +589,8 @@
       "role": "炉前驿主人与商路协调者",
       "relationshipArc": ["投宿", "代看货路", "托管驿站"],
       "interactionSystems": ["lodging", "trade", "rumor", "schedule"],
-      "questChain": "炉火不熄的夜"
+      "questChainId": "lq_quest_three_feet_cloud",
+      "questRole": "support"
     },
     {
       "id": "npc_zong_lishou",
@@ -501,7 +599,8 @@
       "role": "地火与古炉守护人",
       "relationshipArc": ["守门盘问", "共享炉志", "交托火种"],
       "interactionSystems": ["dialogue", "environment_control", "field_coop", "memory_archive"],
-      "questChain": "火也要有归处"
+      "questChainId": "lq_quest_three_feet_cloud",
+      "questRole": "co_protagonist"
     },
     {
       "id": "npc_han_wenquan",
@@ -510,7 +609,8 @@
       "role": "山地测绘师",
       "relationshipArc": ["交换路标", "共测险脊", "完成新图"],
       "interactionSystems": ["mapmaking", "exploration", "weather", "relationship"],
-      "questChain": "云上三尺"
+      "questChainId": "lq_quest_three_feet_cloud",
+      "questRole": "owner"
     },
     {
       "id": "npc_cheng_monian",
@@ -519,7 +619,8 @@
       "role": "徽墨师与墨谱保管人",
       "relationshipArc": ["辨墨试问", "借谱查源", "共开公谱"],
       "interactionSystems": ["craft", "mentorship", "research", "relationship"],
-      "questChain": "一两墨的百日"
+      "questChainId": "hz_quest_hundred_days_ink",
+      "questRole": "owner"
     },
     {
       "id": "npc_wang_shuyan",
@@ -528,7 +629,8 @@
       "role": "契约经纪人与辩契伙伴",
       "relationshipArc": ["按字收费", "共同代理", "互为见证"],
       "interactionSystems": ["contract", "negotiation", "evidence_board", "relationship"],
-      "questChain": "小字里的大路"
+      "questChainId": "hz_quest_small_print_big_road",
+      "questRole": "owner"
     },
     {
       "id": "npc_fang_jiusi",
@@ -537,7 +639,8 @@
       "role": "木作营造师",
       "relationshipArc": ["量尺争执", "共撑危梁", "联名修谱"],
       "interactionSystems": ["building", "craft", "public_works", "field_coop"],
-      "questChain": "梁上没有多余的木"
+      "questChainId": "hz_quest_no_spare_timber",
+      "questRole": "owner"
     },
     {
       "id": "npc_xu_yanqiu",
@@ -546,7 +649,8 @@
       "role": "砚田研究者与书院讲师",
       "relationshipArc": ["课题互换", "田野共研", "公开争鸣"],
       "interactionSystems": ["research", "lecture", "gathering", "relationship"],
-      "questChain": "石头如何记住水"
+      "questChainId": "hz_quest_stone_remembers_water",
+      "questRole": "owner"
     },
     {
       "id": "npc_wu_zhaolin",
@@ -555,7 +659,8 @@
       "role": "林契巡护人",
       "relationshipArc": ["边界警告", "共查盗伐", "共享巡线"],
       "interactionSystems": ["tracking", "exploration", "contract", "companion"],
-      "questChain": "树倒以前"
+      "questChainId": "hz_quest_before_tree_falls",
+      "questRole": "owner"
     },
     {
       "id": "npc_zhu_xiuyun",
@@ -564,7 +669,8 @@
       "role": "远行商队掌柜",
       "relationshipArc": ["临时雇工", "风险合伙", "共同立契"],
       "interactionSystems": ["trade", "caravan", "negotiation", "relationship"],
-      "questChain": "一车货有三条命"
+      "questChainId": "hz_quest_three_lives_cart",
+      "questRole": "owner"
     },
     {
       "id": "npc_luo_qiheng",
@@ -573,7 +679,8 @@
       "role": "书院档案师与天工录怀疑者",
       "relationshipArc": ["限制查阅", "共同校勘", "开放异议卷"],
       "interactionSystems": ["archive", "evidence_board", "dialogue", "relationship"],
-      "questChain": "被夹在目录外的人"
+      "questChainId": "hz_quest_small_print_big_road",
+      "questRole": "co_protagonist"
     },
     {
       "id": "npc_xiaoman",
@@ -582,7 +689,8 @@
       "role": "山路信使与玩家的镜像后辈",
       "relationshipArc": ["抢路较劲", "互带口信", "独当一面"],
       "interactionSystems": ["mail", "race", "travel", "relationship"],
-      "questChain": "信比人先到"
+      "questChainId": "hz_quest_three_lives_cart",
+      "questRole": "co_protagonist"
     }
   ]
 }

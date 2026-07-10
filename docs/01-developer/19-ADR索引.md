@@ -3,6 +3,7 @@
 > 上级文档：[`../01-开发者文档.md`](../01-开发者文档.md)
 > 状态：Active
 > 最后更新：2026-07-10
+> 维护者角色：技术负责人；提案 Owner 与受影响领域负责人会签
 
 ## 1. 规则
 
@@ -81,6 +82,8 @@ F1 证据可能触发：
 - Axmol Web Preview 是否保留，或改用另一 C++ Presentation 宿主。
 - Sprite/骨骼动画与许可方案。
 - Emscripten 模块拆分、异常/RTTI、内存和 Pthreads 参数。
+- JS↔WASM ABI major、线程/缓冲模型若改变 0006 的平台边界。
+- `.tgdpack`/Snapshot/Operation 的正式编码与签名方案若形成长期外部格式。
 - 内容工作台 DOM 框架和本地工作区桥。
 - OIDC 提供方、会话/Cookie 与数据驻留。
 - Windows/Android/iOS 具体发布顺序和商店 SDK。

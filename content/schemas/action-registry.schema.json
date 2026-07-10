@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tiangongdu.example/schemas/action-registry.schema.json",
+  "title": "TianGongDu Action Registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "contexts", "actions", "defaultBindings", "rules"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "const": "1.0.0" },
+    "contexts": {
+      "type": "array",
+      "minItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "priority", "capturesText"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" },
+          "priority": { "type": "integer", "minimum": 0, "maximum": 1000 },
+          "capturesText": { "type": "boolean" }
+        }
+      }
+    },
+    "actions": {
+      "type": "array",
+      "minItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "valueType", "contexts", "edgePolicy", "clearOnBlur"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" },
+          "valueType": { "enum": ["digital", "axis1d", "vector2", "text"] },
+          "contexts": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/id" } },
+          "edgePolicy": { "enum": ["continuous", "press_release", "hold_or_toggle", "press_or_hold", "repeat_with_ui_delay", "text_commit"] },
+          "clearOnBlur": { "const": true }
+        }
+      }
+    },
+    "defaultBindings": {
+      "type": "array",
+      "minItems": 30,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["profile", "control", "actionId", "gesture"],
+        "properties": {
+          "profile": { "enum": ["keyboard_mouse", "gamepad_standard", "text_input"] },
+          "control": { "type": "string", "minLength": 1 },
+          "actionId": { "$ref": "#/$defs/id" },
+          "gesture": { "enum": ["press", "hold", "press_or_hold", "tap_deferred", "step", "held_axis", "axis1d", "axis2d", "text_commit"] },
+          "scale": { "type": "number", "minimum": -1, "maximum": 1 }
+        }
+      }
+    },
+    "rules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["physicalRepeatCreatesPressEdges", "latestDeviceChangesGlyphOnly", "contextChangeClearsHeldGameplayActions", "gamepadDeadzoneDefinedPerDeviceProfile", "textCompositionNeverEntersGameplay", "higherContextPriorityWins", "unhandledInputFallsThrough", "browserTabReservedForDomFocus", "escapeBrowserExitPrecedesActionDispatch", "sharedTapHoldEmitsExactlyOneAction", "ordinaryAndImeTextUseCommitPaths", "holdThresholdMs", "uiRepeatDelayMs", "uiRepeatIntervalMs", "gamepadStickDeadzone", "gamepadTriggerDeadzone"],
+      "properties": {
+        "physicalRepeatCreatesPressEdges": { "const": false },
+        "latestDeviceChangesGlyphOnly": { "const": true },
+        "contextChangeClearsHeldGameplayActions": { "const": true },
+        "gamepadDeadzoneDefinedPerDeviceProfile": { "const": true },
+        "textCompositionNeverEntersGameplay": { "const": true },
+        "higherContextPriorityWins": { "const": true },
+        "unhandledInputFallsThrough": { "const": true },
+        "browserTabReservedForDomFocus": { "const": true },
+        "escapeBrowserExitPrecedesActionDispatch": { "const": true },
+        "sharedTapHoldEmitsExactlyOneAction": { "const": true },
+        "ordinaryAndImeTextUseCommitPaths": { "const": true },
+        "holdThresholdMs": { "type": "integer", "minimum": 200, "maximum": 700 },
+        "uiRepeatDelayMs": { "type": "integer", "minimum": 200, "maximum": 800 },
+        "uiRepeatIntervalMs": { "type": "integer", "minimum": 40, "maximum": 250 },
+        "gamepadStickDeadzone": { "type": "number", "minimum": 0, "maximum": 0.5 },
+        "gamepadTriggerDeadzone": { "type": "number", "minimum": 0, "maximum": 0.5 }
+      }
+    }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" }
+  }
+}

@@ -11,6 +11,10 @@
     "combatSystems",
     "weapons",
     "regions",
+    "mainChapters",
+    "questChains",
+    "enemyFamilies",
+    "f1VerticalSlice",
     "bosses",
     "npcs"
   ],
@@ -20,7 +24,8 @@
     "release": { "const": "1.0" },
     "contentTargets": {
       "type": "object",
-      "required": ["mainMinutes", "regions", "subregions", "bosses", "coreNpcs", "combatSystems", "weaponFamilies"],
+      "additionalProperties": false,
+      "required": ["mainMinutes", "mainAndSideMinutes", "completionistMinutes", "regions", "subregions", "bosses", "coreNpcs", "combatSystems", "weaponFamilies", "mainChapters", "sideQuestChains", "enemyFamilies", "pointsOfInterest"],
       "properties": {
         "mainMinutes": { "type": "integer", "minimum": 900 },
         "mainAndSideMinutes": { "type": "integer", "minimum": 1200 },
@@ -33,6 +38,7 @@
         "weaponFamilies": { "type": "integer", "minimum": 2 },
         "mainChapters": { "type": "integer", "minimum": 18 },
         "sideQuestChains": { "type": "integer", "minimum": 15 },
+        "enemyFamilies": { "type": "integer", "minimum": 20 },
         "pointsOfInterest": { "type": "integer", "minimum": 100 }
       }
     },
@@ -51,6 +57,22 @@
       "minItems": 3,
       "items": { "$ref": "#/$defs/region" }
     },
+    "mainChapters": {
+      "type": "array",
+      "minItems": 18,
+      "items": { "$ref": "#/$defs/mainChapter" }
+    },
+    "questChains": {
+      "type": "array",
+      "minItems": 15,
+      "items": { "$ref": "#/$defs/questChain" }
+    },
+    "enemyFamilies": {
+      "type": "array",
+      "minItems": 20,
+      "items": { "$ref": "#/$defs/enemyFamily" }
+    },
+    "f1VerticalSlice": { "$ref": "#/$defs/f1VerticalSlice" },
     "bosses": {
       "type": "array",
       "minItems": 10,
@@ -124,9 +146,61 @@
         "subregions": { "type": "array", "minItems": 5, "items": { "$ref": "#/$defs/subregion" } }
       }
     },
+    "mainChapter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "regionId", "minutes"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "regionId": { "$ref": "#/$defs/id" },
+        "minutes": { "type": "integer", "minimum": 20, "maximum": 90 }
+      }
+    },
+    "questChain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "regionId", "estimatedMinutes", "participantNpcIds"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "regionId": { "$ref": "#/$defs/id" },
+        "estimatedMinutes": { "type": "integer", "minimum": 15, "maximum": 60 },
+        "participantNpcIds": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/id" } }
+      }
+    },
+    "enemyFamily": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "regionId", "tacticalRole"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "regionId": { "$ref": "#/$defs/id" },
+        "tacticalRole": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "f1VerticalSlice": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "channel", "profileNamespace", "startFixtureId", "chapterId", "subregionIds", "npcIds", "enemyFamilyIds", "bossId", "playableTargetMinutes", "endToEndTestBudgetMinutes"],
+      "properties": {
+        "id": { "const": "f1_rainy_umbrella_trial" },
+        "channel": { "const": "prototype_f1" },
+        "profileNamespace": { "const": "prototype_f1" },
+        "startFixtureId": { "const": "fixture_f1_rainy_umbrella_start" },
+        "chapterId": { "$ref": "#/$defs/id" },
+        "subregionIds": { "type": "array", "minItems": 2, "uniqueItems": true, "items": { "$ref": "#/$defs/id" } },
+        "npcIds": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/id" } },
+        "enemyFamilyIds": { "type": "array", "minItems": 2, "uniqueItems": true, "items": { "$ref": "#/$defs/id" } },
+        "bossId": { "$ref": "#/$defs/id" },
+        "playableTargetMinutes": { "const": 27 },
+        "endToEndTestBudgetMinutes": { "const": 30 }
+      }
+    },
     "boss": {
       "type": "object",
-      "required": ["id", "name", "regionId", "rank", "phases", "coreMechanic", "resolution"],
+      "required": ["id", "name", "regionId", "rank", "phases", "coreMechanic", "resolutionSummary"],
       "properties": {
         "id": { "$ref": "#/$defs/id" },
         "name": { "$ref": "#/$defs/nonEmptyString" },
@@ -134,12 +208,18 @@
         "rank": { "enum": ["elite", "chapter", "region"] },
         "phases": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/nonEmptyString" } },
         "coreMechanic": { "$ref": "#/$defs/nonEmptyString" },
-        "resolution": { "$ref": "#/$defs/nonEmptyString" }
-      }
+        "resolutionSummary": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "allOf": [
+        { "if": { "properties": { "rank": { "const": "elite" } }, "required": ["rank"] }, "then": { "properties": { "phases": { "minItems": 2 } } } },
+        { "if": { "properties": { "rank": { "const": "chapter" } }, "required": ["rank"] }, "then": { "properties": { "phases": { "minItems": 3 } } } },
+        { "if": { "properties": { "rank": { "const": "region" } }, "required": ["rank"] }, "then": { "properties": { "phases": { "minItems": 4 } } } }
+      ]
     },
     "npc": {
       "type": "object",
-      "required": ["id", "name", "regionId", "role", "relationshipArc", "interactionSystems", "questChain"],
+      "additionalProperties": false,
+      "required": ["id", "name", "regionId", "role", "relationshipArc", "interactionSystems", "questChainId", "questRole"],
       "properties": {
         "id": { "$ref": "#/$defs/id" },
         "name": { "$ref": "#/$defs/nonEmptyString" },
@@ -147,7 +227,8 @@
         "role": { "$ref": "#/$defs/nonEmptyString" },
         "relationshipArc": { "type": "array", "minItems": 3, "items": { "$ref": "#/$defs/nonEmptyString" } },
         "interactionSystems": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/id" } },
-        "questChain": { "$ref": "#/$defs/nonEmptyString" }
+        "questChainId": { "$ref": "#/$defs/id" },
+        "questRole": { "enum": ["owner", "co_protagonist", "support"] }
       }
     }
   }

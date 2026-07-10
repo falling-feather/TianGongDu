@@ -4,13 +4,13 @@
 
 主分支采用 **浏览器首发、C++ 核心、多端复用** 的技术路线：C++20 游戏核心由 Emscripten 编译为 WebAssembly，Axmol 2.11.x LTS 负责 2D 渲染、输入、音频与跨平台宿主；网页以 Canvas 承载游戏画面，以 DOM 承载 HUD、菜单和可访问性。Windows/Android/iOS 复用同一核心，按里程碑逐端验证，而不是维护互不兼容的多套游戏。
 
-当前提交是 2.1 技术设计基础，不冒充已经完成的正式 WASM 游戏。F1 的硬门是先做出 15–30 分钟端到端网页纵切，验证 Axmol 当前仍标记为 Preview 的 WebAssembly 路径，再扩大生产。
+当前工作区是 **2.2 开发对接版设计基础**，不冒充已经完成的正式 WASM 游戏。F1 的硬门是先做出“雨夜试伞”网页纵切：约 27 分钟到归位结算，30 分钟覆盖返回、保存、刷新与离线重开；验证 Axmol 当前仍标记为 Preview 的 WebAssembly 路径后再扩大生产。
 
 ## 当前成果
 
 - 固定 00–09 共 10 份顶层文档，以及隶属于 01 的 10–19 开发者二级手册。
 - 设计 1.0 的 3 个地区、18 个大型子地区、14 个 Boss、24 个核心 NPC、2 套战斗系统和 2 条武器体系。
-- 建立可机器校验的 1.0 内容目录、8 类模板注册表和 C++ Web 技术基线。
+- 建立可机器校验的 1.0 内容目录、9 类模板注册表（含独立精英机制战）和 C++ Web 技术基线。
 - 确立 C++ Contracts / Runtime / Gameplay / Presentation / Platform 分层，玩法状态不归渲染树或 JavaScript 所有。
 - 设计 IndexedDB 本地存档、Service Worker/CDN 内容缓存，以及可选的跨设备云同步协议。
 - 旧版 Web 原型完整保存在 [`codex/archive-legacy-web-v1`](https://github.com/falling-feather/TianGongDu/tree/codex/archive-legacy-web-v1)，含 V1.1.0 可玩闭环和 52 项自动化测试。
@@ -20,7 +20,29 @@
 1. 项目负责人先读 [`docs/00-项目总纲.md`](docs/00-项目总纲.md) 与 [`docs/02-版本规划与验收.md`](docs/02-版本规划与验收.md)。
 2. 开发者从 [`docs/01-开发者文档.md`](docs/01-开发者文档.md) 进入 10–19 二级手册。
 3. 技术路线以 [`docs/01-developer/10-技术架构与依赖规则.md`](docs/01-developer/10-技术架构与依赖规则.md) 和 [`content/design/technical-baseline.json`](content/design/technical-baseline.json) 为准。
-4. 内容团队读 [`docs/04-游戏设计总纲.md`](docs/04-游戏设计总纲.md)、[`docs/06-内容生产规范.md`](docs/06-内容生产规范.md) 与 [`docs/07-1.0地区与内容蓝图.md`](docs/07-1.0地区与内容蓝图.md)。
+4. 内容/叙事/关卡团队依次读 [`docs/04-游戏设计总纲.md`](docs/04-游戏设计总纲.md)、[`docs/05-世界与叙事圣经.md`](docs/05-世界与叙事圣经.md)、[`docs/06-内容生产规范.md`](docs/06-内容生产规范.md)、[`docs/07-1.0地区与内容蓝图.md`](docs/07-1.0地区与内容蓝图.md) 与 [`docs/08-UI-UX与可访问性.md`](docs/08-UI-UX与可访问性.md)。
+
+开发组开工前先统一四个结论：
+
+- **F1 不是缩小版 1.0**：它只验证一条端到端生产与运行链，原型存档使用独立命名空间，不直接迁入正式档。
+- **C++ GameCore 是玩法真相**：Axmol、DOM、JavaScript、IndexedDB 和云服务都通过契约观察或提交意图，不能各自保存第二份战斗/任务规则。
+- **M1 才是首个五小时地区成品**：F1 未通过兼容、存档、加载、性能和工具门之前，不批量生产最终资产。
+- **云同步是可选增强**：访客、离线和本地存档先成立；账号、Pthreads、Windows 与移动端都按证据逐门开放。
+
+开发对接的角色所有权、开工清单和 DoR/DoD 见 [`docs/01-开发者文档.md`](docs/01-开发者文档.md)；F1 唯一纵切、30/60/90 天成果门和风险台账见 [`docs/02-版本规划与验收.md`](docs/02-版本规划与验收.md)。
+
+## 当前成熟度
+
+| 领域 | 状态 | 已有 | 仍没有 |
+| --- | --- | --- | --- |
+| 产品/世界/1.0 范围 | Scope Approved | 三地区、战斗/武器、14 Boss、24 NPC、内容预算 | 全量任务/POI 实例和最终平衡 |
+| 技术架构 | Accepted Baseline | C++/WASM/Axmol 分层、存档/同步/部署合同 | 已锁工具链和可编译 CMake 工程 |
+| 可玩纵切 | Scope Approved | F1“雨夜试伞”唯一流程与验收 | 新主线 WASM 纵切代码/资产 |
+| 内容工具 | Scope Approved | 9 类模板注册表与工作台范围 | 可用 Workbench/ContentCore/baker |
+| 本地存档/云同步 | Accepted Baseline | IndexedDB 主路径、Operation/冲突模型 | 实际 DB migration、API、DDL、OIDC |
+| 发布运维 | Accepted Baseline | 渠道、缓存、回滚、证据与灾备门 | CI/CD、正式 origin/CDN/监控 |
+
+`Scope Approved` 或 `Accepted Baseline` 都不等于 `Implemented`。状态词统一定义在 [`docs/09-术语与索引.md`](docs/09-术语与索引.md)。
 
 ## 目标仓库布局
 
@@ -53,16 +75,18 @@ npm test
 npm run validate:design
 ```
 
-它会检查文档层级、链接、ID、内容数量、地区引用、模板注册表，以及 C++20、Axmol、Emscripten、WebGL2、DOM UI、IndexedDB 和云同步基线。
+它会检查文档层级/元信息/链接、稳定 ID、21 章与分钟、18 支线与 24 NPC 参与关系、25 敌人家族、F1 纵切引用、9 类模板、Action/Context/默认输入映射、13 组开发对接合同，以及 C++20、Axmol、Emscripten、WebGL2、DOM UI、IndexedDB 主路径和云同步基线。
+
+当前脚本执行项目语义守卫并解析 Schema；完整 JSON Schema Draft 2020-12 validator、pack/save/API 机器合同与负向 fixture 属于 G1/G3 工具交付，限制见 [`docs/01-developer/16-测试CI与发布门禁.md`](docs/01-developer/16-测试CI与发布门禁.md)。
 
 ## 技术基线
 
 - 游戏核心：C++20，固定 60 Hz 模拟，渲染器无权修改持久玩法状态。
 - 2D 宿主：Axmol 2.11.4 / 2.11.x LTS；WebAssembly 支持必须先通过 F1 硬门。
-- 网页编译：Emscripten SDK，F1 后锁定精确版本；输出 wasm32 + JavaScript loader。
+- 网页编译：Emscripten SDK，G1 宿主门结束前锁定精确版本；输出 wasm32 + JavaScript loader。
 - 网页渲染：WebGL2；首发提供必选单线程构建，多线程构建仅在 COOP/COEP 条件满足时渐进启用。
 - 网页外壳：Canvas 游戏画面 + DOM HUD/菜单 + PWA/Service Worker。
-- 本地存档：IndexedDB，经异步桥或 Emscripten IDBFS 持久化；浏览器存储不是唯一备份。
+- 本地存档：Profile 只经直接异步桥事务写入 IndexedDB；IDBFS 仅兼容非 Profile 文件，不构成第二份真相；浏览器存储不是唯一备份。
 - 云同步：可选、访客可玩、本地优先；修订快照 + 幂等操作日志，C++20/Drogon + PostgreSQL 作为参考实现。
 - 多端：Web 桌面浏览器为 1.0 必选；Windows 原生在网页纵切后进入 Beta，移动端分别通过触控和平台审核门。
 - 内容交付：带哈希的 `.tgdpack`，HTTPS/CDN 分发，Service Worker 与 HTTP Cache 分层缓存。

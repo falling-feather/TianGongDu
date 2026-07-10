@@ -4,7 +4,7 @@
   "title": "TianGongDu Technical Baseline",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "decisionVersion", "productTarget", "gameCore", "runtimeHost", "browserVariants", "webShell", "platformTargets", "cloudSync", "contentDelivery"],
+  "required": ["schemaVersion", "decisionVersion", "productTarget", "gameCore", "runtimeHost", "toolchainLock", "browserVariants", "webShell", "platformTargets", "cloudSync", "contentDelivery"],
   "properties": {
     "$schema": { "type": "string" },
     "schemaVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
@@ -30,14 +30,29 @@
         "releaseLine": { "const": "2.11.x-lts" },
         "webSupportGate": { "const": "f1-required-preview-validation" },
         "webCompiler": { "const": "Emscripten" },
-        "compilerVersionPolicy": { "const": "pin-exact-version-after-f1" },
+        "compilerVersionPolicy": { "const": "pin-exact-version-before-g1-exit" },
         "graphicsBaseline": { "const": "WebGL2" },
         "wasmTarget": { "const": "wasm32" }
+      }
+    },
+    "toolchainLock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requiredByGate", "manifestPath", "status"],
+      "properties": {
+        "requiredByGate": { "const": "G1" },
+        "manifestPath": { "const": "toolchains/toolchain-lock.json" },
+        "status": { "enum": ["planned-not-locked", "locked-and-validated"] }
       }
     },
     "browserVariants": {
       "type": "array",
       "minItems": 2,
+      "maxItems": 2,
+      "allOf": [
+        { "contains": { "type": "object", "properties": { "id": { "const": "web_single_thread" }, "required": { "const": true } }, "required": ["id", "required"] }, "minContains": 1, "maxContains": 1 },
+        { "contains": { "type": "object", "properties": { "id": { "const": "web_pthreads" }, "required": { "const": false } }, "required": ["id", "required"] }, "minContains": 1, "maxContains": 1 }
+      ],
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -59,12 +74,19 @@
         "installability": { "const": "PWA" },
         "offlineCache": { "const": "ServiceWorkerCacheStorage" },
         "localSave": { "const": "IndexedDB" },
-        "cppPersistenceBridge": { "type": "string", "minLength": 1 }
+        "cppPersistenceBridge": { "const": "AsyncIndexedDBPrimary-IDBFSCompatibilityOnly" }
       }
     },
     "platformTargets": {
       "type": "array",
       "minItems": 4,
+      "maxItems": 4,
+      "allOf": [
+        { "contains": { "type": "object", "properties": { "id": { "const": "web_desktop" } }, "required": ["id"] }, "minContains": 1, "maxContains": 1 },
+        { "contains": { "type": "object", "properties": { "id": { "const": "windows_x64" } }, "required": ["id"] }, "minContains": 1, "maxContains": 1 },
+        { "contains": { "type": "object", "properties": { "id": { "const": "android_arm64" } }, "required": ["id"] }, "minContains": 1, "maxContains": 1 },
+        { "contains": { "type": "object", "properties": { "id": { "const": "ios_arm64" } }, "required": ["id"] }, "minContains": 1, "maxContains": 1 }
+      ],
       "items": {
         "type": "object",
         "additionalProperties": false,

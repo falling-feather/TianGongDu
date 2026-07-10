@@ -1,6 +1,6 @@
 {
   "$schema": "../schemas/template-registry.schema.json",
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "1.1.0",
   "templates": [
     {
       "id": "template_core_npc",
@@ -21,6 +21,16 @@
       "generatedArtifacts": ["contentSource", "localizationKeys", "combatFixture", "previewProfile"],
       "previewProfile": "combat_lab",
       "validators": ["stable_id", "readability_budget", "ability_references", "ai_liveness", "performance_tier"]
+    },
+    {
+      "id": "template_elite_encounter",
+      "version": "1.0.0",
+      "contentType": "eliteEncounter",
+      "requiredModules": ["identity", "combatant", "mechanicStages", "lanternIntersection", "arena", "retry", "resolution"],
+      "optionalModules": ["enemyFamilyReuse", "environmentHazard", "companionRole", "alternateResolution"],
+      "generatedArtifacts": ["contentSource", "localizationKeys", "mechanicFixture", "retryFixture", "previewProfile"],
+      "previewProfile": "combat_lab",
+      "validators": ["stable_id", "mechanic_changes", "evidence_reachability", "retry_completeness", "assist_mode_path"]
     },
     {
       "id": "template_chapter_boss",

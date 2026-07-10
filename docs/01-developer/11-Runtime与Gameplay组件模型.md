@@ -3,6 +3,7 @@
 > 上级文档：[`../01-开发者文档.md`](../01-开发者文档.md)
 > 状态：Accepted Baseline
 > 最后更新：2026-07-10
+> 维护者角色：C++ 核心负责人；Gameplay、AI、存档与表现 Owner 会签
 
 ## 1. 混合组件模型
 
@@ -149,7 +150,7 @@ Trigger → Cost → TargetQuery → Movement → HitWindow
 由 `CombatSystem`, `AbilitySystem`, `HitResolutionSystem`, `PoiseSystem`, `EffectSystem` 组合：
 
 - 输入缓冲用 Tick 表达。
-- Axmol/Box2D 查询经 `IPhysicsQuery` 适配并稳定排序。
+- Runtime `ICollisionWorld` 查询经量化并稳定排序；Axmol 物理不进入权威命中，独立碰撞库若使用也只是 Runtime 私有实现。
 - 命中键 `(attacker, abilityInstance, hitIndex, target)` 防重复。
 - 精确格挡是规则窗口、方向和标签交集，不由动画回调判定。
 - AI Director 发放进攻令牌，控制横版群战可读性。
@@ -203,3 +204,82 @@ Boss 节点定义招式、AI 权重、环境、证据、同步边界和退出条
 - 流式压力：地区反复进出后实体、WASM heap、纹理和缓存回落。
 
 新架构原因见 [`adr/ADR-0006-Cpp分层核心与Wasm平台边界.md`](adr/ADR-0006-Cpp分层核心与Wasm平台边界.md)。
+
+## 18. `GameSession` 生命周期
+
+`GameSession` 是一次正在运行的权威游戏实例，唯一拥有 Tick、EntityRegistry、Gameplay 系统、随机流、当前世界和持久事务协调器。Web Shell/Axmol 只能持有 generation-safe handle。
+
+```text
+Uninitialized
+  → Bootstrapping (合同/包/存档验证)
+  → ReadyAtSafePoint
+  → Running ↔ Paused
+  → TravelCommitting ──success──► Running/ReadyAtSafePoint
+                    └─failure──► Paused + recovery UI
+  → ShuttingDown
+  → Destroyed
+
+Persistence（正交子状态）
+Idle → Pending → Committing → Idle
+                 └─failure──► FailedRetryable → Pending/Idle
+```
+
+- Boot 失败不产生半 Session；加载旧档先在隔离对象中迁移/验证。
+- 普通自动保存/奖励提交是正交异步子状态，不把 Running 变成 Saving，也不默认暂停战斗；UI 通过 `PersistenceStatusChanged` 观察 Pending/Committed/Failed。
+- Travel/章节/Boss 结算在事务中生成新安全快照；需要跨 Cell/不可逆切换时进入阻塞的 `TravelCommitting`，成功后切 Head/世界，失败回到 Paused 恢复 UI。
+- `Paused` 不推进 Tick，但可完成平台 I/O 并排队下一 Tick 命令。
+- 受控“返回标题/退出”拒绝新 Gameplay 命令并有界等待已开始的本地提交；浏览器强制关闭/unload 不保证等待，只保上一安全 Head 和已完成事务。
+- 销毁递增 generation，所有旧异步回调和 View binding 自动失效。
+
+## 19. 玩家状态机
+
+不要用一个不断增长的 `PlayerState` 枚举表达所有组合。玩家有三个正交域，命令校验读取它们：
+
+| 域 | 典型状态 | 规则 |
+| --- | --- | --- |
+| Locomotion | Grounded/Airborne/Falling/Climbing/ForcedMove | 决定重力、地面、跳跃、下穿和规则位移 |
+| Action | Free/Startup/Active/Recovery/Guard/Evade/Hitstun/Downed | 决定成本提交、命中窗、取消和受击 |
+| Interaction | None/WorldInteract/Dialogue/Craft/MajorChoice | 决定输入上下文、暂停/减速和任务命令 |
+
+优先级不是“最后写入者获胜”：Session 强制状态/Defeat > Hit/Downed > 已提交动作不可取消段 > 明确取消窗 > 自由输入。每个能力数据声明可从哪些 Action 状态进入、在哪些 Tick 可取消到哪些标签；Presentation 动画状态只能跟随。
+
+跳跃包括 `jump_pressed` 缓冲、离地宽限、起跳 commit、可变高度保持和落地恢复；闪身是独立 Action，不能共享同一物理键语义。攀附只发生在烘焙锚点，避免任意墙面导致动画/碰撞组合爆炸。
+
+## 20. 世界状态分层与持久事务
+
+| 层 | 示例 | 生命周期/保存 |
+| --- | --- | --- |
+| Definition | NPC 原型、能力、任务图、Cell、掉落表 | `.tgdpack` 不可变，不进 Snapshot |
+| Session transient | 当前命中、AI 临时目标、粒子事件、输入缓冲 | 不保存；从安全点/定义重建 |
+| Checkpoint | 玩家状态、Boss 前置、当前任务、随机流、已加载世界摘要 | 自动保存/失败重试 |
+| Profile persistent | 解锁、库存、关系、任务里程碑、地区裁定、天工录 | Snapshot + Operation；跨设备 |
+| Device local | 键位、画质、音量、缓存、部分辅助 | Platform 设置库；默认不同步 |
+| Service authority | cloudRevision、Operation 去重、设备、官方 EntitlementGrant | Sync Service；客户端只缓存镜像 |
+
+一次持久事务先在 GameCore 中验证全部前置，生成新 Profile state、Operation 和本地 `RewardDedupKey`，再交 IStorage 原子提交。官方付费/平台权益只能消费服务端签发的 `EntitlementGrant`。任一部分失败则不对外发布 `Committed` 事件；Presentation 可播放预备演出，但“已获得/已保存”必须等提交成功。
+
+## 21. AI 更新预算与可解释性
+
+AI 分为感知、意图、导航/移动、能力选择和群组协调。高威胁近屏单位每 Tick 更新必要决策；远处/低威胁单位按 2/4/8 Tick 分桶，降频只延迟重新决策，不改变已经提交的动作时间轴。
+
+- 感知事实有来源、可见时间和置信标签，不让 Blackboard 直接读取玩家私有任务状态。
+- Utility/状态机输出 `IntentId + reason tags + validUntilTick`，调试器能说明为何选招/放弃。
+- 群战导演控制同时进攻 token，F1 正式段最多 2 个高威胁者；空中/远程/控制角色不能在无窗口时同时爆发。
+- Leash、失去目标、导航失败、Cell 卸载、玩家进入对话和地区归位都有明确退场状态。
+- NPC 日程使用分钟/时段级模拟，不每 Tick 跑完整 AI；离屏 NPC 只更新抽象日程和持久事件。
+- 30 游戏日长模拟检查任务入口、日程锚点、替代交互和关系事件不死锁。
+
+## 22. 模块 Facade 与事件保留
+
+跨层只通过 Facade/DTO，不让调用者拿内部 Registry 引用：
+
+```text
+IGameSession::submit(CommandBatch)
+IGameSession::advance(FixedTickBudget)
+IGameSession::presentation_snapshot()
+IGameSession::drain_presentation_events(ackSequence)
+IGameSession::begin_persistence_transaction(reason)
+IGameSession::platform_completion(Completion)
+```
+
+Snapshot 的 previous/current 双缓冲是 F1 基线，Presentation 用 accumulator alpha 插值位置/视觉量；权威 UI/阶段/资源显示 current，不插值。一次性表现事件带单调 sequence，Presentation ack 后释放；掉帧可以延后但不能重复播放关键音效/演出。View/context 重建时丢弃过期纯表现事件，从 current Snapshot 重建；持久结算事件由 UI 模型和事务状态恢复，不依赖一次性粒子事件。

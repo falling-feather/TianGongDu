@@ -64,7 +64,7 @@ Web Single 是功能完整的必选产物；Pthreads 是独立构建，在 COOP/
 
 - Gameplay target 不 include Axmol/Emscripten/JS/Drogon。
 - 模板创建 NPC/Boss 不新增专属 C++ 类/ID 特判。
-- Web Single/Pthreads/Windows 回放的离散状态与持久 Operation 一致。
+- Web Single/Windows 回放的离散状态与持久 Operation 一致；Pthreads 通道启用时必须复用同一夹具，Deferred 时保留书面实验结论。
 - 页面隐藏/context lost/Presentation 重建后 Session 正确。
 - 两个异步请求跨 Session 返回时，旧 generation 不污染新状态。
 - Cell 反复卸载后句柄 generation、组件池和内存稳定。

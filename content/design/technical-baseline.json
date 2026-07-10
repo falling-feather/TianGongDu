@@ -1,7 +1,7 @@
 {
   "$schema": "../schemas/technical-baseline.schema.json",
   "schemaVersion": "1.0.0",
-  "decisionVersion": "2.1.0",
+  "decisionVersion": "2.2.0",
   "productTarget": "browser-first-cross-platform-action-rpg",
   "gameCore": {
     "language": "C++20",
@@ -14,9 +14,14 @@
     "releaseLine": "2.11.x-lts",
     "webSupportGate": "f1-required-preview-validation",
     "webCompiler": "Emscripten",
-    "compilerVersionPolicy": "pin-exact-version-after-f1",
+    "compilerVersionPolicy": "pin-exact-version-before-g1-exit",
     "graphicsBaseline": "WebGL2",
     "wasmTarget": "wasm32"
+  },
+  "toolchainLock": {
+    "requiredByGate": "G1",
+    "manifestPath": "toolchains/toolchain-lock.json",
+    "status": "planned-not-locked"
   },
   "browserVariants": [
     {
@@ -36,7 +41,7 @@
     "installability": "PWA",
     "offlineCache": "ServiceWorkerCacheStorage",
     "localSave": "IndexedDB",
-    "cppPersistenceBridge": "EmscriptenIDBFSOrAsyncIndexedDB"
+    "cppPersistenceBridge": "AsyncIndexedDBPrimary-IDBFSCompatibilityOnly"
   },
   "platformTargets": [
     { "id": "web_desktop", "release": "1.0-required" },

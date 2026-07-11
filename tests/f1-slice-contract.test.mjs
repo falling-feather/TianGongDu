@@ -31,7 +31,7 @@ test("F1 one-hour contract and generated C++ stay synchronized", async () => {
   assert.equal(contract.combatBootstrap.abilities.length, 9);
   assert.equal(contract.combatBootstrap.director.maxSimultaneousAttackers, 1);
   assert.equal(contract.combatBootstrap.director.formationRadiusMm, 1500);
-  assert.equal(contract.questInteractions.length, 3);
+  assert.equal(contract.questInteractions.length, 4);
   assert.deepEqual(
     new Set(
       contract.questInteractions
@@ -43,6 +43,16 @@ test("F1 one-hour contract and generated C++ stay synchronized", async () => {
   assert.deepEqual(
     new Set(contract.questCombatTriggers.map((trigger) => trigger.objectiveId)),
     new Set(contract.beats[1].objectiveIds.slice(1))
+  );
+  assert.deepEqual(
+    new Set(contract.questCombatOutcomes.map((outcome) => outcome.objectiveId)),
+    new Set(contract.beats[2].objectiveIds.slice(0, 2))
+  );
+  assert.deepEqual(
+    contract.questInteractions.find(
+      (interaction) => interaction.objectiveId === "f1_objective_choose_lane_route"
+    ).prerequisiteObjectiveIds,
+    contract.beats[2].objectiveIds.slice(0, 2)
   );
   assert(
     contract.combatBootstrap.actors.every((actor) =>
@@ -60,7 +70,8 @@ test("F1 stable content IDs have unique 64-bit keys", async () => {
     ...contract.cellIds,
     ...contract.beats.flatMap((beat) => [beat.id, ...beat.objectiveIds]),
     ...contract.questInteractions.map((interaction) => interaction.id),
-    ...contract.questCombatTriggers.map((trigger) => trigger.id)
+    ...contract.questCombatTriggers.map((trigger) => trigger.id),
+    ...contract.questCombatOutcomes.map((outcome) => outcome.id)
   ];
   assert.equal(new Set(ids.map((id) => fnv1a64(id))).size, ids.length);
 });
@@ -80,6 +91,15 @@ test("F1 opening objectives require valid content-driven scene interactions", as
     () => validateF1SliceContract(duplicateObjective, catalog),
     /duplicate quest interaction objective/
   );
+
+  const futurePrerequisite = structuredClone(await loadF1SliceContract());
+  futurePrerequisite.questInteractions[0].prerequisiteObjectiveIds = [
+    "f1_objective_choose_resolution"
+  ];
+  assert.throws(
+    () => validateF1SliceContract(futurePrerequisite, catalog),
+    /invalid prerequisite objective/
+  );
 });
 
 test("F1 training counters require valid content-driven combat triggers", async () => {
@@ -96,6 +116,23 @@ test("F1 training counters require valid content-driven combat triggers", async 
   assert.throws(
     () => validateF1SliceContract(duplicateObjective, catalog),
     /duplicate quest combat trigger objective/
+  );
+});
+
+test("F1 umbrella-lane outcomes require reachable hostile groups", async () => {
+  const impossibleCount = structuredClone(await loadF1SliceContract());
+  impossibleCount.questCombatOutcomes[0].requiredCount = 3;
+  assert.throws(
+    () => validateF1SliceContract(impossibleCount, catalog),
+    /cannot reach its required hostile count/
+  );
+
+  const duplicateObjective = structuredClone(await loadF1SliceContract());
+  duplicateObjective.questCombatOutcomes[1].objectiveId =
+    duplicateObjective.questCombatOutcomes[0].objectiveId;
+  assert.throws(
+    () => validateF1SliceContract(duplicateObjective, catalog),
+    /duplicate quest combat outcome objective/
   );
 });
 

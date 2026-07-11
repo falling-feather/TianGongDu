@@ -1,5 +1,6 @@
 #pragma once
 
+#include <tgd/contracts/combat_types.hpp>
 #include <tgd/contracts/quest_types.hpp>
 
 #include <array>
@@ -148,6 +149,37 @@ class DeterministicQuestCombatTriggerResolver final {
 
   private:
     std::span<const contracts::QuestCombatTriggerDefinition> definitions_{};
+    bool initialized_{};
+};
+
+enum class QuestCombatOutcomeError : std::uint8_t {
+    none,
+    invalid_lifecycle,
+    invalid_definition,
+    invalid_actor_snapshot,
+};
+
+struct QuestCombatOutcomeResult final {
+    QuestCombatOutcomeError error{QuestCombatOutcomeError::none};
+    bool found{};
+    contracts::StableContentKey outcome{};
+    contracts::StableContentKey objective{};
+};
+
+class DeterministicQuestCombatOutcomeResolver final {
+  public:
+    static constexpr std::size_t outcome_capacity = 64;
+
+    [[nodiscard]] QuestCombatOutcomeError initialize(
+        std::span<const contracts::QuestCombatOutcomeDefinition> definitions
+    ) noexcept;
+    [[nodiscard]] QuestCombatOutcomeResult resolve(
+        std::span<const contracts::CombatActorSnapshot> actors,
+        const IQuestRuntime& quest
+    ) const noexcept;
+
+  private:
+    std::span<const contracts::QuestCombatOutcomeDefinition> definitions_{};
     bool initialized_{};
 };
 

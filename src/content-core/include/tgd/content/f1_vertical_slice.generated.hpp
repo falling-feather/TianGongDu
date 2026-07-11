@@ -50,6 +50,11 @@ inline constexpr std::array<contracts::ContentId, 2> beat_6_objectives{{
     contracts::content_id("f1_objective_return_to_shen_yan"),
 }};
 
+inline constexpr std::array<contracts::ContentId, 2> interaction_3_prerequisites{{
+    contracts::content_id("f1_objective_defeat_leaking_dolls"),
+    contracts::content_id("f1_objective_answer_paper_egret"),
+}};
+
 inline constexpr std::array<contracts::VerticalSliceBeatDefinition, 7> f1_beats{{
     {contracts::content_id("f1_beat_rain_ferry_arrival"), contracts::VerticalSliceBeatKind::exploration, 9, contracts::content_id("f1_cell_rain_ferry"), std::span<const contracts::ContentId>{beat_0_objectives}},
     {contracts::content_id("f1_beat_shen_yan_training"), contracts::VerticalSliceBeatKind::training, 8, contracts::content_id("f1_cell_rain_ferry"), std::span<const contracts::ContentId>{beat_1_objectives}},
@@ -82,15 +87,21 @@ inline constexpr std::array<contracts::ContentId, 5> f1_cells{{
     contracts::content_id("f1_cell_return_safe_point"),
 }};
 
-inline constexpr std::array<contracts::QuestInteractionDefinition, 3> f1_quest_interactions{{
-    {contracts::content_id("f1_interaction_travel_writ"), contracts::QuestInteractionKind::inspect, contracts::content_id("f1_cell_rain_ferry"), contracts::content_id("f1_objective_inspect_travel_writ"), {-12000, -1600, 0, 0}, 800},
-    {contracts::content_id("f1_interaction_ferry_gate"), contracts::QuestInteractionKind::operate, contracts::content_id("f1_cell_rain_ferry"), contracts::content_id("f1_objective_reach_ferry_gate"), {-10450, -100, 0, 0}, 900},
-    {contracts::content_id("f1_interaction_meet_shen_yan"), contracts::QuestInteractionKind::talk, contracts::content_id("f1_cell_rain_ferry"), contracts::content_id("f1_objective_meet_shen_yan"), {-10500, -600, 0, 0}, 800},
+inline constexpr std::array<contracts::QuestInteractionDefinition, 4> f1_quest_interactions{{
+    {contracts::content_id("f1_interaction_travel_writ"), contracts::QuestInteractionKind::inspect, contracts::content_id("f1_cell_rain_ferry"), contracts::content_id("f1_objective_inspect_travel_writ"), {-12000, -1600, 0, 0}, 800, std::span<const contracts::ContentId>{}},
+    {contracts::content_id("f1_interaction_ferry_gate"), contracts::QuestInteractionKind::operate, contracts::content_id("f1_cell_rain_ferry"), contracts::content_id("f1_objective_reach_ferry_gate"), {-10450, -100, 0, 0}, 900, std::span<const contracts::ContentId>{}},
+    {contracts::content_id("f1_interaction_meet_shen_yan"), contracts::QuestInteractionKind::talk, contracts::content_id("f1_cell_rain_ferry"), contracts::content_id("f1_objective_meet_shen_yan"), {-10500, -600, 0, 0}, 800, std::span<const contracts::ContentId>{}},
+    {contracts::content_id("f1_interaction_choose_lane_route"), contracts::QuestInteractionKind::choose, contracts::content_id("f1_cell_umbrella_lane_a"), contracts::content_id("f1_objective_choose_lane_route"), {-500, 1800, 0, 0}, 1000, std::span<const contracts::ContentId>{interaction_3_prerequisites}},
 }};
 
 inline constexpr std::array<contracts::QuestCombatTriggerDefinition, 2> f1_quest_combat_triggers{{
     {contracts::content_id("f1_trigger_eavesguard_counter"), contracts::QuestCombatTriggerKind::player_hit_guarded, contracts::content_id("f1_objective_eavesguard_counter"), contracts::stable_content_key("stance_eavesguard")},
     {contracts::content_id("f1_trigger_flower_turn_counter"), contracts::QuestCombatTriggerKind::player_hit_evaded, contracts::content_id("f1_objective_flower_turn_counter"), contracts::stable_content_key("stance_flower_turn")},
+}};
+
+inline constexpr std::array<contracts::QuestCombatOutcomeDefinition, 2> f1_quest_combat_outcomes{{
+    {contracts::content_id("f1_outcome_defeat_leaking_dolls"), contracts::QuestCombatOutcomeKind::hostile_archetype_defeated, contracts::content_id("f1_objective_defeat_leaking_dolls"), contracts::content_id("jn_enemy_leaking_umbrella_doll"), 2U},
+    {contracts::content_id("f1_outcome_answer_paper_egret"), contracts::QuestCombatOutcomeKind::hostile_archetype_defeated, contracts::content_id("f1_objective_answer_paper_egret"), contracts::content_id("jn_enemy_faded_paper_egret"), 1U},
 }};
 
 inline constexpr std::array<contracts::CombatActorConfig, 4> f1_combat_actors{{
@@ -151,6 +162,7 @@ inline constexpr contracts::VerticalSliceDefinition f1_vertical_slice_definition
     std::span<const contracts::VerticalSliceBeatDefinition>{f1_beats},
     std::span<const contracts::QuestInteractionDefinition>{f1_quest_interactions},
     std::span<const contracts::QuestCombatTriggerDefinition>{f1_quest_combat_triggers},
+    std::span<const contracts::QuestCombatOutcomeDefinition>{f1_quest_combat_outcomes},
 };
 
 }  // namespace tgd::content::generated

@@ -59,7 +59,7 @@ int main() {
         "the first route, cells, and enemy families are explicit"
     );
     ok &= expect(
-        definition->quest_interactions.size() == 3 &&
+        definition->quest_interactions.size() == 4 &&
             definition->quest_interactions.front().objective_id.key ==
                 tgd::contracts::stable_content_key("f1_objective_inspect_travel_writ"),
         "the opening scene interactions are generated content, not presentation rules"
@@ -69,6 +69,14 @@ int main() {
             definition->quest_combat_triggers.front().required_stance ==
                 tgd::contracts::stable_content_key("stance_eavesguard"),
         "training counters are generated combat-to-quest bindings"
+    );
+    const auto& route_interaction = definition->quest_interactions.back();
+    ok &= expect(
+        route_interaction.objective_id.key ==
+                tgd::contracts::stable_content_key("f1_objective_choose_lane_route") &&
+            route_interaction.prerequisite_objectives.size() == 2 &&
+            definition->quest_combat_outcomes.size() == 2,
+        "the lane choice waits for two generated hostile-group outcomes"
     );
 
     std::uint32_t minutes = 0;

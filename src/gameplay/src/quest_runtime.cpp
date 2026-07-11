@@ -70,6 +70,25 @@ QuestInteractionError DeterministicQuestInteractionResolver::initialize(
             definition.objective_id.key == 0 || definition.radius_mm <= 0) {
             return QuestInteractionError::invalid_definition;
         }
+        if (definition.kind != contracts::QuestInteractionKind::inspect &&
+            definition.kind != contracts::QuestInteractionKind::operate &&
+            definition.kind != contracts::QuestInteractionKind::talk &&
+            definition.kind != contracts::QuestInteractionKind::choose) {
+            return QuestInteractionError::invalid_definition;
+        }
+        for (std::size_t prerequisite = 0;
+             prerequisite < definition.prerequisite_objectives.size();
+             ++prerequisite) {
+            const auto key = definition.prerequisite_objectives[prerequisite].key;
+            if (key == 0 || key == definition.objective_id.key) {
+                return QuestInteractionError::invalid_definition;
+            }
+            for (std::size_t prior = 0; prior < prerequisite; ++prior) {
+                if (definition.prerequisite_objectives[prior].key == key) {
+                    return QuestInteractionError::invalid_definition;
+                }
+            }
+        }
         for (std::size_t prior = 0; prior < index; ++prior) {
             if (definitions[prior].id.key == definition.id.key ||
                 definitions[prior].objective_id.key == definition.objective_id.key) {
@@ -103,6 +122,17 @@ QuestInteractionResult DeterministicQuestInteractionResolver::resolve(
             quest.objective_state(definition.objective_id.key) != QuestObjectiveState::active) {
             continue;
         }
+        const auto prerequisites_complete = std::all_of(
+            definition.prerequisite_objectives.begin(),
+            definition.prerequisite_objectives.end(),
+            [&quest](const contracts::ContentId& prerequisite) {
+                return quest.objective_state(prerequisite.key) ==
+                       QuestObjectiveState::completed;
+            }
+        );
+        if (!prerequisites_complete) {
+            continue;
+        }
         const auto distance = ground_distance_squared(query.pose, definition.pose);
         const auto radius = static_cast<std::uint64_t>(definition.radius_mm);
         if (distance > radius * radius) {
@@ -133,6 +163,10 @@ QuestCombatTriggerError DeterministicQuestCombatTriggerResolver::initialize(
         const auto& definition = definitions[index];
         if (definition.id.key == 0 || definition.objective_id.key == 0 ||
             definition.required_stance == 0) {
+            return QuestCombatTriggerError::invalid_definition;
+        }
+        if (definition.kind != contracts::QuestCombatTriggerKind::player_hit_guarded &&
+            definition.kind != contracts::QuestCombatTriggerKind::player_hit_evaded) {
             return QuestCombatTriggerError::invalid_definition;
         }
         for (std::size_t prior = 0; prior < index; ++prior) {
@@ -168,6 +202,84 @@ QuestCombatTriggerResult DeterministicQuestCombatTriggerResolver::resolve(
         if (!result.found || definition.id.key < result.trigger) {
             result.found = true;
             result.trigger = definition.id.key;
+            result.objective = definition.objective_id.key;
+        }
+    }
+    return result;
+}
+
+QuestCombatOutcomeError DeterministicQuestCombatOutcomeResolver::initialize(
+    std::span<const contracts::QuestCombatOutcomeDefinition> definitions
+) noexcept {
+    if (initialized_) {
+        return QuestCombatOutcomeError::invalid_lifecycle;
+    }
+    if (definitions.empty() || definitions.size() > outcome_capacity) {
+        return QuestCombatOutcomeError::invalid_definition;
+    }
+    for (std::size_t index = 0; index < definitions.size(); ++index) {
+        const auto& definition = definitions[index];
+        if (definition.id.key == 0 || definition.objective_id.key == 0 ||
+            definition.archetype_id.key == 0 || definition.required_count == 0) {
+            return QuestCombatOutcomeError::invalid_definition;
+        }
+        if (definition.kind !=
+            contracts::QuestCombatOutcomeKind::hostile_archetype_defeated) {
+            return QuestCombatOutcomeError::invalid_definition;
+        }
+        for (std::size_t prior = 0; prior < index; ++prior) {
+            if (definitions[prior].id.key == definition.id.key ||
+                definitions[prior].objective_id.key == definition.objective_id.key) {
+                return QuestCombatOutcomeError::invalid_definition;
+            }
+        }
+    }
+    definitions_ = definitions;
+    initialized_ = true;
+    return QuestCombatOutcomeError::none;
+}
+
+QuestCombatOutcomeResult DeterministicQuestCombatOutcomeResolver::resolve(
+    std::span<const contracts::CombatActorSnapshot> actors,
+    const IQuestRuntime& quest
+) const noexcept {
+    QuestCombatOutcomeResult result{};
+    if (!initialized_) {
+        result.error = QuestCombatOutcomeError::invalid_lifecycle;
+        return result;
+    }
+    for (std::size_t index = 0; index < actors.size(); ++index) {
+        if (actors[index].actor == 0 || actors[index].archetype == 0) {
+            result.error = QuestCombatOutcomeError::invalid_actor_snapshot;
+            return result;
+        }
+        for (std::size_t prior = 0; prior < index; ++prior) {
+            if (actors[prior].actor == actors[index].actor) {
+                result.error = QuestCombatOutcomeError::invalid_actor_snapshot;
+                return result;
+            }
+        }
+    }
+
+    for (const auto& definition : definitions_) {
+        if (quest.objective_state(definition.objective_id.key) !=
+            QuestObjectiveState::active) {
+            continue;
+        }
+        const auto defeated = static_cast<std::size_t>(std::count_if(
+            actors.begin(),
+            actors.end(),
+            [&definition](const contracts::CombatActorSnapshot& actor) {
+                return actor.faction == contracts::CombatFaction::hostile && !actor.active &&
+                       actor.archetype == definition.archetype_id.key;
+            }
+        ));
+        if (defeated < definition.required_count) {
+            continue;
+        }
+        if (!result.found || definition.id.key < result.outcome) {
+            result.found = true;
+            result.outcome = definition.id.key;
             result.objective = definition.objective_id.key;
         }
     }

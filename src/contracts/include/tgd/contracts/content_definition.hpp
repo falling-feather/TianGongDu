@@ -73,6 +73,7 @@ struct QuestInteractionDefinition final {
     ContentId objective_id{};
     GroundPoseMm pose{};
     std::int32_t radius_mm{};
+    std::span<const ContentId> prerequisite_objectives{};
 };
 
 enum class QuestCombatTriggerKind : std::uint8_t {
@@ -85,6 +86,18 @@ struct QuestCombatTriggerDefinition final {
     QuestCombatTriggerKind kind{QuestCombatTriggerKind::player_hit_guarded};
     ContentId objective_id{};
     StableContentKey required_stance{};
+};
+
+enum class QuestCombatOutcomeKind : std::uint8_t {
+    hostile_archetype_defeated,
+};
+
+struct QuestCombatOutcomeDefinition final {
+    ContentId id{};
+    QuestCombatOutcomeKind kind{QuestCombatOutcomeKind::hostile_archetype_defeated};
+    ContentId objective_id{};
+    ContentId archetype_id{};
+    std::uint16_t required_count{};
 };
 
 struct VerticalSliceDefinition final {
@@ -106,6 +119,7 @@ struct VerticalSliceDefinition final {
     std::span<const VerticalSliceBeatDefinition> beats{};
     std::span<const QuestInteractionDefinition> quest_interactions{};
     std::span<const QuestCombatTriggerDefinition> quest_combat_triggers{};
+    std::span<const QuestCombatOutcomeDefinition> quest_combat_outcomes{};
 };
 
 }  // namespace tgd::contracts

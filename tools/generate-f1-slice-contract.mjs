@@ -100,8 +100,9 @@ export function validateF1SliceContract(contract, catalog) {
   ]);
   const beatIds = [];
   const objectiveIds = [];
+  const objectiveStages = new Map();
   let playableMinutes = 0;
-  for (const beat of contract.beats) {
+  for (const [beatIndex, beat] of contract.beats.entries()) {
     if (!allowedKinds.has(beat.kind)) fail(`unsupported beat kind: ${beat.kind}`);
     if (!Number.isInteger(beat.targetMinutes) || beat.targetMinutes <= 0) {
       fail(`${beat.id} has an invalid targetMinutes`);
@@ -114,6 +115,7 @@ export function validateF1SliceContract(contract, catalog) {
     assertUnique(beat.objectiveIds, `${beat.id} objective`);
     beatIds.push(beat.id);
     objectiveIds.push(...beat.objectiveIds);
+    for (const objective of beat.objectiveIds) objectiveStages.set(objective, beatIndex);
     playableMinutes += beat.targetMinutes;
   }
   assertUnique(beatIds, "beat id");
@@ -135,6 +137,17 @@ export function validateF1SliceContract(contract, catalog) {
     }
     if (!objectiveIds.includes(interaction.objectiveId)) {
       fail(`${interaction.id} references an unknown objective`);
+    }
+    if (!Array.isArray(interaction.prerequisiteObjectiveIds) ||
+        interaction.prerequisiteObjectiveIds.length > 8) {
+      fail(`${interaction.id} has invalid prerequisite objectives`);
+    }
+    assertUnique(interaction.prerequisiteObjectiveIds, `${interaction.id} prerequisite objective`);
+    for (const prerequisite of interaction.prerequisiteObjectiveIds) {
+      if (!objectiveIds.includes(prerequisite) || prerequisite === interaction.objectiveId ||
+          objectiveStages.get(prerequisite) > objectiveStages.get(interaction.objectiveId)) {
+        fail(`${interaction.id} has an invalid prerequisite objective: ${prerequisite}`);
+      }
     }
     if (!Number.isInteger(interaction.radiusMm) || interaction.radiusMm <= 0 ||
         interaction.radiusMm > 10000) {
@@ -159,6 +172,18 @@ export function validateF1SliceContract(contract, catalog) {
     firstBeatInteractionObjectives.some((objective) => !firstBeatObjectives.has(objective))
   ) {
     fail("the first playable beat must be fully covered by scene interactions");
+  }
+  const laneRouteInteraction = interactions.find(
+    (interaction) => interaction.objectiveId === contract.beats[2].objectiveIds[2]
+  );
+  if (
+    laneRouteInteraction?.kind !== "choose" ||
+    !sameValues(
+      laneRouteInteraction.prerequisiteObjectiveIds,
+      contract.beats[2].objectiveIds.slice(0, 2)
+    )
+  ) {
+    fail("the umbrella-lane route choice must require both combat objectives");
   }
   const combatTriggers = contract.questCombatTriggers;
   if (!Array.isArray(combatTriggers) || combatTriggers.length < 2 || combatTriggers.length > 64) {
@@ -190,6 +215,37 @@ export function validateF1SliceContract(contract, catalog) {
     coveredTrainingObjectives.some((objective) => !trainingCombatObjectives.has(objective))
   ) {
     fail("the training beat combat objectives must be fully covered by combat triggers");
+  }
+  const combatOutcomes = contract.questCombatOutcomes;
+  if (!Array.isArray(combatOutcomes) || combatOutcomes.length < 2 || combatOutcomes.length > 64) {
+    fail("quest combat outcomes must contain 2..64 definitions");
+  }
+  for (const outcome of combatOutcomes) {
+    if (outcome.kind !== "hostile_archetype_defeated") {
+      fail(`${outcome.id} has an unsupported quest combat outcome kind`);
+    }
+    if (!objectiveIds.includes(outcome.objectiveId)) {
+      fail(`${outcome.id} references an unknown objective`);
+    }
+    if (!Number.isInteger(outcome.requiredCount) || outcome.requiredCount <= 0 ||
+        outcome.requiredCount > 16) {
+      fail(`${outcome.id} has an invalid required count`);
+    }
+  }
+  assertUnique(combatOutcomes.map((outcome) => outcome.id), "quest combat outcome id");
+  assertUnique(
+    combatOutcomes.map((outcome) => outcome.objectiveId),
+    "quest combat outcome objective"
+  );
+  const laneCombatObjectives = new Set(contract.beats[2].objectiveIds.slice(0, 2));
+  const coveredLaneCombatObjectives = combatOutcomes
+    .filter((outcome) => laneCombatObjectives.has(outcome.objectiveId))
+    .map((outcome) => outcome.objectiveId);
+  if (
+    coveredLaneCombatObjectives.length !== laneCombatObjectives.size ||
+    coveredLaneCombatObjectives.some((objective) => !laneCombatObjectives.has(objective))
+  ) {
+    fail("the umbrella-lane combat objectives must be fully covered by combat outcomes");
   }
   if (
     contract.paddingPolicy?.repeatableCombatCountsTowardTarget !== false ||
@@ -354,6 +410,14 @@ export function validateF1SliceContract(contract, catalog) {
       fail(`${trigger.id} references an unknown required stance`);
     }
   }
+  for (const outcome of combatOutcomes) {
+    const matchingHostiles = combat.actors.filter(
+      (actor) => actor.faction === "hostile" && actor.archetypeId === outcome.archetypeId
+    ).length;
+    if (matchingHostiles < outcome.requiredCount) {
+      fail(`${outcome.id} cannot reach its required hostile count`);
+    }
+  }
   const playerCombatSeed = combat.actors.find((actor) => actor.actorKey === seed.actorKey);
   if (
     playerCombatSeed?.faction !== "player" ||
@@ -431,6 +495,7 @@ export function validateF1SliceContract(contract, catalog) {
     ...objectiveIds,
     ...interactions.map((interaction) => interaction.id),
     ...combatTriggers.map((trigger) => trigger.id),
+    ...combatOutcomes.map((outcome) => outcome.id),
     combat.id,
     ...combat.actors.map((actor) => actor.archetypeId),
     ...stanceIds,
@@ -471,13 +536,20 @@ function combatAbilityRow(ability) {
   return `    {${contentId(ability.id)}, contracts::CombatCommandType::${ability.trigger}, ${stableKey(ability.requiredStanceId)}, ${ability.staminaCost}, ${ability.windupTicks}, ${ability.activeTicks}, ${ability.recoveryTicks}, ${ability.rangeMm}, ${ability.heightToleranceMm}, ${ability.healthDamage}, ${ability.poiseDamage}, ${feedback}},`;
 }
 
-function questInteractionRow(interaction) {
+function questInteractionRow(interaction, index) {
   const pose = interaction.poseMm;
-  return `    {${contentId(interaction.id)}, contracts::QuestInteractionKind::${interaction.kind}, ${contentId(interaction.cellId)}, ${contentId(interaction.objectiveId)}, {${pose.x}, ${pose.y}, ${pose.height}, ${pose.floorLayer}}, ${interaction.radiusMm}},`;
+  const prerequisites = interaction.prerequisiteObjectiveIds.length === 0
+    ? "std::span<const contracts::ContentId>{}"
+    : `std::span<const contracts::ContentId>{interaction_${index}_prerequisites}`;
+  return `    {${contentId(interaction.id)}, contracts::QuestInteractionKind::${interaction.kind}, ${contentId(interaction.cellId)}, ${contentId(interaction.objectiveId)}, {${pose.x}, ${pose.y}, ${pose.height}, ${pose.floorLayer}}, ${interaction.radiusMm}, ${prerequisites}},`;
 }
 
 function questCombatTriggerRow(trigger) {
   return `    {${contentId(trigger.id)}, contracts::QuestCombatTriggerKind::${trigger.kind}, ${contentId(trigger.objectiveId)}, ${stableKey(trigger.requiredStanceId)}},`;
+}
+
+function questCombatOutcomeRow(outcome) {
+  return `    {${contentId(outcome.id)}, contracts::QuestCombatOutcomeKind::${outcome.kind}, ${contentId(outcome.objectiveId)}, ${contentId(outcome.archetypeId)}, ${outcome.requiredCount}U},`;
 }
 
 export function renderF1SliceContract(contract) {
@@ -502,9 +574,21 @@ ${arrayRows(beat.objectiveIds)}
   const basis = seed.cameraBasisQ15;
   const combatActorRows = combat.actors.map(combatActorRow).join("\n");
   const combatAbilityRows = combat.abilities.map(combatAbilityRow).join("\n");
+  const interactionPrerequisiteArrays = contract.questInteractions
+    .map((interaction, index) => ({ interaction, index }))
+    .filter(({ interaction }) => interaction.prerequisiteObjectiveIds.length !== 0)
+    .map(
+      ({ interaction, index }) => `inline constexpr std::array<contracts::ContentId, ${interaction.prerequisiteObjectiveIds.length}> interaction_${index}_prerequisites{{
+${arrayRows(interaction.prerequisiteObjectiveIds)}
+}};`
+    )
+    .join("\n\n");
   const questInteractionRows = contract.questInteractions.map(questInteractionRow).join("\n");
   const questCombatTriggerRows = contract.questCombatTriggers
     .map(questCombatTriggerRow)
+    .join("\n");
+  const questCombatOutcomeRows = contract.questCombatOutcomes
+    .map(questCombatOutcomeRow)
     .join("\n");
 
   return `// Generated from content/design/f1-vertical-slice.json. Do not edit by hand.
@@ -519,6 +603,8 @@ ${arrayRows(beat.objectiveIds)}
 namespace tgd::content::generated {
 
 ${objectiveArrays}
+
+${interactionPrerequisiteArrays}
 
 inline constexpr std::array<contracts::VerticalSliceBeatDefinition, ${contract.beats.length}> f1_beats{{
 ${beatRows}
@@ -546,6 +632,10 @@ ${questInteractionRows}
 
 inline constexpr std::array<contracts::QuestCombatTriggerDefinition, ${contract.questCombatTriggers.length}> f1_quest_combat_triggers{{
 ${questCombatTriggerRows}
+}};
+
+inline constexpr std::array<contracts::QuestCombatOutcomeDefinition, ${contract.questCombatOutcomes.length}> f1_quest_combat_outcomes{{
+${questCombatOutcomeRows}
 }};
 
 inline constexpr std::array<contracts::CombatActorConfig, ${combat.actors.length}> f1_combat_actors{{
@@ -595,6 +685,7 @@ inline constexpr contracts::VerticalSliceDefinition f1_vertical_slice_definition
     std::span<const contracts::VerticalSliceBeatDefinition>{f1_beats},
     std::span<const contracts::QuestInteractionDefinition>{f1_quest_interactions},
     std::span<const contracts::QuestCombatTriggerDefinition>{f1_quest_combat_triggers},
+    std::span<const contracts::QuestCombatOutcomeDefinition>{f1_quest_combat_outcomes},
 };
 
 }  // namespace tgd::content::generated

@@ -16,7 +16,9 @@ namespace {
 using tgd::gameplay::DeterministicQuestRuntime;
 using tgd::gameplay::DeterministicQuestInteractionResolver;
 using tgd::gameplay::DeterministicQuestCombatTriggerResolver;
+using tgd::gameplay::DeterministicQuestCombatOutcomeResolver;
 using tgd::gameplay::QuestError;
+using tgd::gameplay::QuestCombatOutcomeError;
 using tgd::gameplay::QuestCombatTriggerError;
 using tgd::gameplay::QuestInteractionError;
 using tgd::gameplay::QuestLifecycle;
@@ -51,6 +53,17 @@ bool expect(bool condition, std::string_view message) {
     static tgd::content::BuiltInF1ContentDefinitionProvider provider;
     const auto* value = provider.find_vertical_slice(
         tgd::contracts::stable_content_key("f1_rainy_umbrella_trial")
+    );
+    if (value == nullptr) {
+        std::abort();
+    }
+    return *value;
+}
+
+[[nodiscard]] const tgd::contracts::CombatEncounterDefinition& combat_definition() {
+    static tgd::content::BuiltInF1ContentDefinitionProvider provider;
+    const auto* value = provider.find_combat_encounter(
+        tgd::contracts::stable_content_key("f1_encounter_umbrella_lane_bootstrap")
     );
     if (value == nullptr) {
         std::abort();
@@ -417,6 +430,131 @@ bool test_combat_signals_resolve_training_objectives() {
     return ok;
 }
 
+bool test_hostile_group_outcomes_unlock_lane_choice() {
+    DeterministicQuestRuntime quest;
+    DeterministicQuestCombatOutcomeResolver outcomes;
+    DeterministicQuestInteractionResolver interactions;
+    CollectingSink sink;
+    bool ok = quest.initialize(definition(), definition().player.actor) == QuestError::none;
+    ok &= quest.start() == QuestError::none;
+    tgd::contracts::CommandSequence sequence = 1;
+    tgd::contracts::TickIndex tick = 1;
+    for (std::size_t stage = 0; stage < 2; ++stage) {
+        for (const auto& objective : definition().beats[stage].objectives) {
+            ok &= quest.apply(
+                      {tick++, definition().player.actor, sequence++, {}, objective.key},
+                      sink
+                  ).error == QuestError::none;
+        }
+    }
+    ok &= expect(
+        quest.snapshot().stage_index == 2,
+        "hostile outcome tests enter the umbrella-lane beat"
+    );
+    ok &= outcomes.initialize(definition().quest_combat_outcomes) ==
+          QuestCombatOutcomeError::none;
+    ok &= interactions.initialize(definition().quest_interactions) ==
+          QuestInteractionError::none;
+
+    std::array<tgd::contracts::CombatActorSnapshot, 4> actors{};
+    for (std::size_t index = 0; index < combat_definition().actors.size(); ++index) {
+        const auto& config = combat_definition().actors[index];
+        actors[index] = {
+            config.actor,
+            config.archetype_id.key,
+            config.faction,
+            config.initial_pose,
+            config.initial_resources,
+            config.initial_stance,
+            0,
+            false,
+            true,
+        };
+    }
+    ok &= expect(
+        !outcomes.resolve(actors, quest).found,
+        "active hostile groups do not complete combat objectives"
+    );
+
+    const auto& route = definition().quest_interactions.back();
+    ok &= expect(
+        !interactions
+             .resolve(
+                 {definition().player.actor, route.cell_id.key, route.pose},
+                 quest
+             )
+             .found,
+        "the lane choice stays hidden while combat prerequisites are incomplete"
+    );
+
+    std::size_t defeated_dolls = 0;
+    for (auto& actor : actors) {
+        if (actor.archetype ==
+                tgd::contracts::stable_content_key("jn_enemy_leaking_umbrella_doll") &&
+            defeated_dolls < 2) {
+            actor.active = false;
+            ++defeated_dolls;
+            const auto resolved = outcomes.resolve(actors, quest);
+            if (defeated_dolls == 1) {
+                ok &= expect(!resolved.found, "one of two dolls is not a completed group");
+            } else {
+                ok &= expect(
+                    resolved.found && resolved.objective ==
+                                          tgd::contracts::stable_content_key(
+                                              "f1_objective_defeat_leaking_dolls"
+                                          ),
+                    "both defeated dolls resolve their group objective"
+                );
+                ok &= quest.apply(
+                          {
+                              tick++,
+                              definition().player.actor,
+                              sequence++,
+                              {},
+                              resolved.objective,
+                          },
+                          sink
+                      ).error == QuestError::none;
+            }
+        }
+    }
+    for (auto& actor : actors) {
+        if (actor.archetype ==
+            tgd::contracts::stable_content_key("jn_enemy_faded_paper_egret")) {
+            actor.active = false;
+        }
+    }
+    const auto egret = outcomes.resolve(actors, quest);
+    ok &= expect(
+        egret.found && egret.objective ==
+                           tgd::contracts::stable_content_key(
+                               "f1_objective_answer_paper_egret"
+                           ),
+        "the defeated paper egret resolves its authored answer objective"
+    );
+    ok &= quest.apply(
+              {tick++, definition().player.actor, sequence++, {}, egret.objective},
+              sink
+          ).error == QuestError::none;
+    const auto unlocked_route = interactions.resolve(
+        {definition().player.actor, route.cell_id.key, route.pose},
+        quest
+    );
+    ok &= expect(
+        unlocked_route.found && unlocked_route.objective == route.objective_id.key,
+        "completed hostile groups unlock the authored lane choice"
+    );
+
+    auto invalid_actors = actors;
+    invalid_actors[1].actor = invalid_actors[0].actor;
+    ok &= expect(
+        outcomes.resolve(invalid_actors, quest).error ==
+            QuestCombatOutcomeError::invalid_actor_snapshot,
+        "duplicate actor snapshots fail closed"
+    );
+    return ok;
+}
+
 }  // namespace
 
 int main() {
@@ -427,5 +565,6 @@ int main() {
     ok &= test_scene_interactions_resolve_from_active_objectives();
     ok &= test_scene_interaction_ties_are_stable();
     ok &= test_combat_signals_resolve_training_objectives();
+    ok &= test_hostile_group_outcomes_unlock_lane_choice();
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

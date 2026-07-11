@@ -42,6 +42,7 @@ jobs:
           key: f1-toolchains-${{ runner.os }}-${{ hashFiles('toolchains/toolchain-lock.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
             f1-toolchains-${{ runner.os }}-${{ hashFiles('toolchains/toolchain-lock.json') }}-
+            f1-toolchains-${{ runner.os }}-
 
       - name: Install locked JavaScript test dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund

@@ -123,6 +123,14 @@
           "type": "string",
           "pattern": "^(sha256:[0-9a-f]{64}|pending:[a-z0-9-]+)$"
         },
+        "integrityAlternates": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          }
+        },
         "integrityScope": {
           "enum": ["archive", "release-binary", "executable", "pending"]
         },

@@ -48,6 +48,21 @@ function validateEntry(name, entry, errors) {
   pushIf(errors, entry.artifactVerified === true && !hasSha, `${name} 已标记产物验证，但没有 SHA-256。`);
   pushIf(errors, entry.artifactVerified === true && entry.integrityScope === "pending", `${name} 已标记产物验证，但完整性作用域仍为 pending。`);
 
+  const alternates = entry.integrityAlternates ?? [];
+  pushIf(errors, !Array.isArray(alternates), `${name} integrityAlternates 必须是数组。`);
+  if (Array.isArray(alternates)) {
+    pushIf(errors, new Set(alternates).size !== alternates.length, `${name} integrityAlternates 不得重复。`);
+    for (const alternate of alternates) {
+      pushIf(errors, !sha256Pattern.test(alternate), `${name} integrityAlternates 含有无效 SHA-256。`);
+      pushIf(errors, alternate === entry.integrity, `${name} integrityAlternates 不得重复主哈希。`);
+    }
+    pushIf(
+      errors,
+      alternates.length > 0 && entry.integrityScope !== "executable",
+      `${name} 只有已安装可执行文件允许精确哈希变体。`
+    );
+  }
+
   const provenance = entry.provenance;
   pushIf(errors, !provenance || typeof provenance !== "object", `${name} 缺少 provenance。`);
   if (provenance?.url !== null && provenance?.url !== undefined) {

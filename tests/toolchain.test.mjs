@@ -28,6 +28,15 @@ test("verified artifacts require a SHA-256", () => {
   assert.match(validateToolchainLock(unverified, baseline).join("\n"), /没有 SHA-256/);
 });
 
+test("installed executable variants remain an exact SHA-256 allowlist", () => {
+  assert.deepEqual(lock.tools.msvc.integrityAlternates, [
+    "sha256:9beec04038c74406e4c055593edc07ddda7b166272d77cbf85507d5a6be29ff0"
+  ]);
+  const malformed = structuredClone(lock);
+  malformed.tools.msvc.integrityAlternates = ["sha256:unknown"];
+  assert.match(validateToolchainLock(malformed, baseline).join("\n"), /无效 SHA-256/);
+});
+
 test("toolchain runner folds duplicate Windows PATH keys", () => {
   const environment = buildToolchainEnvironment(root, lock, {
     Path: "C:\\first",

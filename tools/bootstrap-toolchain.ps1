@@ -42,6 +42,21 @@ function Get-ExpectedSha256($Entry) {
     return $Matches[1]
 }
 
+function Get-AcceptedExecutableSha256($Entry) {
+    $hashes = [System.Collections.Generic.List[string]]::new()
+    $hashes.Add((Get-ExpectedSha256 $Entry))
+    foreach ($alternate in @($Entry.integrityAlternates)) {
+        if ([string]::IsNullOrWhiteSpace($alternate)) {
+            continue
+        }
+        if ($alternate -notmatch '^sha256:([0-9a-f]{64})$') {
+            throw "Entry $($Entry.version) has an invalid alternate executable SHA-256."
+        }
+        $hashes.Add($Matches[1])
+    }
+    return $hashes
+}
+
 function Move-InvalidCache([string]$Path) {
     $invalidPath = "$Path.invalid-$([DateTime]::UtcNow.ToString('yyyyMMddHHmmssfff'))"
     $resolvedParent = [System.IO.Path]::GetDirectoryName([System.IO.Path]::GetFullPath($invalidPath))
@@ -181,16 +196,18 @@ function Confirm-ExecutableHash([string]$Name, $Entry, [string]$Path) {
     if (-not (Test-Path -LiteralPath $Path)) {
         throw "$Name executable not found: $Path"
     }
-    $expectedHash = Get-ExpectedSha256 $Entry
+    $primaryHash = Get-ExpectedSha256 $Entry
+    $acceptedHashes = @(Get-AcceptedExecutableSha256 $Entry)
     $actualHash = Get-Sha256 $Path
-    if ($actualHash -ne $expectedHash) {
-        throw "$Name executable SHA-256 mismatch: expected $expectedHash, actual $actualHash"
+    if ($actualHash -notin $acceptedHashes) {
+        throw "$Name executable SHA-256 mismatch: expected one of $($acceptedHashes -join ', '), actual $actualHash"
     }
-    if ($null -ne $Entry.provenance.expectedSizeBytes -and
+    if ($actualHash -eq $primaryHash -and
+        $null -ne $Entry.provenance.expectedSizeBytes -and
         ([System.IO.FileInfo]::new($Path)).Length -ne [long]$Entry.provenance.expectedSizeBytes) {
         throw "$Name executable byte length does not match the lock."
     }
-    Write-Output "verified executable: $Name"
+    Write-Output "verified executable: $Name ($actualHash)"
 }
 
 function Find-MsvcCompiler($Entry) {

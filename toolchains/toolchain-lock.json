@@ -14,7 +14,7 @@
       "Emscripten 3.1.73 is pinned to Axmol 2.11.4's documented Windows browser-debug compatibility line.",
       "CMake 4.2.1 was rejected because it exited without diagnostics on this Unicode Windows source path; 4.3.1 passed MSVC and Clang Debug/Release and remains gated on the Axmol Web build.",
       "axslcc 1.14.0 is the exact shader compiler declared by Axmol 2.11.4's immutable 1k/build.profiles.",
-      "MSVC 19.43.34809 is selected through the exact Visual Studio component and 14.43.34808 toolset directory, then verified by cl.exe SHA-256."
+      "MSVC 19.43.34809 is selected through the exact Visual Studio component and 14.43.34808 toolset directory. The VS 17.13 default component and VS 17.14 out-of-support component carry two observed, exact cl.exe hashes; both are allowlisted and any third hash is rejected."
     ],
     "promotionRequirements": [
       "all-artifacts-sha256-verified",
@@ -109,11 +109,14 @@
     "msvc": {
       "version": "19.43.34809",
       "integrity": "sha256:249c9e0663ff869998971901ff102fefd01eb472f02de05c1f47909d9e2c9e8b",
+      "integrityAlternates": [
+        "sha256:9beec04038c74406e4c055593edc07ddda7b166272d77cbf85507d5a6be29ff0"
+      ],
       "integrityScope": "executable",
       "provenance": {
         "kind": "installed-component",
         "url": null,
-        "revision": "VS-2022-17.13.35828.75/MSVC-14.43.34808",
+        "revision": "VS-2022-17.13.35828.75-default-or-17.14.37411.7-component/MSVC-14.43.34808",
         "expectedSizeBytes": 867912,
         "parent": null
       },

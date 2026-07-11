@@ -225,6 +225,39 @@ bool test_invalid_definition_fails_closed() {
     return ok;
 }
 
+bool test_retry_resets_director_boundary() {
+    DeterministicEncounterDirector director;
+    const auto actor_configs = actors();
+    const auto ability_configs = abilities();
+    bool ok = director.initialize(director_definition(), actor_configs, ability_configs) ==
+              EncounterDirectorError::none;
+    std::array<tgd::contracts::CombatActorSnapshot, 3> snapshots{{
+        {1, actor_configs[0].archetype_id.key, tgd::contracts::CombatFaction::player, {0, 0, 0, 0}, actor_configs[0].initial_resources, player_stance, 0, false, true},
+        {2, actor_configs[1].archetype_id.key, tgd::contracts::CombatFaction::hostile, {900, 0, 0, 0}, actor_configs[1].initial_resources, hostile_stance, 0, false, true},
+        {3, actor_configs[2].archetype_id.key, tgd::contracts::CombatFaction::hostile, actor_configs[2].initial_pose, actor_configs[2].initial_resources, hostile_stance, 0, false, true},
+    }};
+    ok &= director.plan_tick(1, snapshots, 1).error == EncounterDirectorError::none;
+    ok &= expect(
+        director.retry_from_initial({0, 1, 1}) ==
+            EncounterDirectorError::retry_targets_wrong_tick,
+        "director retry binds to the completed tick"
+    );
+    ok &= expect(
+        director.retry_from_initial({1, 1, 1}) == EncounterDirectorError::none,
+        "director clears its attack token runtime on retry"
+    );
+    ok &= expect(
+        director.retry_from_initial({1, 1, 1}) ==
+            EncounterDirectorError::stale_retry_sequence,
+        "director rejects a duplicate retry sequence"
+    );
+    ok &= expect(
+        director.plan_tick(2, snapshots, 10).error == EncounterDirectorError::none,
+        "director continues from the next monotonic tick after retry"
+    );
+    return ok;
+}
+
 }  // namespace
 
 int main() {
@@ -232,5 +265,6 @@ int main() {
     ok &= test_chase_attack_tokens_and_determinism();
     ok &= test_wrong_tick_and_leash_return();
     ok &= test_invalid_definition_fails_closed();
+    ok &= test_retry_resets_director_boundary();
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

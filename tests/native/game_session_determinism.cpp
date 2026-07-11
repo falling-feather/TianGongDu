@@ -174,6 +174,53 @@ bool test_frame_overrun_and_visibility() {
     return ok;
 }
 
+bool test_safe_point_retry_boundary() {
+    GameSession session;
+    GameSessionConfig config{};
+    config.initial_pose = {100, -50, 0, 0};
+    bool ok = session.initialize(config, empty_world()) == GameSessionError::none;
+    ok &= session.start() == GameSessionError::none;
+    const std::array commands{
+        move_command(1, 1, {tgd::contracts::ground_axis_one, 0}),
+        move_command(2, 2, {tgd::contracts::ground_axis_one, 0}),
+    };
+    ok &= session.submit(commands) == GameSessionError::none;
+    ok &= session.advance(1).error == GameSessionError::none;
+    ok &= expect(
+        session.current_snapshot().player_pose.x > config.initial_pose.x &&
+            session.queued_command_count() == 1,
+        "movement and a future command exist before retry"
+    );
+
+    const tgd::contracts::SafePointRetryCommand wrong_tick{0, player_actor, 1};
+    ok &= expect(
+        session.retry_from_safe_point(wrong_tick) == GameSessionError::retry_targets_wrong_tick,
+        "retry binds to an exact completed tick"
+    );
+    const tgd::contracts::SafePointRetryCommand retry{1, player_actor, 1};
+    ok &= expect(
+        session.retry_from_safe_point(retry) == GameSessionError::none,
+        "valid retry restores the configured safe point"
+    );
+    ok &= expect(
+        session.current_snapshot().tick == 1 &&
+            session.current_snapshot().player_pose == config.initial_pose &&
+            session.queued_command_count() == 0,
+        "retry preserves the monotonic tick and discards future movement"
+    );
+    ok &= expect(session.generation() == 2, "retry invalidates the movement generation");
+    ok &= expect(
+        session.retry_from_safe_point(retry) == GameSessionError::stale_retry_sequence,
+        "duplicate retry sequence is rejected"
+    );
+    ok &= session.advance(1).error == GameSessionError::none;
+    ok &= expect(
+        session.current_snapshot().player_pose == config.initial_pose,
+        "discarded future input cannot move the restored player"
+    );
+    return ok;
+}
+
 }  // namespace
 
 int main() {
@@ -181,5 +228,6 @@ int main() {
     ok &= test_collision_height_and_floor_layers();
     ok &= test_command_order_jump_and_lifecycle();
     ok &= test_frame_overrun_and_visibility();
+    ok &= test_safe_point_retry_boundary();
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

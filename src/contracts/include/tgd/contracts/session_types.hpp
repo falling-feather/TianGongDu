@@ -61,4 +61,15 @@ struct SessionCommand final {
     GroundVectorQ15 ground_direction{};
 };
 
+enum class SafePointRetryReason : std::uint8_t {
+    player_defeated,
+};
+
+struct SafePointRetryCommand final {
+    TickIndex completed_tick{};
+    StableActorKey actor{};
+    CommandSequence sequence{};
+    SafePointRetryReason reason{SafePointRetryReason::player_defeated};
+};
+
 }  // namespace tgd::contracts

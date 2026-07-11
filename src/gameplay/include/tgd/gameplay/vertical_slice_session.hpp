@@ -76,6 +76,9 @@ class VerticalSliceSession final {
     [[nodiscard]] VerticalSliceError submit_movement(
         std::span<const contracts::SessionCommand> commands
     ) noexcept;
+    [[nodiscard]] VerticalSliceError retry_from_safe_point(
+        const contracts::SafePointRetryCommand& command
+    ) noexcept;
     [[nodiscard]] VerticalSliceAdvanceResult advance(std::uint32_t tick_budget) noexcept;
     [[nodiscard]] CompleteObjectiveResult complete_objective(
         contracts::StableContentKey objective

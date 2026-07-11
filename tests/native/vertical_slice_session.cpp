@@ -152,11 +152,44 @@ bool test_same_commands_produce_same_composed_checksum() {
     return ok;
 }
 
+bool test_retry_preserves_objective_progress() {
+    VerticalSliceSession session;
+    bool ok = session.initialize(definition(), empty_world()) == VerticalSliceError::none;
+    ok &= session.start() == VerticalSliceError::none;
+    const tgd::contracts::SessionCommand move{
+        {1, definition().player.actor, 1, tgd::contracts::SessionCommandType::move_intent},
+        {tgd::contracts::ground_axis_one, 0},
+    };
+    ok &= session.submit_movement(std::span{&move, 1}) == VerticalSliceError::none;
+    ok &= session.advance(1).error == VerticalSliceError::none;
+    ok &= session.complete_objective(definition().beats.front().objectives.front().key).error ==
+          VerticalSliceError::none;
+    const auto completed_before = session.current_snapshot().completed_objectives;
+    const tgd::contracts::SafePointRetryCommand retry{
+        session.current_snapshot().tick,
+        definition().player.actor,
+        1,
+    };
+    ok &= expect(
+        session.retry_from_safe_point(retry) == VerticalSliceError::none,
+        "slice composes a movement safe-point retry"
+    );
+    ok &= expect(
+        session.current_snapshot().player_pose == definition().player.initial_pose &&
+            session.current_snapshot().completed_objectives == completed_before &&
+            session.current_snapshot().simulation_ticks == 1,
+        "retry restores pose without erasing authored progress or elapsed simulation"
+    );
+    ok &= expect(session.generation() == 2, "slice generation changes on retry");
+    return ok;
+}
+
 }  // namespace
 
 int main() {
     bool ok = true;
     ok &= test_objective_driven_progression_and_lifecycle();
     ok &= test_same_commands_produce_same_composed_checksum();
+    ok &= test_retry_preserves_objective_progress();
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

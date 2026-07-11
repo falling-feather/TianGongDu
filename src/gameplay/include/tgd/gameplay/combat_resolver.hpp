@@ -35,6 +35,9 @@ enum class CombatError : std::uint8_t {
     duplicate_pose_update,
     pose_update_queue_full,
     event_capacity_exceeded,
+    retry_targets_wrong_tick,
+    retry_not_allowed,
+    stale_retry_sequence,
 };
 
 class ICombatEventSink {
@@ -60,6 +63,10 @@ class ICombatResolver {
     ) noexcept = 0;
     [[nodiscard]] virtual CombatError synchronize_poses(
         std::span<const contracts::CombatPoseUpdate> updates
+    ) noexcept = 0;
+    [[nodiscard]] virtual CombatError retry_from_initial(
+        const contracts::SafePointRetryCommand& command,
+        ICombatEventSink& sink
     ) noexcept = 0;
     [[nodiscard]] virtual CombatError advance_one_tick(ICombatEventSink& sink) noexcept = 0;
 
@@ -88,6 +95,10 @@ class DeterministicCombatResolver final : public ICombatResolver {
     ) noexcept override;
     [[nodiscard]] CombatError synchronize_poses(
         std::span<const contracts::CombatPoseUpdate> updates
+    ) noexcept override;
+    [[nodiscard]] CombatError retry_from_initial(
+        const contracts::SafePointRetryCommand& command,
+        ICombatEventSink& sink
     ) noexcept override;
     [[nodiscard]] CombatError advance_one_tick(ICombatEventSink& sink) noexcept override;
 
@@ -136,6 +147,7 @@ class DeterministicCombatResolver final : public ICombatResolver {
         const contracts::CombatActorSnapshot& target,
         const contracts::AbilityDefinition& ability
     ) const noexcept;
+    void restore_actor(std::size_t index) noexcept;
     void sort_commands() noexcept;
     void compact_commands(std::size_t consumed) noexcept;
     [[nodiscard]] bool emit(contracts::CombatEvent event) noexcept;
@@ -164,6 +176,7 @@ class DeterministicCombatResolver final : public ICombatResolver {
     std::size_t pose_update_count_{};
     std::array<contracts::CombatEvent, event_capacity> events_{};
     std::size_t event_count_{};
+    contracts::CommandSequence last_retry_sequence_{};
     std::uint64_t checksum_{};
 };
 

@@ -20,6 +20,9 @@ enum class EncounterDirectorError : std::uint8_t {
     wrong_tick,
     invalid_snapshot,
     output_capacity_exceeded,
+    retry_targets_wrong_tick,
+    retry_not_allowed,
+    stale_retry_sequence,
 };
 
 struct EncounterPlanBatch final {
@@ -58,6 +61,9 @@ class IEncounterDirector {
         std::span<const contracts::CombatActorSnapshot> actors,
         contracts::CommandSequence first_sequence
     ) noexcept = 0;
+    [[nodiscard]] virtual EncounterDirectorError retry_from_initial(
+        const contracts::SafePointRetryCommand& command
+    ) noexcept = 0;
     [[nodiscard]] virtual contracts::TickIndex current_tick() const noexcept = 0;
     [[nodiscard]] virtual std::uint64_t checksum() const noexcept = 0;
 };
@@ -76,6 +82,9 @@ class DeterministicEncounterDirector final : public IEncounterDirector {
         contracts::TickIndex tick,
         std::span<const contracts::CombatActorSnapshot> actors,
         contracts::CommandSequence first_sequence
+    ) noexcept override;
+    [[nodiscard]] EncounterDirectorError retry_from_initial(
+        const contracts::SafePointRetryCommand& command
     ) noexcept override;
     [[nodiscard]] contracts::TickIndex current_tick() const noexcept override;
     [[nodiscard]] std::uint64_t checksum() const noexcept override;
@@ -118,6 +127,7 @@ class DeterministicEncounterDirector final : public IEncounterDirector {
     std::array<contracts::AbilityDefinition, ability_capacity> abilities_{};
     std::size_t ability_count_{};
     contracts::TickIndex current_tick_{};
+    contracts::CommandSequence last_retry_sequence_{};
     std::uint64_t checksum_{};
 };
 

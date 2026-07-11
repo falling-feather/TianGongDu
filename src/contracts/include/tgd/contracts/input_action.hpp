@@ -60,6 +60,8 @@ enum class InputClearReason : std::uint8_t {
     context_changed,
     mapping_changed,
     pause,
+    player_defeated,
+    safe_point_retry,
 };
 
 struct ScalarActionSample final {

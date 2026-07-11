@@ -868,6 +868,8 @@ async function runBrowser(target, origin) {
     const combatHitPath = resolve(reportDirectory, `${target}-combat-hit.png`);
     const combatFlowerLightPath = resolve(reportDirectory, `${target}-combat-flower-light.png`);
     const combatGuardPath = resolve(reportDirectory, `${target}-combat-guard.png`);
+    const combatDefeatedPath = resolve(reportDirectory, `${target}-combat-defeated.png`);
+    const combatRetriedPath = resolve(reportDirectory, `${target}-combat-retried.png`);
     const combatReadyFrame = await captureRenderedFrame(
       page,
       canvas,
@@ -935,6 +937,49 @@ async function runBrowser(target, origin) {
     await page.waitForTimeout(850);
     await page.keyboard.press("c");
     await page.waitForTimeout(120);
+    await page.waitForFunction(
+      () => window.__tgdTest?.getF1State()?.playerActive === false,
+      undefined,
+      { timeout: 45_000 }
+    );
+    const defeatedState = await page.evaluate(() => window.__tgdTest.getF1State());
+    assert.equal(defeatedState.playerHealth, 0, `${target} defeat did not reach zero health.`);
+    assert(
+      defeatedState.activeHostiles > 0,
+      `${target} defeat did not come from an active encounter.`
+    );
+    const combatDefeatedFrame = await captureRenderedFrame(
+      page,
+      canvas,
+      combatDefeatedPath,
+      `${target} player defeated`
+    );
+    await page.keyboard.press("r");
+    await page.waitForFunction(
+      () => {
+        const state = window.__tgdTest?.getF1State();
+        return state?.playerActive === true && state.retryCount === 1;
+      },
+      undefined,
+      { timeout: 5_000 }
+    );
+    const retryState = await page.evaluate(() => window.__tgdTest.getF1State());
+    assert.equal(retryState.playerHealth, 120, `${target} retry did not restore player health.`);
+    assert.equal(retryState.activeHostiles, 3, `${target} retry did not restore every hostile.`);
+    const combatRetriedFrame = await captureRenderedFrame(
+      page,
+      canvas,
+      combatRetriedPath,
+      `${target} encounter retried`
+    );
+    const retryFrameComparison = compareFrames(combatDefeatedFrame, combatRetriedFrame);
+    assert(
+      retryFrameComparison.changedPixelRatio >= 0.002 &&
+        retryFrameComparison.changedPixelRatio <= 0.08,
+      `${target} retry feedback changed ${(
+        retryFrameComparison.changedPixelRatio * 100
+      ).toFixed(2)}% of the frame.`
+    );
     await page.reload({ waitUntil: "domcontentloaded", timeout: 45_000 });
     await waitForText(page, status, "宿主已就绪", 45_000);
     await canvas.focus();
@@ -1058,6 +1103,8 @@ async function runBrowser(target, origin) {
       movementComparison,
       combatActionComparison,
       combatHitComparison,
+      retryState,
+      retryFrameComparison,
       frameComparison,
       screenshots: [
         projectPath(combatReadyPath),
@@ -1065,6 +1112,8 @@ async function runBrowser(target, origin) {
         projectPath(combatHitPath),
         projectPath(combatFlowerLightPath),
         projectPath(combatGuardPath),
+        projectPath(combatDefeatedPath),
+        projectPath(combatRetriedPath),
         projectPath(beforePath),
         projectPath(afterPath)
       ]

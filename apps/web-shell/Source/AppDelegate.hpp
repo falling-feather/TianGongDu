@@ -29,6 +29,10 @@ class AppDelegate final : private ax::Application {
     void webContextLost() noexcept;
     void webContextRestored() noexcept;
     [[nodiscard]] int webPresentationState() const noexcept;
+    [[nodiscard]] std::int32_t webF1QaPlayerHealth() const noexcept;
+    [[nodiscard]] int webF1QaPlayerActive() const noexcept;
+    [[nodiscard]] std::uint32_t webF1QaActiveHostiles() const noexcept;
+    [[nodiscard]] std::uint32_t webF1QaRetryCount() const noexcept;
     [[nodiscard]] std::int32_t webBoot(std::span<const std::uint8_t> message) noexcept;
     [[nodiscard]] std::int32_t webSubmitUiCommand(std::span<const std::uint8_t> message) noexcept;
     [[nodiscard]] std::uint32_t webPeekPlatformRequestSize() const noexcept;

@@ -172,6 +172,43 @@ GameSessionError GameSession::submit(
     return GameSessionError::none;
 }
 
+GameSessionError GameSession::retry_from_safe_point(
+    const contracts::SafePointRetryCommand& command
+) noexcept {
+    if (lifecycle_ != GameSessionLifecycle::running && lifecycle_ != GameSessionLifecycle::paused) {
+        return GameSessionError::invalid_lifecycle;
+    }
+    if (command.completed_tick != current_snapshot_.tick) {
+        return GameSessionError::retry_targets_wrong_tick;
+    }
+    if (command.actor != config_.player_actor || command.sequence == 0 ||
+        command.reason != contracts::SafePointRetryReason::player_defeated) {
+        return GameSessionError::invalid_command;
+    }
+    if (command.sequence <= last_retry_sequence_) {
+        return GameSessionError::stale_retry_sequence;
+    }
+
+    previous_snapshot_ = current_snapshot_;
+    current_snapshot_.player_pose = config_.initial_pose;
+    if (current_snapshot_.player_pose.height <= config_.ground_height) {
+        current_snapshot_.player_pose.height = config_.ground_height;
+        current_snapshot_.grounded = true;
+    } else {
+        current_snapshot_.grounded = false;
+    }
+    current_snapshot_.vertical_velocity_mm_per_second = 0;
+    command_count_ = 0;
+    movement_remainder_x_ = 0;
+    movement_remainder_y_ = 0;
+    vertical_remainder_ = 0;
+    gravity_remainder_ = 0;
+    last_retry_sequence_ = command.sequence;
+    ++generation_;
+    update_checksum();
+    return GameSessionError::none;
+}
+
 AdvanceTicksResult GameSession::advance(std::uint32_t tick_budget) noexcept {
     if (lifecycle_ != GameSessionLifecycle::running) {
         return {GameSessionError::invalid_lifecycle, 0};
@@ -361,6 +398,9 @@ void GameSession::update_checksum() noexcept {
     hash_integer(hash, current_snapshot_.player_pose.floor_layer);
     hash_integer(hash, current_snapshot_.vertical_velocity_mm_per_second);
     hash_byte(hash, current_snapshot_.grounded ? 1U : 0U);
+    if (last_retry_sequence_ != 0) {
+        hash_integer(hash, last_retry_sequence_);
+    }
     current_snapshot_.checksum = hash;
 }
 

@@ -160,6 +160,23 @@ VerticalSliceError VerticalSliceSession::submit_movement(
                : VerticalSliceError::movement_session_error;
 }
 
+VerticalSliceError VerticalSliceSession::retry_from_safe_point(
+    const contracts::SafePointRetryCommand& command
+) noexcept {
+    if (lifecycle_ != VerticalSliceLifecycle::running &&
+        lifecycle_ != VerticalSliceLifecycle::paused) {
+        return VerticalSliceError::invalid_lifecycle;
+    }
+    last_movement_error_ = movement_.retry_from_safe_point(command);
+    if (last_movement_error_ != runtime::GameSessionError::none) {
+        return VerticalSliceError::movement_session_error;
+    }
+    previous_snapshot_ = current_snapshot_;
+    ++generation_;
+    refresh_snapshot();
+    return VerticalSliceError::none;
+}
+
 VerticalSliceAdvanceResult VerticalSliceSession::advance(std::uint32_t tick_budget) noexcept {
     if (lifecycle_ != VerticalSliceLifecycle::running) {
         return {VerticalSliceError::invalid_lifecycle, 0};

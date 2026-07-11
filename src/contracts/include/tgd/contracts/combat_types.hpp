@@ -37,6 +37,7 @@ enum class CombatEventType : std::uint8_t {
     command_ignored,
     stamina_recovered,
     poise_recovered,
+    encounter_restarted,
 };
 
 enum CombatFeedbackTag : std::uint32_t {

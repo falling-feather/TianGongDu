@@ -255,18 +255,26 @@ void F1GrayboxLayer::update(float delta_seconds) {
 }
 
 void F1GrayboxLayer::clearInput(tgd::contracts::InputClearReason reason) noexcept {
+    clearHeldInput(reason, true);
+    tick_accumulator_ = 0.0F;
+}
+
+void F1GrayboxLayer::clearHeldInput(
+    tgd::contracts::InputClearReason reason,
+    bool release_guard
+) noexcept {
     const bool guard_was_held = combat_keys_[5] || combat_keys_[6];
     directional_keys_.fill(false);
     combat_keys_.fill(false);
     combat_intent_count_ = 0;
-    if (guard_was_held && combat_.lifecycle() == tgd::gameplay::CombatLifecycle::running) {
+    if (release_guard && guard_was_held &&
+        combat_.lifecycle() == tgd::gameplay::CombatLifecycle::running) {
         queueCombatIntent(tgd::contracts::CombatCommandType::guard_ended);
     }
     jump_pressed_ = false;
     submitted_move_x_ = 0;
     submitted_move_y_ = 0;
     static_cast<void>(input_.clear(++platform_sequence_, reason));
-    tick_accumulator_ = 0.0F;
 }
 
 void F1GrayboxLayer::shutdown() noexcept {
@@ -422,7 +430,7 @@ void F1GrayboxLayer::createHud() {
     addChild(title, 1001);
 
     auto* controls = label(
-        "WASD move | SPACE jump | J light | K heavy | SHIFT guard | C evade | 1/2 stance",
+        "WASD move | SPACE jump | J light | K heavy | SHIFT guard | C evade | 1/2 stance | R retry",
         13.0F,
         ax::Color4B(155, 210, 205, 255)
     );
@@ -463,6 +471,13 @@ void F1GrayboxLayer::createHud() {
 void F1GrayboxLayer::createKeyboardInput() {
     auto* listener = ax::EventListenerKeyboard::create();
     listener->onKeyPressed = [this](ax::EventKeyboard::KeyCode key, ax::Event*) {
+        if (key == ax::EventKeyboard::KeyCode::KEY_R) {
+            retry_requested_ = player_defeated_;
+            return;
+        }
+        if (player_defeated_) {
+            return;
+        }
         if (updateCombatKey(key, true)) {
             return;
         }
@@ -473,6 +488,9 @@ void F1GrayboxLayer::createKeyboardInput() {
         }
     };
     listener->onKeyReleased = [this](ax::EventKeyboard::KeyCode key, ax::Event*) {
+        if (key == ax::EventKeyboard::KeyCode::KEY_R || player_defeated_) {
+            return;
+        }
         if (updateCombatKey(key, false)) {
             return;
         }
@@ -487,6 +505,13 @@ void F1GrayboxLayer::createKeyboardInput() {
 
 void F1GrayboxLayer::simulateTick() noexcept {
     if (session_.lifecycle() != tgd::gameplay::VerticalSliceLifecycle::running) {
+        return;
+    }
+    if (retry_requested_ && !retryEncounter()) {
+        retry_requested_ = false;
+        if (combat_event_label_ != nullptr) {
+            combat_event_label_->setString("RETRY REJECTED / SESSION BOUNDARY DRIFT");
+        }
         return;
     }
     const auto next_tick = session_.current_snapshot().tick + 1;
@@ -538,6 +563,16 @@ void F1GrayboxLayer::updateCombatPresentation() noexcept {
     if (player_node_ == nullptr) {
         return;
     }
+    const auto player_snapshot = std::find_if(
+        combat_.actors().begin(),
+        combat_.actors().end(),
+        [this](const tgd::contracts::CombatActorSnapshot& actor) {
+            return actor.actor == definition_->player.actor;
+        }
+    );
+    const bool player_active =
+        player_snapshot != combat_.actors().end() && player_snapshot->active;
+    player_node_->setOpacity(player_active ? 255 : 96);
     player_node_->setScale(
         1.0F + static_cast<float>(player_action_ticks_) * 0.008F +
         static_cast<float>(player_hit_ticks_) * 0.012F
@@ -628,6 +663,15 @@ void F1GrayboxLayer::publish(
             event.target == definition_->player.actor) {
             player_hit_ticks_ = combat_feedback_ticks;
         }
+        if (event.type == tgd::contracts::CombatEventType::actor_defeated &&
+            event.target == definition_->player.actor) {
+            player_defeated_ = true;
+            retry_requested_ = false;
+            clearHeldInput(tgd::contracts::InputClearReason::player_defeated, false);
+        } else if (event.type == tgd::contracts::CombatEventType::encounter_restarted) {
+            player_defeated_ = false;
+            retry_requested_ = false;
+        }
         if (combat_event_label_ == nullptr) {
             continue;
         }
@@ -668,9 +712,12 @@ void F1GrayboxLayer::publish(
             case tgd::contracts::CombatEventType::actor_defeated:
                 combat_event_label_->setString(
                     event.target == definition_->player.actor
-                        ? "PLAYER DEFEATED / RETRY FLOW RESERVED"
+                        ? "PLAYER DEFEATED / PRESS R TO RETRY"
                         : "HOSTILE DEFEATED"
                 );
+                break;
+            case tgd::contracts::CombatEventType::encounter_restarted:
+                combat_event_label_->setString("ENCOUNTER RETRIED / SAFE POINT RESTORED");
                 break;
             case tgd::contracts::CombatEventType::command_ignored:
                 if (event.source == definition_->player.actor) {
@@ -681,6 +728,45 @@ void F1GrayboxLayer::publish(
                 break;
         }
     }
+}
+
+std::int32_t F1GrayboxLayer::qaPlayerHealth() const noexcept {
+    const auto actors = combat_.actors();
+    const auto player = std::find_if(
+        actors.begin(),
+        actors.end(),
+        [this](const tgd::contracts::CombatActorSnapshot& actor) {
+            return actor.actor == definition_->player.actor;
+        }
+    );
+    return player == actors.end() ? -1 : player->resources.health;
+}
+
+bool F1GrayboxLayer::qaPlayerActive() const noexcept {
+    const auto actors = combat_.actors();
+    const auto player = std::find_if(
+        actors.begin(),
+        actors.end(),
+        [this](const tgd::contracts::CombatActorSnapshot& actor) {
+            return actor.actor == definition_->player.actor;
+        }
+    );
+    return player != actors.end() && player->active;
+}
+
+std::uint32_t F1GrayboxLayer::qaActiveHostiles() const noexcept {
+    const auto actors = combat_.actors();
+    return static_cast<std::uint32_t>(std::count_if(
+        actors.begin(),
+        actors.end(),
+        [](const tgd::contracts::CombatActorSnapshot& actor) {
+            return actor.faction == tgd::contracts::CombatFaction::hostile && actor.active;
+        }
+    ));
+}
+
+std::uint32_t F1GrayboxLayer::qaRetryCount() const noexcept {
+    return retry_count_;
 }
 
 bool F1GrayboxLayer::submitCombatTick(tgd::contracts::TickIndex tick) noexcept {
@@ -751,6 +837,42 @@ bool F1GrayboxLayer::submitCombatTick(tgd::contracts::TickIndex tick) noexcept {
     return combat_.advance_one_tick(*this) == tgd::gameplay::CombatError::none;
 }
 
+bool F1GrayboxLayer::retryEncounter() noexcept {
+    const auto completed_tick = session_.current_snapshot().tick;
+    const auto actors = combat_.actors();
+    const auto player = std::find_if(
+        actors.begin(),
+        actors.end(),
+        [this](const tgd::contracts::CombatActorSnapshot& actor) {
+            return actor.actor == definition_->player.actor;
+        }
+    );
+    if (!player_defeated_ || player == actors.end() || player->active ||
+        combat_.current_tick() != completed_tick ||
+        encounter_.current_tick() != completed_tick) {
+        return false;
+    }
+    const tgd::contracts::SafePointRetryCommand command{
+        completed_tick,
+        definition_->player.actor,
+        retry_command_sequence_,
+    };
+    clearHeldInput(tgd::contracts::InputClearReason::safe_point_retry, false);
+    if (encounter_.retry_from_initial(command) !=
+            tgd::gameplay::EncounterDirectorError::none ||
+        session_.retry_from_safe_point(command) != tgd::gameplay::VerticalSliceError::none ||
+        combat_.retry_from_initial(command, *this) != tgd::gameplay::CombatError::none) {
+        return false;
+    }
+    ++retry_command_sequence_;
+    ++retry_count_;
+    player_action_ticks_ = 0;
+    player_hit_ticks_ = 0;
+    attack_fx_ticks_ = 0;
+    hostile_flash_ticks_.fill(0);
+    return true;
+}
+
 void F1GrayboxLayer::refreshCombatHud() noexcept {
     if (combat_resources_label_ == nullptr) {
         return;
@@ -783,7 +905,8 @@ void F1GrayboxLayer::refreshCombatHud() noexcept {
                        std::to_string(player->resources.stamina_max) + " | POISE " +
                        std::to_string(player->resources.poise) + "/" +
                        std::to_string(player->resources.poise_max) + " | STANCE " + stance +
-                       " | HOSTILES " + std::to_string(active_hostiles);
+                       " | HOSTILES " + std::to_string(active_hostiles) +
+                       (player->active ? "" : " | DOWN: PRESS R");
     combat_resources_label_->setString(text);
 }
 

@@ -24,6 +24,10 @@ class F1GrayboxLayer final : public ax::Layer, public tgd::gameplay::ICombatEven
     void clearInput(tgd::contracts::InputClearReason reason) noexcept;
     void shutdown() noexcept;
     void publish(std::span<const tgd::contracts::CombatEvent> events) noexcept override;
+    [[nodiscard]] std::int32_t qaPlayerHealth() const noexcept;
+    [[nodiscard]] bool qaPlayerActive() const noexcept;
+    [[nodiscard]] std::uint32_t qaActiveHostiles() const noexcept;
+    [[nodiscard]] std::uint32_t qaRetryCount() const noexcept;
 
   private:
     struct PendingCombatIntent final {
@@ -49,11 +53,16 @@ class F1GrayboxLayer final : public ax::Layer, public tgd::gameplay::ICombatEven
     ) noexcept;
     void updateJumpKey(bool pressed) noexcept;
     void submitAxisState() noexcept;
+    void clearHeldInput(
+        tgd::contracts::InputClearReason reason,
+        bool release_guard
+    ) noexcept;
     void queueCombatIntent(
         tgd::contracts::CombatCommandType type,
         tgd::contracts::StableContentKey stance = 0
     ) noexcept;
     [[nodiscard]] bool submitCombatTick(tgd::contracts::TickIndex tick) noexcept;
+    [[nodiscard]] bool retryEncounter() noexcept;
     void refreshCombatHud() noexcept;
 
     [[nodiscard]] ax::Vec2 project(const tgd::contracts::GroundPoseMm& pose) const noexcept;
@@ -73,6 +82,7 @@ class F1GrayboxLayer final : public ax::Layer, public tgd::gameplay::ICombatEven
     tgd::contracts::CommandSequence command_sequence_{1};
     tgd::contracts::CommandSequence combat_command_sequence_{1};
     tgd::contracts::CommandSequence encounter_command_sequence_{1};
+    tgd::contracts::CommandSequence retry_command_sequence_{1};
     std::array<bool, 8> directional_keys_{};
     std::array<bool, 7> combat_keys_{};
     std::array<PendingCombatIntent, combat_intent_capacity> combat_intents_{};
@@ -80,6 +90,9 @@ class F1GrayboxLayer final : public ax::Layer, public tgd::gameplay::ICombatEven
     std::int32_t submitted_move_x_{};
     std::int32_t submitted_move_y_{};
     bool jump_pressed_{};
+    bool player_defeated_{};
+    bool retry_requested_{};
+    std::uint32_t retry_count_{};
     float tick_accumulator_{};
 
     ax::Node* world_layer_{};

@@ -389,6 +389,85 @@ bool test_delayed_resource_recovery() {
     return ok;
 }
 
+bool test_defeat_retry_restores_initial_encounter() {
+    DeterministicCombatResolver resolver;
+    CollectingSink sink;
+    auto actor_configs = actors();
+    actor_configs[0].initial_resources.health = 20;
+    actor_configs[0].initial_resources.health_max = 20;
+    const auto ability_configs = abilities();
+    bool ok = resolver.initialize(actor_configs, ability_configs) == CombatError::none;
+    ok &= resolver.start() == CombatError::none;
+    const std::array commands{
+        CombatCommand{1, 2, 1, CombatCommandType::heavy_attack, 1, 0},
+        CombatCommand{10, 1, 2, CombatCommandType::light_attack, 2, 0},
+    };
+    ok &= resolver.submit(commands) == CombatError::none;
+    for (int tick = 0; tick < 5; ++tick) {
+        ok &= resolver.advance_one_tick(sink) == CombatError::none;
+    }
+    ok &= expect(!resolver.actors()[0].active, "zero health enters the defeated state");
+    ok &= expect(sink.contains(CombatEventType::actor_defeated), "defeat emits an event");
+
+    const tgd::contracts::SafePointRetryCommand zero_sequence{5, 1, 0};
+    ok &= expect(
+        resolver.retry_from_initial(zero_sequence, sink) == CombatError::stale_retry_sequence,
+        "retry requires a non-zero monotonic sequence"
+    );
+    const tgd::contracts::SafePointRetryCommand retry{5, 1, 1};
+    ok &= expect(
+        resolver.retry_from_initial(retry, sink) == CombatError::none,
+        "defeated player can restart the encounter"
+    );
+    ok &= expect(
+        resolver.current_tick() == 5 && resolver.actors()[0].active &&
+            resolver.actors()[0].resources == actor_configs[0].initial_resources &&
+            resolver.actors()[1].resources == actor_configs[1].initial_resources,
+        "retry preserves the tick and restores every actor resource"
+    );
+    ok &= expect(
+        sink.contains(CombatEventType::encounter_restarted),
+        "retry emits a presentation-safe restart event"
+    );
+    ok &= expect(
+        resolver.retry_from_initial({5, 1, 2}, sink) == CombatError::retry_not_allowed,
+        "active player cannot restart repeatedly"
+    );
+    for (int tick = 5; tick < 10; ++tick) {
+        ok &= resolver.advance_one_tick(sink) == CombatError::none;
+    }
+    ok &= expect(
+        resolver.actors()[0].active_ability == 0,
+        "retry clears future combat commands from the defeated attempt"
+    );
+    return ok;
+}
+
+bool test_defeat_cancels_pending_ability() {
+    DeterministicCombatResolver resolver;
+    CollectingSink sink;
+    auto actor_configs = actors();
+    actor_configs[1].initial_resources.health = 18;
+    actor_configs[1].initial_resources.health_max = 18;
+    const auto ability_configs = abilities();
+    bool ok = resolver.initialize(actor_configs, ability_configs) == CombatError::none;
+    ok &= resolver.start() == CombatError::none;
+    const std::array commands{
+        CombatCommand{1, 1, 1, CombatCommandType::light_attack, 2, 0},
+        CombatCommand{1, 2, 1, CombatCommandType::heavy_attack, 1, 0},
+    };
+    ok &= resolver.submit(commands) == CombatError::none;
+    for (int tick = 0; tick < 6; ++tick) {
+        ok &= resolver.advance_one_tick(sink) == CombatError::none;
+    }
+    ok &= expect(!resolver.actors()[1].active, "the earlier hit defeats the hostile");
+    ok &= expect(
+        resolver.actors()[0].resources.health == 120,
+        "a defeated hostile cannot finish its pending heavy attack"
+    );
+    return ok;
+}
+
 }  // namespace
 
 int main() {
@@ -399,5 +478,7 @@ int main() {
     ok &= test_floor_miss_and_determinism();
     ok &= test_authoritative_pose_sync();
     ok &= test_delayed_resource_recovery();
+    ok &= test_defeat_retry_restores_initial_encounter();
+    ok &= test_defeat_cancels_pending_ability();
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

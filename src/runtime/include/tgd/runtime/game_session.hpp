@@ -28,6 +28,8 @@ enum class GameSessionError : std::uint8_t {
     duplicate_command_key,
     command_targets_past_tick,
     command_queue_full,
+    retry_targets_wrong_tick,
+    stale_retry_sequence,
 };
 
 struct GameSessionConfig final {
@@ -71,6 +73,9 @@ class GameSession final {
     [[nodiscard]] GameSessionError submit(
         std::span<const contracts::SessionCommand> commands
     ) noexcept;
+    [[nodiscard]] GameSessionError retry_from_safe_point(
+        const contracts::SafePointRetryCommand& command
+    ) noexcept;
     [[nodiscard]] AdvanceTicksResult advance(std::uint32_t tick_budget) noexcept;
 
     [[nodiscard]] GameSessionLifecycle lifecycle() const noexcept;
@@ -101,6 +106,7 @@ class GameSession final {
     std::unique_ptr<ICollisionWorld> collision_world_{};
     std::array<contracts::SessionCommand, command_capacity> commands_{};
     std::size_t command_count_{};
+    contracts::CommandSequence last_retry_sequence_{};
     PresentationSnapshot previous_snapshot_{};
     PresentationSnapshot current_snapshot_{};
     std::int64_t movement_remainder_x_{};

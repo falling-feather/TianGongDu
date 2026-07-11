@@ -336,6 +336,31 @@ EncounterPlanResult DeterministicEncounterDirector::plan_tick(
     return result;
 }
 
+EncounterDirectorError DeterministicEncounterDirector::retry_from_initial(
+    const contracts::SafePointRetryCommand& command
+) noexcept {
+    if (!initialized_) {
+        return EncounterDirectorError::invalid_lifecycle;
+    }
+    if (command.completed_tick != current_tick_) {
+        return EncounterDirectorError::retry_targets_wrong_tick;
+    }
+    if (command.actor != definition_.player_actor ||
+        command.reason != contracts::SafePointRetryReason::player_defeated) {
+        return EncounterDirectorError::retry_not_allowed;
+    }
+    if (command.sequence == 0 || command.sequence <= last_retry_sequence_) {
+        return EncounterDirectorError::stale_retry_sequence;
+    }
+    for (std::size_t index = 0; index < hostile_count_; ++index) {
+        hostiles_[index].next_attack_tick = 0;
+        hostiles_[index].attack_count = 0;
+    }
+    last_retry_sequence_ = command.sequence;
+    update_checksum();
+    return EncounterDirectorError::none;
+}
+
 contracts::TickIndex DeterministicEncounterDirector::current_tick() const noexcept {
     return current_tick_;
 }
@@ -435,6 +460,9 @@ contracts::GroundPoseMm DeterministicEncounterDirector::formation_target(
 void DeterministicEncounterDirector::update_checksum() noexcept {
     auto hash = fnv_offset;
     hash_integer(hash, current_tick_);
+    if (last_retry_sequence_ != 0) {
+        hash_integer(hash, last_retry_sequence_);
+    }
     hash_integer(hash, definition_.player_actor);
     hash_integer(hash, definition_.aggro_range_mm);
     hash_integer(hash, definition_.leash_range_mm);

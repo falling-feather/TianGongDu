@@ -92,20 +92,7 @@ CombatError DeterministicCombatResolver::initialize(
         }
     );
     for (std::size_t index = 0; index < actor_count_; ++index) {
-        const auto& config = actor_configs_[index];
-        actor_snapshots_[index] = {
-            config.actor,
-            config.archetype_id.key,
-            config.faction,
-            config.initial_pose,
-            config.initial_resources,
-            config.initial_stance,
-            0,
-            false,
-            config.initial_resources.health > 0,
-        };
-        actor_runtime_[index] = {};
-        actor_runtime_[index].active_ability = ability_capacity;
+        restore_actor(index);
     }
 
     ability_count_ = abilities.size();
@@ -211,6 +198,45 @@ CombatError DeterministicCombatResolver::synchronize_poses(
     for (const auto& update : updates) {
         pose_updates_[pose_update_count_++] = update;
     }
+    return CombatError::none;
+}
+
+CombatError DeterministicCombatResolver::retry_from_initial(
+    const contracts::SafePointRetryCommand& command,
+    ICombatEventSink& sink
+) noexcept {
+    if (lifecycle_ != CombatLifecycle::running && lifecycle_ != CombatLifecycle::paused) {
+        return CombatError::invalid_lifecycle;
+    }
+    if (command.completed_tick != current_tick_) {
+        return CombatError::retry_targets_wrong_tick;
+    }
+    const auto player_index = actor_index(command.actor);
+    if (player_index == actor_capacity ||
+        actor_snapshots_[player_index].faction != contracts::CombatFaction::player ||
+        actor_snapshots_[player_index].active ||
+        command.reason != contracts::SafePointRetryReason::player_defeated) {
+        return CombatError::retry_not_allowed;
+    }
+    if (command.sequence == 0 || command.sequence <= last_retry_sequence_) {
+        return CombatError::stale_retry_sequence;
+    }
+
+    for (std::size_t index = 0; index < actor_count_; ++index) {
+        restore_actor(index);
+    }
+    command_count_ = 0;
+    pose_update_count_ = 0;
+    event_count_ = 0;
+    last_retry_sequence_ = command.sequence;
+    static_cast<void>(emit({
+        current_tick_,
+        contracts::CombatEventType::encounter_restarted,
+        command.actor,
+        command.actor,
+    }));
+    update_checksum();
+    sink.publish(std::span{events_}.first(event_count_));
     return CombatError::none;
 }
 
@@ -455,6 +481,23 @@ bool DeterministicCombatResolver::target_in_range(
     return delta_x * delta_x + delta_y * delta_y <= range * range;
 }
 
+void DeterministicCombatResolver::restore_actor(std::size_t index) noexcept {
+    const auto& config = actor_configs_[index];
+    actor_snapshots_[index] = {
+        config.actor,
+        config.archetype_id.key,
+        config.faction,
+        config.initial_pose,
+        config.initial_resources,
+        config.initial_stance,
+        0,
+        false,
+        config.initial_resources.health > 0,
+    };
+    actor_runtime_[index] = {};
+    actor_runtime_[index].active_ability = ability_capacity;
+}
+
 void DeterministicCombatResolver::sort_commands() noexcept {
     std::sort(
         commands_.begin(),
@@ -557,6 +600,12 @@ bool DeterministicCombatResolver::resolve_actor(
 ) noexcept {
     auto& runtime = actor_runtime_[index];
     auto& actor = actor_snapshots_[index];
+    if (!actor.active) {
+        actor.active_ability = 0;
+        runtime = {};
+        runtime.active_ability = ability_capacity;
+        return true;
+    }
     if (runtime.active_ability == ability_capacity) {
         return true;
     }
@@ -730,6 +779,9 @@ bool DeterministicCombatResolver::resolve_hit(
     if (target.resources.health == 0) {
         target.active = false;
         target.guarding = false;
+        target.active_ability = 0;
+        actor_runtime_[target_index] = {};
+        actor_runtime_[target_index].active_ability = ability_capacity;
         return emit({
             tick,
             contracts::CombatEventType::actor_defeated,
@@ -746,6 +798,9 @@ bool DeterministicCombatResolver::resolve_hit(
 void DeterministicCombatResolver::update_checksum() noexcept {
     auto hash = fnv_offset;
     hash_integer(hash, current_tick_);
+    if (last_retry_sequence_ != 0) {
+        hash_integer(hash, last_retry_sequence_);
+    }
     for (std::size_t index = 0; index < actor_count_; ++index) {
         const auto& actor = actor_snapshots_[index];
         const auto& runtime = actor_runtime_[index];

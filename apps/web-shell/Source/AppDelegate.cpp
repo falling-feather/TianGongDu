@@ -287,6 +287,22 @@ int AppDelegate::webPresentationState() const noexcept {
     return static_cast<int>(presentation_.state());
 }
 
+std::int32_t AppDelegate::webF1QaPlayerHealth() const noexcept {
+    return grayboxLayer_ == nullptr ? -1 : grayboxLayer_->qaPlayerHealth();
+}
+
+int AppDelegate::webF1QaPlayerActive() const noexcept {
+    return grayboxLayer_ != nullptr && grayboxLayer_->qaPlayerActive() ? 1 : 0;
+}
+
+std::uint32_t AppDelegate::webF1QaActiveHostiles() const noexcept {
+    return grayboxLayer_ == nullptr ? 0U : grayboxLayer_->qaActiveHostiles();
+}
+
+std::uint32_t AppDelegate::webF1QaRetryCount() const noexcept {
+    return grayboxLayer_ == nullptr ? 0U : grayboxLayer_->qaRetryCount();
+}
+
 std::int32_t AppDelegate::webBoot(std::span<const std::uint8_t> message) noexcept {
     using tgd::platform::web::WebAbiError;
 
@@ -584,6 +600,34 @@ EMSCRIPTEN_KEEPALIVE int tgd_web_presentation_state() {
         return app->webPresentationState();
     }
     return -1;
+}
+
+EMSCRIPTEN_KEEPALIVE std::int32_t tgd_web_f1_qa_player_health() {
+    if (const auto* app = AppDelegate::active(); app != nullptr) {
+        return app->webF1QaPlayerHealth();
+    }
+    return -1;
+}
+
+EMSCRIPTEN_KEEPALIVE int tgd_web_f1_qa_player_active() {
+    if (const auto* app = AppDelegate::active(); app != nullptr) {
+        return app->webF1QaPlayerActive();
+    }
+    return 0;
+}
+
+EMSCRIPTEN_KEEPALIVE std::uint32_t tgd_web_f1_qa_active_hostiles() {
+    if (const auto* app = AppDelegate::active(); app != nullptr) {
+        return app->webF1QaActiveHostiles();
+    }
+    return 0;
+}
+
+EMSCRIPTEN_KEEPALIVE std::uint32_t tgd_web_f1_qa_retry_count() {
+    if (const auto* app = AppDelegate::active(); app != nullptr) {
+        return app->webF1QaRetryCount();
+    }
+    return 0;
 }
 
 }  // extern "C"

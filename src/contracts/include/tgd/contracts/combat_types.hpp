@@ -71,6 +71,12 @@ struct CombatCommand final {
     StableContentKey stance{};
 };
 
+struct CombatPoseUpdate final {
+    TickIndex tick{};
+    StableActorKey actor{};
+    GroundPoseMm pose{};
+};
+
 struct AbilityDefinition final {
     ContentId id{};
     CombatCommandType trigger{CombatCommandType::light_attack};

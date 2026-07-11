@@ -30,6 +30,10 @@ enum class CombatError : std::uint8_t {
     duplicate_command_key,
     command_targets_past_tick,
     command_queue_full,
+    pose_targets_wrong_tick,
+    invalid_pose_update,
+    duplicate_pose_update,
+    pose_update_queue_full,
     event_capacity_exceeded,
 };
 
@@ -53,6 +57,9 @@ class ICombatResolver {
     [[nodiscard]] virtual CombatError destroy() noexcept = 0;
     [[nodiscard]] virtual CombatError submit(
         std::span<const contracts::CombatCommand> commands
+    ) noexcept = 0;
+    [[nodiscard]] virtual CombatError synchronize_poses(
+        std::span<const contracts::CombatPoseUpdate> updates
     ) noexcept = 0;
     [[nodiscard]] virtual CombatError advance_one_tick(ICombatEventSink& sink) noexcept = 0;
 
@@ -79,6 +86,9 @@ class DeterministicCombatResolver final : public ICombatResolver {
     [[nodiscard]] CombatError submit(
         std::span<const contracts::CombatCommand> commands
     ) noexcept override;
+    [[nodiscard]] CombatError synchronize_poses(
+        std::span<const contracts::CombatPoseUpdate> updates
+    ) noexcept override;
     [[nodiscard]] CombatError advance_one_tick(ICombatEventSink& sink) noexcept override;
 
     [[nodiscard]] CombatLifecycle lifecycle() const noexcept;
@@ -103,6 +113,11 @@ class DeterministicCombatResolver final : public ICombatResolver {
     [[nodiscard]] bool duplicate_command_key(
         const contracts::CombatCommand& command,
         std::span<const contracts::CombatCommand> pending,
+        std::size_t pending_index
+    ) const noexcept;
+    [[nodiscard]] bool duplicate_pose_update(
+        const contracts::CombatPoseUpdate& update,
+        std::span<const contracts::CombatPoseUpdate> pending,
         std::size_t pending_index
     ) const noexcept;
     [[nodiscard]] std::size_t actor_index(contracts::StableActorKey actor) const noexcept;
@@ -142,6 +157,8 @@ class DeterministicCombatResolver final : public ICombatResolver {
     std::size_t ability_count_{};
     std::array<contracts::CombatCommand, command_capacity> commands_{};
     std::size_t command_count_{};
+    std::array<contracts::CombatPoseUpdate, actor_capacity> pose_updates_{};
+    std::size_t pose_update_count_{};
     std::array<contracts::CombatEvent, event_capacity> events_{};
     std::size_t event_count_{};
     std::uint64_t checksum_{};

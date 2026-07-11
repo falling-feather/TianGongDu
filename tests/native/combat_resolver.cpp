@@ -282,6 +282,50 @@ bool test_floor_miss_and_determinism() {
     return ok;
 }
 
+bool test_authoritative_pose_sync() {
+    DeterministicCombatResolver resolver;
+    CollectingSink sink;
+    auto actor_configs = actors();
+    actor_configs[1].initial_pose.x = 4'000;
+    const auto ability_configs = abilities();
+    bool ok = resolver.initialize(actor_configs, ability_configs) == CombatError::none;
+    ok &= resolver.start() == CombatError::none;
+
+    const std::array wrong_tick{
+        tgd::contracts::CombatPoseUpdate{2, 2, {900, 0, 0, 0}},
+    };
+    ok &= expect(
+        resolver.synchronize_poses(wrong_tick) == CombatError::pose_targets_wrong_tick,
+        "pose sync targets exactly the next simulation tick"
+    );
+    const std::array atomic_failure{
+        tgd::contracts::CombatPoseUpdate{1, 2, {900, 0, 0, 0}},
+        tgd::contracts::CombatPoseUpdate{1, 999, {0, 0, 0, 0}},
+    };
+    ok &= expect(
+        resolver.synchronize_poses(atomic_failure) == CombatError::invalid_pose_update,
+        "unknown actor rejects the whole pose batch"
+    );
+    const std::array valid_pose{
+        tgd::contracts::CombatPoseUpdate{1, 2, {900, 0, 0, 0}},
+    };
+    ok &= resolver.synchronize_poses(valid_pose) == CombatError::none;
+    ok &= expect(
+        resolver.synchronize_poses(valid_pose) == CombatError::duplicate_pose_update,
+        "one actor has one authoritative pose per tick"
+    );
+    const std::array attack{
+        CombatCommand{1, 1, 1, CombatCommandType::light_attack, 2, 0},
+    };
+    ok &= resolver.submit(attack) == CombatError::none;
+    for (int tick = 0; tick < 3; ++tick) {
+        ok &= resolver.advance_one_tick(sink) == CombatError::none;
+    }
+    ok &= expect(sink.contains(CombatEventType::hit_landed), "combat reads the movement-owned pose");
+    ok &= expect(resolver.actors()[1].pose.x == 900, "pose sync is committed with its tick");
+    return ok;
+}
+
 }  // namespace
 
 int main() {
@@ -290,5 +334,6 @@ int main() {
     ok &= test_unguarded_poise_break();
     ok &= test_evade_window_boundaries();
     ok &= test_floor_miss_and_determinism();
+    ok &= test_authoritative_pose_sync();
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

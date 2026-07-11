@@ -134,6 +134,7 @@ CombatError DeterministicCombatResolver::destroy() noexcept {
     actor_count_ = 0;
     ability_count_ = 0;
     command_count_ = 0;
+    pose_update_count_ = 0;
     event_count_ = 0;
     return CombatError::none;
 }
@@ -165,6 +166,34 @@ CombatError DeterministicCombatResolver::submit(
     return CombatError::none;
 }
 
+CombatError DeterministicCombatResolver::synchronize_poses(
+    std::span<const contracts::CombatPoseUpdate> updates
+) noexcept {
+    if (lifecycle_ != CombatLifecycle::running && lifecycle_ != CombatLifecycle::paused) {
+        return CombatError::invalid_lifecycle;
+    }
+    if (updates.size() > actor_capacity - pose_update_count_) {
+        return CombatError::pose_update_queue_full;
+    }
+    const auto expected_tick = current_tick_ + 1;
+    for (std::size_t index = 0; index < updates.size(); ++index) {
+        const auto& update = updates[index];
+        if (update.tick != expected_tick) {
+            return CombatError::pose_targets_wrong_tick;
+        }
+        if (actor_index(update.actor) == actor_capacity) {
+            return CombatError::invalid_pose_update;
+        }
+        if (duplicate_pose_update(update, updates, index)) {
+            return CombatError::duplicate_pose_update;
+        }
+    }
+    for (const auto& update : updates) {
+        pose_updates_[pose_update_count_++] = update;
+    }
+    return CombatError::none;
+}
+
 CombatError DeterministicCombatResolver::advance_one_tick(ICombatEventSink& sink) noexcept {
     if (lifecycle_ != CombatLifecycle::running) {
         return CombatError::invalid_lifecycle;
@@ -172,6 +201,10 @@ CombatError DeterministicCombatResolver::advance_one_tick(ICombatEventSink& sink
     sort_commands();
     event_count_ = 0;
     const auto next_tick = current_tick_ + 1;
+    for (std::size_t index = 0; index < pose_update_count_; ++index) {
+        const auto& update = pose_updates_[index];
+        actor_snapshots_[actor_index(update.actor)].pose = update.pose;
+    }
     std::size_t consumed = 0;
     while (consumed < command_count_ && commands_[consumed].tick == next_tick) {
         if (!process_command(commands_[consumed])) {
@@ -186,6 +219,7 @@ CombatError DeterministicCombatResolver::advance_one_tick(ICombatEventSink& sink
     }
     current_tick_ = next_tick;
     compact_commands(consumed);
+    pose_update_count_ = 0;
     update_checksum();
     sink.publish(std::span{events_}.first(event_count_));
     return CombatError::none;
@@ -313,6 +347,24 @@ bool DeterministicCombatResolver::duplicate_command_key(
     }
     for (std::size_t index = 0; index < pending_index; ++index) {
         if (same_command_key(command, pending[index])) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool DeterministicCombatResolver::duplicate_pose_update(
+    const contracts::CombatPoseUpdate& update,
+    std::span<const contracts::CombatPoseUpdate> pending,
+    std::size_t pending_index
+) const noexcept {
+    for (std::size_t index = 0; index < pose_update_count_; ++index) {
+        if (pose_updates_[index].actor == update.actor) {
+            return true;
+        }
+    }
+    for (std::size_t index = 0; index < pending_index; ++index) {
+        if (pending[index].actor == update.actor) {
             return true;
         }
     }

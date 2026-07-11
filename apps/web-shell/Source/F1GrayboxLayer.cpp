@@ -7,9 +7,11 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <new>
 #include <span>
+#include <string>
 #include <string_view>
 
 namespace {
@@ -18,6 +20,7 @@ constexpr float design_width = 1280.0F;
 constexpr float design_height = 720.0F;
 constexpr float fixed_tick_seconds = 1.0F / 60.0F;
 constexpr std::uint32_t max_catch_up_ticks = 4;
+constexpr std::uint8_t combat_feedback_ticks = 12;
 
 [[nodiscard]] ax::Color4F color(
     std::uint8_t red,
@@ -187,7 +190,10 @@ bool F1GrayboxLayer::init() {
     definition_ = content_.find_vertical_slice(
         tgd::contracts::stable_content_key("f1_rainy_umbrella_trial")
     );
-    if (definition_ == nullptr) {
+    combat_definition_ = content_.find_combat_encounter(
+        tgd::contracts::stable_content_key("f1_encounter_umbrella_lane_bootstrap")
+    );
+    if (definition_ == nullptr || combat_definition_ == nullptr) {
         return false;
     }
 
@@ -206,7 +212,10 @@ bool F1GrayboxLayer::init() {
             tgd::gameplay::SessionInputError::none ||
         session_.initialize(*definition_, std::move(collision_world)) !=
             tgd::gameplay::VerticalSliceError::none ||
-        session_.start() != tgd::gameplay::VerticalSliceError::none) {
+        session_.start() != tgd::gameplay::VerticalSliceError::none ||
+        combat_.initialize(combat_definition_->actors, combat_definition_->abilities) !=
+            tgd::gameplay::CombatError::none ||
+        combat_.start() != tgd::gameplay::CombatError::none) {
         return false;
     }
 
@@ -215,7 +224,9 @@ bool F1GrayboxLayer::init() {
     createActors();
     createHud();
     createKeyboardInput();
+    createMouseInput();
     updatePlayerPresentation();
+    updateCombatPresentation();
     scheduleUpdate();
     return true;
 }
@@ -236,10 +247,17 @@ void F1GrayboxLayer::update(float delta_seconds) {
         tick_accumulator_ = 0.0F;
     }
     updatePlayerPresentation();
+    updateCombatPresentation();
 }
 
 void F1GrayboxLayer::clearInput(tgd::contracts::InputClearReason reason) noexcept {
+    const bool guard_was_held = combat_keys_[5] || combat_keys_[6];
     directional_keys_.fill(false);
+    combat_keys_.fill(false);
+    combat_intent_count_ = 0;
+    if (guard_was_held && combat_.lifecycle() == tgd::gameplay::CombatLifecycle::running) {
+        queueCombatIntent(tgd::contracts::CombatCommandType::guard_ended);
+    }
     jump_pressed_ = false;
     submitted_move_x_ = 0;
     submitted_move_y_ = 0;
@@ -253,6 +271,11 @@ void F1GrayboxLayer::shutdown() noexcept {
     if (lifecycle != tgd::gameplay::VerticalSliceLifecycle::uninitialized &&
         lifecycle != tgd::gameplay::VerticalSliceLifecycle::destroyed) {
         static_cast<void>(session_.destroy());
+    }
+    const auto combat_lifecycle = combat_.lifecycle();
+    if (combat_lifecycle != tgd::gameplay::CombatLifecycle::uninitialized &&
+        combat_lifecycle != tgd::gameplay::CombatLifecycle::destroyed) {
+        static_cast<void>(combat_.destroy());
     }
     unscheduleUpdate();
 }
@@ -352,9 +375,24 @@ void F1GrayboxLayer::createActors() {
     };
 
     place(shenYanVisual(), {start.x + 1'500, start.y + 1'000, 0, 0});
-    place(umbrellaDollVisual(false), {start.x + 8'000, start.y - 1'000, 0, 0});
-    place(umbrellaDollVisual(true), {start.x + 9'000, start.y + 1'200, 0, 0});
-    place(paperEgretVisual(), {start.x + 10'500, start.y + 2'500, 700, 0});
+    std::size_t hostile_index = 0;
+    for (const auto& actor : combat_definition_->actors) {
+        if (actor.faction != tgd::contracts::CombatFaction::hostile ||
+            hostile_index >= hostile_capacity) {
+            continue;
+        }
+        ax::Node* visual = nullptr;
+        if (actor.archetype_id.key ==
+            tgd::contracts::stable_content_key("jn_enemy_faded_paper_egret")) {
+            visual = paperEgretVisual();
+        } else {
+            visual = umbrellaDollVisual((actor.actor % 2U) == 0U);
+        }
+        place(visual, actor.initial_pose);
+        hostile_nodes_[hostile_index] = visual;
+        hostile_actor_keys_[hostile_index] = actor.actor;
+        ++hostile_index;
+    }
     place(bossVisual(), {start.x + 16'000, start.y + 3'500, 0, 0});
 
     auto* evidence = ax::DrawNode::create();
@@ -365,34 +403,65 @@ void F1GrayboxLayer::createActors() {
 
     player_node_ = playerVisual();
     world_layer_->addChild(player_node_);
+
+    combat_fx_ = ax::DrawNode::create();
+    world_layer_->addChild(combat_fx_, 500);
 }
 
 void F1GrayboxLayer::createHud() {
-    auto* panel = ax::LayerColor::create(ax::Color4B(5, 15, 20, 214), 470.0F, 94.0F);
-    panel->setPosition({22.0F, 604.0F});
+    auto* panel = ax::LayerColor::create(ax::Color4B(5, 15, 20, 218), 900.0F, 154.0F);
+    panel->setPosition({22.0F, 542.0F});
     addChild(panel, 1000);
 
-    auto* title = label("F1 · 雨夜试伞 / RAIN FERRY CONTROL GRAYBOX", 19.0F, ax::Color4B(232, 210, 161, 255));
+    auto* title = label("F1 / RAIN FERRY COMBAT GRAYBOX", 19.0F, ax::Color4B(232, 210, 161, 255));
     title->setPosition({38.0F, 684.0F});
     addChild(title, 1001);
 
-    auto* controls = label("WASD / ARROWS  move in depth     SPACE  jump", 14.0F, ax::Color4B(155, 210, 205, 255));
+    auto* controls = label(
+        "WASD move | SPACE jump | J/LMB light | K/RMB heavy | SHIFT guard | C evade | 1/2 stance",
+        13.0F,
+        ax::Color4B(155, 210, 205, 255)
+    );
     controls->setPosition({38.0F, 654.0F});
     addChild(controls, 1001);
 
-    auto* state = label("MOVE + HEIGHT CORE: LIVE    COMBAT / QUEST PORTS: RESERVED", 12.0F, ax::Color4B(151, 159, 151, 255));
+    auto* state = label(
+        "MOVE + COMBAT CORE: LIVE | ENCOUNTER DIRECTOR / QUEST / FINAL ASSETS: RESERVED",
+        12.0F,
+        ax::Color4B(151, 159, 151, 255)
+    );
     state->setPosition({38.0F, 627.0F});
     addChild(state, 1001);
 
-    auto* direction = label("DOUZHANSHEN-FIRST · PANORAMA / SCALE / DEPTH / CONTROLLED CAMERA", 12.0F, ax::Color4B(214, 177, 113, 220));
+    combat_resources_label_ = label("", 13.0F, ax::Color4B(230, 193, 126, 255));
+    combat_resources_label_->setPosition({38.0F, 605.0F});
+    addChild(combat_resources_label_, 1001);
+
+    combat_event_label_ = label(
+        "Move uphill to engage the nearest hostile.",
+        12.0F,
+        ax::Color4B(174, 217, 203, 255)
+    );
+    combat_event_label_->setPosition({38.0F, 580.0F});
+    addChild(combat_event_label_, 1001);
+
+    auto* direction = label(
+        "DOUZHANSHEN-FIRST / 2.5D OBLIQUE PANORAMA / SCALE / DEPTH / CONTROLLED CAMERA",
+        12.0F,
+        ax::Color4B(214, 177, 113, 220)
+    );
     direction->setAnchorPoint({1.0F, 0.0F});
     direction->setPosition({1252.0F, 20.0F});
     addChild(direction, 1001);
+    refreshCombatHud();
 }
 
 void F1GrayboxLayer::createKeyboardInput() {
     auto* listener = ax::EventListenerKeyboard::create();
     listener->onKeyPressed = [this](ax::EventKeyboard::KeyCode key, ax::Event*) {
+        if (updateCombatKey(key, true)) {
+            return;
+        }
         if (key == ax::EventKeyboard::KeyCode::KEY_SPACE) {
             updateJumpKey(true);
         } else {
@@ -400,11 +469,30 @@ void F1GrayboxLayer::createKeyboardInput() {
         }
     };
     listener->onKeyReleased = [this](ax::EventKeyboard::KeyCode key, ax::Event*) {
+        if (updateCombatKey(key, false)) {
+            return;
+        }
         if (key == ax::EventKeyboard::KeyCode::KEY_SPACE) {
             updateJumpKey(false);
         } else {
             updateDirectionalKey(key, false);
         }
+    };
+    _eventDispatcher->addEventListenerWithSceneGraphPriority(listener, this);
+}
+
+void F1GrayboxLayer::createMouseInput() {
+    auto* listener = ax::EventListenerMouse::create();
+    listener->onMouseDown = [this](ax::EventMouse* event) {
+        if (event->getMouseButton() == ax::EventMouse::MouseButton::BUTTON_LEFT) {
+            queueCombatIntent(tgd::contracts::CombatCommandType::light_attack);
+            return true;
+        }
+        if (event->getMouseButton() == ax::EventMouse::MouseButton::BUTTON_RIGHT) {
+            queueCombatIntent(tgd::contracts::CombatCommandType::heavy_attack);
+            return true;
+        }
+        return false;
     };
     _eventDispatcher->addEventListenerWithSceneGraphPriority(listener, this);
 }
@@ -423,7 +511,23 @@ void F1GrayboxLayer::simulateTick() noexcept {
     if (session_.submit_movement(commands.view()) != tgd::gameplay::VerticalSliceError::none) {
         return;
     }
-    static_cast<void>(session_.advance(1));
+    const auto movement_result = session_.advance(1);
+    if (movement_result.error != tgd::gameplay::VerticalSliceError::none ||
+        movement_result.executed_ticks != 1 || !submitCombatTick(next_tick)) {
+        return;
+    }
+    if (player_action_ticks_ > 0) {
+        --player_action_ticks_;
+    }
+    if (attack_fx_ticks_ > 0) {
+        --attack_fx_ticks_;
+    }
+    for (auto& flash : hostile_flash_ticks_) {
+        if (flash > 0) {
+            --flash;
+        }
+    }
+    refreshCombatHud();
 }
 
 void F1GrayboxLayer::updatePlayerPresentation() noexcept {
@@ -439,6 +543,207 @@ void F1GrayboxLayer::updatePlayerPresentation() noexcept {
     }
 }
 
+void F1GrayboxLayer::updateCombatPresentation() noexcept {
+    if (player_node_ == nullptr) {
+        return;
+    }
+    player_node_->setScale(1.0F + static_cast<float>(player_action_ticks_) * 0.008F);
+    const auto player_position = project(session_.current_snapshot().player_pose);
+    if (combat_fx_ != nullptr) {
+        combat_fx_->clear();
+        if (attack_fx_ticks_ > 0) {
+            const auto progress = static_cast<float>(combat_feedback_ticks - attack_fx_ticks_) /
+                                  static_cast<float>(combat_feedback_ticks);
+            combat_fx_->drawCircle(
+                player_position + ax::Vec2(24.0F, 33.0F),
+                35.0F + progress * 58.0F,
+                0.0F,
+                36,
+                false,
+                1.55F,
+                0.48F,
+                color(109, 226, 205, static_cast<std::uint8_t>(220.0F * (1.0F - progress))),
+                3.0F
+            );
+        }
+    }
+
+    for (std::size_t node_index = 0; node_index < hostile_capacity; ++node_index) {
+        auto* node = hostile_nodes_[node_index];
+        if (node == nullptr) {
+            continue;
+        }
+        const auto actor_key = hostile_actor_keys_[node_index];
+        const auto snapshot = std::find_if(
+            combat_.actors().begin(),
+            combat_.actors().end(),
+            [actor_key](const tgd::contracts::CombatActorSnapshot& actor) {
+                return actor.actor == actor_key;
+            }
+        );
+        if (snapshot == combat_.actors().end()) {
+            node->setVisible(false);
+            continue;
+        }
+        node->setVisible(snapshot->active);
+        node->setPosition(project(snapshot->pose));
+        node->setLocalZOrder(depthOrder(node->getPositionY()));
+        node->setScale(1.0F + static_cast<float>(hostile_flash_ticks_[node_index]) * 0.018F);
+    }
+}
+
+void F1GrayboxLayer::publish(
+    std::span<const tgd::contracts::CombatEvent> events
+) noexcept {
+    for (const auto& event : events) {
+        if (event.type == tgd::contracts::CombatEventType::ability_started &&
+            event.source == definition_->player.actor) {
+            player_action_ticks_ = combat_feedback_ticks;
+            if ((event.feedback_tags & tgd::contracts::feedback_evade) == 0U) {
+                attack_fx_ticks_ = combat_feedback_ticks;
+            }
+            if (combat_event_label_ != nullptr) {
+                combat_event_label_->setString(
+                    (event.feedback_tags & tgd::contracts::feedback_evade) != 0U
+                        ? "EVADE WINDOW ACTIVE"
+                        : "ABILITY COMMITTED / WAIT FOR HIT WINDOW"
+                );
+            }
+        }
+        if (event.type == tgd::contracts::CombatEventType::hit_landed ||
+            event.type == tgd::contracts::CombatEventType::hit_guarded ||
+            event.type == tgd::contracts::CombatEventType::poise_broken) {
+            for (std::size_t index = 0; index < hostile_capacity; ++index) {
+                if (hostile_actor_keys_[index] == event.target) {
+                    hostile_flash_ticks_[index] = combat_feedback_ticks;
+                }
+            }
+        }
+        if (combat_event_label_ == nullptr) {
+            continue;
+        }
+        switch (event.type) {
+            case tgd::contracts::CombatEventType::stance_changed:
+                combat_event_label_->setString(
+                    event.ability == tgd::contracts::stable_content_key("stance_flower_turn")
+                        ? "STANCE: FLOWER TURN"
+                        : "STANCE: EAVESGUARD"
+                );
+                break;
+            case tgd::contracts::CombatEventType::guard_changed:
+                combat_event_label_->setString(event.value != 0 ? "GUARD HELD" : "GUARD RELEASED");
+                break;
+            case tgd::contracts::CombatEventType::attack_missed:
+                combat_event_label_->setString("MISS / MOVE INTO RANGE AND MATCH HEIGHT");
+                break;
+            case tgd::contracts::CombatEventType::hit_landed:
+                combat_event_label_->setString("HIT CONFIRMED / HEALTH AND POISE RESOLVED");
+                break;
+            case tgd::contracts::CombatEventType::hit_guarded:
+                combat_event_label_->setString("GUARDED HIT / POISE ABSORBED THE IMPACT");
+                break;
+            case tgd::contracts::CombatEventType::hit_evaded:
+                combat_event_label_->setString("EVADED / ACTIVE WINDOW WON");
+                break;
+            case tgd::contracts::CombatEventType::poise_broken:
+                combat_event_label_->setString("POISE BROKEN");
+                break;
+            case tgd::contracts::CombatEventType::actor_defeated:
+                combat_event_label_->setString("HOSTILE DEFEATED");
+                break;
+            case tgd::contracts::CombatEventType::command_ignored:
+                combat_event_label_->setString("ACTION UNAVAILABLE / RECOVERY OR RESOURCE LOCK");
+                break;
+            default:
+                break;
+        }
+    }
+}
+
+bool F1GrayboxLayer::submitCombatTick(tgd::contracts::TickIndex tick) noexcept {
+    if (combat_.lifecycle() != tgd::gameplay::CombatLifecycle::running ||
+        combat_.current_tick() + 1 != tick) {
+        return false;
+    }
+    const tgd::contracts::CombatPoseUpdate pose_update{
+        tick,
+        definition_->player.actor,
+        session_.current_snapshot().player_pose,
+    };
+    if (combat_.synchronize_poses(std::span{&pose_update, 1}) !=
+        tgd::gameplay::CombatError::none) {
+        return false;
+    }
+
+    std::array<tgd::contracts::CombatCommand, combat_intent_capacity> commands{};
+    std::size_t command_count = 0;
+    for (std::size_t index = 0; index < combat_intent_count_; ++index) {
+        const auto& intent = combat_intents_[index];
+        tgd::contracts::StableActorKey target = 0;
+        if (intent.type == tgd::contracts::CombatCommandType::light_attack ||
+            intent.type == tgd::contracts::CombatCommandType::heavy_attack) {
+            target = nearestActiveHostile();
+            if (target == 0) {
+                if (combat_event_label_ != nullptr) {
+                    combat_event_label_->setString("NO ACTIVE HOSTILE TARGET");
+                }
+                continue;
+            }
+        }
+        commands[command_count++] = {
+            tick,
+            definition_->player.actor,
+            combat_command_sequence_++,
+            intent.type,
+            target,
+            intent.stance,
+        };
+    }
+    if (command_count != 0 &&
+        combat_.submit(std::span{commands}.first(command_count)) !=
+            tgd::gameplay::CombatError::none) {
+        return false;
+    }
+    combat_intent_count_ = 0;
+    return combat_.advance_one_tick(*this) == tgd::gameplay::CombatError::none;
+}
+
+void F1GrayboxLayer::refreshCombatHud() noexcept {
+    if (combat_resources_label_ == nullptr) {
+        return;
+    }
+    const auto actors = combat_.actors();
+    const auto player = std::find_if(
+        actors.begin(),
+        actors.end(),
+        [this](const tgd::contracts::CombatActorSnapshot& actor) {
+            return actor.actor == definition_->player.actor;
+        }
+    );
+    if (player == actors.end()) {
+        combat_resources_label_->setString("COMBAT SNAPSHOT UNAVAILABLE");
+        return;
+    }
+    const auto active_hostiles = static_cast<std::size_t>(std::count_if(
+        actors.begin(),
+        actors.end(),
+        [](const tgd::contracts::CombatActorSnapshot& actor) {
+            return actor.faction == tgd::contracts::CombatFaction::hostile && actor.active;
+        }
+    ));
+    const auto stance = player->stance == tgd::contracts::stable_content_key("stance_flower_turn")
+                            ? "FLOWER TURN"
+                            : "EAVESGUARD";
+    std::string text = "HP " + std::to_string(player->resources.health) + "/" +
+                       std::to_string(player->resources.health_max) + " | ST " +
+                       std::to_string(player->resources.stamina) + "/" +
+                       std::to_string(player->resources.stamina_max) + " | POISE " +
+                       std::to_string(player->resources.poise) + "/" +
+                       std::to_string(player->resources.poise_max) + " | STANCE " + stance +
+                       " | HOSTILES " + std::to_string(active_hostiles);
+    combat_resources_label_->setString(text);
+}
+
 void F1GrayboxLayer::updateDirectionalKey(
     ax::EventKeyboard::KeyCode key,
     bool pressed
@@ -449,6 +754,63 @@ void F1GrayboxLayer::updateDirectionalKey(
     }
     directional_keys_[static_cast<std::size_t>(index)] = pressed;
     submitAxisState();
+}
+
+bool F1GrayboxLayer::updateCombatKey(
+    ax::EventKeyboard::KeyCode key,
+    bool pressed
+) noexcept {
+    const auto index = combatKeyIndex(key);
+    if (index < 0) {
+        return false;
+    }
+    const auto key_index = static_cast<std::size_t>(index);
+    if (combat_keys_[key_index] == pressed) {
+        return true;
+    }
+    if (key_index >= 5) {
+        const bool guard_before = combat_keys_[5] || combat_keys_[6];
+        combat_keys_[key_index] = pressed;
+        const bool guard_after = combat_keys_[5] || combat_keys_[6];
+        if (guard_before != guard_after) {
+            queueCombatIntent(
+                guard_after ? tgd::contracts::CombatCommandType::guard_started
+                            : tgd::contracts::CombatCommandType::guard_ended
+            );
+        }
+        return true;
+    }
+
+    combat_keys_[key_index] = pressed;
+    if (!pressed) {
+        return true;
+    }
+    switch (key_index) {
+        case 0:
+            queueCombatIntent(tgd::contracts::CombatCommandType::light_attack);
+            break;
+        case 1:
+            queueCombatIntent(tgd::contracts::CombatCommandType::heavy_attack);
+            break;
+        case 2:
+            queueCombatIntent(tgd::contracts::CombatCommandType::evade);
+            break;
+        case 3:
+            queueCombatIntent(
+                tgd::contracts::CombatCommandType::switch_stance,
+                tgd::contracts::stable_content_key("stance_eavesguard")
+            );
+            break;
+        case 4:
+            queueCombatIntent(
+                tgd::contracts::CombatCommandType::switch_stance,
+                tgd::contracts::stable_content_key("stance_flower_turn")
+            );
+            break;
+        default:
+            break;
+    }
+    return true;
 }
 
 void F1GrayboxLayer::updateJumpKey(bool pressed) noexcept {
@@ -504,6 +866,17 @@ void F1GrayboxLayer::submitAxisState() noexcept {
     }
 }
 
+void F1GrayboxLayer::queueCombatIntent(
+    tgd::contracts::CombatCommandType type,
+    tgd::contracts::StableContentKey stance
+) noexcept {
+    if (combat_.lifecycle() != tgd::gameplay::CombatLifecycle::running ||
+        combat_intent_count_ >= combat_intent_capacity) {
+        return;
+    }
+    combat_intents_[combat_intent_count_++] = {type, stance};
+}
+
 ax::Vec2 F1GrayboxLayer::project(const tgd::contracts::GroundPoseMm& pose) const noexcept {
     const auto& origin = definition_->player.initial_pose;
     const auto relative_x = static_cast<float>(pose.x - origin.x);
@@ -537,6 +910,59 @@ int F1GrayboxLayer::directionalKeyIndex(ax::EventKeyboard::KeyCode key) const no
         default:
             return -1;
     }
+}
+
+int F1GrayboxLayer::combatKeyIndex(ax::EventKeyboard::KeyCode key) const noexcept {
+    using KeyCode = ax::EventKeyboard::KeyCode;
+    switch (key) {
+        case KeyCode::KEY_J:
+            return 0;
+        case KeyCode::KEY_K:
+            return 1;
+        case KeyCode::KEY_C:
+            return 2;
+        case KeyCode::KEY_1:
+            return 3;
+        case KeyCode::KEY_2:
+            return 4;
+        case KeyCode::KEY_LEFT_SHIFT:
+            return 5;
+        case KeyCode::KEY_RIGHT_SHIFT:
+            return 6;
+        default:
+            return -1;
+    }
+}
+
+tgd::contracts::StableActorKey F1GrayboxLayer::nearestActiveHostile() const noexcept {
+    const auto actors = combat_.actors();
+    const auto player = std::find_if(
+        actors.begin(),
+        actors.end(),
+        [this](const tgd::contracts::CombatActorSnapshot& actor) {
+            return actor.actor == definition_->player.actor;
+        }
+    );
+    if (player == actors.end()) {
+        return 0;
+    }
+
+    auto nearest_distance = std::numeric_limits<std::int64_t>::max();
+    tgd::contracts::StableActorKey nearest = 0;
+    for (const auto& actor : actors) {
+        if (actor.faction != tgd::contracts::CombatFaction::hostile || !actor.active ||
+            actor.pose.floor_layer != player->pose.floor_layer) {
+            continue;
+        }
+        const auto delta_x = static_cast<std::int64_t>(actor.pose.x) - player->pose.x;
+        const auto delta_y = static_cast<std::int64_t>(actor.pose.y) - player->pose.y;
+        const auto distance = delta_x * delta_x + delta_y * delta_y;
+        if (distance < nearest_distance || (distance == nearest_distance && actor.actor < nearest)) {
+            nearest_distance = distance;
+            nearest = actor.actor;
+        }
+    }
+    return nearest;
 }
 
 int F1GrayboxLayer::depthOrder(float screen_y) const noexcept {

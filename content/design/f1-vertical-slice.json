@@ -136,7 +136,7 @@
         "trigger": "light_attack",
         "requiredStanceId": "stance_eavesguard",
         "staminaCost": 8,
-        "windupTicks": 8,
+        "windupTicks": 12,
         "activeTicks": 3,
         "recoveryTicks": 12,
         "rangeMm": 1800,

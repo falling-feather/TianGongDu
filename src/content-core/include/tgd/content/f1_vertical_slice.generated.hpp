@@ -90,7 +90,7 @@ inline constexpr std::array<contracts::CombatActorConfig, 4> f1_combat_actors{{
 }};
 
 inline constexpr std::array<contracts::AbilityDefinition, 9> f1_combat_abilities{{
-    {contracts::content_id("ability_eavesguard_light"), contracts::CombatCommandType::light_attack, contracts::stable_content_key("stance_eavesguard"), 8, 8, 3, 12, 1800, 700, 18, 18, contracts::feedback_light},
+    {contracts::content_id("ability_eavesguard_light"), contracts::CombatCommandType::light_attack, contracts::stable_content_key("stance_eavesguard"), 8, 12, 3, 12, 1800, 700, 18, 18, contracts::feedback_light},
     {contracts::content_id("ability_eavesguard_heavy"), contracts::CombatCommandType::heavy_attack, contracts::stable_content_key("stance_eavesguard"), 18, 18, 4, 24, 2050, 800, 30, 46, contracts::feedback_heavy},
     {contracts::content_id("ability_flower_light"), contracts::CombatCommandType::light_attack, contracts::stable_content_key("stance_flower_turn"), 10, 6, 4, 14, 2100, 900, 20, 14, contracts::feedback_light},
     {contracts::content_id("ability_flower_heavy"), contracts::CombatCommandType::heavy_attack, contracts::stable_content_key("stance_flower_turn"), 22, 14, 6, 28, 2350, 1000, 38, 34, contracts::feedback_heavy},

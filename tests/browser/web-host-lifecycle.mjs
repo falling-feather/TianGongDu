@@ -857,6 +857,85 @@ async function runBrowser(target, origin) {
       ).toFixed(2)}% of the frame.`
     );
 
+    await page.keyboard.down("w");
+    await page.keyboard.down("d");
+    await page.waitForTimeout(1_800);
+    await page.keyboard.up("d");
+    await page.keyboard.up("w");
+    await page.waitForTimeout(150);
+    const combatReadyPath = resolve(reportDirectory, `${target}-combat-ready.png`);
+    const combatActionPath = resolve(reportDirectory, `${target}-combat-action.png`);
+    const combatHitPath = resolve(reportDirectory, `${target}-combat-hit.png`);
+    const combatFlowerLightPath = resolve(reportDirectory, `${target}-combat-flower-light.png`);
+    const combatGuardPath = resolve(reportDirectory, `${target}-combat-guard.png`);
+    const combatReadyFrame = await captureRenderedFrame(
+      page,
+      canvas,
+      combatReadyPath,
+      `${target} combat ready`
+    );
+    await page.keyboard.press("k");
+    await page.waitForTimeout(50);
+    const combatActionFrame = await captureRenderedFrame(
+      page,
+      canvas,
+      combatActionPath,
+      `${target} heavy attack startup`
+    );
+    const combatActionComparison = compareFrames(combatReadyFrame, combatActionFrame);
+    assert(
+      combatActionComparison.changedPixelRatio >= 0.0002 &&
+        combatActionComparison.changedPixelRatio <= 0.04,
+      `${target} heavy startup feedback changed ${(
+        combatActionComparison.changedPixelRatio * 100
+      ).toFixed(2)}% of the frame.`
+    );
+    await page.waitForTimeout(320);
+    const combatHitFrame = await captureRenderedFrame(
+      page,
+      canvas,
+      combatHitPath,
+      `${target} heavy attack hit`
+    );
+    const combatHitComparison = compareFrames(combatReadyFrame, combatHitFrame);
+    assert(
+      combatHitComparison.changedPixelRatio >= 0.0002 &&
+        combatHitComparison.changedPixelRatio <= 0.04,
+      `${target} hit feedback changed ${(
+        combatHitComparison.changedPixelRatio * 100
+      ).toFixed(2)}% of the frame.`
+    );
+    assert.notEqual(
+      combatActionFrame.sha256,
+      combatHitFrame.sha256,
+      `${target} startup and hit frames must be visually distinct.`
+    );
+
+    await page.waitForTimeout(450);
+    await page.keyboard.press("2");
+    await page.waitForTimeout(60);
+    await page.keyboard.press("j");
+    await page.waitForTimeout(50);
+    await captureRenderedFrame(
+      page,
+      canvas,
+      combatFlowerLightPath,
+      `${target} flower-turn light attack`
+    );
+    await page.waitForTimeout(850);
+    await page.keyboard.press("c");
+    await page.waitForTimeout(650);
+    await page.keyboard.down("Shift");
+    await page.waitForTimeout(80);
+    await captureRenderedFrame(
+      page,
+      canvas,
+      combatGuardPath,
+      `${target} guard held`
+    );
+    await page.keyboard.up("Shift");
+    await page.waitForTimeout(120);
+
     const beforePath = resolve(reportDirectory, `${target}-before.png`);
     const afterPath = resolve(reportDirectory, `${target}-after-context-restore.png`);
     const beforeFrame = await captureRenderedFrame(
@@ -973,8 +1052,18 @@ async function runBrowser(target, origin) {
       beforeFrame: publicFrame(beforeFrame),
       afterFrame: publicFrame(afterFrame),
       movementComparison,
+      combatActionComparison,
+      combatHitComparison,
       frameComparison,
-      screenshots: [projectPath(beforePath), projectPath(afterPath)]
+      screenshots: [
+        projectPath(combatReadyPath),
+        projectPath(combatActionPath),
+        projectPath(combatHitPath),
+        projectPath(combatFlowerLightPath),
+        projectPath(combatGuardPath),
+        projectPath(beforePath),
+        projectPath(afterPath)
+      ]
     };
   } finally {
     await browser?.close();

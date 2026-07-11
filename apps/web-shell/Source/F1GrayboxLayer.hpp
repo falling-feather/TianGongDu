@@ -39,7 +39,6 @@ class F1GrayboxLayer final : public ax::Layer, public tgd::gameplay::ICombatEven
     void createActors();
     void createHud();
     void createKeyboardInput();
-    void createMouseInput();
     void simulateTick() noexcept;
     void updatePlayerPresentation() noexcept;
     void updateCombatPresentation() noexcept;

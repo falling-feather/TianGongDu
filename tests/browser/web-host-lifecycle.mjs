@@ -841,7 +841,7 @@ async function runBrowser(target, origin) {
       assert.equal(await button(testId).count(), 1, `${target} is missing ${testId}.`);
     }
 
-    await canvas.click({ position: { x: 380, y: 360 } });
+    await canvas.focus();
     const stationaryFrame = analyzePng(await canvas.screenshot({ type: "png" }));
     await page.keyboard.down("w");
     await page.waitForTimeout(600);
@@ -937,7 +937,7 @@ async function runBrowser(target, origin) {
     await page.waitForTimeout(120);
     await page.reload({ waitUntil: "domcontentloaded", timeout: 45_000 });
     await waitForText(page, status, "宿主已就绪", 45_000);
-    await canvas.click({ position: { x: 380, y: 360 } });
+    await canvas.focus();
     await page.waitForTimeout(150);
 
     const beforePath = resolve(reportDirectory, `${target}-before.png`);

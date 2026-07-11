@@ -229,7 +229,6 @@ bool F1GrayboxLayer::init() {
     createActors();
     createHud();
     createKeyboardInput();
-    createMouseInput();
     updatePlayerPresentation();
     updateCombatPresentation();
     scheduleUpdate();
@@ -423,7 +422,7 @@ void F1GrayboxLayer::createHud() {
     addChild(title, 1001);
 
     auto* controls = label(
-        "WASD move | SPACE jump | J/LMB light | K/RMB heavy | SHIFT guard | C evade | 1/2 stance",
+        "WASD move | SPACE jump | J light | K heavy | SHIFT guard | C evade | 1/2 stance",
         13.0F,
         ax::Color4B(155, 210, 205, 255)
     );
@@ -482,22 +481,6 @@ void F1GrayboxLayer::createKeyboardInput() {
         } else {
             updateDirectionalKey(key, false);
         }
-    };
-    _eventDispatcher->addEventListenerWithSceneGraphPriority(listener, this);
-}
-
-void F1GrayboxLayer::createMouseInput() {
-    auto* listener = ax::EventListenerMouse::create();
-    listener->onMouseDown = [this](ax::EventMouse* event) {
-        if (event->getMouseButton() == ax::EventMouse::MouseButton::BUTTON_LEFT) {
-            queueCombatIntent(tgd::contracts::CombatCommandType::light_attack);
-            return true;
-        }
-        if (event->getMouseButton() == ax::EventMouse::MouseButton::BUTTON_RIGHT) {
-            queueCombatIntent(tgd::contracts::CombatCommandType::heavy_attack);
-            return true;
-        }
-        return false;
     };
     _eventDispatcher->addEventListenerWithSceneGraphPriority(listener, this);
 }

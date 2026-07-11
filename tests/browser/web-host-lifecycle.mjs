@@ -448,12 +448,82 @@ async function runBrowser(target, origin) {
 
     const status = page.locator("#status");
     const state = page.getByTestId("qa-state");
+    const profileState = page.getByTestId("profile-state");
+    const saveProfile = page.getByTestId("save-profile");
     const lastEvent = page.locator("#last-event");
     const canvas = page.locator("canvas");
     await waitForText(page, status, "宿主已就绪", 45_000);
     await waitForText(page, state, "presentation: running");
     await canvas.waitFor({ state: "visible" });
     assert.equal(await canvas.count(), 1, "Exactly one game canvas is required.");
+    await page.waitForFunction(
+      () => window.__tgdProfile?.getState()?.stateName === "ready",
+      undefined,
+      { timeout: 45_000 }
+    );
+    const initialProfile = await page.evaluate(() => window.__tgdProfile.getState());
+    assert.equal(initialProfile.hasSnapshot, false, `${target} Guest Profile was not fresh.`);
+    assert.equal(initialProfile.committedSaveCount, "0");
+    assert.equal(await saveProfile.isEnabled(), true, `${target} Guest save never became available.`);
+    assert.deepEqual(
+      await page.evaluate(() => window.__tgdProfile.inspectSchema()),
+      {
+        name: "tiangongdu.prototype_f1.internal.profile",
+        version: 1,
+        stores: [
+          "device_settings",
+          "migration_workspace",
+          "operations",
+          "profile_heads",
+          "profile_meta",
+          "snapshots"
+        ]
+      },
+      `${target} IndexedDB v1 schema drifted.`
+    );
+
+    await saveProfile.click();
+    await page.waitForFunction(
+      () => window.__tgdProfile?.getState()?.committedSaveCount === "1",
+      undefined,
+      { timeout: 15_000 }
+    );
+    await waitForText(page, profileState, "已保存");
+    const savedProfile = await page.evaluate(() => window.__tgdProfile.getState());
+    assert.equal(savedProfile.stateName, "ready");
+    assert.equal(savedProfile.hasSnapshot, true);
+    assert.equal(savedProfile.hasPendingSave, false);
+    assert.equal(savedProfile.logicalSequence, "1");
+    const saveTrace = await page.evaluate(() => window.__tgdLifecycleTrace
+      .filter((record) => record.event === "profile.state")
+      .map((record) => ({ ...record })));
+    const savingIndex = saveTrace.findIndex((record) => record.stateName === "saving");
+    const committedIndex = saveTrace.findIndex(
+      (record) => record.stateName === "ready" && record.committedSaveCount === "1"
+    );
+    assert(savingIndex >= 0, `${target} omitted the saving state.`);
+    assert(committedIndex > savingIndex, `${target} claimed commit before the saving state.`);
+    assert.equal(saveTrace[savingIndex].committedSaveCount, "0");
+    assert.doesNotMatch(saveTrace[savingIndex].displayText, /已保存/);
+    assert.match(saveTrace[committedIndex].displayText, /已保存/);
+
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 45_000 });
+    await waitForText(page, status, "宿主已就绪", 45_000);
+    await waitForText(page, state, "presentation: running");
+    await page.waitForFunction(
+      () => window.__tgdProfile?.getState()?.stateName === "ready",
+      undefined,
+      { timeout: 45_000 }
+    );
+    await waitForText(page, profileState, "已恢复");
+    const restoredProfile = await page.evaluate(() => window.__tgdProfile.getState());
+    assert.equal(restoredProfile.hasSnapshot, true);
+    assert.equal(restoredProfile.hasPendingSave, false);
+    assert.equal(restoredProfile.committedSaveCount, "0");
+    assert.equal(restoredProfile.logicalSequence, "1");
+    assert.equal(restoredProfile.snapshotId, savedProfile.snapshotId);
+    assert.doesNotMatch(await profileState.innerText(), /已保存/);
+
     await page.evaluate(() => {
       const canvasElement = document.querySelector("canvas");
       if (canvasElement) canvasElement.style.boxShadow = "none";

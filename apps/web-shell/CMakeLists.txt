@@ -27,6 +27,21 @@ target_compile_options(
   PRIVATE
     "$<$<COMPILE_LANG_AND_ID:CXX,Clang>:-Wno-gnu-zero-variadic-macro-arguments>"
 )
+target_link_options(
+  ${TGD_WEB_APP}
+  PRIVATE
+    "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web-abi.generated.js"
+    "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/indexeddb-v1.generated.js"
+    "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/indexeddb-storage.js"
+)
+set_property(
+  TARGET ${TGD_WEB_APP}
+  APPEND
+  PROPERTY LINK_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/web-abi.generated.js"
+    "${CMAKE_CURRENT_SOURCE_DIR}/indexeddb-v1.generated.js"
+    "${CMAKE_CURRENT_SOURCE_DIR}/indexeddb-storage.js"
+)
 
 # The F1 host has no external game assets yet. Keeping this list explicitly
 # empty prevents a second, accidental resource packaging path.
@@ -40,7 +55,7 @@ set(
 )
 set(
   AX_WASM_EXPORTS
-  "${AX_WASM_EXPORTS},_tgd_web_visibility_changed,_tgd_web_focus_changed,_tgd_web_context_lost,_tgd_web_context_restored,_tgd_web_presentation_state"
+  "${AX_WASM_EXPORTS},_malloc,_free,_tgd_web_abi_version,_tgd_web_boot,_tgd_web_submit_platform_event,_tgd_web_submit_ui_command,_tgd_web_peek_platform_request_size,_tgd_web_poll_platform_request,_tgd_web_complete_async_request,_tgd_web_peek_ui_event_size,_tgd_web_poll_ui_event,_tgd_web_request_shutdown,_tgd_web_visibility_changed,_tgd_web_focus_changed,_tgd_web_context_lost,_tgd_web_context_restored,_tgd_web_presentation_state"
   CACHE STRING
   "TianGongDu and Axmol WASM exports"
   FORCE

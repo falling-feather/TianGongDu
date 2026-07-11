@@ -75,6 +75,25 @@
         gap: 16px;
         margin-top: 10px;
       }
+
+      .profile-controls {
+        display: grid;
+        grid-template-columns: auto auto 1fr;
+        align-items: center;
+        gap: 10px;
+        margin-top: 12px;
+        padding: 10px 12px;
+        border: 1px solid rgba(208, 157, 85, 0.34);
+        border-radius: 10px;
+        background: rgba(5, 10, 14, 0.82);
+      }
+
+      .profile-label {
+        color: #d09d55;
+        font-size: 13px;
+        letter-spacing: 0.06em;
+      }
+
       .qa-controls {
         display: flex;
         flex-wrap: wrap;
@@ -87,8 +106,7 @@
         background: rgba(5, 10, 14, 0.82);
       }
 
-      .qa-controls[hidden] { display: none; }
-
+      .profile-controls button,
       .qa-controls button {
         border: 1px solid rgba(208, 157, 85, 0.55);
         border-radius: 7px;
@@ -99,15 +117,34 @@
         cursor: pointer;
       }
 
+      .profile-controls button:disabled {
+        cursor: wait;
+        opacity: 0.48;
+      }
+
+      .profile-controls button:focus-visible,
       .qa-controls button:focus-visible {
         outline: 2px solid #d09d55;
         outline-offset: 2px;
       }
 
+      #profile-state {
+        margin: 0;
+        color: #aab9b7;
+        font: 12px/1.4 ui-monospace, "Cascadia Mono", monospace;
+      }
+
+      .qa-controls[hidden] { display: none; }
+
       #qa-state {
         margin: 0 0 0 auto;
         color: #aab9b7;
         font: 12px/1.4 ui-monospace, "Cascadia Mono", monospace;
+      }
+
+      @media (max-width: 640px) {
+        .profile-controls { grid-template-columns: 1fr auto; }
+        #profile-state { grid-column: 1 / -1; }
       }
     </style>
   </head>
@@ -124,6 +161,11 @@
         <p id="last-event" aria-live="polite">等待生命周期事件</p>
         <p id="variant">Web Single · WebGL2</p>
       </footer>
+      <section class="profile-controls" aria-label="Guest 本地存档">
+        <span class="profile-label">Guest · 本地优先</span>
+        <button id="save-profile" data-testid="save-profile" type="button" disabled>保存检查点</button>
+        <p id="profile-state" data-testid="profile-state" role="status" aria-live="polite" data-save-state="booting">等待 IndexedDB…</p>
+      </section>
       <section id="qa-controls" class="qa-controls" aria-label="Lifecycle QA controls" hidden>
         <button type="button" data-testid="qa-hide">Simulate hidden</button>
         <button type="button" data-testid="qa-show">Simulate visible</button>
@@ -141,10 +183,13 @@
       const statusElement = document.getElementById("status");
       const lastEventElement = document.getElementById("last-event");
       const canvasElement = document.getElementById("canvas");
+      const saveProfileButton = document.getElementById("save-profile");
+      const profileStateElement = document.getElementById("profile-state");
       const qaControlsElement = document.getElementById("qa-controls");
       const qaStateElement = document.getElementById("qa-state");
       const lifecycleTrace = [];
       let contextLossExtension = null;
+      let profileBridge = null;
       const presentationStateNames = Object.freeze({
         0: "stopped",
         1: "running",
@@ -176,6 +221,53 @@
 
       function presentationState() {
         return invokeBridge("tgd_web_presentation_state", "number");
+      }
+
+      function renderProfileState(state) {
+        if (!state) return;
+        saveProfileButton.disabled = state.stateName !== "ready";
+        profileStateElement.dataset.saveState = state.stateName;
+        if (state.stateName === "loading_head" || state.stateName === "loading_snapshot") {
+          profileStateElement.textContent = "正在恢复 Guest 本地档…";
+        } else if (state.stateName === "saving") {
+          profileStateElement.textContent = "正在提交 IndexedDB 原子事务…";
+        } else if (state.stateName === "ready" && state.hasSnapshot) {
+          profileStateElement.textContent = Number(state.committedSaveCount) > 0
+            ? `已保存 · 本会话 ${state.committedSaveCount} 次 · 序列 ${state.logicalSequence}`
+            : `已恢复 · 序列 ${state.logicalSequence}`;
+          profileStateElement.dataset.saveState = Number(state.committedSaveCount) > 0
+            ? "saved"
+            : "restored";
+        } else if (state.stateName === "ready") {
+          profileStateElement.textContent = "Guest 新档已就绪";
+        } else {
+          profileStateElement.textContent = `本地档不可写 · ${state.stateName}/${state.errorName}`;
+        }
+        recordLifecycle("profile.state", {
+          ...state,
+          displayText: profileStateElement.textContent
+        });
+      }
+
+      async function initializeProfile() {
+        if (!globalThis.TgdIndexedDbStorage) {
+          throw new Error("IndexedDB storage bridge was not linked into the Web host");
+        }
+        profileBridge = globalThis.TgdIndexedDbStorage.createBridge(Module, {
+          onProfileState: renderProfileState,
+          onFatal: (error) => {
+            profileStateElement.dataset.saveState = "fatal";
+            profileStateElement.textContent = "本地档桥发生致命错误";
+            recordLifecycle("profile.fatal", { message: String(error) });
+          }
+        });
+        window.__tgdProfile = Object.freeze({
+          getState: profileBridge.getProfileState,
+          save: profileBridge.saveGuestCheckpoint,
+          inspectSchema: profileBridge.inspectSchema,
+          identity: profileBridge.identity
+        });
+        await profileBridge.boot();
       }
 
       function updateQaState(action) {
@@ -221,6 +313,18 @@
       window.addEventListener("focus", () => dispatchFocus(true));
       window.addEventListener("error", (event) => {
         recordLifecycle("window.error", { message: event.message });
+      });
+      window.addEventListener("pagehide", () => profileBridge?.shutdown(), { once: true });
+
+      saveProfileButton.addEventListener("click", async () => {
+        saveProfileButton.disabled = true;
+        try {
+          await profileBridge?.saveGuestCheckpoint();
+        } catch (error) {
+          profileStateElement.dataset.saveState = "error";
+          profileStateElement.textContent = `保存失败 · ${String(error)}`;
+          recordLifecycle("profile.save_failed", { message: String(error) });
+        }
       });
 
       window.__tgdLifecycleTrace = lifecycleTrace;
@@ -268,13 +372,20 @@
       var Module = {
         preRun: [],
         postRun: [() => {
-          window.setTimeout(() => {
+          window.setTimeout(async () => {
             statusElement.textContent = "宿主已就绪";
             dispatchFocus(document.hasFocus());
             dispatchVisibility(document.hidden);
             recordLifecycle("runtime.ready", { state: presentationState() });
             if (!qaControlsElement.hidden) updateQaState("runtime.ready");
             canvasElement.focus({ preventScroll: true });
+            try {
+              await initializeProfile();
+            } catch (error) {
+              profileStateElement.dataset.saveState = "fatal";
+              profileStateElement.textContent = `本地档启动失败 · ${String(error)}`;
+              recordLifecycle("profile.boot_failed", { message: String(error) });
+            }
           }, 0);
         }],
         print: (...parts) => console.log(parts.join(" ")),

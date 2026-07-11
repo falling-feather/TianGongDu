@@ -6,6 +6,14 @@
     minor: 0,
     headerBytes: 40,
     maxMessageBytes: 262144,
+    payload: Object.freeze({
+      bootConfigV1Bytes: 52,
+      uiCommandV1Bytes: 20,
+      uiEventV1Bytes: 40,
+      storageRequestV1HeaderBytes: 208,
+      storageCompletionV1HeaderBytes: 152,
+      maxStorageTransferBytes: 16777392
+    }),
     messageType: Object.freeze({
     boot_config: 1,
     boot_result: 2,

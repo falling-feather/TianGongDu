@@ -45,6 +45,14 @@ export interface TgdWebAbiContract {
   readonly minor: 0;
   readonly headerBytes: 40;
   readonly maxMessageBytes: 262144;
+  readonly payload: {
+    readonly bootConfigV1Bytes: 52;
+    readonly uiCommandV1Bytes: 20;
+    readonly uiEventV1Bytes: 40;
+    readonly storageRequestV1HeaderBytes: 208;
+    readonly storageCompletionV1HeaderBytes: 152;
+    readonly maxStorageTransferBytes: 16777392;
+  };
   readonly messageType: {
     readonly boot_config: 1;
     readonly boot_result: 2;

@@ -8,6 +8,14 @@
     "maxMessageBytes": 262144,
     "headerBytes": 40
   },
+  "payloads": {
+    "bootConfigV1Bytes": 52,
+    "uiCommandV1Bytes": 20,
+    "uiEventV1Bytes": 40,
+    "storageRequestV1HeaderBytes": 208,
+    "storageCompletionV1HeaderBytes": 152,
+    "maxStorageTransferBytes": 16777392
+  },
   "messageTypes": [
     { "id": 1, "name": "boot_config", "direction": "js_to_cpp", "payloadVersion": 1, "critical": true },
     { "id": 2, "name": "boot_result", "direction": "cpp_to_js", "payloadVersion": 1, "critical": true },

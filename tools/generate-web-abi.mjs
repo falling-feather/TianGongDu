@@ -52,6 +52,19 @@ export function validateWebAbiContract(contract) {
   if (contract.abi.maxMessageBytes !== 256 * 1024) {
     throw new Error("Web ABI v1 max message size must stay at 256 KiB.");
   }
+  const expectedPayloads = Object.freeze({
+    bootConfigV1Bytes: 52,
+    uiCommandV1Bytes: 20,
+    uiEventV1Bytes: 40,
+    storageRequestV1HeaderBytes: 208,
+    storageCompletionV1HeaderBytes: 152,
+    maxStorageTransferBytes: 16 * 1024 * 1024 + 176
+  });
+  for (const [name, value] of Object.entries(expectedPayloads)) {
+    if (contract.payloads?.[name] !== value) {
+      throw new Error(`Web ABI v1 payload size changed: ${name}`);
+    }
+  }
   assertIdList(contract.messageTypes, "messageTypes");
   assertIdList(contract.storageOperations, "storageOperations");
   assertIdList(contract.errorCodes, "errorCodes");
@@ -90,6 +103,12 @@ export function renderCHeader(contract) {
 #define TGD_WEB_ABI_MINOR UINT16_C(${contract.abi.minor})
 #define TGD_WEB_ABI_MESSAGE_HEADER_BYTES UINT32_C(${contract.abi.headerBytes})
 #define TGD_WEB_ABI_MAX_MESSAGE_BYTES UINT32_C(${contract.abi.maxMessageBytes})
+#define TGD_WEB_BOOT_CONFIG_V1_BYTES UINT32_C(${contract.payloads.bootConfigV1Bytes})
+#define TGD_WEB_UI_COMMAND_V1_BYTES UINT32_C(${contract.payloads.uiCommandV1Bytes})
+#define TGD_WEB_UI_EVENT_V1_BYTES UINT32_C(${contract.payloads.uiEventV1Bytes})
+#define TGD_WEB_STORAGE_REQUEST_V1_HEADER_BYTES UINT32_C(${contract.payloads.storageRequestV1HeaderBytes})
+#define TGD_WEB_STORAGE_COMPLETION_V1_HEADER_BYTES UINT32_C(${contract.payloads.storageCompletionV1HeaderBytes})
+#define TGD_WEB_MAX_STORAGE_TRANSFER_BYTES UINT32_C(${contract.payloads.maxStorageTransferBytes})
 
 typedef enum tgd_web_message_type {
 ${messageEnum}
@@ -151,6 +170,14 @@ export function renderJavaScript(contract) {
     minor: ${contract.abi.minor},
     headerBytes: ${contract.abi.headerBytes},
     maxMessageBytes: ${contract.abi.maxMessageBytes},
+    payload: Object.freeze({
+      bootConfigV1Bytes: ${contract.payloads.bootConfigV1Bytes},
+      uiCommandV1Bytes: ${contract.payloads.uiCommandV1Bytes},
+      uiEventV1Bytes: ${contract.payloads.uiEventV1Bytes},
+      storageRequestV1HeaderBytes: ${contract.payloads.storageRequestV1HeaderBytes},
+      storageCompletionV1HeaderBytes: ${contract.payloads.storageCompletionV1HeaderBytes},
+      maxStorageTransferBytes: ${contract.payloads.maxStorageTransferBytes}
+    }),
     messageType: Object.freeze({
 ${objectEntries(contract.messageTypes)}
     }),
@@ -189,6 +216,14 @@ export interface TgdWebAbiContract {
   readonly minor: ${contract.abi.minor};
   readonly headerBytes: ${contract.abi.headerBytes};
   readonly maxMessageBytes: ${contract.abi.maxMessageBytes};
+  readonly payload: {
+    readonly bootConfigV1Bytes: ${contract.payloads.bootConfigV1Bytes};
+    readonly uiCommandV1Bytes: ${contract.payloads.uiCommandV1Bytes};
+    readonly uiEventV1Bytes: ${contract.payloads.uiEventV1Bytes};
+    readonly storageRequestV1HeaderBytes: ${contract.payloads.storageRequestV1HeaderBytes};
+    readonly storageCompletionV1HeaderBytes: ${contract.payloads.storageCompletionV1HeaderBytes};
+    readonly maxStorageTransferBytes: ${contract.payloads.maxStorageTransferBytes};
+  };
   readonly messageType: {
 ${messageKeys}
   };

@@ -57,6 +57,19 @@ target_link_libraries(tgd_native_profile_storage PRIVATE tgd_contracts tgd_runti
 
 add_test(NAME tgd.native.profile-storage COMMAND tgd_native_profile_storage)
 
+add_executable(tgd_native_web_platform_bridge web_platform_bridge.cpp)
+target_compile_features(tgd_native_web_platform_bridge PRIVATE cxx_std_20)
+tgd_enable_strict_warnings(tgd_native_web_platform_bridge)
+target_link_libraries(
+  tgd_native_web_platform_bridge
+  PRIVATE
+    tgd_contracts
+    tgd_runtime
+    tgd_platform_web
+)
+
+add_test(NAME tgd.native.web-platform-bridge COMMAND tgd_native_web_platform_bridge)
+
 add_executable(tgd_native_session_input_state session_input_state.cpp)
 target_compile_features(tgd_native_session_input_state PRIVATE cxx_std_20)
 tgd_enable_strict_warnings(tgd_native_session_input_state)

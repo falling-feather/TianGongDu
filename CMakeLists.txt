@@ -125,7 +125,16 @@ endif()
 tgd_register_layer(tgd_presentation_axmol ALLOW tgd_runtime tgd_contracts)
 
 tgd_add_static_layer(tgd_platform_web)
-target_sources(tgd_platform_web PRIVATE src/platform/web/src/layer_probe.cpp)
+target_sources(
+  tgd_platform_web
+  PRIVATE
+    src/platform/web/src/layer_probe.cpp
+    src/platform/web/src/web_platform_bridge.cpp
+)
+target_include_directories(
+  tgd_platform_web
+  PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/platform/web/include>"
+)
 target_link_libraries(tgd_platform_web PUBLIC tgd_runtime tgd_contracts)
 tgd_register_layer(tgd_platform_web ALLOW tgd_runtime tgd_contracts)
 

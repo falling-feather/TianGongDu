@@ -7,6 +7,7 @@
   "required": [
     "schemaVersion",
     "abi",
+    "payloads",
     "messageTypes",
     "storageOperations",
     "errorCodes"
@@ -24,6 +25,26 @@
         "endianness": { "const": "little" },
         "maxMessageBytes": { "type": "integer", "minimum": 1024, "maximum": 1048576 },
         "headerBytes": { "const": 40 }
+      }
+    },
+    "payloads": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bootConfigV1Bytes",
+        "uiCommandV1Bytes",
+        "uiEventV1Bytes",
+        "storageRequestV1HeaderBytes",
+        "storageCompletionV1HeaderBytes",
+        "maxStorageTransferBytes"
+      ],
+      "properties": {
+        "bootConfigV1Bytes": { "const": 52 },
+        "uiCommandV1Bytes": { "const": 20 },
+        "uiEventV1Bytes": { "const": 40 },
+        "storageRequestV1HeaderBytes": { "const": 208 },
+        "storageCompletionV1HeaderBytes": { "const": 152 },
+        "maxStorageTransferBytes": { "const": 16777392 }
       }
     },
     "messageTypes": { "$ref": "#/$defs/idList" },

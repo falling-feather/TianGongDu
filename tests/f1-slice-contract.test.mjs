@@ -31,6 +31,11 @@ test("F1 one-hour contract and generated C++ stay synchronized", async () => {
   assert.equal(contract.combatBootstrap.abilities.length, 9);
   assert.equal(contract.combatBootstrap.director.maxSimultaneousAttackers, 1);
   assert.equal(contract.combatBootstrap.director.formationRadiusMm, 1500);
+  assert.equal(contract.questInteractions.length, 2);
+  assert.deepEqual(
+    new Set(contract.questInteractions.map((interaction) => interaction.objectiveId)),
+    new Set(contract.beats[0].objectiveIds)
+  );
   assert(
     contract.combatBootstrap.actors.every((actor) =>
       Object.values(actor.recovery).every((value) => Number.isInteger(value) && value > 0)
@@ -45,9 +50,27 @@ test("F1 stable content IDs have unique 64-bit keys", async () => {
   const ids = [
     contract.id,
     ...contract.cellIds,
-    ...contract.beats.flatMap((beat) => [beat.id, ...beat.objectiveIds])
+    ...contract.beats.flatMap((beat) => [beat.id, ...beat.objectiveIds]),
+    ...contract.questInteractions.map((interaction) => interaction.id)
   ];
   assert.equal(new Set(ids.map((id) => fnv1a64(id))).size, ids.length);
+});
+
+test("F1 opening objectives require valid content-driven scene interactions", async () => {
+  const unknownObjective = structuredClone(await loadF1SliceContract());
+  unknownObjective.questInteractions[0].objectiveId = "f1_objective_missing";
+  assert.throws(
+    () => validateF1SliceContract(unknownObjective, catalog),
+    /unknown objective/
+  );
+
+  const duplicateObjective = structuredClone(await loadF1SliceContract());
+  duplicateObjective.questInteractions[1].objectiveId =
+    duplicateObjective.questInteractions[0].objectiveId;
+  assert.throws(
+    () => validateF1SliceContract(duplicateObjective, catalog),
+    /duplicate quest interaction objective/
+  );
 });
 
 test("F1 slice cannot auto-advance or shrink below one playable hour", async () => {

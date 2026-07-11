@@ -58,6 +58,12 @@ int main() {
             definition->enemy_family_ids.size() == 2,
         "the first route, cells, and enemy families are explicit"
     );
+    ok &= expect(
+        definition->quest_interactions.size() == 2 &&
+            definition->quest_interactions.front().objective_id.key ==
+                tgd::contracts::stable_content_key("f1_objective_inspect_travel_writ"),
+        "the opening scene interactions are generated content, not presentation rules"
+    );
 
     std::uint32_t minutes = 0;
     std::unordered_set<tgd::contracts::StableContentKey> ids;

@@ -59,6 +59,22 @@ struct VerticalSliceBeatDefinition final {
     std::span<const ContentId> objectives{};
 };
 
+enum class QuestInteractionKind : std::uint8_t {
+    inspect,
+    operate,
+    talk,
+    choose,
+};
+
+struct QuestInteractionDefinition final {
+    ContentId id{};
+    QuestInteractionKind kind{QuestInteractionKind::inspect};
+    ContentId cell_id{};
+    ContentId objective_id{};
+    GroundPoseMm pose{};
+    std::int32_t radius_mm{};
+};
+
 struct VerticalSliceDefinition final {
     ContentId id{};
     std::string_view view_model{};
@@ -76,6 +92,7 @@ struct VerticalSliceDefinition final {
     std::span<const ContentId> enemy_family_ids{};
     std::span<const ContentId> cell_ids{};
     std::span<const VerticalSliceBeatDefinition> beats{};
+    std::span<const QuestInteractionDefinition> quest_interactions{};
 };
 
 }  // namespace tgd::contracts

@@ -14,6 +14,7 @@
     "combatBootstrap",
     "cellIds",
     "beats",
+    "questInteractions",
     "paddingPolicy",
     "ports"
   ],
@@ -105,6 +106,12 @@
       "type": "array",
       "minItems": 7,
       "items": { "$ref": "#/$defs/beat" }
+    },
+    "questInteractions": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 64,
+      "items": { "$ref": "#/$defs/questInteraction" }
     },
     "paddingPolicy": {
       "type": "object",
@@ -335,6 +342,19 @@
         "cellId": { "$ref": "#/$defs/id" },
         "objectiveIds": { "$ref": "#/$defs/idList" },
         "autoAdvance": { "const": false }
+      }
+    },
+    "questInteraction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "cellId", "objectiveId", "poseMm", "radiusMm"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": { "enum": ["inspect", "operate", "talk", "choose"] },
+        "cellId": { "$ref": "#/$defs/id" },
+        "objectiveId": { "$ref": "#/$defs/id" },
+        "poseMm": { "$ref": "#/$defs/pose" },
+        "radiusMm": { "type": "integer", "minimum": 1, "maximum": 10000 }
       }
     },
     "port": {

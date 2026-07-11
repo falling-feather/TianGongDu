@@ -3,6 +3,7 @@
 #include <tgd/contracts/quest_types.hpp>
 #include <tgd/gameplay/quest_runtime.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cstdlib>
 #include <iostream>
@@ -13,7 +14,9 @@
 namespace {
 
 using tgd::gameplay::DeterministicQuestRuntime;
+using tgd::gameplay::DeterministicQuestInteractionResolver;
 using tgd::gameplay::QuestError;
+using tgd::gameplay::QuestInteractionError;
 using tgd::gameplay::QuestLifecycle;
 using tgd::gameplay::QuestObjectiveState;
 
@@ -199,6 +202,119 @@ bool test_invalid_definition_fails_closed() {
     return ok;
 }
 
+bool test_scene_interactions_resolve_from_active_objectives() {
+    DeterministicQuestRuntime quest;
+    DeterministicQuestInteractionResolver interactions;
+    CollectingSink sink;
+    bool ok = quest.initialize(definition(), definition().player.actor) == QuestError::none;
+    ok &= quest.start() == QuestError::none;
+    ok &= expect(
+        interactions.initialize(definition().quest_interactions) == QuestInteractionError::none,
+        "generated scene interactions initialize once"
+    );
+
+    const auto initial = interactions.resolve(
+        {
+            definition().player.actor,
+            definition().beats.front().cell_id.key,
+            definition().player.initial_pose,
+        },
+        quest
+    );
+    ok &= expect(
+        initial.error == QuestInteractionError::none && initial.found &&
+            initial.interaction ==
+                tgd::contracts::stable_content_key("f1_interaction_travel_writ") &&
+            initial.objective ==
+                tgd::contracts::stable_content_key("f1_objective_inspect_travel_writ"),
+        "the closest active opening interaction resolves from authored content"
+    );
+    ok &= quest.apply(
+              {1, definition().player.actor, 1, {}, initial.objective},
+              sink
+          ).error == QuestError::none;
+    const auto consumed = interactions.resolve(
+        {
+            definition().player.actor,
+            definition().beats.front().cell_id.key,
+            definition().player.initial_pose,
+        },
+        quest
+    );
+    ok &= expect(
+        !consumed.found,
+        "a completed objective no longer exposes an interaction prompt"
+    );
+
+    auto wrong_floor_pose = definition().quest_interactions.back().pose;
+    ++wrong_floor_pose.floor_layer;
+    ok &= expect(
+        !interactions
+             .resolve(
+                 {
+                     definition().player.actor,
+                     definition().quest_interactions.back().cell_id.key,
+                     wrong_floor_pose,
+                 },
+                 quest
+             )
+             .found,
+        "interactions do not leak across authored floor layers"
+    );
+    ok &= expect(
+        interactions.resolve({0, definition().beats.front().cell_id.key, {}}, quest).error ==
+            QuestInteractionError::invalid_query,
+        "invalid actor queries fail closed"
+    );
+    return ok;
+}
+
+bool test_scene_interaction_ties_are_stable() {
+    const auto& first = definition().beats.front();
+    const auto shared_pose = definition().player.initial_pose;
+    const std::array tied{
+        tgd::contracts::QuestInteractionDefinition{
+            tgd::contracts::content_id("interaction_tie_b"),
+            tgd::contracts::QuestInteractionKind::inspect,
+            first.cell_id,
+            first.objectives.front(),
+            shared_pose,
+            1000,
+        },
+        tgd::contracts::QuestInteractionDefinition{
+            tgd::contracts::content_id("interaction_tie_a"),
+            tgd::contracts::QuestInteractionKind::operate,
+            first.cell_id,
+            first.objectives.back(),
+            shared_pose,
+            1000,
+        },
+    };
+    DeterministicQuestRuntime quest;
+    DeterministicQuestInteractionResolver interactions;
+    bool ok = quest.initialize(definition(), definition().player.actor) == QuestError::none;
+    ok &= quest.start() == QuestError::none;
+    ok &= interactions.initialize(tied) == QuestInteractionError::none;
+    const auto resolved = interactions.resolve(
+        {definition().player.actor, first.cell_id.key, shared_pose},
+        quest
+    );
+    const auto expected = std::min(tied[0].id.key, tied[1].id.key);
+    ok &= expect(
+        resolved.found && resolved.interaction == expected,
+        "equal-distance interactions use stable content ID ordering"
+    );
+
+    auto invalid = tied;
+    invalid[1].objective_id = invalid[0].objective_id;
+    DeterministicQuestInteractionResolver invalid_resolver;
+    ok &= expect(
+        invalid_resolver.initialize(invalid) == QuestInteractionError::invalid_definition,
+        "duplicate interaction objectives fail definition validation"
+    );
+    return ok;
+}
+
 }  // namespace
 
 int main() {
@@ -206,5 +322,7 @@ int main() {
     ok &= test_ordering_idempotency_and_lifecycle();
     ok &= test_full_resolution_is_deterministic();
     ok &= test_invalid_definition_fails_closed();
+    ok &= test_scene_interactions_resolve_from_active_objectives();
+    ok &= test_scene_interaction_ties_are_stable();
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

@@ -74,6 +74,44 @@ class IQuestRuntime {
     [[nodiscard]] virtual const contracts::QuestSnapshot& snapshot() const noexcept = 0;
 };
 
+enum class QuestInteractionError : std::uint8_t {
+    none,
+    invalid_lifecycle,
+    invalid_definition,
+    invalid_query,
+};
+
+struct QuestInteractionQuery final {
+    contracts::StableActorKey actor{};
+    contracts::StableContentKey cell{};
+    contracts::GroundPoseMm pose{};
+};
+
+struct QuestInteractionResult final {
+    QuestInteractionError error{QuestInteractionError::none};
+    bool found{};
+    contracts::StableContentKey interaction{};
+    contracts::StableContentKey objective{};
+    contracts::QuestInteractionKind kind{contracts::QuestInteractionKind::inspect};
+};
+
+class DeterministicQuestInteractionResolver final {
+  public:
+    static constexpr std::size_t interaction_capacity = 64;
+
+    [[nodiscard]] QuestInteractionError initialize(
+        std::span<const contracts::QuestInteractionDefinition> definitions
+    ) noexcept;
+    [[nodiscard]] QuestInteractionResult resolve(
+        const QuestInteractionQuery& query,
+        const IQuestRuntime& quest
+    ) const noexcept;
+
+  private:
+    std::span<const contracts::QuestInteractionDefinition> definitions_{};
+    bool initialized_{};
+};
+
 class DeterministicQuestRuntime final : public IQuestRuntime {
   public:
     static constexpr std::size_t stage_capacity = 16;

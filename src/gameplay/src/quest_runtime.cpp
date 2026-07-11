@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <limits>
 #include <type_traits>
 
 namespace tgd::gameplay {
@@ -15,6 +16,33 @@ void hash_byte(std::uint64_t& hash, std::uint8_t value) noexcept {
     hash *= fnv_prime;
 }
 
+[[nodiscard]] std::uint64_t squared_component(
+    std::int32_t left,
+    std::int32_t right
+) noexcept {
+    const auto delta = static_cast<std::int64_t>(left) - static_cast<std::int64_t>(right);
+    const auto magnitude = static_cast<std::uint64_t>(delta < 0 ? -delta : delta);
+    return magnitude * magnitude;
+}
+
+[[nodiscard]] std::uint64_t saturating_add(
+    std::uint64_t left,
+    std::uint64_t right
+) noexcept {
+    const auto maximum = std::numeric_limits<std::uint64_t>::max();
+    return right > maximum - left ? maximum : left + right;
+}
+
+[[nodiscard]] std::uint64_t ground_distance_squared(
+    const contracts::GroundPoseMm& left,
+    const contracts::GroundPoseMm& right
+) noexcept {
+    return saturating_add(
+        squared_component(left.x, right.x),
+        squared_component(left.y, right.y)
+    );
+}
+
 template <typename Integer>
 void hash_integer(std::uint64_t& hash, Integer value) noexcept {
     using Unsigned = std::make_unsigned_t<Integer>;
@@ -26,6 +54,71 @@ void hash_integer(std::uint64_t& hash, Integer value) noexcept {
 }
 
 }  // namespace
+
+QuestInteractionError DeterministicQuestInteractionResolver::initialize(
+    std::span<const contracts::QuestInteractionDefinition> definitions
+) noexcept {
+    if (initialized_) {
+        return QuestInteractionError::invalid_lifecycle;
+    }
+    if (definitions.empty() || definitions.size() > interaction_capacity) {
+        return QuestInteractionError::invalid_definition;
+    }
+    for (std::size_t index = 0; index < definitions.size(); ++index) {
+        const auto& definition = definitions[index];
+        if (definition.id.key == 0 || definition.cell_id.key == 0 ||
+            definition.objective_id.key == 0 || definition.radius_mm <= 0) {
+            return QuestInteractionError::invalid_definition;
+        }
+        for (std::size_t prior = 0; prior < index; ++prior) {
+            if (definitions[prior].id.key == definition.id.key ||
+                definitions[prior].objective_id.key == definition.objective_id.key) {
+                return QuestInteractionError::invalid_definition;
+            }
+        }
+    }
+    definitions_ = definitions;
+    initialized_ = true;
+    return QuestInteractionError::none;
+}
+
+QuestInteractionResult DeterministicQuestInteractionResolver::resolve(
+    const QuestInteractionQuery& query,
+    const IQuestRuntime& quest
+) const noexcept {
+    QuestInteractionResult result{};
+    if (!initialized_) {
+        result.error = QuestInteractionError::invalid_lifecycle;
+        return result;
+    }
+    if (query.actor == 0 || query.cell == 0) {
+        result.error = QuestInteractionError::invalid_query;
+        return result;
+    }
+
+    auto best_distance = std::numeric_limits<std::uint64_t>::max();
+    for (const auto& definition : definitions_) {
+        if (definition.cell_id.key != query.cell ||
+            definition.pose.floor_layer != query.pose.floor_layer ||
+            quest.objective_state(definition.objective_id.key) != QuestObjectiveState::active) {
+            continue;
+        }
+        const auto distance = ground_distance_squared(query.pose, definition.pose);
+        const auto radius = static_cast<std::uint64_t>(definition.radius_mm);
+        if (distance > radius * radius) {
+            continue;
+        }
+        if (!result.found || distance < best_distance ||
+            (distance == best_distance && definition.id.key < result.interaction)) {
+            result.found = true;
+            result.interaction = definition.id.key;
+            result.objective = definition.objective_id.key;
+            result.kind = definition.kind;
+            best_distance = distance;
+        }
+    }
+    return result;
+}
 
 QuestError DeterministicQuestRuntime::initialize(
     const contracts::VerticalSliceDefinition& definition,

@@ -121,6 +121,45 @@ export function validateF1SliceContract(contract, catalog) {
   if (playableMinutes !== timing.playableTargetMinutes) {
     fail(`beat budgets total ${playableMinutes}, expected ${timing.playableTargetMinutes}`);
   }
+  const interactions = contract.questInteractions;
+  if (!Array.isArray(interactions) || interactions.length < 2 || interactions.length > 64) {
+    fail("quest interactions must contain 2..64 definitions");
+  }
+  const interactionKinds = new Set(["inspect", "operate", "talk", "choose"]);
+  for (const interaction of interactions) {
+    if (!interactionKinds.has(interaction.kind)) {
+      fail(`${interaction.id} has an unsupported interaction kind`);
+    }
+    if (!contract.cellIds.includes(interaction.cellId)) {
+      fail(`${interaction.id} references an unknown cell`);
+    }
+    if (!objectiveIds.includes(interaction.objectiveId)) {
+      fail(`${interaction.id} references an unknown objective`);
+    }
+    if (!Number.isInteger(interaction.radiusMm) || interaction.radiusMm <= 0 ||
+        interaction.radiusMm > 10000) {
+      fail(`${interaction.id} has an invalid interaction radius`);
+    }
+    const pose = interaction.poseMm;
+    if (!pose || ![pose.x, pose.y, pose.height, pose.floorLayer].every(Number.isInteger)) {
+      fail(`${interaction.id} has an invalid interaction pose`);
+    }
+  }
+  assertUnique(interactions.map((interaction) => interaction.id), "quest interaction id");
+  assertUnique(
+    interactions.map((interaction) => interaction.objectiveId),
+    "quest interaction objective"
+  );
+  const firstBeatObjectives = new Set(contract.beats[0].objectiveIds);
+  const firstBeatInteractionObjectives = interactions
+    .filter((interaction) => firstBeatObjectives.has(interaction.objectiveId))
+    .map((interaction) => interaction.objectiveId);
+  if (
+    firstBeatInteractionObjectives.length !== firstBeatObjectives.size ||
+    firstBeatInteractionObjectives.some((objective) => !firstBeatObjectives.has(objective))
+  ) {
+    fail("the first playable beat must be fully covered by scene interactions");
+  }
   if (
     contract.paddingPolicy?.repeatableCombatCountsTowardTarget !== false ||
     contract.paddingPolicy?.forcedWaitingCountsTowardTarget !== false ||
@@ -354,6 +393,7 @@ export function validateF1SliceContract(contract, catalog) {
     ...contract.cellIds,
     ...beatIds,
     ...objectiveIds,
+    ...interactions.map((interaction) => interaction.id),
     combat.id,
     ...combat.actors.map((actor) => actor.archetypeId),
     ...stanceIds,
@@ -394,6 +434,11 @@ function combatAbilityRow(ability) {
   return `    {${contentId(ability.id)}, contracts::CombatCommandType::${ability.trigger}, ${stableKey(ability.requiredStanceId)}, ${ability.staminaCost}, ${ability.windupTicks}, ${ability.activeTicks}, ${ability.recoveryTicks}, ${ability.rangeMm}, ${ability.heightToleranceMm}, ${ability.healthDamage}, ${ability.poiseDamage}, ${feedback}},`;
 }
 
+function questInteractionRow(interaction) {
+  const pose = interaction.poseMm;
+  return `    {${contentId(interaction.id)}, contracts::QuestInteractionKind::${interaction.kind}, ${contentId(interaction.cellId)}, ${contentId(interaction.objectiveId)}, {${pose.x}, ${pose.y}, ${pose.height}, ${pose.floorLayer}}, ${interaction.radiusMm}},`;
+}
+
 export function renderF1SliceContract(contract) {
   const refs = contract.catalogReferences;
   const seed = contract.playerSeed;
@@ -416,6 +461,7 @@ ${arrayRows(beat.objectiveIds)}
   const basis = seed.cameraBasisQ15;
   const combatActorRows = combat.actors.map(combatActorRow).join("\n");
   const combatAbilityRows = combat.abilities.map(combatAbilityRow).join("\n");
+  const questInteractionRows = contract.questInteractions.map(questInteractionRow).join("\n");
 
   return `// Generated from content/design/f1-vertical-slice.json. Do not edit by hand.
 #pragma once
@@ -448,6 +494,10 @@ ${arrayRows(refs.enemyFamilyIds)}
 
 inline constexpr std::array<contracts::ContentId, ${contract.cellIds.length}> f1_cells{{
 ${arrayRows(contract.cellIds)}
+}};
+
+inline constexpr std::array<contracts::QuestInteractionDefinition, ${contract.questInteractions.length}> f1_quest_interactions{{
+${questInteractionRows}
 }};
 
 inline constexpr std::array<contracts::CombatActorConfig, ${combat.actors.length}> f1_combat_actors{{
@@ -495,6 +545,7 @@ inline constexpr contracts::VerticalSliceDefinition f1_vertical_slice_definition
     std::span<const contracts::ContentId>{f1_enemy_families},
     std::span<const contracts::ContentId>{f1_cells},
     std::span<const contracts::VerticalSliceBeatDefinition>{f1_beats},
+    std::span<const contracts::QuestInteractionDefinition>{f1_quest_interactions},
 };
 
 }  // namespace tgd::content::generated

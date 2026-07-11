@@ -58,6 +58,7 @@ async function assertWebArtifacts() {
     "tiangongdu-f1.html",
     "tiangongdu-f1.js",
     "tiangongdu-f1.wasm",
+    "service-worker.js",
     "tgd-replay-probe.html",
     "tgd-replay-probe.js",
     "tgd-replay-probe.wasm"
@@ -642,6 +643,58 @@ async function runBrowser(target, origin) {
     assert.equal(conflictRestoredProfile.logicalSequence, "3");
     assert.equal(conflictRestoredProfile.snapshotId, winningProfile.snapshotId);
 
+    await page.waitForFunction(
+      () => window.__tgdServiceWorker?.ready === true,
+      undefined,
+      { timeout: 45_000 }
+    );
+    let offlineSavedProfile;
+    await page.context().setOffline(true);
+    try {
+      const offlineResponse = await page.reload({
+        waitUntil: "domcontentloaded",
+        timeout: 45_000
+      });
+      assert(offlineResponse?.ok(), `${target} offline shell reload did not return a cached response.`);
+      assert.equal(
+        offlineResponse.fromServiceWorker(),
+        true,
+        `${target} offline shell reload bypassed the Service Worker.`
+      );
+      await waitForText(page, status, "宿主已就绪", 45_000);
+      await page.waitForFunction(
+        () => window.__tgdProfile?.getState()?.stateName === "ready",
+        undefined,
+        { timeout: 45_000 }
+      );
+      assert.equal(
+        (await page.evaluate(() => window.__tgdProfile.getState())).logicalSequence,
+        "3"
+      );
+      await saveProfile.click();
+      await page.waitForFunction(
+        () => window.__tgdProfile?.getState()?.committedSaveCount === "1",
+        undefined,
+        { timeout: 15_000 }
+      );
+      offlineSavedProfile = await page.evaluate(() => window.__tgdProfile.getState());
+      assert.equal(offlineSavedProfile.logicalSequence, "4");
+      assert.equal(offlineSavedProfile.hasPendingSave, false);
+    } finally {
+      await page.context().setOffline(false);
+    }
+
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 45_000 });
+    await waitForText(page, status, "宿主已就绪", 45_000);
+    await page.waitForFunction(
+      () => window.__tgdProfile?.getState()?.stateName === "ready",
+      undefined,
+      { timeout: 45_000 }
+    );
+    const onlineRestoredProfile = await page.evaluate(() => window.__tgdProfile.getState());
+    assert.equal(onlineRestoredProfile.logicalSequence, "4");
+    assert.equal(onlineRestoredProfile.snapshotId, offlineSavedProfile.snapshotId);
+
     await page.evaluate(async () => {
       const profile = window.__tgdProfile.getState();
       const profileId = window.__tgdProfile.identity.profileId;
@@ -698,8 +751,8 @@ async function runBrowser(target, origin) {
     assert.match(recoveryExport.fileName, /\.tgdprofile$/);
     assert.equal(recoveryExport.mediaType, "application/vnd.tiangongdu.profile+octet-stream");
     assert.equal(recoveryExport.profileId, recoveryExport.expectedProfileId);
-    assert.equal(recoveryExport.snapshotId, winningProfile.snapshotId);
-    assert.equal(recoveryExport.logicalSequence, "3");
+    assert.equal(recoveryExport.snapshotId, offlineSavedProfile.snapshotId);
+    assert.equal(recoveryExport.logicalSequence, "4");
     assert.match(recoveryExport.envelopeHash, /^[0-9a-f]{64}$/);
     assert(recoveryExport.byteLength > 176);
     assert.notEqual(recoveryExport.firstByte, 0x54);

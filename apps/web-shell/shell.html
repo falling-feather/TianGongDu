@@ -290,6 +290,23 @@
         await profileBridge.boot();
       }
 
+      async function initializeOfflineShell() {
+        const state = { supported: "serviceWorker" in navigator, ready: false };
+        window.__tgdServiceWorker = state;
+        if (!state.supported) {
+          recordLifecycle("service_worker.unavailable");
+          return state;
+        }
+        const registration = await navigator.serviceWorker.register("./service-worker.js", {
+          scope: "./"
+        });
+        await navigator.serviceWorker.ready;
+        state.ready = true;
+        state.scope = registration.scope;
+        recordLifecycle("service_worker.ready", { scope: registration.scope });
+        return state;
+      }
+
       function updateQaState(action) {
         const state = presentationState();
         const stateName = presentationStateNames[state] ?? `unknown(${state})`;
@@ -432,6 +449,11 @@
               profileStateElement.dataset.saveState = "fatal";
               profileStateElement.textContent = `本地档启动失败 · ${String(error)}`;
               recordLifecycle("profile.boot_failed", { message: String(error) });
+            }
+            try {
+              await initializeOfflineShell();
+            } catch (error) {
+              recordLifecycle("service_worker.failed", { message: String(error) });
             }
           }, 0);
         }],

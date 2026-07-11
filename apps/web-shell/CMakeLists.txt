@@ -41,6 +41,7 @@ set_property(
     "${CMAKE_CURRENT_SOURCE_DIR}/web-abi.generated.js"
     "${CMAKE_CURRENT_SOURCE_DIR}/indexeddb-v1.generated.js"
     "${CMAKE_CURRENT_SOURCE_DIR}/indexeddb-storage.js"
+    "${CMAKE_CURRENT_SOURCE_DIR}/service-worker.js"
 )
 
 # The F1 host has no external game assets yet. Keeping this list explicitly
@@ -70,4 +71,13 @@ set_target_properties(
   ${TGD_WEB_APP}
   PROPERTIES
     OUTPUT_NAME "tiangongdu-f1"
+)
+add_custom_command(
+  TARGET ${TGD_WEB_APP}
+  POST_BUILD
+  COMMAND
+    "${CMAKE_COMMAND}" -E copy_if_different
+    "${CMAKE_CURRENT_SOURCE_DIR}/service-worker.js"
+    "$<TARGET_FILE_DIR:${TGD_WEB_APP}>/service-worker.js"
+  VERBATIM
 )

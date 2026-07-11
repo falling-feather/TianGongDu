@@ -55,6 +55,7 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "TGD_AXMOL_ROOT": "$env{AX_ROOT}",
+        "TGD_BUILD_F1_REPLAY_PROBE": "ON",
         "TGD_BUILD_TESTS": "OFF",
         "TGD_ENABLE_AXMOL_HOST": "ON",
         "TGD_WEB_STAGING_ROOT": "$env{TEMP}/tiangongdu-f1"

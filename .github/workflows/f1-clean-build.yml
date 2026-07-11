@@ -111,9 +111,13 @@ jobs:
             build/web-debug/dist/web
             build/web-release-single/dist/web
             build/windows-msvc-debug/tests/native/Debug/tgd_native_bootstrap_smoke.exe
+            build/windows-msvc-debug/tests/native/Debug/tgd_native_command_replay.exe
             build/windows-msvc-debug/tests/native/Release/tgd_native_bootstrap_smoke.exe
+            build/windows-msvc-debug/tests/native/Release/tgd_native_command_replay.exe
             build/windows-clang-debug/tests/native/tgd_native_bootstrap_smoke.exe
+            build/windows-clang-debug/tests/native/tgd_native_command_replay.exe
             build/windows-clang-release/tests/native/tgd_native_bootstrap_smoke.exe
+            build/windows-clang-release/tests/native/tgd_native_command_replay.exe
 
       - name: Save resumable toolchain and browser cache
         if: always()

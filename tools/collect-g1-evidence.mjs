@@ -70,7 +70,50 @@ for (const result of browserReport.results) {
     result.frameComparison.changedPixelRatio <= 0.02,
     `${result.target} did not restore the bootstrap frame.`
   );
+  assert.equal(
+    result.replayProbe?.status,
+    "passed",
+    `${result.target} lacks a passing WASM replay probe.`
+  );
+  assert.deepEqual(
+    result.replayProbe.build,
+    result.embeddedIdentity,
+    `${result.target} host and replay evidence came from different builds.`
+  );
+  assert.equal(result.replayProbe.finalTick, 10_000, `${result.target} replay tick drifted.`);
+  assert.match(
+    result.replayProbe.expectedChecksum,
+    /^[0-9a-f]{16}$/,
+    `${result.target} replay checksum is not canonical.`
+  );
+  assert.deepEqual(
+    result.replayProbe.cadences.map((cadence) => cadence.fps),
+    [30, 60, 144],
+    `${result.target} lacks the required replay cadences.`
+  );
+  for (const cadence of result.replayProbe.cadences) {
+    assert.equal(cadence.error, 0, `${result.target} ${cadence.fps} Hz replay failed.`);
+    assert.equal(
+      cadence.checksum,
+      result.replayProbe.expectedChecksum,
+      `${result.target} ${cadence.fps} Hz replay checksum drifted.`
+    );
+    assert.notEqual(cadence.pose.x, 0, `${result.target} replay did not exercise world x.`);
+    assert.notEqual(cadence.pose.y, 0, `${result.target} replay did not exercise world y.`);
+    assert(cadence.pose.height > 0, `${result.target} replay did not exercise height.`);
+    assert.notEqual(
+      cadence.pose.floorLayer,
+      0,
+      `${result.target} replay did not exercise floorLayer.`
+    );
+  }
 }
+
+assert.equal(
+  new Set(browserReport.results.map((result) => result.replayProbe.expectedChecksum)).size,
+  1,
+  "Browser variants reported different golden replay checksums."
+);
 
 const embeddedCommits = new Set(
   browserReport.results.map((result) => result.embeddedIdentity.commit)
@@ -95,13 +138,23 @@ const artifactPaths = [
   "build/web-debug/dist/web/tiangongdu-f1.html",
   "build/web-debug/dist/web/tiangongdu-f1.js",
   "build/web-debug/dist/web/tiangongdu-f1.wasm",
+  "build/web-debug/dist/web/tgd-replay-probe.html",
+  "build/web-debug/dist/web/tgd-replay-probe.js",
+  "build/web-debug/dist/web/tgd-replay-probe.wasm",
   "build/web-release-single/dist/web/tiangongdu-f1.html",
   "build/web-release-single/dist/web/tiangongdu-f1.js",
   "build/web-release-single/dist/web/tiangongdu-f1.wasm",
+  "build/web-release-single/dist/web/tgd-replay-probe.html",
+  "build/web-release-single/dist/web/tgd-replay-probe.js",
+  "build/web-release-single/dist/web/tgd-replay-probe.wasm",
   "build/windows-msvc-debug/tests/native/Debug/tgd_native_bootstrap_smoke.exe",
+  "build/windows-msvc-debug/tests/native/Debug/tgd_native_command_replay.exe",
   "build/windows-msvc-debug/tests/native/Release/tgd_native_bootstrap_smoke.exe",
+  "build/windows-msvc-debug/tests/native/Release/tgd_native_command_replay.exe",
   "build/windows-clang-debug/tests/native/tgd_native_bootstrap_smoke.exe",
-  "build/windows-clang-release/tests/native/tgd_native_bootstrap_smoke.exe"
+  "build/windows-clang-debug/tests/native/tgd_native_command_replay.exe",
+  "build/windows-clang-release/tests/native/tgd_native_bootstrap_smoke.exe",
+  "build/windows-clang-release/tests/native/tgd_native_command_replay.exe"
 ].map((path) => resolve(root, path));
 
 const toolchainLockPath = resolve(root, "toolchains/toolchain-lock.json");
@@ -150,6 +203,7 @@ const manifest = {
     frameComparison: result.frameComparison,
     beforeFrame: result.beforeFrame,
     afterFrame: result.afterFrame,
+    replayProbe: result.replayProbe,
     screenshots: result.screenshots
   })),
   browserReport: await artifact(browserReportPath),
@@ -167,6 +221,7 @@ const manifest = {
   ],
   limits: [
     "The geometric scene is a host/lifecycle probe, not the final ADR-0009 2.5D art-direction slice.",
+    "The WASM command replay is a deterministic GameCore probe, not a substitute for the F1 rainy-umbrella playable slice.",
     "Web Single is the required baseline; Pthreads remains a conditional G3 spike.",
     "This G1 matrix covers desktop Chrome, Edge, and Firefox on the recorded Windows runner."
   ]

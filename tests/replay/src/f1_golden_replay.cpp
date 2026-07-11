@@ -36,16 +36,19 @@ namespace {
 runtime::CommandReplay make_f1_golden_replay() {
     runtime::CommandReplay replay;
     replay.content_fingerprint = fingerprint("f1_rainy_umbrella_trial");
+    replay.session_config.initial_pose.x = 1'250;
+    replay.session_config.initial_pose.y = -2'500;
+    replay.session_config.initial_pose.floor_layer = 2;
     replay.session_config.collision_radius = 100;
     replay.final_tick = 10'000;
-    replay.expected_checksum = 0xc4bc7b02f098c880ULL;
+    replay.expected_checksum = 0xfde5024f1286eeadULL;
     replay.commands.reserve(10'050);
     for (contracts::TickIndex tick = 1; tick <= replay.final_tick; ++tick) {
         replay.commands.push_back({
             {tick, replay.session_config.player_actor, tick * 2, contracts::SessionCommandType::move_intent},
             direction_for_tick(tick),
         });
-        if (tick % 240 == 1) {
+        if (tick % 240 == 1 || tick == 9'991) {
             replay.commands.push_back({
                 {tick,
                  replay.session_config.player_actor,

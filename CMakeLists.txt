@@ -9,6 +9,7 @@ include(TgdAxmol)
 include(TgdWarnings)
 
 option(TGD_BUILD_TESTS "Build TianGongDu native and cross-compiled smoke tests." ON)
+option(TGD_BUILD_F1_REPLAY_PROBE "Build the F1 command replay Web probe." OFF)
 option(TGD_ENABLE_AXMOL_HOST "Build the Axmol presentation host." OFF)
 set(TGD_AXMOL_ROOT "$ENV{AX_ROOT}" CACHE PATH "Path to the locked Axmol source tree.")
 set(
@@ -148,8 +149,12 @@ endif()
 
 tgd_validate_architecture()
 
-if(TGD_BUILD_TESTS)
+if(TGD_BUILD_TESTS OR TGD_BUILD_F1_REPLAY_PROBE)
   add_subdirectory(tests/replay)
+endif()
+
+if(TGD_BUILD_F1_REPLAY_PROBE)
+  add_subdirectory(tests/web)
 endif()
 
 if(TGD_BUILD_TESTS)

@@ -54,7 +54,14 @@ function projectPath(path) {
 }
 
 async function assertWebArtifacts() {
-  for (const fileName of ["tiangongdu-f1.html", "tiangongdu-f1.js", "tiangongdu-f1.wasm"]) {
+  for (const fileName of [
+    "tiangongdu-f1.html",
+    "tiangongdu-f1.js",
+    "tiangongdu-f1.wasm",
+    "tgd-replay-probe.html",
+    "tgd-replay-probe.js",
+    "tgd-replay-probe.wasm"
+  ]) {
     const artifact = resolve(distDirectory, fileName);
     const metadata = await stat(artifact);
     assert(metadata.isFile(), `Web artifact is not a file: ${projectPath(artifact)}`);
@@ -67,6 +74,13 @@ async function startStaticServer() {
   const server = createServer(async (request, response) => {
     try {
       const url = new URL(request.url ?? "/", "http://127.0.0.1");
+      if (url.pathname === "/favicon.ico") {
+        response.writeHead(204, {
+          "Cache-Control": "no-store",
+          "Content-Length": 0
+        }).end();
+        return;
+      }
       const pathname = decodeURIComponent(
         url.pathname === "/" ? "/tiangongdu-f1.html" : url.pathname
       );
@@ -298,6 +312,87 @@ function parseLifecycle(message) {
   }
 }
 
+function parseReplayProbe(message) {
+  const prefix = "[tgd.replay] ";
+  if (!message.startsWith(prefix)) return null;
+  try {
+    return JSON.parse(message.slice(prefix.length));
+  } catch {
+    return null;
+  }
+}
+
+async function waitForRecord(page, records, label, timeoutMs = 45_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (records.length > 0) return records.at(-1);
+    await page.waitForTimeout(100);
+  }
+  throw new Error(`Timed out waiting for ${label}.`);
+}
+
+function validateReplayProbe(record, target) {
+  assert.equal(record.schemaVersion, "1.0.0", `${target} replay schema changed.`);
+  assert.equal(record.status, "passed", `${target} WASM replay probe failed.`);
+  assert(record.build, `${target} replay omitted its build identity.`);
+  assert(record.build.version, `${target} replay omitted its semantic version.`);
+  assert(record.build.commit, `${target} replay omitted its Git commit.`);
+  assert(record.build.channel, `${target} replay omitted its build channel.`);
+  assert.equal(record.formatMajor, 1, `${target} replay major changed.`);
+  assert.equal(record.formatMinor, 0, `${target} replay minor changed.`);
+  assert.equal(record.finalTick, 10_000, `${target} replay did not target 10,000 ticks.`);
+  assert.match(
+    record.contentFingerprint,
+    /^[0-9a-f]{16}$/,
+    `${target} replay content fingerprint is not canonical.`
+  );
+  assert.match(
+    record.expectedChecksum,
+    /^[0-9a-f]{16}$/,
+    `${target} replay checksum is not canonical.`
+  );
+  assert(record.canonicalBytes > 0, `${target} replay emitted no canonical bytes.`);
+  for (const field of [
+    "validationError",
+    "encodeError",
+    "decodeError",
+    "reencodeError"
+  ]) {
+    assert.equal(record[field], 0, `${target} replay ${field} was non-zero.`);
+  }
+  assert.deepEqual(
+    record.cadences.map((cadence) => cadence.fps),
+    [30, 60, 144],
+    `${target} replay cadence matrix changed.`
+  );
+  const expectedPose = record.cadences[0]?.pose;
+  assert(expectedPose, `${target} replay omitted its quantized pose.`);
+  assert.notEqual(expectedPose.x, 0, `${target} replay did not exercise world x.`);
+  assert.notEqual(expectedPose.y, 0, `${target} replay did not exercise world y.`);
+  assert(expectedPose.height > 0, `${target} replay did not exercise independent height.`);
+  assert.notEqual(
+    expectedPose.floorLayer,
+    0,
+    `${target} replay did not exercise an independent floor layer.`
+  );
+  for (const cadence of record.cadences) {
+    assert.equal(cadence.error, 0, `${target} ${cadence.fps} Hz replay failed.`);
+    assert.equal(cadence.tick, record.finalTick, `${target} ${cadence.fps} Hz tick drifted.`);
+    assert.equal(
+      cadence.checksum,
+      record.expectedChecksum,
+      `${target} ${cadence.fps} Hz checksum drifted.`
+    );
+    assert(cadence.frames > 0, `${target} ${cadence.fps} Hz emitted no render frames.`);
+    assert.deepEqual(
+      cadence.pose,
+      expectedPose,
+      `${target} ${cadence.fps} Hz quantized pose drifted.`
+    );
+  }
+  return record;
+}
+
 function isExpectedConsoleDiagnostic(target, type, text) {
   return (
     target === "firefox" &&
@@ -313,6 +408,7 @@ async function runBrowser(target, origin) {
   const pageErrors = [];
   const requestFailures = [];
   const lifecycle = [];
+  const replayProbes = [];
   const checkpoints = [];
   let browser;
 
@@ -332,6 +428,8 @@ async function runBrowser(target, origin) {
       }
       const record = parseLifecycle(text);
       if (record) lifecycle.push(record);
+      const replayProbe = parseReplayProbe(text);
+      if (replayProbe) replayProbes.push(replayProbe);
     });
     page.on("pageerror", (error) => pageErrors.push(error.message));
     page.on("requestfailed", (request) => {
@@ -446,6 +544,33 @@ async function runBrowser(target, origin) {
       assert.equal(identity.commit, expectedCommit, `${target} embedded the wrong Git commit.`);
     }
 
+    const replayUrl = `${origin}/tgd-replay-probe.html?qa=1`;
+    const replayResponse = await page.goto(replayUrl, {
+      waitUntil: "domcontentloaded",
+      timeout: 45_000
+    });
+    assert(
+      replayResponse?.ok(),
+      `${target} failed to load ${replayUrl}: HTTP ${replayResponse?.status()}`
+    );
+    const replayProbe = validateReplayProbe(
+      await waitForRecord(page, replayProbes, `${target} WASM replay result`),
+      target
+    );
+    assert.deepEqual(
+      replayProbe.build,
+      {
+        version: identity.version,
+        commit: identity.commit,
+        channel: identity.channel
+      },
+      `${target} host and replay probe came from different builds.`
+    );
+
+    assert.deepEqual(pageErrors, [], `${target} emitted page errors.`);
+    assert.deepEqual(requestFailures, [], `${target} had failed local requests.`);
+    assert.deepEqual(consoleProblems, [], `${target} emitted console warnings/errors.`);
+
     return {
       target,
       status: "passed",
@@ -457,6 +582,7 @@ async function runBrowser(target, origin) {
         commit: identity.commit,
         channel: identity.channel
       },
+      replayProbe,
       checkpoints,
       consoleProblems,
       expectedConsoleDiagnostics,

@@ -128,6 +128,13 @@ int main() {
             replay_60.snapshot.player_pose == replay_144.snapshot.player_pose,
         "30/60/144 command replays share one quantized pose"
     );
+    ok &= expect(
+        replay_60.snapshot.player_pose.x != 0 &&
+            replay_60.snapshot.player_pose.y != 0 &&
+            replay_60.snapshot.player_pose.height > 0 &&
+            replay_60.snapshot.player_pose.floor_layer != 0,
+        "golden final pose exercises x/y/height/floorLayer"
+    );
     auto wrong_checksum = decoded.replay;
     wrong_checksum.expected_checksum ^= 1U;
     ok &= expect(

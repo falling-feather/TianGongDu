@@ -24,6 +24,7 @@ jobs:
       TGD_BROWSER_TARGETS: chrome,edge,firefox
       TGD_BUILD_ID: g1-gh-${{ github.run_id }}-${{ github.run_attempt }}
       TGD_EXPECT_COMMIT: ${{ github.sha }}
+      TGD_FORCE_SOFTWARE_WEBGL: "1"
 
     steps:
       - name: Check out the exact revision

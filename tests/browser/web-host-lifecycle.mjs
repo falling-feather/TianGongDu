@@ -38,6 +38,8 @@ const reportDirectory = resolve(
     "build/browser-qa"
 );
 const expectedCommit = process.env.TGD_EXPECT_COMMIT?.trim() || null;
+const forceSoftwareGraphics =
+  process.env.TGD_FORCE_SOFTWARE_WEBGL === "1" || process.env.CI === "true";
 
 const contentTypes = new Map([
   [".html", "text/html; charset=utf-8"],
@@ -107,15 +109,46 @@ async function startStaticServer() {
 }
 
 function launchDefinition(target) {
+  const chromiumSoftwareArguments = forceSoftwareGraphics
+    ? ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"]
+    : [];
+  const firefoxSoftwarePreferences = forceSoftwareGraphics
+    ? {
+        "layers.d3d11.force-warp": true,
+        "webgl.angle.force-d3d11": true,
+        "webgl.angle.force-warp": true,
+        "webgl.disable-fail-if-major-performance-caveat": true,
+        "webgl.enable-webgl2": true,
+        "webgl.forbid-software": false,
+        "webgl.force-enabled": true
+      }
+    : undefined;
   switch (target) {
     case "chrome":
-      return { browserType: chromium, launchOptions: { channel: "chrome", headless: true } };
+      return {
+        browserType: chromium,
+        launchOptions: { channel: "chrome", headless: true, args: chromiumSoftwareArguments }
+      };
     case "edge":
-      return { browserType: chromium, launchOptions: { channel: "msedge", headless: true } };
+      return {
+        browserType: chromium,
+        launchOptions: { channel: "msedge", headless: true, args: chromiumSoftwareArguments }
+      };
     case "chromium":
-      return { browserType: chromium, launchOptions: { headless: true } };
+      return {
+        browserType: chromium,
+        launchOptions: { headless: true, args: chromiumSoftwareArguments }
+      };
     case "firefox":
-      return { browserType: firefox, launchOptions: { headless: true } };
+      return {
+        browserType: firefox,
+        launchOptions: {
+          headless: true,
+          ...(firefoxSoftwarePreferences
+            ? { firefoxUserPrefs: firefoxSoftwarePreferences }
+            : {})
+        }
+      };
     default:
       throw new Error(`Unsupported browser target: ${target}`);
   }
@@ -208,6 +241,53 @@ function publicFrame(frame) {
   return summary;
 }
 
+async function inspectWebgl(page, target) {
+  return page.evaluate((useDebugRendererInfo) => {
+    const canvas = document.querySelector("canvas");
+    const context = canvas?.getContext("webgl2") ?? null;
+    if (!context) return { available: false };
+    const debugRendererInfo = useDebugRendererInfo
+      ? context.getExtension("WEBGL_debug_renderer_info")
+      : null;
+    const contextLossExtension = context.getExtension("WEBGL_lose_context");
+    return {
+      available: true,
+      contextLost: context.isContextLost(),
+      contextLossExtension: Boolean(contextLossExtension),
+      version: String(context.getParameter(context.VERSION)),
+      shadingLanguageVersion: String(context.getParameter(context.SHADING_LANGUAGE_VERSION)),
+      vendor: String(
+        context.getParameter(debugRendererInfo?.UNMASKED_VENDOR_WEBGL ?? context.VENDOR)
+      ),
+      renderer: String(
+        context.getParameter(debugRendererInfo?.UNMASKED_RENDERER_WEBGL ?? context.RENDERER)
+      ),
+      maxTextureSize: Number(context.getParameter(context.MAX_TEXTURE_SIZE))
+    };
+  }, target !== "firefox");
+}
+
+async function captureRenderedFrame(page, canvas, path, label, timeoutMs = 20_000) {
+  const deadline = Date.now() + timeoutMs;
+  let buffer;
+  let frame;
+  while (Date.now() < deadline) {
+    buffer = await canvas.screenshot();
+    frame = analyzePng(buffer);
+    if (frame.uniqueColors >= 4 && frame.goldPixelRatio >= 0.005) {
+      await writeFile(path, buffer);
+      return frame;
+    }
+    await page.waitForTimeout(250);
+  }
+  if (buffer) await writeFile(path, buffer);
+  throw new Error(
+    `${label} did not render the bootstrap probe: ${frame?.uniqueColors ?? 0} colors, ${(
+      (frame?.goldPixelRatio ?? 0) * 100
+    ).toFixed(3)}% gold pixels.`
+  );
+}
+
 function parseLifecycle(message) {
   const prefix = "[tgd.lifecycle] ";
   if (!message.startsWith(prefix)) return null;
@@ -276,6 +356,16 @@ async function runBrowser(target, origin) {
     await waitForText(page, state, "presentation: running");
     await canvas.waitFor({ state: "visible" });
     assert.equal(await canvas.count(), 1, "Exactly one game canvas is required.");
+    await page.evaluate(() => {
+      const canvasElement = document.querySelector("canvas");
+      if (canvasElement) canvasElement.style.boxShadow = "none";
+    });
+    const webgl = await inspectWebgl(page, target);
+    assert(webgl.available, `${target} did not create a WebGL2 context.`);
+    assert.equal(webgl.contextLost, false, `${target} started with a lost WebGL2 context.`);
+    assert(webgl.contextLossExtension, `${target} lacks WEBGL_lose_context.`);
+    assert.match(webgl.version, /WebGL 2/i, `${target} did not expose WebGL 2.`);
+    assert(webgl.renderer, `${target} did not report a WebGL renderer.`);
 
     const button = (testId) => page.getByTestId(testId);
     for (const testId of [
@@ -291,12 +381,11 @@ async function runBrowser(target, origin) {
 
     const beforePath = resolve(reportDirectory, `${target}-before.png`);
     const afterPath = resolve(reportDirectory, `${target}-after-context-restore.png`);
-    const beforeBuffer = await canvas.screenshot({ path: beforePath });
-    const beforeFrame = analyzePng(beforeBuffer);
-    assert(beforeFrame.uniqueColors >= 4, `${target} initial canvas is visually blank.`);
-    assert(
-      beforeFrame.goldPixelRatio >= 0.005,
-      `${target} initial canvas is missing the gold bridge probe.`
+    const beforeFrame = await captureRenderedFrame(
+      page,
+      canvas,
+      beforePath,
+      `${target} initial canvas`
     );
 
     const clickAndExpect = async (testId, expected, expectedEvent) => {
@@ -334,14 +423,13 @@ async function runBrowser(target, origin) {
 
     // Axmol recreates buffers/programs asynchronously after the browser event.
     await page.waitForTimeout(4_000);
-    const afterBuffer = await canvas.screenshot({ path: afterPath });
-    const afterFrame = analyzePng(afterBuffer);
-    const frameComparison = compareFrames(beforeFrame, afterFrame);
-    assert(afterFrame.uniqueColors >= 4, `${target} restored canvas is visually blank.`);
-    assert(
-      afterFrame.goldPixelRatio >= 0.005,
-      `${target} restored canvas is missing the gold bridge probe.`
+    const afterFrame = await captureRenderedFrame(
+      page,
+      canvas,
+      afterPath,
+      `${target} restored canvas`
     );
+    const frameComparison = compareFrames(beforeFrame, afterFrame);
     assert(
       frameComparison.changedPixelRatio <= 0.02,
       `${target} restored canvas differs from the initial probe by ${(
@@ -362,6 +450,8 @@ async function runBrowser(target, origin) {
       target,
       status: "passed",
       browserVersion: browser.version(),
+      graphicsMode: forceSoftwareGraphics ? "forced-software" : "browser-default",
+      webgl,
       embeddedIdentity: {
         version: identity.version,
         commit: identity.commit,
@@ -416,6 +506,7 @@ const report = {
   platform: process.platform,
   architecture: process.arch,
   node: process.version,
+  graphicsMode: forceSoftwareGraphics ? "forced-software" : "browser-default",
   distDirectory: projectPath(distDirectory),
   expectedCommit,
   targets,

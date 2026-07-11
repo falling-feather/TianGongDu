@@ -33,6 +33,13 @@ async function artifact(path) {
 
 const browserReport = JSON.parse(await readFile(browserReportPath, "utf8"));
 const requiredBrowsers = ["chrome", "edge", "firefox"];
+if (process.env.CI === "true") {
+  assert.equal(
+    browserReport.graphicsMode,
+    "forced-software",
+    "The GPU-less CI runner must use the explicit software WebGL profile."
+  );
+}
 assert.deepEqual(
   [...browserReport.targets].sort(),
   [...requiredBrowsers].sort(),
@@ -45,6 +52,20 @@ for (const result of browserReport.results) {
   assert.deepEqual(result.pageErrors, [], `${result.target} had page errors.`);
   assert.deepEqual(result.requestFailures, [], `${result.target} had request failures.`);
   assert.equal(result.checkpoints.length, 8, `${result.target} lacks lifecycle checkpoints.`);
+  assert.equal(result.webgl.available, true, `${result.target} lacks WebGL2 evidence.`);
+  assert.equal(result.webgl.contextLost, false, `${result.target} started with a lost context.`);
+  assert.equal(
+    result.webgl.contextLossExtension,
+    true,
+    `${result.target} lacks context-loss fault injection.`
+  );
+  assert.equal(
+    result.graphicsMode,
+    browserReport.graphicsMode,
+    `${result.target} reported a different graphics mode.`
+  );
+  assert.match(result.webgl.version, /WebGL 2/i, `${result.target} lacks WebGL 2 evidence.`);
+  assert(result.webgl.renderer, `${result.target} lacks renderer identity.`);
   assert(
     result.frameComparison.changedPixelRatio <= 0.02,
     `${result.target} did not restore the bootstrap frame.`
@@ -112,7 +133,8 @@ const manifest = {
     node: process.version,
     runnerName: process.env.RUNNER_NAME ?? null,
     runnerImage: process.env.ImageOS ?? null,
-    runnerImageVersion: process.env.ImageVersion ?? null
+    runnerImageVersion: process.env.ImageVersion ?? null,
+    browserGraphicsMode: browserReport.graphicsMode
   },
   locks: {
     toolchain: await artifact(toolchainLockPath),
@@ -121,6 +143,8 @@ const manifest = {
   browserMatrix: browserReport.results.map((result) => ({
     target: result.target,
     browserVersion: result.browserVersion,
+    graphicsMode: result.graphicsMode,
+    webgl: result.webgl,
     checkpoints: result.checkpoints,
     expectedConsoleDiagnostics: result.expectedConsoleDiagnostics,
     frameComparison: result.frameComparison,

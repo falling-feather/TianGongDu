@@ -38,7 +38,7 @@
 | 领域 | 状态 | 已有 | 仍没有 |
 | --- | --- | --- | --- |
 | 产品/世界/1.0 范围 | Scope Approved | 三地区、战斗/武器、14 Boss、24 NPC、内容预算 | 全量任务/POI 实例和最终平衡 |
-| 技术架构 | In Progress（`F1-DEV-01`） | C++/WASM/Axmol 分层、存档/同步/部署合同；可编译 Native CMake target graph、宿主生命周期 smoke 与架构 lint | 已锁工具链、Clang/WASM 对照、Axmol Web Single 与真实浏览器证据 |
+| 技术架构 | In Progress（`F1-DEV-01`） | C++/WASM/Axmol 分层、存档/同步/部署合同；可编译 Native CMake target graph、宿主生命周期 smoke、架构 lint；候选工具链缓存/签名已验证，MSVC/Clang Debug/Release 对照已通过 | Axmol Web Single 与真实浏览器/干净 CI 证据，随后提升工具链锁状态 |
 | 可玩纵切 | Scope Approved | F1“雨夜试伞”唯一流程与验收 | 新主线 WASM 纵切代码/资产 |
 | 内容工具 | Scope Approved | 9 类模板注册表与工作台范围 | 可用 Workbench/ContentCore/baker |
 | 本地存档/云同步 | Accepted Baseline | IndexedDB 主路径、Operation/冲突模型 | 实际 DB migration、API、DDL、OIDC |
@@ -75,9 +75,14 @@ docs/                    00–09；01-developer/ 下为 10–19 与 ADR
 ```bash
 npm test
 npm run validate:design
+npm run validate:toolchain
 ```
 
-它会检查文档层级/元信息/链接、稳定 ID、21 章与分钟、18 支线与 24 NPC 参与关系、25 敌人家族、F1 纵切引用、9 类模板、Action/Context/默认输入映射、14 组开发对接合同，以及 C++20、Axmol、Emscripten、WebGL2、DOM UI、IndexedDB 主路径和云同步基线。
+它会检查文档层级/元信息/链接、稳定 ID、21 章与分钟、18 支线与 24 NPC 参与关系、25 敌人家族、F1 纵切引用、9 类模板、Action/Context/默认输入映射、14 组开发对接合同，以及 C++20、Axmol、Emscripten、WebGL2、DOM UI、IndexedDB 主路径和云同步基线。工具链校验还会拒绝浮动版本、非官方来源、越出工作区的缓存路径，以及没有 SHA-256 却声称已验证的产物。
+
+`toolchains/toolchain-lock.json` 当前是 `candidate-being-validated`，不是 G1 放行结论。下载完候选归档后可运行 `npm run validate:toolchain:cache` 逐一核对大小和 SHA-256；只有 Web Single、MSVC/Clang、浏览器生命周期证据与 build ID 全部齐备，才允许同步提升锁文件和技术基线状态。
+
+Windows x64 可用 `npm run bootstrap:toolchain` 在仓库 `.cache/` 内恢复候选工具链。脚本按锁定字节长度断点下载、逐项校验 SHA-256、验证 LLVM 官方分离签名并无安装解包；它不会写入永久 PATH 或系统级 `AX_ROOT/EMSDK`。所有构建通过 `tools/run-toolchain.mjs` 注入本次进程环境，避免 IDE 私有配置和 Windows `Path/PATH` 重复键污染。
 
 当前脚本执行项目语义守卫并解析 Schema；完整 JSON Schema Draft 2020-12 validator、pack/save/API 机器合同与负向 fixture 属于 G1/G3 工具交付，限制见 [`docs/01-developer/16-测试CI与发布门禁.md`](docs/01-developer/16-测试CI与发布门禁.md)。
 

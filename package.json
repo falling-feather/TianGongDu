@@ -7,9 +7,17 @@
     "node": ">=20"
   },
   "scripts": {
-    "test": "node --test tests/design-foundation.test.mjs tests/architecture.test.mjs",
+    "bootstrap:toolchain": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/bootstrap-toolchain.ps1",
+    "test": "node --test tests/design-foundation.test.mjs tests/architecture.test.mjs tests/toolchain.test.mjs",
     "validate:design": "node tools/validate-design.mjs",
+    "validate:toolchain": "node tools/verify-toolchain.mjs",
+    "validate:toolchain:cache": "node tools/verify-toolchain.mjs --cache",
     "lint:architecture": "node tools/check-architecture.mjs",
-    "test:cpp:msvc": "cmake --workflow --preset windows-msvc-debug"
+    "test:cpp:msvc": "node tools/run-toolchain.mjs cmake --workflow --preset windows-msvc-debug",
+    "test:cpp:msvc:release": "node tools/run-toolchain.mjs cmake --workflow --preset windows-msvc-release",
+    "test:cpp:clang": "node tools/run-toolchain.mjs --vsdev cmake --workflow --preset windows-clang-debug",
+    "test:cpp:clang:release": "node tools/run-toolchain.mjs --vsdev cmake --workflow --preset windows-clang-release",
+    "build:web:debug": "node tools/run-toolchain.mjs cmake --workflow --preset web-debug",
+    "build:web:release": "node tools/run-toolchain.mjs cmake --workflow --preset web-release-single"
   }
 }

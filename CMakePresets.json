@@ -148,6 +148,28 @@
         { "type": "build", "name": "windows-clang-debug" },
         { "type": "test", "name": "windows-clang-debug" }
       ]
+    },
+    {
+      "name": "windows-clang-release",
+      "steps": [
+        { "type": "configure", "name": "windows-clang-release" },
+        { "type": "build", "name": "windows-clang-release" },
+        { "type": "test", "name": "windows-clang-release" }
+      ]
+    },
+    {
+      "name": "web-debug",
+      "steps": [
+        { "type": "configure", "name": "web-debug" },
+        { "type": "build", "name": "web-debug" }
+      ]
+    },
+    {
+      "name": "web-release-single",
+      "steps": [
+        { "type": "configure", "name": "web-release-single" },
+        { "type": "build", "name": "web-release-single" }
+      ]
     }
   ]
 }

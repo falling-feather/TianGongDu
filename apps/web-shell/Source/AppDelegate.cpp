@@ -334,6 +334,12 @@ std::int32_t AppDelegate::webSubmitUiCommand(std::span<const std::uint8_t> messa
     if (command.session_generation != webBootConfig_.session_generation) {
         return static_cast<std::int32_t>(WebAbiError::stale_generation);
     }
+    if (command.type == tgd::platform::web::WebUiCommandType::retry_pending_save) {
+        const auto retried = profileStorage_.retry_pending_save();
+        trace("profile.save.retry", toString(retried));
+        publishProfileUi();
+        return static_cast<std::int32_t>(toWebError(retried));
+    }
 
     const auto current_sequence =
         profileStorage_.has_snapshot() ? profileStorage_.current_head().logical_sequence : 0;
@@ -343,7 +349,7 @@ std::int32_t AppDelegate::webSubmitUiCommand(std::span<const std::uint8_t> messa
 
     tgd::contracts::SaveEnvelopeV1 snapshot;
     snapshot.profile_id = webBootConfig_.profile_id;
-    snapshot.snapshot_id = command.snapshot_id;
+    snapshot.snapshot_id = command.command_id;
     snapshot.parent_snapshot_id = profileStorage_.has_snapshot()
                                       ? profileStorage_.current_head().snapshot_id
                                       : tgd::contracts::StableId128{};

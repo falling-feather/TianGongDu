@@ -524,6 +524,63 @@ async function runBrowser(target, origin) {
     assert.equal(restoredProfile.snapshotId, savedProfile.snapshotId);
     assert.doesNotMatch(await profileState.innerText(), /已保存/);
 
+    const quotaUrl = `${origin}/tiangongdu-f1.html?qa=1&storageFault=quota_once`;
+    const quotaResponse = await page.goto(quotaUrl, {
+      waitUntil: "domcontentloaded",
+      timeout: 45_000
+    });
+    assert(quotaResponse?.ok(), `${target} failed to load quota fixture.`);
+    await waitForText(page, status, "宿主已就绪", 45_000);
+    await waitForText(page, state, "presentation: running");
+    await page.waitForFunction(
+      () => window.__tgdProfile?.getState()?.stateName === "ready",
+      undefined,
+      { timeout: 45_000 }
+    );
+    assert.equal((await page.evaluate(() => window.__tgdProfile.getState())).logicalSequence, "1");
+    await saveProfile.click();
+    await page.waitForFunction(
+      () => window.__tgdProfile?.getState()?.errorName === "storage_quota",
+      undefined,
+      { timeout: 15_000 }
+    );
+    const quotaProfile = await page.evaluate(() => window.__tgdProfile.getState());
+    assert.equal(quotaProfile.stateName, "save_failed");
+    assert.equal(quotaProfile.hasPendingSave, true);
+    assert.equal(quotaProfile.committedSaveCount, "0");
+    assert.equal(quotaProfile.logicalSequence, "1");
+    assert.equal((await profileState.getAttribute("data-save-state")), "retryable");
+    assert.doesNotMatch(await profileState.innerText(), /已保存/);
+    assert.match(await saveProfile.innerText(), /重试保存/);
+    assert.equal(await saveProfile.isEnabled(), true);
+
+    await saveProfile.click();
+    await page.waitForFunction(
+      () => {
+        const profile = window.__tgdProfile?.getState();
+        return profile?.stateName === "ready" && profile.committedSaveCount === "1";
+      },
+      undefined,
+      { timeout: 15_000 }
+    );
+    const retriedProfile = await page.evaluate(() => window.__tgdProfile.getState());
+    assert.equal(retriedProfile.hasPendingSave, false);
+    assert.equal(retriedProfile.logicalSequence, "2");
+    await waitForText(page, profileState, "已保存");
+
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 45_000 });
+    await waitForText(page, status, "宿主已就绪", 45_000);
+    await waitForText(page, state, "presentation: running");
+    await page.waitForFunction(
+      () => window.__tgdProfile?.getState()?.stateName === "ready",
+      undefined,
+      { timeout: 45_000 }
+    );
+    const retryRestoredProfile = await page.evaluate(() => window.__tgdProfile.getState());
+    assert.equal(retryRestoredProfile.logicalSequence, "2");
+    assert.equal(retryRestoredProfile.snapshotId, retriedProfile.snapshotId);
+    await waitForText(page, profileState, "已恢复");
+
     await page.evaluate(() => {
       const canvasElement = document.querySelector("canvas");
       if (canvasElement) canvasElement.style.boxShadow = "none";

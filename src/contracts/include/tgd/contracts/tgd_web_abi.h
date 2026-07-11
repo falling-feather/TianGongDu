@@ -27,6 +27,11 @@ typedef enum tgd_web_message_type {
     TGD_WEB_MESSAGE_DIAGNOSTIC = 200
 } tgd_web_message_type;
 
+typedef enum tgd_web_ui_command {
+    TGD_WEB_UI_COMMAND_SAVE_GUEST_CHECKPOINT = 1,
+    TGD_WEB_UI_COMMAND_RETRY_PENDING_SAVE = 2
+} tgd_web_ui_command;
+
 typedef enum tgd_web_storage_operation {
     TGD_WEB_STORAGE_READ = 1,
     TGD_WEB_STORAGE_WRITE_ATOMIC = 2,

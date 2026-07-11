@@ -385,8 +385,34 @@ int main() {
     tgd::platform::web::WebUiCommand command;
     ok &= expect(
         WebPlatformBridge::decode_ui_command(command_message, command) == WebAbiError::none &&
-            command.snapshot_id == snapshot_two && command.session_generation == 9,
+            command.type == tgd::platform::web::WebUiCommandType::save_guest_checkpoint &&
+            command.command_id == snapshot_two && command.session_generation == 9,
         "UI save command decodes through the same ABI header"
+    );
+    command_payload[0] = static_cast<std::uint8_t>(TGD_WEB_UI_COMMAND_RETRY_PENDING_SAVE);
+    const auto retry_message = wrap_message(
+        static_cast<std::uint16_t>(TGD_WEB_MESSAGE_UI_COMMAND),
+        9,
+        snapshot_two,
+        command_payload
+    );
+    ok &= expect(
+        WebPlatformBridge::decode_ui_command(retry_message, command) == WebAbiError::none &&
+            command.type == tgd::platform::web::WebUiCommandType::retry_pending_save &&
+            command.command_id == snapshot_two,
+        "UI retry command keeps the original pending snapshot inside the coordinator"
+    );
+    command_payload[0] = 3;
+    const auto unknown_command_message = wrap_message(
+        static_cast<std::uint16_t>(TGD_WEB_MESSAGE_UI_COMMAND),
+        9,
+        snapshot_two,
+        command_payload
+    );
+    ok &= expect(
+        WebPlatformBridge::decode_ui_command(unknown_command_message, command) ==
+            WebAbiError::invalid_message,
+        "unknown UI commands fail closed"
     );
 
     const tgd::platform::web::WebProfileUiEvent ui_event{

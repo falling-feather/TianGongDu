@@ -122,6 +122,15 @@ test("浏览器存储桥按显式小端编码 Boot 与保存命令", async () =>
   assert.equal(saveView.getUint16(40, true), 1);
   assert.equal(saveView.getUint16(42, true), 2);
   assert.equal(saveView.getBigUint64(44, true), request.high);
+
+  const retry = storage.test.encodeRetryCommand({
+    commandId: request,
+    sessionGeneration: 17,
+    sequence: 5n
+  });
+  const retryView = new DataView(retry.buffer);
+  assert.equal(retryView.getUint16(40, true), abi.uiCommand.retry_pending_save);
+  assert.equal(retryView.getBigUint64(44, true), request.high);
 });
 
 test("尚无快照的 Guest UI 事件允许空 snapshot identity", async () => {

@@ -9,6 +9,7 @@
     "abi",
     "payloads",
     "messageTypes",
+    "uiCommands",
     "storageOperations",
     "errorCodes"
   ],
@@ -48,6 +49,7 @@
       }
     },
     "messageTypes": { "$ref": "#/$defs/idList" },
+    "uiCommands": { "$ref": "#/$defs/idList" },
     "storageOperations": { "$ref": "#/$defs/idList" },
     "errorCodes": { "$ref": "#/$defs/idList" }
   },

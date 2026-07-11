@@ -10,6 +10,10 @@ export type TgdWebMessageName =
   | "storage_cancel"
   | "diagnostic";
 
+export type TgdWebUiCommandName =
+  | "save_guest_checkpoint"
+  | "retry_pending_save";
+
 export type TgdWebStorageOperationName =
   | "read"
   | "write_atomic"
@@ -63,6 +67,10 @@ export interface TgdWebAbiContract {
     readonly storage_completion: 101;
     readonly storage_cancel: 102;
     readonly diagnostic: 200;
+  };
+  readonly uiCommand: {
+    readonly save_guest_checkpoint: 1;
+    readonly retry_pending_save: 2;
   };
   readonly storageOperation: {
     readonly read: 1;

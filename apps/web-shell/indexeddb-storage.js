@@ -307,7 +307,7 @@
     return output;
   }
 
-  function encodeSaveCommand({ snapshotId, sessionGeneration, sequence, checkpointKind = 2 }) {
+  function encodeUiCommand({ command, commandId, sessionGeneration, sequence, checkpointKind = 2 }) {
     const output = new Uint8Array(abi.headerBytes + abi.payload.uiCommandV1Bytes);
     const view = new DataView(output.buffer);
     encodeHeader(
@@ -316,13 +316,32 @@
       abi.payload.uiCommandV1Bytes,
       sessionGeneration,
       sequence,
-      snapshotId
+      commandId
     );
     const offset = abi.headerBytes;
-    view.setUint16(offset, 1, true);
+    view.setUint16(offset, command, true);
     view.setUint16(offset + 2, checkpointKind, true);
-    writeId(view, offset + 4, snapshotId);
+    writeId(view, offset + 4, commandId);
     return output;
+  }
+
+  function encodeSaveCommand({ snapshotId, sessionGeneration, sequence, checkpointKind = 2 }) {
+    return encodeUiCommand({
+      command: abi.uiCommand.save_guest_checkpoint,
+      commandId: snapshotId,
+      sessionGeneration,
+      sequence,
+      checkpointKind
+    });
+  }
+
+  function encodeRetryCommand({ commandId, sessionGeneration, sequence }) {
+    return encodeUiCommand({
+      command: abi.uiCommand.retry_pending_save,
+      commandId,
+      sessionGeneration,
+      sequence
+    });
   }
 
   function decodeProfileUiEvent(value) {
@@ -528,6 +547,10 @@
     constructor(environment = {}) {
       this.indexedDB = environment.indexedDB ?? globalThis.indexedDB;
       this.navigator = environment.navigator ?? globalThis.navigator;
+      if (environment.testFaultMode && environment.testFaultMode !== "quota_once") {
+        throw new TypeError(`Unknown IndexedDB test fault: ${environment.testFaultMode}`);
+      }
+      this.remainingQuotaFailures = environment.testFaultMode === "quota_once" ? 1 : 0;
       this.databasePromise = null;
       this.databaseHandle = null;
       this.transfers = new Map();
@@ -733,6 +756,10 @@
         request.nextHead.envelopeHash === ZERO_DIGEST
       ) {
         return { request, error: storageError.invalidRequest };
+      }
+      if (this.remainingQuotaFailures > 0) {
+        this.remainingQuotaFailures -= 1;
+        return { request, error: storageError.quota };
       }
       const database = await this.open();
       const outcome = await new Promise((resolve) => {
@@ -1047,6 +1074,30 @@
       return publicProfileState(latestProfileEvent);
     }
 
+    async function retryPendingSave() {
+      if (
+        !latestProfileEvent ||
+        latestProfileEvent.stateName !== "save_failed" ||
+        !latestProfileEvent.hasPendingSave
+      ) {
+        throw new Error("Guest Profile has no retryable pending save");
+      }
+      const result = callWithBytes(
+        "tgd_web_submit_ui_command",
+        encodeRetryCommand({
+          commandId: randomId(cryptoObject),
+          sessionGeneration,
+          sequence: ++outboundSequence
+        })
+      );
+      if (result !== abi.errorCode.none) {
+        throw new Error(`Guest checkpoint retry failed with Web ABI error ${result}`);
+      }
+      publishProfileEvents();
+      await drain();
+      return publicProfileState(latestProfileEvent);
+    }
+
     function shutdown() {
       call("tgd_web_request_shutdown", null);
       backend.close();
@@ -1055,6 +1106,7 @@
     return Object.freeze({
       boot,
       drain,
+      retryPendingSave,
       saveGuestCheckpoint,
       shutdown,
       getProfileState: () => publicProfileState(latestProfileEvent),
@@ -1081,6 +1133,7 @@
       decodeStorageRequest,
       decodeProfileUiEvent,
       encodeBootMessage,
+      encodeRetryCommand,
       encodeSaveCommand,
       encodeCompletionMessages,
       idFromHex,

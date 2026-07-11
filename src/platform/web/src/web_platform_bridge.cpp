@@ -638,12 +638,13 @@ WebAbiError WebPlatformBridge::decode_ui_command(
     std::uint16_t command = 0;
     std::uint16_t checkpoint = 0;
     if (!reader.read(command) || !reader.read(checkpoint) ||
-        !reader.read_id(output.snapshot_id) || reader.remaining() != 0 ||
-        command != static_cast<std::uint16_t>(WebUiCommandType::save_guest_checkpoint) ||
+        !reader.read_id(output.command_id) || reader.remaining() != 0 ||
+        command < static_cast<std::uint16_t>(WebUiCommandType::save_guest_checkpoint) ||
+        command > static_cast<std::uint16_t>(WebUiCommandType::retry_pending_save) ||
         checkpoint < static_cast<std::uint16_t>(contracts::CheckpointKind::automatic) ||
         checkpoint > static_cast<std::uint16_t>(contracts::CheckpointKind::imported) ||
-        output.snapshot_id.empty() || header.session_generation == 0 ||
-        header.request_id != output.snapshot_id) {
+        output.command_id.empty() || header.session_generation == 0 ||
+        header.request_id != output.command_id) {
         return WebAbiError::invalid_message;
     }
     output.type = static_cast<WebUiCommandType>(command);

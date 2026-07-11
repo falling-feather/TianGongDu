@@ -33,6 +33,7 @@ test("Web ABI 各 ID 命名空间稳定且不碰撞", async () => {
   const contract = await loadWebAbiContract();
   for (const entries of [
     contract.messageTypes,
+    contract.uiCommands,
     contract.storageOperations,
     contract.errorCodes
   ]) {
@@ -41,6 +42,8 @@ test("Web ABI 各 ID 命名空间稳定且不碰撞", async () => {
   }
   assert.equal(contract.messageTypes.find((entry) => entry.name === "storage_request")?.id, 100);
   assert.equal(contract.messageTypes.find((entry) => entry.name === "storage_completion")?.id, 101);
+  assert.equal(contract.uiCommands.find((entry) => entry.name === "save_guest_checkpoint")?.id, 1);
+  assert.equal(contract.uiCommands.find((entry) => entry.name === "retry_pending_save")?.id, 2);
 });
 
 test("Web ABI 对版本、顺序和消息元数据漂移失败关闭", async () => {

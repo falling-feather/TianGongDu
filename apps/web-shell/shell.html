@@ -187,6 +187,7 @@
       const profileStateElement = document.getElementById("profile-state");
       const qaControlsElement = document.getElementById("qa-controls");
       const qaStateElement = document.getElementById("qa-state");
+      const pageParameters = new URLSearchParams(window.location.search);
       const lifecycleTrace = [];
       let contextLossExtension = null;
       let profileBridge = null;
@@ -225,7 +226,9 @@
 
       function renderProfileState(state) {
         if (!state) return;
-        saveProfileButton.disabled = state.stateName !== "ready";
+        const retryable = state.stateName === "save_failed" && state.hasPendingSave;
+        saveProfileButton.disabled = state.stateName !== "ready" && !retryable;
+        saveProfileButton.textContent = retryable ? "重试保存" : "保存检查点";
         profileStateElement.dataset.saveState = state.stateName;
         if (state.stateName === "loading_head" || state.stateName === "loading_snapshot") {
           profileStateElement.textContent = "正在恢复 Guest 本地档…";
@@ -240,6 +243,11 @@
             : "restored";
         } else if (state.stateName === "ready") {
           profileStateElement.textContent = "Guest 新档已就绪";
+        } else if (retryable) {
+          profileStateElement.textContent = state.errorName === "storage_quota"
+            ? "保存未提交 · 配额不足 · 可重试"
+            : `保存未提交 · ${state.errorName} · 可重试`;
+          profileStateElement.dataset.saveState = "retryable";
         } else {
           profileStateElement.textContent = `本地档不可写 · ${state.stateName}/${state.errorName}`;
         }
@@ -254,6 +262,9 @@
           throw new Error("IndexedDB storage bridge was not linked into the Web host");
         }
         profileBridge = globalThis.TgdIndexedDbStorage.createBridge(Module, {
+          testFaultMode: pageParameters.get("qa") === "1"
+            ? pageParameters.get("storageFault")
+            : null,
           onProfileState: renderProfileState,
           onFatal: (error) => {
             profileStateElement.dataset.saveState = "fatal";
@@ -263,6 +274,7 @@
         });
         window.__tgdProfile = Object.freeze({
           getState: profileBridge.getProfileState,
+          retry: profileBridge.retryPendingSave,
           save: profileBridge.saveGuestCheckpoint,
           inspectSchema: profileBridge.inspectSchema,
           identity: profileBridge.identity
@@ -319,7 +331,12 @@
       saveProfileButton.addEventListener("click", async () => {
         saveProfileButton.disabled = true;
         try {
-          await profileBridge?.saveGuestCheckpoint();
+          const state = profileBridge?.getProfileState();
+          if (state?.stateName === "save_failed" && state.hasPendingSave) {
+            await profileBridge.retryPendingSave();
+          } else {
+            await profileBridge?.saveGuestCheckpoint();
+          }
         } catch (error) {
           profileStateElement.dataset.saveState = "error";
           profileStateElement.textContent = `保存失败 · ${String(error)}`;
@@ -345,7 +362,7 @@
         }
       });
 
-      if (new URLSearchParams(window.location.search).get("qa") === "1") {
+      if (pageParameters.get("qa") === "1") {
         qaControlsElement.hidden = false;
         const qaActions = Object.freeze({
           "qa-hide": () => dispatchVisibility(true),

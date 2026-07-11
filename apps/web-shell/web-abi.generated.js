@@ -25,6 +25,10 @@
     storage_cancel: 102,
     diagnostic: 200
     }),
+    uiCommand: Object.freeze({
+    save_guest_checkpoint: 1,
+    retry_pending_save: 2
+    }),
     storageOperation: Object.freeze({
     read: 1,
     write_atomic: 2,

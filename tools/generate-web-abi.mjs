@@ -66,6 +66,7 @@ export function validateWebAbiContract(contract) {
     }
   }
   assertIdList(contract.messageTypes, "messageTypes");
+  assertIdList(contract.uiCommands, "uiCommands");
   assertIdList(contract.storageOperations, "storageOperations");
   assertIdList(contract.errorCodes, "errorCodes");
   for (const message of contract.messageTypes) {
@@ -88,6 +89,7 @@ function renderEnum(entries, prefix) {
 
 export function renderCHeader(contract) {
   const messageEnum = renderEnum(contract.messageTypes, "TGD_WEB_MESSAGE");
+  const uiCommandEnum = renderEnum(contract.uiCommands, "TGD_WEB_UI_COMMAND");
   const storageEnum = renderEnum(
     contract.storageOperations,
     "TGD_WEB_STORAGE"
@@ -113,6 +115,10 @@ export function renderCHeader(contract) {
 typedef enum tgd_web_message_type {
 ${messageEnum}
 } tgd_web_message_type;
+
+typedef enum tgd_web_ui_command {
+${uiCommandEnum}
+} tgd_web_ui_command;
 
 typedef enum tgd_web_storage_operation {
 ${storageEnum}
@@ -181,6 +187,9 @@ export function renderJavaScript(contract) {
     messageType: Object.freeze({
 ${objectEntries(contract.messageTypes)}
     }),
+    uiCommand: Object.freeze({
+${objectEntries(contract.uiCommands)}
+    }),
     storageOperation: Object.freeze({
 ${objectEntries(contract.storageOperations)}
     }),
@@ -199,11 +208,15 @@ function typeUnion(entries) {
 
 export function renderTypeScript(contract) {
   const messageKeys = contract.messageTypes.map((entry) => `    readonly ${entry.name}: ${entry.id};`).join("\n");
+  const uiCommandKeys = contract.uiCommands.map((entry) => `    readonly ${entry.name}: ${entry.id};`).join("\n");
   const storageKeys = contract.storageOperations.map((entry) => `    readonly ${entry.name}: ${entry.id};`).join("\n");
   const errorKeys = contract.errorCodes.map((entry) => `    readonly ${entry.name}: ${entry.id};`).join("\n");
   return `// Generated from content/design/web-abi.json. Do not edit by hand.
 export type TgdWebMessageName =
 ${typeUnion(contract.messageTypes)};
+
+export type TgdWebUiCommandName =
+${typeUnion(contract.uiCommands)};
 
 export type TgdWebStorageOperationName =
 ${typeUnion(contract.storageOperations)};
@@ -226,6 +239,9 @@ export interface TgdWebAbiContract {
   };
   readonly messageType: {
 ${messageKeys}
+  };
+  readonly uiCommand: {
+${uiCommandKeys}
   };
   readonly storageOperation: {
 ${storageKeys}

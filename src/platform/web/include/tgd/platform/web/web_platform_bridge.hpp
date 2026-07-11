@@ -33,7 +33,8 @@ enum class WebAbiError : std::int32_t {
 };
 
 enum class WebUiCommandType : std::uint16_t {
-    save_guest_checkpoint = 1,
+    save_guest_checkpoint = TGD_WEB_UI_COMMAND_SAVE_GUEST_CHECKPOINT,
+    retry_pending_save = TGD_WEB_UI_COMMAND_RETRY_PENDING_SAVE,
 };
 
 struct WebBootConfig final {
@@ -46,7 +47,8 @@ struct WebBootConfig final {
 struct WebUiCommand final {
     WebUiCommandType type{WebUiCommandType::save_guest_checkpoint};
     contracts::CheckpointKind checkpoint_kind{contracts::CheckpointKind::safe_point};
-    contracts::StableId128 snapshot_id{};
+    // For a new save this becomes the snapshot ID; for retry it is only the command correlation ID.
+    contracts::StableId128 command_id{};
     std::uint32_t session_generation{};
 };
 

@@ -101,6 +101,23 @@ add_test(
   COMMAND tgd_native_f1_content_contract
 )
 
+add_executable(tgd_native_vertical_slice_session vertical_slice_session.cpp)
+target_compile_features(tgd_native_vertical_slice_session PRIVATE cxx_std_20)
+tgd_enable_strict_warnings(tgd_native_vertical_slice_session)
+target_link_libraries(
+  tgd_native_vertical_slice_session
+  PRIVATE
+    tgd_contracts
+    tgd_runtime
+    tgd_gameplay
+    tgd_content_core
+)
+
+add_test(
+  NAME tgd.native.vertical-slice-session
+  COMMAND tgd_native_vertical_slice_session
+)
+
 add_test(
   NAME tgd.architecture.reject-reverse-link
   COMMAND

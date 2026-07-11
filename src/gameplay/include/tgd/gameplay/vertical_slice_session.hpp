@@ -1,0 +1,115 @@
+#pragma once
+
+#include <tgd/contracts/content_definition.hpp>
+#include <tgd/contracts/session_types.hpp>
+#include <tgd/runtime/collision_world.hpp>
+#include <tgd/runtime/game_session.hpp>
+
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <span>
+
+namespace tgd::gameplay {
+
+enum class VerticalSliceLifecycle : std::uint8_t {
+    uninitialized,
+    ready_at_safe_point,
+    running,
+    paused,
+    resolved,
+    destroyed,
+};
+
+enum class VerticalSliceError : std::uint8_t {
+    none,
+    invalid_lifecycle,
+    invalid_definition,
+    missing_collision_world,
+    movement_session_error,
+    unknown_objective,
+    objective_not_active,
+};
+
+struct VerticalSliceSnapshot final {
+    contracts::TickIndex tick{};
+    contracts::ContentId slice_id{};
+    contracts::ContentId beat_id{};
+    contracts::ContentId cell_id{};
+    contracts::GroundPoseMm player_pose{};
+    std::uint16_t beat_index{};
+    std::uint16_t beat_count{};
+    std::uint16_t completed_objectives{};
+    std::uint16_t required_objectives{};
+    std::uint64_t simulation_ticks{};
+    bool resolved{};
+    std::uint64_t checksum{};
+};
+
+struct CompleteObjectiveResult final {
+    VerticalSliceError error{VerticalSliceError::none};
+    bool accepted{};
+    bool beat_advanced{};
+    bool slice_resolved{};
+};
+
+struct VerticalSliceAdvanceResult final {
+    VerticalSliceError error{VerticalSliceError::none};
+    std::uint32_t executed_ticks{};
+};
+
+class VerticalSliceSession final {
+  public:
+    static constexpr std::size_t max_beats = 16;
+    static constexpr std::size_t max_objectives = 64;
+
+    [[nodiscard]] VerticalSliceError initialize(
+        const contracts::VerticalSliceDefinition& definition,
+        std::unique_ptr<runtime::ICollisionWorld> collision_world
+    ) noexcept;
+    [[nodiscard]] VerticalSliceError start() noexcept;
+    [[nodiscard]] VerticalSliceError pause() noexcept;
+    [[nodiscard]] VerticalSliceError resume() noexcept;
+    [[nodiscard]] VerticalSliceError destroy() noexcept;
+
+    [[nodiscard]] VerticalSliceError submit_movement(
+        std::span<const contracts::SessionCommand> commands
+    ) noexcept;
+    [[nodiscard]] VerticalSliceAdvanceResult advance(std::uint32_t tick_budget) noexcept;
+    [[nodiscard]] CompleteObjectiveResult complete_objective(
+        contracts::StableContentKey objective
+    ) noexcept;
+
+    [[nodiscard]] VerticalSliceLifecycle lifecycle() const noexcept;
+    [[nodiscard]] std::uint32_t generation() const noexcept;
+    [[nodiscard]] runtime::GameSessionError last_movement_error() const noexcept;
+    [[nodiscard]] const contracts::VerticalSliceDefinition* definition() const noexcept;
+    [[nodiscard]] const VerticalSliceSnapshot& previous_snapshot() const noexcept;
+    [[nodiscard]] const VerticalSliceSnapshot& current_snapshot() const noexcept;
+
+  private:
+    [[nodiscard]] bool valid_definition(
+        const contracts::VerticalSliceDefinition& definition
+    ) const noexcept;
+    [[nodiscard]] bool is_known_objective(contracts::StableContentKey objective) const noexcept;
+    [[nodiscard]] bool is_completed(contracts::StableContentKey objective) const noexcept;
+    [[nodiscard]] std::size_t active_completed_count() const noexcept;
+    [[nodiscard]] bool active_beat_complete() const noexcept;
+    void refresh_snapshot() noexcept;
+    void update_checksum() noexcept;
+
+    VerticalSliceLifecycle lifecycle_{VerticalSliceLifecycle::uninitialized};
+    std::uint32_t generation_{};
+    const contracts::VerticalSliceDefinition* definition_{};
+    runtime::GameSession movement_{};
+    runtime::GameSessionError last_movement_error_{runtime::GameSessionError::none};
+    std::array<contracts::StableContentKey, max_objectives> completed_objectives_{};
+    std::size_t completed_objective_count_{};
+    std::size_t beat_index_{};
+    std::uint64_t simulation_ticks_{};
+    VerticalSliceSnapshot previous_snapshot_{};
+    VerticalSliceSnapshot current_snapshot_{};
+};
+
+}  // namespace tgd::gameplay

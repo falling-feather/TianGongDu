@@ -101,6 +101,7 @@ target_sources(
   PRIVATE
     src/gameplay/src/layer_probe.cpp
     src/gameplay/src/session_input_state.cpp
+    src/gameplay/src/vertical_slice_session.cpp
 )
 target_include_directories(
   tgd_gameplay

@@ -412,10 +412,12 @@ async function runBrowser(target, origin) {
   const replayProbes = [];
   const checkpoints = [];
   let browser;
+  let context;
 
   try {
     browser = await definition.browserType.launch(definition.launchOptions);
-    const page = await browser.newPage({ viewport: { width: 1280, height: 960 } });
+    context = await browser.newContext({ viewport: { width: 1280, height: 960 } });
+    const page = await context.newPage();
     page.on("console", (message) => {
       const text = message.text();
       const type = message.type();

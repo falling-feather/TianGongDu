@@ -6,7 +6,7 @@
 
 主分支采用 **浏览器首发、C++ 核心、多端复用** 的技术路线：C++20 游戏核心由 Emscripten 编译为 WebAssembly，Axmol 2.11.x LTS 负责 2D/2.5D 表现、输入、音频与跨平台宿主；网页以 Canvas 承载游戏画面，以 DOM 承载 HUD、菜单和可访问性。Windows/Android/iOS 复用同一核心，按里程碑逐端验证，而不是维护互不兼容的多套游戏。
 
-当前工作区是 **2.2 开发对接版设计基础**，不冒充已经完成的正式 WASM 游戏。F1 的硬门是先做出“雨夜试伞”网页纵切：约 27 分钟到归位结算，30 分钟覆盖返回、保存、刷新与离线重开；验证 Axmol 当前仍标记为 Preview 的 WebAssembly 路径后再扩大生产。
+当前工作区是 **2.2 开发对接版设计基础**，不冒充已经完成的正式 WASM 游戏。F1 的硬门是先做出“雨夜试伞”网页纵切：玩家获得控制到任一归位结算首玩不少于 60 分钟，70 分钟端到端预算再覆盖标题/加载、返回、保存、刷新与离线重开；不得以加载、挂机、重复刷怪或失败重试凑时。验证 Axmol 当前仍标记为 Preview 的 WebAssembly 路径后再扩大生产。
 
 ## 当前成果
 
@@ -15,7 +15,8 @@
 - 建立可机器校验的 1.0 内容目录、9 类模板注册表（含独立精英机制战）和 C++ Web 技术基线。
 - 确立 C++ Contracts / Runtime / Gameplay / Presentation / Platform 分层，玩法状态不归渲染树或 JavaScript 所有。
 - 完成 F1 固定 60 Hz `GameSession`、斜向世界输入与版本化命令回放；同一 C++ 黄金夹具已通过 Native 双编译器双配置和 Web Single 三浏览器验证。
-- 设计 IndexedDB 本地存档、Service Worker/CDN 内容缓存，以及可选的跨设备云同步协议。
+- 已实现 Web ABI 1.0、`SaveEnvelopeV1`、Profile 原子提交协调器和 256 KiB 分块存储桥；JavaScript IndexedDB v1、导出/恢复与浏览器异常路径仍在 `F1-DEV-03` 中实现。
+- 已设计 Service Worker/CDN 内容缓存，以及可选的跨设备云同步协议；设计不等于运行时已落地。
 - 旧版 Web 原型完整保存在 [`codex/archive-legacy-web-v1`](https://github.com/falling-feather/TianGongDu/tree/codex/archive-legacy-web-v1)，含 V1.1.0 可玩闭环和 52 项自动化测试。
 
 ## 从哪里开始
@@ -41,10 +42,10 @@
 | 领域 | 状态 | 已有 | 仍没有 |
 | --- | --- | --- | --- |
 | 产品/世界/1.0 范围 | Scope Approved | 三地区、战斗/武器、14 Boss、24 NPC、内容预算 | 全量任务/POI 实例和最终平衡 |
-| 技术架构 | In Progress（`F1-DEV-03`） | 精确工具链与分层；60 Hz Session、斜向世界输入、量化 `x/y/height/floorLayer`、版本化回放及 Native/Web 三浏览器一致性证据已通过 | 正式 Web Shell、IndexedDB 事务/迁移/导出恢复、玩法纵切与真实设备性能证据 |
+| 技术架构 | In Progress（`F1-DEV-03`） | 精确工具链与分层；60 Hz Session、量化回放；Web ABI 1.0、存档信封、Profile CAS 协调器与分块存储桥 | JavaScript IndexedDB 事务/迁移/导出恢复、正式 Web Shell、玩法纵切与真实设备性能证据 |
 | 可玩纵切 | Scope Approved | F1“雨夜试伞”唯一流程与验收 | 新主线 WASM 纵切代码/资产 |
 | 内容工具 | Scope Approved | 9 类模板注册表与工作台范围 | 可用 Workbench/ContentCore/baker |
-| 本地存档/云同步 | Accepted Baseline | IndexedDB 主路径、Operation/冲突模型 | 实际 DB migration、API、DDL、OIDC |
+| 本地存档/云同步 | In Progress（`F1-DEV-03`） | IndexedDB 主路径设计、`SaveEnvelopeV1`、Profile Head CAS/冲突模型和 C++ 异步桥 | 实际 IndexedDB v1/迁移/导出恢复、多标签接管、云 API/DDL/OIDC |
 | 发布运维 | Accepted Baseline | 渠道、缓存、回滚、证据与灾备门；F1 Windows 2022 干净 CI 已落地 | CD、正式 origin/CDN/监控与演练 |
 
 `Scope Approved` 或 `Accepted Baseline` 都不等于 `Implemented`。状态词统一定义在 [`docs/09-术语与索引.md`](docs/09-术语与索引.md)。

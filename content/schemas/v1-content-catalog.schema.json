@@ -194,8 +194,8 @@
         "npcIds": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/id" } },
         "enemyFamilyIds": { "type": "array", "minItems": 2, "uniqueItems": true, "items": { "$ref": "#/$defs/id" } },
         "bossId": { "$ref": "#/$defs/id" },
-        "playableTargetMinutes": { "const": 27 },
-        "endToEndTestBudgetMinutes": { "const": 30 }
+        "playableTargetMinutes": { "const": 60 },
+        "endToEndTestBudgetMinutes": { "const": 70 }
       }
     },
     "boss": {

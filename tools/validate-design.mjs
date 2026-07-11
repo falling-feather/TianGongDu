@@ -510,7 +510,7 @@ export async function validateProject(projectRoot = defaultRoot) {
   const f1 = catalog.f1VerticalSlice;
   pushIf(errors, f1.channel !== "prototype_f1" || f1.profileNamespace !== "prototype_f1", "F1 纵切必须使用独立 prototype_f1 渠道与 Profile 命名空间。");
   pushIf(errors, f1.startFixtureId !== "fixture_f1_rainy_umbrella_start", "F1 必须使用唯一受控起始夹具。");
-  pushIf(errors, f1.playableTargetMinutes !== 27 || f1.endToEndTestBudgetMinutes !== 30, "F1 必须区分 27 分钟可玩目标与 30 分钟端到端测试预算。");
+  pushIf(errors, f1.playableTargetMinutes !== 60 || f1.endToEndTestBudgetMinutes !== 70, "F1 必须区分不少于 60 分钟的可玩目标与 70 分钟端到端测试预算。");
   pushIf(errors, !chapterIds.has(f1.chapterId), `F1 引用了不存在的章节：${f1.chapterId}`);
   pushIf(errors, !bossIds.has(f1.bossId), `F1 引用了不存在的 Boss：${f1.bossId}`);
   for (const id of f1.subregionIds) pushIf(errors, !subregions.some((entry) => entry.id === id), `F1 引用了不存在的子地区：${id}`);

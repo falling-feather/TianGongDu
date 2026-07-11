@@ -86,6 +86,21 @@ add_test(
   COMMAND tgd_native_session_input_state
 )
 
+add_executable(tgd_native_f1_content_contract f1_content_contract.cpp)
+target_compile_features(tgd_native_f1_content_contract PRIVATE cxx_std_20)
+tgd_enable_strict_warnings(tgd_native_f1_content_contract)
+target_link_libraries(
+  tgd_native_f1_content_contract
+  PRIVATE
+    tgd_contracts
+    tgd_content_core
+)
+
+add_test(
+  NAME tgd.native.f1-content-contract
+  COMMAND tgd_native_f1_content_contract
+)
+
 add_test(
   NAME tgd.architecture.reject-reverse-link
   COMMAND

@@ -1,0 +1,169 @@
+{
+  "$schema": "../schemas/f1-vertical-slice.schema.json",
+  "schemaVersion": "1.0.0",
+  "id": "f1_rainy_umbrella_trial",
+  "view": {
+    "model": "2.5d-oblique-panoramic",
+    "primaryGuidance": "douzhanshen",
+    "secondaryReference": "warm-snow-combat-readability",
+    "cameraMode": "author-controlled-oblique"
+  },
+  "timing": {
+    "playableTargetMinutes": 60,
+    "endToEndTestBudgetMinutes": 70,
+    "startupMinutes": 3,
+    "postResolutionPersistenceMinutes": 7,
+    "excludedFromPlayable": [
+      "title_loading",
+      "failure_retry",
+      "idle",
+      "post_resolution_persistence"
+    ]
+  },
+  "catalogReferences": {
+    "startFixtureId": "fixture_f1_rainy_umbrella_start",
+    "chapterId": "jn_chapter_02",
+    "subregionIds": ["jn_rain_ferry", "jn_umbrella_lane"],
+    "npcIds": ["npc_shen_yan"],
+    "enemyFamilyIds": [
+      "jn_enemy_leaking_umbrella_doll",
+      "jn_enemy_faded_paper_egret"
+    ],
+    "bossId": "jn_boss_umbrella_wraith"
+  },
+  "playerSeed": {
+    "actorKey": 1,
+    "initialPoseMm": {
+      "x": -12000,
+      "y": -1600,
+      "height": 0,
+      "floorLayer": 0
+    },
+    "moveSpeedMmPerSecond": 3600,
+    "jumpSpeedMmPerSecond": 4800,
+    "gravityMmPerSecondSquared": 9600,
+    "collisionRadiusMm": 260,
+    "collisionHeightMm": 1800,
+    "cameraBasisQ15": {
+      "screenRightWorld": { "x": 23170, "y": -23170 },
+      "screenForwardWorld": { "x": 23170, "y": 23170 },
+      "revision": 2
+    }
+  },
+  "cellIds": [
+    "f1_cell_rain_ferry",
+    "f1_cell_umbrella_lane_a",
+    "f1_cell_canopy_workstation",
+    "f1_cell_four_seasons_court",
+    "f1_cell_return_safe_point"
+  ],
+  "beats": [
+    {
+      "id": "f1_beat_rain_ferry_arrival",
+      "kind": "exploration",
+      "targetMinutes": 9,
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveIds": [
+        "f1_objective_reach_ferry_gate",
+        "f1_objective_inspect_travel_writ"
+      ],
+      "autoAdvance": false
+    },
+    {
+      "id": "f1_beat_shen_yan_training",
+      "kind": "training",
+      "targetMinutes": 8,
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveIds": [
+        "f1_objective_meet_shen_yan",
+        "f1_objective_eavesguard_counter",
+        "f1_objective_flower_turn_counter"
+      ],
+      "autoAdvance": false
+    },
+    {
+      "id": "f1_beat_umbrella_lane_first_encounter",
+      "kind": "combat",
+      "targetMinutes": 12,
+      "cellId": "f1_cell_umbrella_lane_a",
+      "objectiveIds": [
+        "f1_objective_defeat_leaking_dolls",
+        "f1_objective_answer_paper_egret",
+        "f1_objective_choose_lane_route"
+      ],
+      "autoAdvance": false
+    },
+    {
+      "id": "f1_beat_shared_workbench_investigation",
+      "kind": "investigation",
+      "targetMinutes": 11,
+      "cellId": "f1_cell_canopy_workstation",
+      "objectiveIds": [
+        "f1_objective_reveal_spring_trace",
+        "f1_objective_reveal_winter_trace",
+        "f1_objective_review_shared_ledger",
+        "f1_objective_choose_rib_calibration"
+      ],
+      "autoAdvance": false
+    },
+    {
+      "id": "f1_beat_canopy_return_encounter",
+      "kind": "combat",
+      "targetMinutes": 7,
+      "cellId": "f1_cell_canopy_workstation",
+      "objectiveIds": [
+        "f1_objective_validate_calibration",
+        "f1_objective_open_return_shortcut"
+      ],
+      "autoAdvance": false
+    },
+    {
+      "id": "f1_beat_four_seasons_wraith",
+      "kind": "boss",
+      "targetMinutes": 10,
+      "cellId": "f1_cell_four_seasons_court",
+      "objectiveIds": [
+        "f1_objective_survive_spring_phase",
+        "f1_objective_survive_summer_phase",
+        "f1_objective_survive_autumn_phase",
+        "f1_objective_survive_winter_phase"
+      ],
+      "autoAdvance": false
+    },
+    {
+      "id": "f1_beat_resolution_and_return",
+      "kind": "resolution",
+      "targetMinutes": 3,
+      "cellId": "f1_cell_return_safe_point",
+      "objectiveIds": [
+        "f1_objective_choose_resolution",
+        "f1_objective_return_to_shen_yan"
+      ],
+      "autoAdvance": false
+    }
+  ],
+  "paddingPolicy": {
+    "repeatableCombatCountsTowardTarget": false,
+    "forcedWaitingCountsTowardTarget": false,
+    "failureRetryCountsTowardTarget": false
+  },
+  "ports": [
+    {
+      "name": "IContentDefinitionProvider",
+      "owner": "content-core",
+      "status": "bootstrap_implemented"
+    },
+    { "name": "IWorldCellSource", "owner": "runtime", "status": "reserved" },
+    { "name": "ICombatResolver", "owner": "gameplay", "status": "reserved" },
+    { "name": "ICombatEventSink", "owner": "gameplay", "status": "reserved" },
+    { "name": "IEncounterDirector", "owner": "gameplay", "status": "reserved" },
+    { "name": "IQuestRuntime", "owner": "gameplay", "status": "reserved" },
+    { "name": "ISnapshotContributor", "owner": "runtime", "status": "reserved" },
+    {
+      "name": "IPresentationEventSink",
+      "owner": "presentation",
+      "status": "reserved"
+    },
+    { "name": "IAssetResolver", "owner": "presentation", "status": "reserved" }
+  ]
+}

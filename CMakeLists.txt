@@ -144,7 +144,16 @@ target_link_libraries(tgd_platform_native PUBLIC tgd_runtime tgd_contracts)
 tgd_register_layer(tgd_platform_native ALLOW tgd_runtime tgd_contracts)
 
 tgd_add_static_layer(tgd_content_core)
-target_sources(tgd_content_core PRIVATE src/content-core/src/layer_probe.cpp)
+target_sources(
+  tgd_content_core
+  PRIVATE
+    src/content-core/src/content_definition_provider.cpp
+    src/content-core/src/layer_probe.cpp
+)
+target_include_directories(
+  tgd_content_core
+  PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/content-core/include>"
+)
 target_link_libraries(tgd_content_core PUBLIC tgd_contracts)
 tgd_register_layer(tgd_content_core ALLOW tgd_contracts)
 

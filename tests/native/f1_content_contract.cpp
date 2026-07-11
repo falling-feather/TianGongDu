@@ -1,0 +1,80 @@
+#include <tgd/content/content_definition_provider.hpp>
+#include <tgd/contracts/content_definition.hpp>
+
+#include <cstdint>
+#include <cstdlib>
+#include <iostream>
+#include <string_view>
+#include <unordered_set>
+
+namespace {
+
+bool expect(bool condition, std::string_view message) {
+    if (!condition) {
+        std::cerr << "F1 content contract failure: " << message << '\n';
+    }
+    return condition;
+}
+
+}  // namespace
+
+int main() {
+    tgd::content::BuiltInF1ContentDefinitionProvider provider;
+    const auto* definition = provider.find_vertical_slice(
+        tgd::contracts::stable_content_key("f1_rainy_umbrella_trial")
+    );
+    bool ok = expect(definition != nullptr, "built-in provider resolves the F1 slice");
+    if (definition == nullptr) {
+        return EXIT_FAILURE;
+    }
+
+    ok &= expect(
+        provider.find_vertical_slice(tgd::contracts::stable_content_key("missing_slice")) ==
+            nullptr,
+        "unknown content fails closed"
+    );
+    ok &= expect(
+        definition->view_model == "2.5d-oblique-panoramic" &&
+            definition->primary_guidance == "douzhanshen" &&
+            definition->secondary_reference == "warm-snow-combat-readability",
+        "Douzhanshen remains the first view and staging guide"
+    );
+    ok &= expect(
+        definition->playable_target_minutes == 60 &&
+            definition->end_to_end_test_budget_minutes == 70,
+        "playable and E2E budgets stay separate"
+    );
+    ok &= expect(
+        definition->beats.size() == 7 && definition->cell_ids.size() == 5 &&
+            definition->enemy_family_ids.size() == 2,
+        "the first route, cells, and enemy families are explicit"
+    );
+
+    std::uint32_t minutes = 0;
+    std::unordered_set<tgd::contracts::StableContentKey> ids;
+    for (const auto& beat : definition->beats) {
+        minutes += beat.target_minutes;
+        ok &= expect(beat.id.key != 0 && ids.insert(beat.id.key).second, "beat key is unique");
+        ok &= expect(beat.cell_id.key != 0, "beat has an explicit cell");
+        ok &= expect(!beat.objectives.empty(), "beat advances from objectives, not a timer");
+        for (const auto& objective : beat.objectives) {
+            ok &= expect(
+                objective.key != 0 && ids.insert(objective.key).second,
+                "objective key is unique"
+            );
+        }
+    }
+    ok &= expect(minutes == 60, "seven playable beat budgets total exactly 60 minutes");
+
+    const auto& basis = definition->player.camera_basis;
+    const auto dot = static_cast<std::int64_t>(basis.screen_right_world.x) *
+                         basis.screen_forward_world.x +
+                     static_cast<std::int64_t>(basis.screen_right_world.y) *
+                         basis.screen_forward_world.y;
+    const auto determinant = static_cast<std::int64_t>(basis.screen_right_world.x) *
+                                 basis.screen_forward_world.y -
+                             static_cast<std::int64_t>(basis.screen_right_world.y) *
+                                 basis.screen_forward_world.x;
+    ok &= expect(dot == 0 && determinant > 0, "camera-relative movement uses a right-handed oblique basis");
+    return ok ? EXIT_SUCCESS : EXIT_FAILURE;
+}

@@ -1,0 +1,192 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tiangongdu.example/schemas/f1-vertical-slice.schema.json",
+  "title": "TianGongDu F1 vertical slice contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "view",
+    "timing",
+    "catalogReferences",
+    "playerSeed",
+    "cellIds",
+    "beats",
+    "paddingPolicy",
+    "ports"
+  ],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "const": "1.0.0" },
+    "id": { "const": "f1_rainy_umbrella_trial" },
+    "view": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model", "primaryGuidance", "secondaryReference", "cameraMode"],
+      "properties": {
+        "model": { "const": "2.5d-oblique-panoramic" },
+        "primaryGuidance": { "const": "douzhanshen" },
+        "secondaryReference": { "const": "warm-snow-combat-readability" },
+        "cameraMode": { "const": "author-controlled-oblique" }
+      }
+    },
+    "timing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "playableTargetMinutes",
+        "endToEndTestBudgetMinutes",
+        "startupMinutes",
+        "postResolutionPersistenceMinutes",
+        "excludedFromPlayable"
+      ],
+      "properties": {
+        "playableTargetMinutes": { "const": 60 },
+        "endToEndTestBudgetMinutes": { "const": 70 },
+        "startupMinutes": { "const": 3 },
+        "postResolutionPersistenceMinutes": { "const": 7 },
+        "excludedFromPlayable": {
+          "type": "array",
+          "minItems": 4,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/id" }
+        }
+      }
+    },
+    "catalogReferences": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "startFixtureId",
+        "chapterId",
+        "subregionIds",
+        "npcIds",
+        "enemyFamilyIds",
+        "bossId"
+      ],
+      "properties": {
+        "startFixtureId": { "$ref": "#/$defs/id" },
+        "chapterId": { "$ref": "#/$defs/id" },
+        "subregionIds": { "$ref": "#/$defs/idList" },
+        "npcIds": { "$ref": "#/$defs/idList" },
+        "enemyFamilyIds": { "$ref": "#/$defs/idList" },
+        "bossId": { "$ref": "#/$defs/id" }
+      }
+    },
+    "playerSeed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actorKey",
+        "initialPoseMm",
+        "moveSpeedMmPerSecond",
+        "jumpSpeedMmPerSecond",
+        "gravityMmPerSecondSquared",
+        "collisionRadiusMm",
+        "collisionHeightMm",
+        "cameraBasisQ15"
+      ],
+      "properties": {
+        "actorKey": { "type": "integer", "minimum": 1 },
+        "initialPoseMm": { "$ref": "#/$defs/pose" },
+        "moveSpeedMmPerSecond": { "type": "integer", "minimum": 1 },
+        "jumpSpeedMmPerSecond": { "type": "integer", "minimum": 1 },
+        "gravityMmPerSecondSquared": { "type": "integer", "minimum": 1 },
+        "collisionRadiusMm": { "type": "integer", "minimum": 1 },
+        "collisionHeightMm": { "type": "integer", "minimum": 1 },
+        "cameraBasisQ15": { "$ref": "#/$defs/cameraBasis" }
+      }
+    },
+    "cellIds": { "$ref": "#/$defs/idList" },
+    "beats": {
+      "type": "array",
+      "minItems": 7,
+      "items": { "$ref": "#/$defs/beat" }
+    },
+    "paddingPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repeatableCombatCountsTowardTarget",
+        "forcedWaitingCountsTowardTarget",
+        "failureRetryCountsTowardTarget"
+      ],
+      "properties": {
+        "repeatableCombatCountsTowardTarget": { "const": false },
+        "forcedWaitingCountsTowardTarget": { "const": false },
+        "failureRetryCountsTowardTarget": { "const": false }
+      }
+    },
+    "ports": {
+      "type": "array",
+      "minItems": 9,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/port" }
+    }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$" },
+    "idList": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/id" }
+    },
+    "vector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y"],
+      "properties": {
+        "x": { "type": "integer", "minimum": -32767, "maximum": 32767 },
+        "y": { "type": "integer", "minimum": -32767, "maximum": 32767 }
+      }
+    },
+    "pose": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "height", "floorLayer"],
+      "properties": {
+        "x": { "type": "integer" },
+        "y": { "type": "integer" },
+        "height": { "type": "integer" },
+        "floorLayer": { "type": "integer", "minimum": -32768, "maximum": 32767 }
+      }
+    },
+    "cameraBasis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["screenRightWorld", "screenForwardWorld", "revision"],
+      "properties": {
+        "screenRightWorld": { "$ref": "#/$defs/vector" },
+        "screenForwardWorld": { "$ref": "#/$defs/vector" },
+        "revision": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "beat": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "targetMinutes", "cellId", "objectiveIds", "autoAdvance"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": {
+          "enum": ["exploration", "training", "combat", "investigation", "boss", "resolution"]
+        },
+        "targetMinutes": { "type": "integer", "minimum": 1 },
+        "cellId": { "$ref": "#/$defs/id" },
+        "objectiveIds": { "$ref": "#/$defs/idList" },
+        "autoAdvance": { "const": false }
+      }
+    },
+    "port": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "owner", "status"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^I[A-Za-z0-9]+$" },
+        "owner": { "enum": ["content-core", "runtime", "gameplay", "presentation"] },
+        "status": { "enum": ["reserved", "bootstrap_implemented"] }
+      }
+    }
+  }
+}

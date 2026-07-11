@@ -19,7 +19,7 @@ const catalog = JSON.parse(
   await readFile(resolve(root, "content/design/v1-content-catalog.json"), "utf8")
 );
 
-test("F1 一小时纵切机器合同与生成的 C++ 定义保持同步", async () => {
+test("F1 one-hour contract and generated C++ stay synchronized", async () => {
   const contract = await loadF1SliceContract();
   const generated = await readFile(generatedPath, "utf8");
   assert.equal(generated, renderF1SliceContract(contract));
@@ -27,10 +27,13 @@ test("F1 一小时纵切机器合同与生成的 C++ 定义保持同步", async 
   assert.equal(contract.timing.endToEndTestBudgetMinutes, 70);
   assert.equal(contract.view.primaryGuidance, "douzhanshen");
   assert.equal(contract.beats.length, 7);
-  assert.equal(contract.ports.filter((port) => port.status === "reserved").length, 8);
+  assert.equal(contract.combatBootstrap.actors.length, 4);
+  assert.equal(contract.combatBootstrap.abilities.length, 9);
+  assert.equal(contract.ports.filter((port) => port.status === "reserved").length, 6);
+  assert.equal(contract.ports.filter((port) => port.status === "bootstrap_implemented").length, 3);
 });
 
-test("纵切稳定 ID 的 64 位键无碰撞", async () => {
+test("F1 stable content IDs have unique 64-bit keys", async () => {
   const contract = await loadF1SliceContract();
   const ids = [
     contract.id,
@@ -40,7 +43,7 @@ test("纵切稳定 ID 的 64 位键无碰撞", async () => {
   assert.equal(new Set(ids.map((id) => fnv1a64(id))).size, ids.length);
 });
 
-test("纵切不能用计时自动推进或缩水到一小时以下", async () => {
+test("F1 slice cannot auto-advance or shrink below one playable hour", async () => {
   const contract = structuredClone(await loadF1SliceContract());
   contract.beats[0].autoAdvance = true;
   assert.throws(() => validateF1SliceContract(contract, catalog), /must never advance/);
@@ -48,4 +51,16 @@ test("纵切不能用计时自动推进或缩水到一小时以下", async () =>
   const shortContract = structuredClone(await loadF1SliceContract());
   shortContract.beats[0].targetMinutes -= 1;
   assert.throws(() => validateF1SliceContract(shortContract, catalog), /expected 60/);
+});
+
+test("F1 combat contract requires stance abilities and stance-neutral evade", async () => {
+  const missingAbility = structuredClone(await loadF1SliceContract());
+  missingAbility.combatBootstrap.abilities = missingAbility.combatBootstrap.abilities.filter(
+    (ability) => ability.id !== "ability_flower_heavy"
+  );
+  assert.throws(() => validateF1SliceContract(missingAbility, catalog), /missing heavy_attack/);
+
+  const stanceBoundEvade = structuredClone(await loadF1SliceContract());
+  stanceBoundEvade.combatBootstrap.abilities.at(-1).requiredStanceId = "stance_eavesguard";
+  assert.throws(() => validateF1SliceContract(stanceBoundEvade, catalog), /stance-neutral/);
 });

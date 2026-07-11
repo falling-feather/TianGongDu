@@ -146,8 +146,14 @@ export function validateF1SliceContract(contract, catalog) {
   if (contract.ports[0].status !== "bootstrap_implemented") {
     fail("the built-in definition provider must be marked as bootstrap implemented");
   }
-  if (contract.ports.slice(1).some((port) => port.status !== "reserved")) {
-    fail("unimplemented ports must remain explicitly reserved");
+  const implementedPorts = new Set([
+    "IContentDefinitionProvider",
+    "ICombatResolver",
+    "ICombatEventSink"
+  ]);
+  for (const port of contract.ports) {
+    const expected = implementedPorts.has(port.name) ? "bootstrap_implemented" : "reserved";
+    if (port.status !== expected) fail(`${port.name} must remain ${expected}`);
   }
 
   const seed = contract.playerSeed;
@@ -182,6 +188,116 @@ export function validateF1SliceContract(contract, catalog) {
     fail("camera basis must be a right-handed unit oblique basis with a new revision");
   }
 
+  const combat = contract.combatBootstrap;
+  if (combat?.id !== "f1_encounter_umbrella_lane_bootstrap") {
+    fail("combat bootstrap id drifted");
+  }
+  if (!Array.isArray(combat.actors) || combat.actors.length < 2 || combat.actors.length > 16) {
+    fail("combat bootstrap requires 2..16 actors");
+  }
+  if (!Array.isArray(combat.abilities) || combat.abilities.length === 0 || combat.abilities.length > 32) {
+    fail("combat bootstrap requires 1..32 abilities");
+  }
+  assertUnique(combat.actors.map((actor) => actor.actorKey), "combat actor key");
+  const stanceIds = new Set();
+  const resourcePairs = [
+    ["health", "healthMax", true],
+    ["stamina", "staminaMax", true],
+    ["poise", "poiseMax", true],
+    ["lantern", "lanternMax", false]
+  ];
+  for (const actor of combat.actors) {
+    if (!Number.isSafeInteger(actor.actorKey) || actor.actorKey <= 0) {
+      fail("invalid combat actor key");
+    }
+    if (!["player", "hostile", "neutral"].includes(actor.faction)) {
+      fail(`${actor.actorKey} has an invalid faction`);
+    }
+    if (!Array.isArray(actor.stanceIds) || actor.stanceIds.length === 0 || actor.stanceIds.length > 3) {
+      fail(`${actor.actorKey} must declare 1..3 stances`);
+    }
+    assertUnique(actor.stanceIds, `${actor.actorKey} stance`);
+    if (!actor.stanceIds.includes(actor.initialStanceId)) {
+      fail(`${actor.actorKey} initial stance is not allowed`);
+    }
+    for (const stance of actor.stanceIds) stanceIds.add(stance);
+    for (const [valueField, maxField, positiveMax] of resourcePairs) {
+      const value = actor.resources?.[valueField];
+      const maximum = actor.resources?.[maxField];
+      if (
+        !Number.isInteger(value) ||
+        !Number.isInteger(maximum) ||
+        value < 0 ||
+        maximum < (positiveMax ? 1 : 0) ||
+        value > maximum
+      ) {
+        fail(`${actor.actorKey} has invalid ${valueField}/${maxField}`);
+      }
+    }
+    if (!Number.isInteger(actor.resources.evidence) || actor.resources.evidence < 0) {
+      fail(`${actor.actorKey} has invalid evidence`);
+    }
+  }
+  const playerCombatSeed = combat.actors.find((actor) => actor.actorKey === seed.actorKey);
+  if (
+    playerCombatSeed?.faction !== "player" ||
+    !sameValues(playerCombatSeed.poseMm, seed.initialPoseMm)
+  ) {
+    fail("combat player seed must match the movement player seed");
+  }
+
+  assertUnique(combat.abilities.map((ability) => ability.id), "combat ability id");
+  const triggerKeys = [];
+  const coveredStanceTriggers = new Set();
+  let evadeCount = 0;
+  const feedbackTags = new Set(["light", "heavy", "guard", "poise_break", "evade"]);
+  for (const ability of combat.abilities) {
+    if (!["light_attack", "heavy_attack", "evade"].includes(ability.trigger)) {
+      fail(`${ability.id} has an invalid trigger`);
+    }
+    if (ability.trigger === "evade") {
+      if (ability.requiredStanceId !== undefined) fail(`${ability.id} evade must be stance-neutral`);
+      evadeCount += 1;
+    } else if (!stanceIds.has(ability.requiredStanceId)) {
+      fail(`${ability.id} references an unknown stance`);
+    }
+    const triggerKey = `${ability.trigger}:${ability.requiredStanceId ?? "*"}`;
+    triggerKeys.push(triggerKey);
+    coveredStanceTriggers.add(triggerKey);
+    for (const field of [
+      "staminaCost",
+      "windupTicks",
+      "recoveryTicks",
+      "rangeMm",
+      "heightToleranceMm",
+      "healthDamage",
+      "poiseDamage"
+    ]) {
+      if (!Number.isInteger(ability[field]) || ability[field] < 0 || ability[field] > 100000) {
+        fail(`${ability.id} has invalid ${field}`);
+      }
+    }
+    if (!Number.isInteger(ability.activeTicks) || ability.activeTicks <= 0 || ability.activeTicks > 600) {
+      fail(`${ability.id} has invalid activeTicks`);
+    }
+    if (!Array.isArray(ability.feedbackTags) || ability.feedbackTags.length === 0) {
+      fail(`${ability.id} has no feedback tags`);
+    }
+    assertUnique(ability.feedbackTags, `${ability.id} feedback tag`);
+    if (ability.feedbackTags.some((tag) => !feedbackTags.has(tag))) {
+      fail(`${ability.id} has an unknown feedback tag`);
+    }
+  }
+  assertUnique(triggerKeys, "combat trigger and stance");
+  if (evadeCount !== 1) fail("combat bootstrap requires one shared evade ability");
+  for (const stance of stanceIds) {
+    for (const trigger of ["light_attack", "heavy_attack"]) {
+      if (!coveredStanceTriggers.has(`${trigger}:${stance}`)) {
+        fail(`${stance} is missing ${trigger}`);
+      }
+    }
+  }
+
   const allStableIds = [
     contract.id,
     refs.startFixtureId,
@@ -192,9 +308,13 @@ export function validateF1SliceContract(contract, catalog) {
     refs.bossId,
     ...contract.cellIds,
     ...beatIds,
-    ...objectiveIds
+    ...objectiveIds,
+    combat.id,
+    ...combat.actors.map((actor) => actor.archetypeId),
+    ...stanceIds,
+    ...combat.abilities.map((ability) => ability.id)
   ];
-  assertHashUnique(allStableIds, "stable content id");
+  assertHashUnique([...new Set(allStableIds)], "stable content id");
   return contract;
 }
 
@@ -210,9 +330,28 @@ function beatKind(value) {
   return `contracts::VerticalSliceBeatKind::${value}`;
 }
 
+function stableKey(value) {
+  return value ? `contracts::stable_content_key("${value}")` : "0";
+}
+
+function combatActorRow(actor) {
+  const pose = actor.poseMm;
+  const resources = actor.resources;
+  const stances = [...actor.stanceIds.map(stableKey), ...Array(3 - actor.stanceIds.length).fill("0")];
+  return `    {${actor.actorKey}ULL, ${contentId(actor.archetypeId)}, contracts::CombatFaction::${actor.faction}, {${pose.x}, ${pose.y}, ${pose.height}, ${pose.floorLayer}}, {${resources.health}, ${resources.healthMax}, ${resources.stamina}, ${resources.staminaMax}, ${resources.poise}, ${resources.poiseMax}, ${resources.lantern}, ${resources.lanternMax}, ${resources.evidence}}, {${stances.join(", ")}}, ${actor.stanceIds.length}U, ${stableKey(actor.initialStanceId)}},`;
+}
+
+function combatAbilityRow(ability) {
+  const feedback = ability.feedbackTags
+    .map((tag) => `contracts::feedback_${tag}`)
+    .join(" | ");
+  return `    {${contentId(ability.id)}, contracts::CombatCommandType::${ability.trigger}, ${stableKey(ability.requiredStanceId)}, ${ability.staminaCost}, ${ability.windupTicks}, ${ability.activeTicks}, ${ability.recoveryTicks}, ${ability.rangeMm}, ${ability.heightToleranceMm}, ${ability.healthDamage}, ${ability.poiseDamage}, ${feedback}},`;
+}
+
 export function renderF1SliceContract(contract) {
   const refs = contract.catalogReferences;
   const seed = contract.playerSeed;
+  const combat = contract.combatBootstrap;
   const objectiveArrays = contract.beats
     .map(
       (beat, index) => `inline constexpr std::array<contracts::ContentId, ${beat.objectiveIds.length}> beat_${index}_objectives{{
@@ -228,10 +367,13 @@ ${arrayRows(beat.objectiveIds)}
     .join("\n");
   const pose = seed.initialPoseMm;
   const basis = seed.cameraBasisQ15;
+  const combatActorRows = combat.actors.map(combatActorRow).join("\n");
+  const combatAbilityRows = combat.abilities.map(combatAbilityRow).join("\n");
 
   return `// Generated from content/design/f1-vertical-slice.json. Do not edit by hand.
 #pragma once
 
+#include <tgd/contracts/combat_types.hpp>
 #include <tgd/contracts/content_definition.hpp>
 
 #include <array>
@@ -260,6 +402,20 @@ ${arrayRows(refs.enemyFamilyIds)}
 inline constexpr std::array<contracts::ContentId, ${contract.cellIds.length}> f1_cells{{
 ${arrayRows(contract.cellIds)}
 }};
+
+inline constexpr std::array<contracts::CombatActorConfig, ${combat.actors.length}> f1_combat_actors{{
+${combatActorRows}
+}};
+
+inline constexpr std::array<contracts::AbilityDefinition, ${combat.abilities.length}> f1_combat_abilities{{
+${combatAbilityRows}
+}};
+
+inline constexpr contracts::CombatEncounterDefinition f1_combat_encounter_definition{
+    ${contentId(combat.id)},
+    std::span<const contracts::CombatActorConfig>{f1_combat_actors},
+    std::span<const contracts::AbilityDefinition>{f1_combat_abilities},
+};
 
 inline constexpr contracts::VerticalSliceDefinition f1_vertical_slice_definition{
     ${contentId(contract.id)},

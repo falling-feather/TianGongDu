@@ -11,6 +11,7 @@
     "timing",
     "catalogReferences",
     "playerSeed",
+    "combatBootstrap",
     "cellIds",
     "beats",
     "paddingPolicy",
@@ -98,6 +99,7 @@
         "cameraBasisQ15": { "$ref": "#/$defs/cameraBasis" }
       }
     },
+    "combatBootstrap": { "$ref": "#/$defs/combatBootstrap" },
     "cellIds": { "$ref": "#/$defs/idList" },
     "beats": {
       "type": "array",
@@ -161,6 +163,116 @@
         "screenRightWorld": { "$ref": "#/$defs/vector" },
         "screenForwardWorld": { "$ref": "#/$defs/vector" },
         "revision": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "combatResources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "health",
+        "healthMax",
+        "stamina",
+        "staminaMax",
+        "poise",
+        "poiseMax",
+        "lantern",
+        "lanternMax",
+        "evidence"
+      ],
+      "properties": {
+        "health": { "type": "integer", "minimum": 0 },
+        "healthMax": { "type": "integer", "minimum": 1 },
+        "stamina": { "type": "integer", "minimum": 0 },
+        "staminaMax": { "type": "integer", "minimum": 1 },
+        "poise": { "type": "integer", "minimum": 0 },
+        "poiseMax": { "type": "integer", "minimum": 1 },
+        "lantern": { "type": "integer", "minimum": 0 },
+        "lanternMax": { "type": "integer", "minimum": 0 },
+        "evidence": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "combatActor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actorKey",
+        "archetypeId",
+        "faction",
+        "poseMm",
+        "resources",
+        "stanceIds",
+        "initialStanceId"
+      ],
+      "properties": {
+        "actorKey": { "type": "integer", "minimum": 1 },
+        "archetypeId": { "$ref": "#/$defs/id" },
+        "faction": { "enum": ["player", "hostile", "neutral"] },
+        "poseMm": { "$ref": "#/$defs/pose" },
+        "resources": { "$ref": "#/$defs/combatResources" },
+        "stanceIds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/id" }
+        },
+        "initialStanceId": { "$ref": "#/$defs/id" }
+      }
+    },
+    "combatAbility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "trigger",
+        "staminaCost",
+        "windupTicks",
+        "activeTicks",
+        "recoveryTicks",
+        "rangeMm",
+        "heightToleranceMm",
+        "healthDamage",
+        "poiseDamage",
+        "feedbackTags"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "trigger": { "enum": ["light_attack", "heavy_attack", "evade"] },
+        "requiredStanceId": { "$ref": "#/$defs/id" },
+        "staminaCost": { "type": "integer", "minimum": 0 },
+        "windupTicks": { "type": "integer", "minimum": 0, "maximum": 600 },
+        "activeTicks": { "type": "integer", "minimum": 1, "maximum": 600 },
+        "recoveryTicks": { "type": "integer", "minimum": 0, "maximum": 600 },
+        "rangeMm": { "type": "integer", "minimum": 0, "maximum": 100000 },
+        "heightToleranceMm": { "type": "integer", "minimum": 0, "maximum": 100000 },
+        "healthDamage": { "type": "integer", "minimum": 0, "maximum": 100000 },
+        "poiseDamage": { "type": "integer", "minimum": 0, "maximum": 100000 },
+        "feedbackTags": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["light", "heavy", "guard", "poise_break", "evade"] }
+        }
+      }
+    },
+    "combatBootstrap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "actors", "abilities"],
+      "properties": {
+        "id": { "const": "f1_encounter_umbrella_lane_bootstrap" },
+        "actors": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 16,
+          "items": { "$ref": "#/$defs/combatActor" }
+        },
+        "abilities": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": { "$ref": "#/$defs/combatAbility" }
+        }
       }
     },
     "beat": {

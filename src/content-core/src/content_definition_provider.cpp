@@ -12,4 +12,14 @@ const contracts::VerticalSliceDefinition* BuiltInF1ContentDefinitionProvider::fi
     return nullptr;
 }
 
+const contracts::CombatEncounterDefinition*
+BuiltInF1ContentDefinitionProvider::find_combat_encounter(
+    contracts::StableContentKey id
+) const noexcept {
+    if (id == generated::f1_combat_encounter_definition.id.key) {
+        return &generated::f1_combat_encounter_definition;
+    }
+    return nullptr;
+}
+
 }  // namespace tgd::content

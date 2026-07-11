@@ -33,6 +33,15 @@ int main() {
             nullptr,
         "unknown content fails closed"
     );
+    const auto* combat = provider.find_combat_encounter(
+        tgd::contracts::stable_content_key("f1_encounter_umbrella_lane_bootstrap")
+    );
+    ok &= expect(combat != nullptr, "built-in provider resolves the F1 combat bootstrap");
+    ok &= expect(
+        provider.find_combat_encounter(tgd::contracts::stable_content_key("missing_encounter")) ==
+            nullptr,
+        "unknown combat content fails closed"
+    );
     ok &= expect(
         definition->view_model == "2.5d-oblique-panoramic" &&
             definition->primary_guidance == "douzhanshen" &&
@@ -65,6 +74,32 @@ int main() {
         }
     }
     ok &= expect(minutes == 60, "seven playable beat budgets total exactly 60 minutes");
+
+    if (combat != nullptr) {
+        ok &= expect(
+            combat->actors.size() == 4 && combat->abilities.size() == 9,
+            "the first player and enemy combat set is explicit"
+        );
+        bool found_player = false;
+        std::unordered_set<tgd::contracts::StableContentKey> ability_ids;
+        for (const auto& actor : combat->actors) {
+            found_player |= actor.actor == definition->player.actor &&
+                            actor.faction == tgd::contracts::CombatFaction::player &&
+                            actor.initial_pose == definition->player.initial_pose;
+            ok &= expect(
+                actor.stance_count > 0 && actor.initial_stance != 0,
+                "each combat actor declares a stance"
+            );
+        }
+        for (const auto& ability : combat->abilities) {
+            ok &= expect(
+                ability.id.key != 0 && ability_ids.insert(ability.id.key).second,
+                "combat ability keys are unique"
+            );
+            ok &= expect(ability.active_ticks > 0, "ability has an authoritative active window");
+        }
+        ok &= expect(found_player, "combat and movement share the same player seed");
+    }
 
     const auto& basis = definition->player.camera_basis;
     const auto dot = static_cast<std::int64_t>(basis.screen_right_world.x) *

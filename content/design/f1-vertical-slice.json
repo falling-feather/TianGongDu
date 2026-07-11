@@ -50,6 +50,214 @@
       "revision": 2
     }
   },
+  "combatBootstrap": {
+    "id": "f1_encounter_umbrella_lane_bootstrap",
+    "actors": [
+      {
+        "actorKey": 1,
+        "archetypeId": "actor_f1_player",
+        "faction": "player",
+        "poseMm": { "x": -12000, "y": -1600, "height": 0, "floorLayer": 0 },
+        "resources": {
+          "health": 120,
+          "healthMax": 120,
+          "stamina": 100,
+          "staminaMax": 100,
+          "poise": 80,
+          "poiseMax": 80,
+          "lantern": 30,
+          "lanternMax": 30,
+          "evidence": 0
+        },
+        "stanceIds": ["stance_eavesguard", "stance_flower_turn"],
+        "initialStanceId": "stance_eavesguard"
+      },
+      {
+        "actorKey": 101,
+        "archetypeId": "jn_enemy_leaking_umbrella_doll",
+        "faction": "hostile",
+        "poseMm": { "x": -4000, "y": -2600, "height": 0, "floorLayer": 0 },
+        "resources": {
+          "health": 90,
+          "healthMax": 90,
+          "stamina": 80,
+          "staminaMax": 80,
+          "poise": 40,
+          "poiseMax": 40,
+          "lantern": 0,
+          "lanternMax": 0,
+          "evidence": 0
+        },
+        "stanceIds": ["stance_umbrella_rust"],
+        "initialStanceId": "stance_umbrella_rust"
+      },
+      {
+        "actorKey": 102,
+        "archetypeId": "jn_enemy_leaking_umbrella_doll",
+        "faction": "hostile",
+        "poseMm": { "x": -3000, "y": -400, "height": 0, "floorLayer": 0 },
+        "resources": {
+          "health": 90,
+          "healthMax": 90,
+          "stamina": 80,
+          "staminaMax": 80,
+          "poise": 40,
+          "poiseMax": 40,
+          "lantern": 0,
+          "lanternMax": 0,
+          "evidence": 0
+        },
+        "stanceIds": ["stance_umbrella_rust"],
+        "initialStanceId": "stance_umbrella_rust"
+      },
+      {
+        "actorKey": 103,
+        "archetypeId": "jn_enemy_faded_paper_egret",
+        "faction": "hostile",
+        "poseMm": { "x": -1500, "y": 900, "height": 700, "floorLayer": 0 },
+        "resources": {
+          "health": 70,
+          "healthMax": 70,
+          "stamina": 100,
+          "staminaMax": 100,
+          "poise": 28,
+          "poiseMax": 28,
+          "lantern": 0,
+          "lanternMax": 0,
+          "evidence": 0
+        },
+        "stanceIds": ["stance_paper_egret"],
+        "initialStanceId": "stance_paper_egret"
+      }
+    ],
+    "abilities": [
+      {
+        "id": "ability_eavesguard_light",
+        "trigger": "light_attack",
+        "requiredStanceId": "stance_eavesguard",
+        "staminaCost": 8,
+        "windupTicks": 8,
+        "activeTicks": 3,
+        "recoveryTicks": 12,
+        "rangeMm": 1800,
+        "heightToleranceMm": 700,
+        "healthDamage": 18,
+        "poiseDamage": 18,
+        "feedbackTags": ["light"]
+      },
+      {
+        "id": "ability_eavesguard_heavy",
+        "trigger": "heavy_attack",
+        "requiredStanceId": "stance_eavesguard",
+        "staminaCost": 18,
+        "windupTicks": 18,
+        "activeTicks": 4,
+        "recoveryTicks": 24,
+        "rangeMm": 2050,
+        "heightToleranceMm": 800,
+        "healthDamage": 30,
+        "poiseDamage": 46,
+        "feedbackTags": ["heavy"]
+      },
+      {
+        "id": "ability_flower_light",
+        "trigger": "light_attack",
+        "requiredStanceId": "stance_flower_turn",
+        "staminaCost": 10,
+        "windupTicks": 6,
+        "activeTicks": 4,
+        "recoveryTicks": 14,
+        "rangeMm": 2100,
+        "heightToleranceMm": 900,
+        "healthDamage": 20,
+        "poiseDamage": 14,
+        "feedbackTags": ["light"]
+      },
+      {
+        "id": "ability_flower_heavy",
+        "trigger": "heavy_attack",
+        "requiredStanceId": "stance_flower_turn",
+        "staminaCost": 22,
+        "windupTicks": 14,
+        "activeTicks": 6,
+        "recoveryTicks": 28,
+        "rangeMm": 2350,
+        "heightToleranceMm": 1000,
+        "healthDamage": 38,
+        "poiseDamage": 34,
+        "feedbackTags": ["heavy"]
+      },
+      {
+        "id": "ability_umbrella_rust_light",
+        "trigger": "light_attack",
+        "requiredStanceId": "stance_umbrella_rust",
+        "staminaCost": 6,
+        "windupTicks": 18,
+        "activeTicks": 4,
+        "recoveryTicks": 24,
+        "rangeMm": 1650,
+        "heightToleranceMm": 700,
+        "healthDamage": 12,
+        "poiseDamage": 16,
+        "feedbackTags": ["light"]
+      },
+      {
+        "id": "ability_umbrella_rust_heavy",
+        "trigger": "heavy_attack",
+        "requiredStanceId": "stance_umbrella_rust",
+        "staminaCost": 16,
+        "windupTicks": 32,
+        "activeTicks": 6,
+        "recoveryTicks": 40,
+        "rangeMm": 1900,
+        "heightToleranceMm": 800,
+        "healthDamage": 24,
+        "poiseDamage": 36,
+        "feedbackTags": ["heavy"]
+      },
+      {
+        "id": "ability_paper_egret_light",
+        "trigger": "light_attack",
+        "requiredStanceId": "stance_paper_egret",
+        "staminaCost": 8,
+        "windupTicks": 22,
+        "activeTicks": 6,
+        "recoveryTicks": 26,
+        "rangeMm": 2700,
+        "heightToleranceMm": 1300,
+        "healthDamage": 14,
+        "poiseDamage": 12,
+        "feedbackTags": ["light"]
+      },
+      {
+        "id": "ability_paper_egret_heavy",
+        "trigger": "heavy_attack",
+        "requiredStanceId": "stance_paper_egret",
+        "staminaCost": 20,
+        "windupTicks": 38,
+        "activeTicks": 8,
+        "recoveryTicks": 42,
+        "rangeMm": 3200,
+        "heightToleranceMm": 1500,
+        "healthDamage": 26,
+        "poiseDamage": 30,
+        "feedbackTags": ["heavy"]
+      },
+      {
+        "id": "ability_common_evade",
+        "trigger": "evade",
+        "staminaCost": 14,
+        "windupTicks": 0,
+        "activeTicks": 12,
+        "recoveryTicks": 22,
+        "rangeMm": 0,
+        "heightToleranceMm": 0,
+        "healthDamage": 0,
+        "poiseDamage": 0,
+        "feedbackTags": ["evade"]
+      }
+    ]
+  },
   "cellIds": [
     "f1_cell_rain_ferry",
     "f1_cell_umbrella_lane_a",
@@ -154,8 +362,16 @@
       "status": "bootstrap_implemented"
     },
     { "name": "IWorldCellSource", "owner": "runtime", "status": "reserved" },
-    { "name": "ICombatResolver", "owner": "gameplay", "status": "reserved" },
-    { "name": "ICombatEventSink", "owner": "gameplay", "status": "reserved" },
+    {
+      "name": "ICombatResolver",
+      "owner": "gameplay",
+      "status": "bootstrap_implemented"
+    },
+    {
+      "name": "ICombatEventSink",
+      "owner": "gameplay",
+      "status": "bootstrap_implemented"
+    },
     { "name": "IEncounterDirector", "owner": "gameplay", "status": "reserved" },
     { "name": "IQuestRuntime", "owner": "gameplay", "status": "reserved" },
     { "name": "ISnapshotContributor", "owner": "runtime", "status": "reserved" },

@@ -5,6 +5,7 @@
 
 #include <array>
 #include <cstdint>
+#include <span>
 
 namespace tgd::contracts {
 
@@ -123,6 +124,12 @@ struct CombatEvent final {
     StableContentKey ability{};
     std::int32_t value{};
     std::uint32_t feedback_tags{};
+};
+
+struct CombatEncounterDefinition final {
+    ContentId id{};
+    std::span<const CombatActorConfig> actors{};
+    std::span<const AbilityDefinition> abilities{};
 };
 
 }  // namespace tgd::contracts

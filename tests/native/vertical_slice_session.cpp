@@ -9,7 +9,9 @@
 #include <cstdlib>
 #include <iostream>
 #include <memory>
+#include <span>
 #include <string_view>
+#include <vector>
 
 namespace {
 
@@ -23,6 +25,21 @@ bool expect(bool condition, std::string_view message) {
     }
     return condition;
 }
+
+class CollectingQuestSink final : public tgd::gameplay::IQuestEventSink {
+  public:
+    void publish(std::span<const tgd::contracts::QuestEvent> events) noexcept override {
+        values.insert(values.end(), events.begin(), events.end());
+    }
+
+    [[nodiscard]] bool contains(tgd::contracts::QuestEventType type) const {
+        return std::any_of(values.begin(), values.end(), [type](const auto& event) {
+            return event.type == type;
+        });
+    }
+
+    std::vector<tgd::contracts::QuestEvent> values;
+};
 
 [[nodiscard]] std::unique_ptr<tgd::runtime::StaticCollisionWorld> empty_world() {
     auto world = std::make_unique<tgd::runtime::StaticCollisionWorld>();
@@ -55,6 +72,12 @@ bool test_objective_driven_progression_and_lifecycle() {
         "the route starts at Rain Ferry"
     );
     ok &= expect(session.start() == VerticalSliceError::none, "slice starts explicitly");
+    ok &= expect(
+        session.quest_snapshot().stage == definition().beats.front().id.key &&
+            session.objective_state(definition().beats.front().objectives.front().key) ==
+                tgd::gameplay::QuestObjectiveState::active,
+        "slice exposes the composed quest snapshot"
+    );
 
     const tgd::contracts::SessionCommand move{
         {1, definition().player.actor, 1, tgd::contracts::SessionCommandType::move_intent},
@@ -83,11 +106,12 @@ bool test_objective_driven_progression_and_lifecycle() {
         "unknown content fails closed"
     );
 
+    CollectingQuestSink quest_sink;
     for (std::size_t beat_index = 0; beat_index < definition().beats.size(); ++beat_index) {
         const auto& beat = definition().beats[beat_index];
         for (auto objective = beat.objectives.rbegin(); objective != beat.objectives.rend();
              ++objective) {
-            const auto result = session.complete_objective(objective->key);
+            const auto result = session.complete_objective(objective->key, quest_sink);
             ok &= expect(result.error == VerticalSliceError::none && result.accepted, "objective is accepted");
             const auto duplicate = session.complete_objective(objective->key);
             ok &= expect(
@@ -100,6 +124,11 @@ bool test_objective_driven_progression_and_lifecycle() {
         session.lifecycle() == VerticalSliceLifecycle::resolved &&
             session.current_snapshot().resolved,
         "the final return objective resolves the slice"
+    );
+    ok &= expect(
+        quest_sink.contains(tgd::contracts::QuestEventType::stage_advanced) &&
+            quest_sink.contains(tgd::contracts::QuestEventType::quest_resolved),
+        "quest events survive composition through the vertical slice"
     );
     ok &= expect(
         session.current_snapshot().simulation_ticks == 1,
@@ -165,6 +194,7 @@ bool test_retry_preserves_objective_progress() {
     ok &= session.complete_objective(definition().beats.front().objectives.front().key).error ==
           VerticalSliceError::none;
     const auto completed_before = session.current_snapshot().completed_objectives;
+    const auto quest_checksum_before = session.quest_snapshot().checksum;
     const tgd::contracts::SafePointRetryCommand retry{
         session.current_snapshot().tick,
         definition().player.actor,
@@ -177,7 +207,8 @@ bool test_retry_preserves_objective_progress() {
     ok &= expect(
         session.current_snapshot().player_pose == definition().player.initial_pose &&
             session.current_snapshot().completed_objectives == completed_before &&
-            session.current_snapshot().simulation_ticks == 1,
+            session.current_snapshot().simulation_ticks == 1 &&
+            session.quest_snapshot().checksum == quest_checksum_before,
         "retry restores pose without erasing authored progress or elapsed simulation"
     );
     ok &= expect(session.generation() == 2, "slice generation changes on retry");

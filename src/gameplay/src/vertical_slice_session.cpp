@@ -56,6 +56,11 @@ void hash_integer(std::uint64_t& hash, Integer value) noexcept {
            determinant <= target + tolerance;
 }
 
+class DiscardingQuestEventSink final : public IQuestEventSink {
+  public:
+    void publish(std::span<const contracts::QuestEvent>) noexcept override {}
+};
+
 }  // namespace
 
 VerticalSliceError VerticalSliceSession::initialize(
@@ -71,6 +76,9 @@ VerticalSliceError VerticalSliceSession::initialize(
     if (!collision_world) {
         return VerticalSliceError::missing_collision_world;
     }
+    if (quest_.initialize(definition, definition.player.actor) != QuestError::none) {
+        return VerticalSliceError::invalid_definition;
+    }
 
     runtime::GameSessionConfig movement_config{};
     movement_config.player_actor = definition.player.actor;
@@ -84,6 +92,7 @@ VerticalSliceError VerticalSliceSession::initialize(
     movement_config.collision_height = definition.player.collision_height_mm;
     last_movement_error_ = movement_.initialize(movement_config, std::move(collision_world));
     if (last_movement_error_ != runtime::GameSessionError::none) {
+        static_cast<void>(quest_.destroy());
         return VerticalSliceError::movement_session_error;
     }
 
@@ -103,6 +112,9 @@ VerticalSliceError VerticalSliceSession::start() noexcept {
     if (last_movement_error_ != runtime::GameSessionError::none) {
         return VerticalSliceError::movement_session_error;
     }
+    if (quest_.start() != QuestError::none) {
+        return VerticalSliceError::quest_runtime_error;
+    }
     lifecycle_ = VerticalSliceLifecycle::running;
     return VerticalSliceError::none;
 }
@@ -115,6 +127,9 @@ VerticalSliceError VerticalSliceSession::pause() noexcept {
     if (last_movement_error_ != runtime::GameSessionError::none) {
         return VerticalSliceError::movement_session_error;
     }
+    if (quest_.pause() != QuestError::none) {
+        return VerticalSliceError::quest_runtime_error;
+    }
     lifecycle_ = VerticalSliceLifecycle::paused;
     return VerticalSliceError::none;
 }
@@ -126,6 +141,9 @@ VerticalSliceError VerticalSliceSession::resume() noexcept {
     last_movement_error_ = movement_.resume();
     if (last_movement_error_ != runtime::GameSessionError::none) {
         return VerticalSliceError::movement_session_error;
+    }
+    if (quest_.resume() != QuestError::none) {
+        return VerticalSliceError::quest_runtime_error;
     }
     lifecycle_ = VerticalSliceLifecycle::running;
     return VerticalSliceError::none;
@@ -140,10 +158,12 @@ VerticalSliceError VerticalSliceSession::destroy() noexcept {
     if (last_movement_error_ != runtime::GameSessionError::none) {
         return VerticalSliceError::movement_session_error;
     }
+    if (quest_.destroy() != QuestError::none) {
+        return VerticalSliceError::quest_runtime_error;
+    }
     lifecycle_ = VerticalSliceLifecycle::destroyed;
     ++generation_;
     definition_ = nullptr;
-    completed_objective_count_ = 0;
     return VerticalSliceError::none;
 }
 
@@ -197,43 +217,58 @@ VerticalSliceAdvanceResult VerticalSliceSession::advance(std::uint32_t tick_budg
 CompleteObjectiveResult VerticalSliceSession::complete_objective(
     contracts::StableContentKey objective
 ) noexcept {
-    if (lifecycle_ == VerticalSliceLifecycle::resolved && is_known_objective(objective) &&
-        is_completed(objective)) {
-        return {VerticalSliceError::none, false, false, true};
-    }
-    if (lifecycle_ != VerticalSliceLifecycle::running) {
+    DiscardingQuestEventSink sink;
+    return complete_objective(objective, sink);
+}
+
+CompleteObjectiveResult VerticalSliceSession::complete_objective(
+    contracts::StableContentKey objective,
+    IQuestEventSink& sink
+) noexcept {
+    if (lifecycle_ != VerticalSliceLifecycle::running &&
+        lifecycle_ != VerticalSliceLifecycle::resolved) {
         return {VerticalSliceError::invalid_lifecycle};
     }
-    if (!is_known_objective(objective)) {
+    const auto state = quest_.objective_state(objective);
+    if (state == QuestObjectiveState::unknown) {
         return {VerticalSliceError::unknown_objective};
     }
-    if (is_completed(objective)) {
-        return {VerticalSliceError::none, false, false, false};
-    }
-    const auto& active = definition_->beats[beat_index_];
-    if (!contains_content_id(active.objectives, objective)) {
+    if (state == QuestObjectiveState::locked) {
         return {VerticalSliceError::objective_not_active};
     }
-
+    const contracts::QuestCommand command{
+        current_snapshot_.tick,
+        definition_->player.actor,
+        quest_command_sequence_,
+        contracts::QuestCommandType::complete_objective,
+        objective,
+    };
+    const auto result = quest_.apply(command, sink);
+    if (result.error == QuestError::unknown_objective) {
+        return {VerticalSliceError::unknown_objective};
+    }
+    if (result.error == QuestError::objective_not_active) {
+        return {VerticalSliceError::objective_not_active};
+    }
+    if (result.error != QuestError::none) {
+        return {VerticalSliceError::quest_runtime_error};
+    }
+    ++quest_command_sequence_;
     previous_snapshot_ = current_snapshot_;
-    completed_objectives_[completed_objective_count_] = objective;
-    ++completed_objective_count_;
-    const bool beat_advanced = active_beat_complete();
-    bool resolved = false;
-    if (beat_advanced) {
-        if (beat_index_ + 1 < definition_->beats.size()) {
-            ++beat_index_;
-        } else {
-            last_movement_error_ = movement_.pause();
-            if (last_movement_error_ != runtime::GameSessionError::none) {
-                return {VerticalSliceError::movement_session_error, true, false, false};
-            }
-            lifecycle_ = VerticalSliceLifecycle::resolved;
-            resolved = true;
+    if (result.quest_resolved && lifecycle_ != VerticalSliceLifecycle::resolved) {
+        last_movement_error_ = movement_.pause();
+        if (last_movement_error_ != runtime::GameSessionError::none) {
+            return {VerticalSliceError::movement_session_error, result.accepted, false, false};
         }
+        lifecycle_ = VerticalSliceLifecycle::resolved;
     }
     refresh_snapshot();
-    return {VerticalSliceError::none, true, beat_advanced, resolved};
+    return {
+        VerticalSliceError::none,
+        result.accepted,
+        result.stage_advanced,
+        result.quest_resolved,
+    };
 }
 
 VerticalSliceLifecycle VerticalSliceSession::lifecycle() const noexcept {
@@ -258,6 +293,16 @@ const VerticalSliceSnapshot& VerticalSliceSession::previous_snapshot() const noe
 
 const VerticalSliceSnapshot& VerticalSliceSession::current_snapshot() const noexcept {
     return current_snapshot_;
+}
+
+const contracts::QuestSnapshot& VerticalSliceSession::quest_snapshot() const noexcept {
+    return quest_.snapshot();
+}
+
+QuestObjectiveState VerticalSliceSession::objective_state(
+    contracts::StableContentKey objective
+) const noexcept {
+    return quest_.objective_state(objective);
 }
 
 bool VerticalSliceSession::valid_definition(
@@ -308,56 +353,21 @@ bool VerticalSliceSession::valid_definition(
            definition.end_to_end_test_budget_minutes >= definition.playable_target_minutes;
 }
 
-bool VerticalSliceSession::is_known_objective(
-    contracts::StableContentKey objective
-) const noexcept {
-    for (const auto& beat : definition_->beats) {
-        if (contains_content_id(beat.objectives, objective)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-bool VerticalSliceSession::is_completed(contracts::StableContentKey objective) const noexcept {
-    return std::find(
-               completed_objectives_.begin(),
-               completed_objectives_.begin() +
-                   static_cast<std::ptrdiff_t>(completed_objective_count_),
-               objective
-           ) != completed_objectives_.begin() +
-                    static_cast<std::ptrdiff_t>(completed_objective_count_);
-}
-
-std::size_t VerticalSliceSession::active_completed_count() const noexcept {
-    const auto& active = definition_->beats[beat_index_];
-    return static_cast<std::size_t>(std::count_if(
-        active.objectives.begin(),
-        active.objectives.end(),
-        [this](const contracts::ContentId& objective) { return is_completed(objective.key); }
-    ));
-}
-
-bool VerticalSliceSession::active_beat_complete() const noexcept {
-    return active_completed_count() == definition_->beats[beat_index_].objectives.size();
-}
-
 void VerticalSliceSession::refresh_snapshot() noexcept {
     const auto& movement_snapshot = movement_.current_snapshot();
-    const auto& beat = definition_->beats[beat_index_];
+    const auto& quest_snapshot = quest_.snapshot();
+    const auto& beat = definition_->beats[quest_snapshot.stage_index];
     current_snapshot_.tick = movement_snapshot.tick;
     current_snapshot_.slice_id = definition_->id;
     current_snapshot_.beat_id = beat.id;
     current_snapshot_.cell_id = beat.cell_id;
     current_snapshot_.player_pose = movement_snapshot.player_pose;
-    current_snapshot_.beat_index = static_cast<std::uint16_t>(beat_index_);
-    current_snapshot_.beat_count = static_cast<std::uint16_t>(definition_->beats.size());
-    current_snapshot_.completed_objectives =
-        static_cast<std::uint16_t>(active_completed_count());
-    current_snapshot_.required_objectives =
-        static_cast<std::uint16_t>(beat.objectives.size());
+    current_snapshot_.beat_index = quest_snapshot.stage_index;
+    current_snapshot_.beat_count = quest_snapshot.stage_count;
+    current_snapshot_.completed_objectives = quest_snapshot.completed_in_stage;
+    current_snapshot_.required_objectives = quest_snapshot.required_in_stage;
     current_snapshot_.simulation_ticks = simulation_ticks_;
-    current_snapshot_.resolved = lifecycle_ == VerticalSliceLifecycle::resolved;
+    current_snapshot_.resolved = quest_snapshot.resolved;
     update_checksum();
 }
 
@@ -376,9 +386,7 @@ void VerticalSliceSession::update_checksum() noexcept {
     hash_integer(hash, current_snapshot_.required_objectives);
     hash_integer(hash, current_snapshot_.simulation_ticks);
     hash_byte(hash, current_snapshot_.resolved ? 1U : 0U);
-    for (std::size_t index = 0; index < completed_objective_count_; ++index) {
-        hash_integer(hash, completed_objectives_[index]);
-    }
+    hash_integer(hash, quest_.snapshot().checksum);
     current_snapshot_.checksum = hash;
 }
 

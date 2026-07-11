@@ -2,10 +2,10 @@
 
 #include <tgd/contracts/content_definition.hpp>
 #include <tgd/contracts/session_types.hpp>
+#include <tgd/gameplay/quest_runtime.hpp>
 #include <tgd/runtime/collision_world.hpp>
 #include <tgd/runtime/game_session.hpp>
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -28,6 +28,7 @@ enum class VerticalSliceError : std::uint8_t {
     invalid_definition,
     missing_collision_world,
     movement_session_error,
+    quest_runtime_error,
     unknown_objective,
     objective_not_active,
 };
@@ -83,6 +84,10 @@ class VerticalSliceSession final {
     [[nodiscard]] CompleteObjectiveResult complete_objective(
         contracts::StableContentKey objective
     ) noexcept;
+    [[nodiscard]] CompleteObjectiveResult complete_objective(
+        contracts::StableContentKey objective,
+        IQuestEventSink& sink
+    ) noexcept;
 
     [[nodiscard]] VerticalSliceLifecycle lifecycle() const noexcept;
     [[nodiscard]] std::uint32_t generation() const noexcept;
@@ -90,15 +95,15 @@ class VerticalSliceSession final {
     [[nodiscard]] const contracts::VerticalSliceDefinition* definition() const noexcept;
     [[nodiscard]] const VerticalSliceSnapshot& previous_snapshot() const noexcept;
     [[nodiscard]] const VerticalSliceSnapshot& current_snapshot() const noexcept;
+    [[nodiscard]] const contracts::QuestSnapshot& quest_snapshot() const noexcept;
+    [[nodiscard]] QuestObjectiveState objective_state(
+        contracts::StableContentKey objective
+    ) const noexcept;
 
   private:
     [[nodiscard]] bool valid_definition(
         const contracts::VerticalSliceDefinition& definition
     ) const noexcept;
-    [[nodiscard]] bool is_known_objective(contracts::StableContentKey objective) const noexcept;
-    [[nodiscard]] bool is_completed(contracts::StableContentKey objective) const noexcept;
-    [[nodiscard]] std::size_t active_completed_count() const noexcept;
-    [[nodiscard]] bool active_beat_complete() const noexcept;
     void refresh_snapshot() noexcept;
     void update_checksum() noexcept;
 
@@ -107,9 +112,8 @@ class VerticalSliceSession final {
     const contracts::VerticalSliceDefinition* definition_{};
     runtime::GameSession movement_{};
     runtime::GameSessionError last_movement_error_{runtime::GameSessionError::none};
-    std::array<contracts::StableContentKey, max_objectives> completed_objectives_{};
-    std::size_t completed_objective_count_{};
-    std::size_t beat_index_{};
+    DeterministicQuestRuntime quest_{};
+    contracts::CommandSequence quest_command_sequence_{1};
     std::uint64_t simulation_ticks_{};
     VerticalSliceSnapshot previous_snapshot_{};
     VerticalSliceSnapshot current_snapshot_{};

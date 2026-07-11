@@ -62,7 +62,13 @@ function(tgd_add_static_layer target)
 endfunction()
 
 tgd_add_static_layer(tgd_contracts)
-target_sources(tgd_contracts PRIVATE src/contracts/src/build_identity.cpp)
+target_sources(
+  tgd_contracts
+  PRIVATE
+    src/contracts/src/build_identity.cpp
+    src/contracts/src/save_envelope.cpp
+    src/contracts/src/sha256.cpp
+)
 target_include_directories(
   tgd_contracts
   PUBLIC

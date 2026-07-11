@@ -43,6 +43,13 @@ target_link_libraries(
 
 add_test(NAME tgd.native.command-replay COMMAND tgd_native_command_replay)
 
+add_executable(tgd_native_save_envelope save_envelope.cpp)
+target_compile_features(tgd_native_save_envelope PRIVATE cxx_std_20)
+tgd_enable_strict_warnings(tgd_native_save_envelope)
+target_link_libraries(tgd_native_save_envelope PRIVATE tgd_contracts)
+
+add_test(NAME tgd.native.save-envelope COMMAND tgd_native_save_envelope)
+
 add_executable(tgd_native_session_input_state session_input_state.cpp)
 target_compile_features(tgd_native_session_input_state PRIVATE cxx_std_20)
 tgd_enable_strict_warnings(tgd_native_session_input_state)

@@ -9,8 +9,10 @@
   "scripts": {
     "generate:action-contract": "node tools/generate-action-contract.mjs",
     "check:action-contract": "node tools/generate-action-contract.mjs --check",
+    "generate:web-abi": "node tools/generate-web-abi.mjs",
+    "check:web-abi": "node tools/generate-web-abi.mjs --check",
     "bootstrap:toolchain": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/bootstrap-toolchain.ps1",
-    "test": "node --test tests/design-foundation.test.mjs tests/architecture.test.mjs tests/toolchain.test.mjs tests/action-contract.test.mjs",
+    "test": "node --test tests/design-foundation.test.mjs tests/architecture.test.mjs tests/toolchain.test.mjs tests/action-contract.test.mjs tests/web-abi-contract.test.mjs",
     "validate:design": "node tools/validate-design.mjs",
     "validate:toolchain": "node tools/verify-toolchain.mjs",
     "validate:toolchain:cache": "node tools/verify-toolchain.mjs --cache",

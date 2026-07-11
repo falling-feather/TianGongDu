@@ -15,6 +15,21 @@ target_link_libraries(
 
 add_test(NAME tgd.native.bootstrap-smoke COMMAND tgd_native_bootstrap_smoke)
 
+add_executable(tgd_native_game_session_determinism game_session_determinism.cpp)
+target_compile_features(tgd_native_game_session_determinism PRIVATE cxx_std_20)
+tgd_enable_strict_warnings(tgd_native_game_session_determinism)
+target_link_libraries(
+  tgd_native_game_session_determinism
+  PRIVATE
+    tgd_contracts
+    tgd_runtime
+)
+
+add_test(
+  NAME tgd.native.game-session-determinism
+  COMMAND tgd_native_game_session_determinism
+)
+
 add_test(
   NAME tgd.architecture.reject-reverse-link
   COMMAND

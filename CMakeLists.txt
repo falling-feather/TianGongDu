@@ -71,7 +71,14 @@ target_include_directories(
 tgd_register_layer(tgd_contracts)
 
 tgd_add_static_layer(tgd_runtime)
-target_sources(tgd_runtime PRIVATE src/runtime/src/runtime_facade.cpp)
+target_sources(
+  tgd_runtime
+  PRIVATE
+    src/runtime/src/collision_world.cpp
+    src/runtime/src/fixed_step_driver.cpp
+    src/runtime/src/game_session.cpp
+    src/runtime/src/runtime_facade.cpp
+)
 target_include_directories(
   tgd_runtime
   PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/runtime/include>"

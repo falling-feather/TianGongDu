@@ -183,8 +183,7 @@
       header.payloadVersion !== 1 ||
       header.payloadLength !== input.byteLength - abi.headerBytes ||
       header.sessionGeneration === 0 ||
-      header.sequence === 0n ||
-      idEmpty(header.requestId)
+      header.sequence === 0n
     ) {
       throw new WireError("Invalid Web ABI message header");
     }
@@ -219,6 +218,7 @@
     if (
       operation < abi.storageOperation.read ||
       operation > abi.storageOperation.request_persistence ||
+      idEmpty(header.requestId) ||
       recordKind < 1 ||
       recordKind > schema.stores.length ||
       durability > 1 ||
@@ -854,7 +854,8 @@
     }
     const words = new Uint32Array(4);
     cryptoObject.getRandomValues(words);
-    if (words.every((word) => word === 0)) words[0] = 1;
+    // ProfileStorageCoordinator reserves a zero high half for invalid request seeds.
+    if (words[0] === 0 && words[1] === 0) words[0] = 1;
     return idFromHex(
       Array.from(words, (word) => word.toString(16).padStart(8, "0")).join("")
     );
@@ -1084,6 +1085,7 @@
       encodeCompletionMessages,
       idFromHex,
       idToHex,
+      randomId,
       storageError
     })
   });

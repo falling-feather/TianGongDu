@@ -124,6 +124,34 @@ test("浏览器存储桥按显式小端编码 Boot 与保存命令", async () =>
   assert.equal(saveView.getBigUint64(44, true), request.high);
 });
 
+test("尚无快照的 Guest UI 事件允许空 snapshot identity", async () => {
+  const { abi, storage } = await loadBrowserContract();
+  const event = new Uint8Array(abi.headerBytes + abi.payload.uiEventV1Bytes);
+  const view = new DataView(event.buffer);
+  view.setUint16(0, abi.major, true);
+  view.setUint16(2, abi.minor, true);
+  view.setUint16(4, abi.messageType.ui_event, true);
+  view.setUint16(6, 1, true);
+  view.setUint32(8, abi.payload.uiEventV1Bytes, true);
+  view.setUint32(12, 17, true);
+  view.setBigUint64(16, 1n, true);
+  view.setUint16(40, 2, true);
+  const decoded = storage.test.decodeProfileUiEvent(event);
+  assert.equal(decoded.stateName, "loading_head");
+  assert.equal(decoded.hasSnapshot, false);
+  assert.equal(decoded.committedSaveCount, 0n);
+  assert.equal(storage.test.idToHex(decoded.snapshotId), "0".repeat(32));
+});
+
+test("请求种子即使随机源返回全零也保留非零 high half", async () => {
+  const { storage } = await loadBrowserContract();
+  const generated = storage.test.randomId({
+    getRandomValues: (output) => output.fill(0)
+  });
+  assert.notEqual(generated.high, 0n);
+  assert.equal(generated.low, 0n);
+});
+
 test("浏览器存储桥解码原子写请求并分块编码完成消息", async () => {
   const { abi, storage } = await loadBrowserContract();
   const request = storage.test.decodeStorageRequest(storageWriteMessage(abi));

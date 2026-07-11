@@ -2,7 +2,7 @@
 
 > 上级文档：[`../01-开发者文档.md`](../01-开发者文档.md)
 > 状态：Accepted Baseline
-> 最后更新：2026-07-10
+> 最后更新：2026-07-11
 > 维护者角色：C++ 核心负责人；Gameplay、AI、存档与表现 Owner 会签
 
 ## 1. 混合组件模型
@@ -153,7 +153,7 @@ Trigger → Cost → TargetQuery → Movement → HitWindow
 - Runtime `ICollisionWorld` 查询经量化并稳定排序；Axmol 物理不进入权威命中，独立碰撞库若使用也只是 Runtime 私有实现。
 - 命中键 `(attacker, abilityInstance, hitIndex, target)` 防重复。
 - 精确格挡是规则窗口、方向和标签交集，不由动画回调判定。
-- AI Director 发放进攻令牌，控制横版群战可读性。
+- AI Director 按视野扇区、纵深与遮挡发放进攻令牌，控制斜向全景群战可读性。
 - Web 后台/掉帧不会改变攻击速度和资源恢复。
 
 ## 12. 工灯定印
@@ -237,13 +237,13 @@ Idle → Pending → Committing → Idle
 
 | 域 | 典型状态 | 规则 |
 | --- | --- | --- |
-| Locomotion | Grounded/Airborne/Falling/Climbing/ForcedMove | 决定重力、地面、跳跃、下穿和规则位移 |
+| Locomotion | Grounded/Airborne/Falling/Climbing/ForcedMove | 决定地面平面移动、独立高度、纵跃/落差、层连接和规则位移 |
 | Action | Free/Startup/Active/Recovery/Guard/Evade/Hitstun/Downed | 决定成本提交、命中窗、取消和受击 |
 | Interaction | None/WorldInteract/Dialogue/Craft/MajorChoice | 决定输入上下文、暂停/减速和任务命令 |
 
 优先级不是“最后写入者获胜”：Session 强制状态/Defeat > Hit/Downed > 已提交动作不可取消段 > 明确取消窗 > 自由输入。每个能力数据声明可从哪些 Action 状态进入、在哪些 Tick 可取消到哪些标签；Presentation 动画状态只能跟随。
 
-跳跃包括 `jump_pressed` 缓冲、离地宽限、起跳 commit、可变高度保持和落地恢复；闪身是独立 Action，不能共享同一物理键语义。攀附只发生在烘焙锚点，避免任意墙面导致动画/碰撞组合爆炸。
+纵跃包括 `jump_pressed` 缓冲、离地宽限、起跳 commit、可变高度保持和落地恢复；它改变独立高度而不把屏幕方向当成世界纵深。闪身是地面平面上的独立 Action，不能共享同一物理键语义。跨越/攀附只发生在烘焙锚点，避免任意墙面导致动画、遮挡和碰撞组合爆炸。
 
 ## 20. 世界状态分层与持久事务
 

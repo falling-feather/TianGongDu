@@ -24,10 +24,12 @@ test("1.0 内容规模达到承诺下限", async () => {
   assert.equal(summary.templates, 9);
   assert.equal(summary.coreLanguage, "C++20");
   assert.equal(summary.engine, "Axmol");
+  assert.equal(summary.viewModel, "2.5d-oblique-panoramic");
+  assert.equal(summary.primaryGuidance, "douzhanshen");
   assert.equal(summary.toolchainLockStatus, "planned-not-locked");
   assert.equal(summary.webTarget, "wasm32");
   assert.equal(summary.cloudSync, true);
-  assert.equal(summary.activeArchitectureDecisions, 4);
+  assert.equal(summary.activeArchitectureDecisions, 5);
   assert.equal(summary.platformTargets, 4);
   assert.equal(summary.architectureModules, 11);
   assert.equal(summary.handoffContractMarkers, 14);

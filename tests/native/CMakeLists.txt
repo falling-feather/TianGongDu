@@ -118,6 +118,21 @@ add_test(
   COMMAND tgd_native_vertical_slice_session
 )
 
+add_executable(tgd_native_combat_resolver combat_resolver.cpp)
+target_compile_features(tgd_native_combat_resolver PRIVATE cxx_std_20)
+tgd_enable_strict_warnings(tgd_native_combat_resolver)
+target_link_libraries(
+  tgd_native_combat_resolver
+  PRIVATE
+    tgd_contracts
+    tgd_gameplay
+)
+
+add_test(
+  NAME tgd.native.combat-resolver
+  COMMAND tgd_native_combat_resolver
+)
+
 add_test(
   NAME tgd.architecture.reject-reverse-link
   COMMAND

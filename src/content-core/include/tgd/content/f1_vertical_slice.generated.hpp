@@ -83,10 +83,10 @@ inline constexpr std::array<contracts::ContentId, 5> f1_cells{{
 }};
 
 inline constexpr std::array<contracts::CombatActorConfig, 4> f1_combat_actors{{
-    {1ULL, contracts::content_id("actor_f1_player"), contracts::CombatFaction::player, {-12000, -1600, 0, 0}, {120, 120, 100, 100, 80, 80, 30, 30, 0}, {contracts::stable_content_key("stance_eavesguard"), contracts::stable_content_key("stance_flower_turn"), 0}, 2U, contracts::stable_content_key("stance_eavesguard")},
-    {101ULL, contracts::content_id("jn_enemy_leaking_umbrella_doll"), contracts::CombatFaction::hostile, {-4000, -2600, 0, 0}, {90, 90, 80, 80, 40, 40, 0, 0, 0}, {contracts::stable_content_key("stance_umbrella_rust"), 0, 0}, 1U, contracts::stable_content_key("stance_umbrella_rust")},
-    {102ULL, contracts::content_id("jn_enemy_leaking_umbrella_doll"), contracts::CombatFaction::hostile, {-3000, -400, 0, 0}, {90, 90, 80, 80, 40, 40, 0, 0, 0}, {contracts::stable_content_key("stance_umbrella_rust"), 0, 0}, 1U, contracts::stable_content_key("stance_umbrella_rust")},
-    {103ULL, contracts::content_id("jn_enemy_faded_paper_egret"), contracts::CombatFaction::hostile, {-1500, 900, 700, 0}, {70, 70, 100, 100, 28, 28, 0, 0, 0}, {contracts::stable_content_key("stance_paper_egret"), 0, 0}, 1U, contracts::stable_content_key("stance_paper_egret")},
+    {1ULL, contracts::content_id("actor_f1_player"), contracts::CombatFaction::player, {-12000, -1600, 0, 0}, {120, 120, 100, 100, 80, 80, 30, 30, 0}, {contracts::stable_content_key("stance_eavesguard"), contracts::stable_content_key("stance_flower_turn"), 0}, 2U, contracts::stable_content_key("stance_eavesguard"), {30, 6, 2, 120, 12, 4}},
+    {101ULL, contracts::content_id("jn_enemy_leaking_umbrella_doll"), contracts::CombatFaction::hostile, {-4000, -2600, 0, 0}, {90, 90, 80, 80, 40, 40, 0, 0, 0}, {contracts::stable_content_key("stance_umbrella_rust"), 0, 0}, 1U, contracts::stable_content_key("stance_umbrella_rust"), {45, 10, 2, 150, 15, 3}},
+    {102ULL, contracts::content_id("jn_enemy_leaking_umbrella_doll"), contracts::CombatFaction::hostile, {-3000, -400, 0, 0}, {90, 90, 80, 80, 40, 40, 0, 0, 0}, {contracts::stable_content_key("stance_umbrella_rust"), 0, 0}, 1U, contracts::stable_content_key("stance_umbrella_rust"), {45, 10, 2, 150, 15, 3}},
+    {103ULL, contracts::content_id("jn_enemy_faded_paper_egret"), contracts::CombatFaction::hostile, {-1500, 900, 700, 0}, {70, 70, 100, 100, 28, 28, 0, 0, 0}, {contracts::stable_content_key("stance_paper_egret"), 0, 0}, 1U, contracts::stable_content_key("stance_paper_egret"), {36, 8, 2, 120, 12, 3}},
 }};
 
 inline constexpr std::array<contracts::AbilityDefinition, 9> f1_combat_abilities{{

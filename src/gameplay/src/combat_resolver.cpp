@@ -49,6 +49,25 @@ void hash_integer(std::uint64_t& hash, Integer value) noexcept {
     return std::max(0, value - amount);
 }
 
+[[nodiscard]] std::int32_t clamp_add(
+    std::int32_t value,
+    std::int32_t amount,
+    std::int32_t maximum
+) noexcept {
+    return static_cast<std::int32_t>(std::min(
+        static_cast<std::int64_t>(maximum),
+        static_cast<std::int64_t>(value) + amount
+    ));
+}
+
+[[nodiscard]] bool valid_recovery(
+    const contracts::CombatRecoveryDefinition& recovery
+) noexcept {
+    return recovery.stamina_delay_ticks > 0 && recovery.stamina_interval_ticks > 0 &&
+           recovery.stamina_per_interval > 0 && recovery.poise_delay_ticks > 0 &&
+           recovery.poise_interval_ticks > 0 && recovery.poise_per_interval > 0;
+}
+
 }  // namespace
 
 CombatError DeterministicCombatResolver::initialize(
@@ -86,6 +105,7 @@ CombatError DeterministicCombatResolver::initialize(
             config.initial_resources.health > 0,
         };
         actor_runtime_[index] = {};
+        actor_runtime_[index].active_ability = ability_capacity;
     }
 
     ability_count_ = abilities.size();
@@ -217,6 +237,11 @@ CombatError DeterministicCombatResolver::advance_one_tick(ICombatEventSink& sink
             return CombatError::event_capacity_exceeded;
         }
     }
+    for (std::size_t index = 0; index < actor_count_; ++index) {
+        if (!recover_actor(index, next_tick)) {
+            return CombatError::event_capacity_exceeded;
+        }
+    }
     current_tick_ = next_tick;
     compact_commands(consumed);
     pose_update_count_ = 0;
@@ -258,7 +283,8 @@ CombatError DeterministicCombatResolver::validate_config(
         const auto& actor = actors[index];
         if (actor.actor == 0 || actor.archetype_id.key == 0 ||
             actor.stance_count == 0 || actor.stance_count > actor.stance_ids.size() ||
-            actor.initial_stance == 0 || !valid_resources(actor.initial_resources)) {
+            actor.initial_stance == 0 || !valid_resources(actor.initial_resources) ||
+            !valid_recovery(actor.recovery)) {
             return CombatError::invalid_config;
         }
         bool initial_stance_found = false;
@@ -502,6 +528,10 @@ bool DeterministicCombatResolver::process_command(
     const auto& ability = abilities_[selected];
     actor.guarding = false;
     actor.resources.stamina -= ability.stamina_cost;
+    if (ability.stamina_cost > 0) {
+        runtime.next_stamina_recovery_tick =
+            command.tick + actor_configs_[source_index].recovery.stamina_delay_ticks;
+    }
     actor.active_ability = ability.id.key;
     runtime.active_ability = static_cast<std::uint16_t>(selected);
     runtime.target = command.target;
@@ -555,6 +585,61 @@ bool DeterministicCombatResolver::resolve_actor(
     return true;
 }
 
+bool DeterministicCombatResolver::recover_actor(
+    std::size_t index,
+    contracts::TickIndex tick
+) noexcept {
+    auto& actor = actor_snapshots_[index];
+    auto& runtime = actor_runtime_[index];
+    const auto& recovery = actor_configs_[index].recovery;
+    if (!actor.active || actor.guarding || runtime.active_ability != ability_capacity) {
+        return true;
+    }
+    if (actor.resources.stamina < actor.resources.stamina_max &&
+        runtime.next_stamina_recovery_tick != 0 &&
+        tick >= runtime.next_stamina_recovery_tick) {
+        const auto before = actor.resources.stamina;
+        actor.resources.stamina = clamp_add(
+            before,
+            recovery.stamina_per_interval,
+            actor.resources.stamina_max
+        );
+        runtime.next_stamina_recovery_tick = tick + recovery.stamina_interval_ticks;
+        if (!emit({
+                tick,
+                contracts::CombatEventType::stamina_recovered,
+                actor.actor,
+                actor.actor,
+                0,
+                actor.resources.stamina - before,
+            })) {
+            return false;
+        }
+    }
+    if (actor.resources.poise < actor.resources.poise_max &&
+        runtime.next_poise_recovery_tick != 0 &&
+        tick >= runtime.next_poise_recovery_tick) {
+        const auto before = actor.resources.poise;
+        actor.resources.poise = clamp_add(
+            before,
+            recovery.poise_per_interval,
+            actor.resources.poise_max
+        );
+        runtime.next_poise_recovery_tick = tick + recovery.poise_interval_ticks;
+        if (!emit({
+                tick,
+                contracts::CombatEventType::poise_recovered,
+                actor.actor,
+                actor.actor,
+                0,
+                actor.resources.poise - before,
+            })) {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool DeterministicCombatResolver::resolve_hit(
     std::size_t source_index,
     std::size_t target_index,
@@ -582,6 +667,10 @@ bool DeterministicCombatResolver::resolve_hit(
     const auto poise_before = target.resources.poise;
     target.resources.poise = clamp_subtract(target.resources.poise, ability.poise_damage);
     const auto poise_damage = poise_before - target.resources.poise;
+    if (poise_damage > 0) {
+        actor_runtime_[target_index].next_poise_recovery_tick =
+            tick + actor_configs_[target_index].recovery.poise_delay_ticks;
+    }
     const auto poise_broken = poise_before > 0 && target.resources.poise == 0;
     const auto was_guarding = target.guarding;
     auto health_damage = ability.health_damage;
@@ -679,6 +768,8 @@ void DeterministicCombatResolver::update_checksum() noexcept {
         hash_integer(hash, runtime.target);
         hash_integer(hash, runtime.ability_started_tick);
         hash_integer(hash, runtime.evade_until_tick);
+        hash_integer(hash, runtime.next_stamina_recovery_tick);
+        hash_integer(hash, runtime.next_poise_recovery_tick);
         hash_byte(hash, runtime.hit_applied ? 1U : 0U);
     }
     checksum_ = hash;

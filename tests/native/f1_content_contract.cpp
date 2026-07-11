@@ -97,6 +97,15 @@ int main() {
                 actor.stance_count > 0 && actor.initial_stance != 0,
                 "each combat actor declares a stance"
             );
+            ok &= expect(
+                actor.recovery.stamina_delay_ticks > 0 &&
+                    actor.recovery.stamina_interval_ticks > 0 &&
+                    actor.recovery.stamina_per_interval > 0 &&
+                    actor.recovery.poise_delay_ticks > 0 &&
+                    actor.recovery.poise_interval_ticks > 0 &&
+                    actor.recovery.poise_per_interval > 0,
+                "each combat actor declares deterministic resource recovery"
+            );
         }
         for (const auto& ability : combat->abilities) {
             ok &= expect(

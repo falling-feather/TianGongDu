@@ -31,6 +31,11 @@ test("F1 one-hour contract and generated C++ stay synchronized", async () => {
   assert.equal(contract.combatBootstrap.abilities.length, 9);
   assert.equal(contract.combatBootstrap.director.maxSimultaneousAttackers, 1);
   assert.equal(contract.combatBootstrap.director.formationRadiusMm, 1500);
+  assert(
+    contract.combatBootstrap.actors.every((actor) =>
+      Object.values(actor.recovery).every((value) => Number.isInteger(value) && value > 0)
+    )
+  );
   assert.equal(contract.ports.filter((port) => port.status === "reserved").length, 5);
   assert.equal(contract.ports.filter((port) => port.status === "bootstrap_implemented").length, 4);
 });
@@ -69,4 +74,11 @@ test("F1 combat contract requires stance abilities and stance-neutral evade", as
   const fractionalChase = structuredClone(await loadF1SliceContract());
   fractionalChase.combatBootstrap.director.chaseSpeedMmPerSecond = 1801;
   assert.throws(() => validateF1SliceContract(fractionalChase, catalog), /director definition/);
+
+  const zeroRecoveryInterval = structuredClone(await loadF1SliceContract());
+  zeroRecoveryInterval.combatBootstrap.actors[0].recovery.staminaIntervalTicks = 0;
+  assert.throws(
+    () => validateF1SliceContract(zeroRecoveryInterval, catalog),
+    /invalid recovery field/
+  );
 });

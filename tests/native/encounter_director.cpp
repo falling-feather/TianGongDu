@@ -57,7 +57,8 @@ bool expect(bool condition, std::string_view message) {
          player_resources,
          {player_stance, 0, 0},
          1,
-         player_stance},
+         player_stance,
+         {60, 6, 2, 120, 12, 2}},
         {2,
          tgd::contracts::content_id("actor_test_hostile"),
          tgd::contracts::CombatFaction::hostile,
@@ -65,7 +66,8 @@ bool expect(bool condition, std::string_view message) {
          hostile_resources,
          {hostile_stance, 0, 0},
          1,
-         hostile_stance},
+         hostile_stance,
+         {60, 6, 2, 120, 12, 2}},
         {3,
          tgd::contracts::content_id("actor_test_hostile"),
          tgd::contracts::CombatFaction::hostile,
@@ -73,7 +75,8 @@ bool expect(bool condition, std::string_view message) {
          hostile_resources,
          {hostile_stance, 0, 0},
          1,
-         hostile_stance},
+         hostile_stance,
+         {60, 6, 2, 120, 12, 2}},
     }};
 }
 

@@ -261,6 +261,22 @@ export function validateF1SliceContract(contract, catalog) {
     if (!Number.isInteger(actor.resources.evidence) || actor.resources.evidence < 0) {
       fail(`${actor.actorKey} has invalid evidence`);
     }
+    for (const [field, maximum] of [
+      ["staminaDelayTicks", 3600],
+      ["staminaIntervalTicks", 600],
+      ["staminaPerInterval", 100000],
+      ["poiseDelayTicks", 3600],
+      ["poiseIntervalTicks", 600],
+      ["poisePerInterval", 100000]
+    ]) {
+      if (
+        !Number.isInteger(actor.recovery?.[field]) ||
+        actor.recovery[field] <= 0 ||
+        actor.recovery[field] > maximum
+      ) {
+        fail(`${actor.actorKey} has invalid recovery field ${field}`);
+      }
+    }
   }
   const playerCombatSeed = combat.actors.find((actor) => actor.actorKey === seed.actorKey);
   if (
@@ -365,8 +381,9 @@ function stableKey(value) {
 function combatActorRow(actor) {
   const pose = actor.poseMm;
   const resources = actor.resources;
+  const recovery = actor.recovery;
   const stances = [...actor.stanceIds.map(stableKey), ...Array(3 - actor.stanceIds.length).fill("0")];
-  return `    {${actor.actorKey}ULL, ${contentId(actor.archetypeId)}, contracts::CombatFaction::${actor.faction}, {${pose.x}, ${pose.y}, ${pose.height}, ${pose.floorLayer}}, {${resources.health}, ${resources.healthMax}, ${resources.stamina}, ${resources.staminaMax}, ${resources.poise}, ${resources.poiseMax}, ${resources.lantern}, ${resources.lanternMax}, ${resources.evidence}}, {${stances.join(", ")}}, ${actor.stanceIds.length}U, ${stableKey(actor.initialStanceId)}},`;
+  return `    {${actor.actorKey}ULL, ${contentId(actor.archetypeId)}, contracts::CombatFaction::${actor.faction}, {${pose.x}, ${pose.y}, ${pose.height}, ${pose.floorLayer}}, {${resources.health}, ${resources.healthMax}, ${resources.stamina}, ${resources.staminaMax}, ${resources.poise}, ${resources.poiseMax}, ${resources.lantern}, ${resources.lanternMax}, ${resources.evidence}}, {${stances.join(", ")}}, ${actor.stanceIds.length}U, ${stableKey(actor.initialStanceId)}, {${recovery.staminaDelayTicks}, ${recovery.staminaIntervalTicks}, ${recovery.staminaPerInterval}, ${recovery.poiseDelayTicks}, ${recovery.poiseIntervalTicks}, ${recovery.poisePerInterval}}},`;
 }
 
 function combatAbilityRow(ability) {

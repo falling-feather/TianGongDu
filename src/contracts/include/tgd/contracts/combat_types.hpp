@@ -35,6 +35,8 @@ enum class CombatEventType : std::uint8_t {
     poise_broken,
     actor_defeated,
     command_ignored,
+    stamina_recovered,
+    poise_recovered,
 };
 
 enum CombatFeedbackTag : std::uint32_t {
@@ -61,6 +63,15 @@ struct CombatResources final {
         const CombatResources&,
         const CombatResources&
     ) noexcept = default;
+};
+
+struct CombatRecoveryDefinition final {
+    std::uint16_t stamina_delay_ticks{};
+    std::uint16_t stamina_interval_ticks{};
+    std::int32_t stamina_per_interval{};
+    std::uint16_t poise_delay_ticks{};
+    std::uint16_t poise_interval_ticks{};
+    std::int32_t poise_per_interval{};
 };
 
 struct CombatCommand final {
@@ -102,6 +113,7 @@ struct CombatActorConfig final {
     std::array<StableContentKey, 3> stance_ids{};
     std::uint8_t stance_count{};
     StableContentKey initial_stance{};
+    CombatRecoveryDefinition recovery{};
 };
 
 struct CombatActorSnapshot final {

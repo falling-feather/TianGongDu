@@ -191,6 +191,26 @@
         "evidence": { "type": "integer", "minimum": 0 }
       }
     },
+    "combatRecovery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "staminaDelayTicks",
+        "staminaIntervalTicks",
+        "staminaPerInterval",
+        "poiseDelayTicks",
+        "poiseIntervalTicks",
+        "poisePerInterval"
+      ],
+      "properties": {
+        "staminaDelayTicks": { "type": "integer", "minimum": 1, "maximum": 3600 },
+        "staminaIntervalTicks": { "type": "integer", "minimum": 1, "maximum": 600 },
+        "staminaPerInterval": { "type": "integer", "minimum": 1, "maximum": 100000 },
+        "poiseDelayTicks": { "type": "integer", "minimum": 1, "maximum": 3600 },
+        "poiseIntervalTicks": { "type": "integer", "minimum": 1, "maximum": 600 },
+        "poisePerInterval": { "type": "integer", "minimum": 1, "maximum": 100000 }
+      }
+    },
     "combatActor": {
       "type": "object",
       "additionalProperties": false,
@@ -200,6 +220,7 @@
         "faction",
         "poseMm",
         "resources",
+        "recovery",
         "stanceIds",
         "initialStanceId"
       ],
@@ -209,6 +230,7 @@
         "faction": { "enum": ["player", "hostile", "neutral"] },
         "poseMm": { "$ref": "#/$defs/pose" },
         "resources": { "$ref": "#/$defs/combatResources" },
+        "recovery": { "$ref": "#/$defs/combatRecovery" },
         "stanceIds": {
           "type": "array",
           "minItems": 1,

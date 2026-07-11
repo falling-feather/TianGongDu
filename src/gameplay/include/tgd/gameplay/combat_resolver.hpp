@@ -102,6 +102,8 @@ class DeterministicCombatResolver final : public ICombatResolver {
         contracts::StableActorKey target{};
         contracts::TickIndex ability_started_tick{};
         contracts::TickIndex evade_until_tick{};
+        contracts::TickIndex next_stamina_recovery_tick{};
+        contracts::TickIndex next_poise_recovery_tick{};
         bool hit_applied{};
     };
 
@@ -139,6 +141,7 @@ class DeterministicCombatResolver final : public ICombatResolver {
     [[nodiscard]] bool emit(contracts::CombatEvent event) noexcept;
     [[nodiscard]] bool process_command(const contracts::CombatCommand& command) noexcept;
     [[nodiscard]] bool resolve_actor(std::size_t index, contracts::TickIndex tick) noexcept;
+    [[nodiscard]] bool recover_actor(std::size_t index, contracts::TickIndex tick) noexcept;
     [[nodiscard]] bool resolve_hit(
         std::size_t source_index,
         std::size_t target_index,

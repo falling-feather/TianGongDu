@@ -46,6 +46,17 @@ class CollectingSink final : public tgd::gameplay::ICombatEventSink {
         return result;
     }
 
+    [[nodiscard]] std::size_t count_for(
+        CombatEventType type,
+        tgd::contracts::StableActorKey actor
+    ) const {
+        std::size_t result = 0;
+        for (const auto& event : values) {
+            result += event.type == type && event.source == actor ? 1U : 0U;
+        }
+        return result;
+    }
+
     std::vector<CombatEvent> values;
 };
 
@@ -67,7 +78,8 @@ bool expect(bool condition, std::string_view message) {
          player_resources,
          {eavesguard, flower_turn, 0},
          2,
-         eavesguard},
+         eavesguard,
+         {60, 6, 2, 60, 6, 2}},
         {2,
          tgd::contracts::content_id("jn_enemy_leaking_umbrella_doll"),
          tgd::contracts::CombatFaction::hostile,
@@ -75,7 +87,8 @@ bool expect(bool condition, std::string_view message) {
          enemy_resources,
          {eavesguard, 0, 0},
          1,
-         eavesguard},
+         eavesguard,
+         {60, 6, 2, 60, 6, 2}},
     }};
 }
 
@@ -326,6 +339,56 @@ bool test_authoritative_pose_sync() {
     return ok;
 }
 
+bool test_delayed_resource_recovery() {
+    DeterministicCombatResolver resolver;
+    CollectingSink sink;
+    auto actor_configs = actors();
+    actor_configs[0].recovery = {3, 2, 3, 4, 2, 5};
+    actor_configs[1].recovery = {3, 2, 3, 4, 2, 5};
+    const auto ability_configs = abilities();
+    bool ok = resolver.initialize(actor_configs, ability_configs) == CombatError::none;
+    ok &= resolver.start() == CombatError::none;
+    const std::array commands{
+        CombatCommand{1, 1, 1, CombatCommandType::light_attack, 2, 0},
+        CombatCommand{1, 2, 1, CombatCommandType::light_attack, 1, 0},
+    };
+    ok &= resolver.submit(commands) == CombatError::none;
+    for (int tick = 0; tick < 6; ++tick) {
+        ok &= resolver.advance_one_tick(sink) == CombatError::none;
+    }
+    ok &= expect(
+        sink.count_for(CombatEventType::stamina_recovered, 1) == 0,
+        "stamina does not recover during the active ability"
+    );
+    ok &= expect(
+        sink.count_for(CombatEventType::poise_recovered, 1) == 0,
+        "poise waits for its configured recovery window"
+    );
+    for (int tick = 6; tick < 13; ++tick) {
+        ok &= resolver.advance_one_tick(sink) == CombatError::none;
+    }
+    const auto player = resolver.actors()[0];
+    ok &= expect(player.resources.stamina == 100, "stamina recovers to its independent maximum");
+    ok &= expect(player.resources.poise == 80, "poise recovers to its independent maximum");
+    ok &= expect(
+        sink.count_for(CombatEventType::stamina_recovered, 1) == 3,
+        "stamina recovery emits one event per applied interval"
+    );
+    ok &= expect(
+        sink.count_for(CombatEventType::poise_recovered, 1) == 4,
+        "poise recovery emits one event per applied interval"
+    );
+
+    auto invalid_actors = actors();
+    invalid_actors[0].recovery.stamina_interval_ticks = 0;
+    DeterministicCombatResolver invalid;
+    ok &= expect(
+        invalid.initialize(invalid_actors, ability_configs) == CombatError::invalid_config,
+        "zero recovery intervals fail configuration closed"
+    );
+    return ok;
+}
+
 }  // namespace
 
 int main() {
@@ -335,5 +398,6 @@ int main() {
     ok &= test_evade_window_boundaries();
     ok &= test_floor_miss_and_determinism();
     ok &= test_authoritative_pose_sync();
+    ok &= test_delayed_resource_recovery();
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

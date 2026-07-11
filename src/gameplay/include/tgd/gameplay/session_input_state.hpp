@@ -23,6 +23,7 @@ enum class SessionInputError : std::uint8_t {
 struct SessionCommandBatch final {
     std::array<contracts::SessionCommand, 2> commands{};
     std::size_t size{};
+    bool interact_pressed{};
 
     [[nodiscard]] std::span<const contracts::SessionCommand> view() const noexcept {
         return std::span{commands}.first(size);
@@ -69,6 +70,7 @@ class SessionInputState final {
     std::int32_t move_x_{};
     std::int32_t move_y_{};
     bool jump_pressed_{};
+    bool interact_pressed_{};
     bool gameplay_enabled_{true};
 };
 

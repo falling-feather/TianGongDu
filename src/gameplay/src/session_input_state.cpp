@@ -10,6 +10,7 @@ inline constexpr auto gameplay_context = contracts::input_context_id("gameplay")
 inline constexpr auto move_x_action = contracts::action_id("move_x");
 inline constexpr auto move_y_action = contracts::action_id("move_y");
 inline constexpr auto jump_action = contracts::action_id("jump");
+inline constexpr auto interact_action = contracts::action_id("interact");
 
 [[nodiscard]] std::uint64_t integer_sqrt_ceil(std::uint64_t value) noexcept {
     std::uint64_t low = 0;
@@ -175,7 +176,9 @@ SessionCommandBatch SessionInputState::commands_for_tick(
         };
         batch.size = 2;
     }
+    batch.interact_pressed = gameplay_enabled_ && interact_pressed_;
     jump_pressed_ = false;
+    interact_pressed_ = false;
     return batch;
 }
 
@@ -206,7 +209,7 @@ SessionInputError SessionInputState::validate_sample(
         return SessionInputError::none;
     }
     if (sample.action != move_x_action && sample.action != move_y_action &&
-        sample.action != jump_action) {
+        sample.action != jump_action && sample.action != interact_action) {
         return SessionInputError::unsupported_gameplay_action;
     }
     if (sample.action == move_x_action || sample.action == move_y_action) {
@@ -244,6 +247,9 @@ void SessionInputState::apply_sample(const contracts::ScalarActionSample& sample
     } else if (sample.action == jump_action &&
                sample.edge == contracts::ActionSampleEdge::pressed && !sample.repeated) {
         jump_pressed_ = true;
+    } else if (sample.action == interact_action &&
+               sample.edge == contracts::ActionSampleEdge::pressed && !sample.repeated) {
+        interact_pressed_ = true;
     }
 }
 
@@ -251,6 +257,7 @@ void SessionInputState::clear_values(contracts::InputClearReason reason) noexcep
     move_x_ = 0;
     move_y_ = 0;
     jump_pressed_ = false;
+    interact_pressed_ = false;
     last_clear_reason_ = reason;
 }
 

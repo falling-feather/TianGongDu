@@ -53,6 +53,22 @@ bool expect(bool condition, std::string_view message) {
     };
 }
 
+[[nodiscard]] tgd::contracts::ScalarActionSample digital_sample(
+    std::uint64_t sequence,
+    std::string_view action,
+    bool pressed,
+    bool repeated = false
+) {
+    return {
+        sequence,
+        tgd::contracts::action_id(action),
+        pressed ? tgd::contracts::ground_axis_one : 0,
+        pressed ? tgd::contracts::ActionSampleEdge::pressed
+                : tgd::contracts::ActionSampleEdge::released,
+        repeated,
+    };
+}
+
 }  // namespace
 
 int main() {
@@ -145,19 +161,48 @@ int main() {
     ok &= expect(input.commands_for_tick(5, 1, 50).size == 2, "new physical edge creates jump");
     ok &= expect(input.commands_for_tick(6, 1, 60).size == 1, "jump edge is consumed once");
 
+    const std::array interaction_press{digital_sample(5, "interact", true)};
+    ok &= expect(
+        input.submit(interaction_press) == SessionInputError::none,
+        "registered interact action is accepted"
+    );
+    ok &= expect(
+        input.commands_for_tick(7, 1, 70).interact_pressed,
+        "interact edge is exposed once to the session boundary"
+    );
+    ok &= expect(
+        !input.commands_for_tick(8, 1, 80).interact_pressed,
+        "interact edge is consumed exactly once"
+    );
+
+    const std::array repeated_interaction{digital_sample(6, "interact", true, true)};
+    ok &= input.submit(repeated_interaction) == SessionInputError::none;
+    ok &= expect(
+        !input.commands_for_tick(9, 1, 90).interact_pressed,
+        "browser repeat never creates an interaction edge"
+    );
+
+    const std::array pending_interaction{digital_sample(7, "interact", true)};
+    ok &= input.submit(pending_interaction) == SessionInputError::none;
+    ok &= input.clear(8, tgd::contracts::InputClearReason::blur) == SessionInputError::none;
+    ok &= expect(
+        !input.commands_for_tick(10, 1, 100).interact_pressed,
+        "blur clears a pending interaction edge"
+    );
+
     const std::array held_again{
-        axis_sample(5, "move_x", tgd::contracts::ground_axis_one),
+        axis_sample(9, "move_x", tgd::contracts::ground_axis_one),
     };
     ok &= input.submit(held_again) == SessionInputError::none;
-    ok &= input.set_gameplay_enabled(false, 6) == SessionInputError::none;
+    ok &= input.set_gameplay_enabled(false, 10) == SessionInputError::none;
     ok &= expect(
         input.commands_for_tick(7, 1, 70).commands[0].ground_direction ==
             tgd::contracts::GroundVectorQ15{},
         "higher input context clears gameplay axes"
     );
-    ok &= input.set_gameplay_enabled(true, 7) == SessionInputError::none;
+    ok &= input.set_gameplay_enabled(true, 11) == SessionInputError::none;
     ok &= expect(
-        input.clear(8, tgd::contracts::InputClearReason::device_disconnected) ==
+        input.clear(12, tgd::contracts::InputClearReason::device_disconnected) ==
             SessionInputError::none &&
             input.last_clear_reason() == tgd::contracts::InputClearReason::device_disconnected,
         "device disconnect is an explicit clear reason"

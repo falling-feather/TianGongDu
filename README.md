@@ -15,7 +15,8 @@
 - 建立可机器校验的 1.0 内容目录、9 类模板注册表（含独立精英机制战）和 C++ Web 技术基线。
 - 确立 C++ Contracts / Runtime / Gameplay / Presentation / Platform 分层，玩法状态不归渲染树或 JavaScript 所有。
 - 完成 F1 固定 60 Hz `GameSession`、斜向世界输入与版本化命令回放；同一 C++ 黄金夹具已通过 Native 双编译器双配置和 Web Single 三浏览器验证。
-- 已实现 Web ABI 1.0、`SaveEnvelopeV1`、Profile 原子提交协调器和 256 KiB 分块存储桥；Guest IndexedDB v1 首次保存与刷新恢复已通过三浏览器阶段门，异常、离线、迁移/导入路径仍在 `F1-DEV-03` 中收口。
+- 已实现 Web ABI 1.0、`SaveEnvelopeV1`、Profile 原子提交协调器和 256 KiB 分块存储桥；Guest IndexedDB v1 首次保存与刷新恢复已通过三浏览器阶段门，配额/CAS/损坏导出/离线实现等待下一个阶段门聚合复验，迁移/导入仍保留为缺项。
+- 已将 F1 的 5 个 Cell、7 个目标驱动玩法段、斜向相机基和 60/70 分钟口径固化为 JSON→C++ 机器合同，并用 `VerticalSliceSession` 组合既有移动核心；这仍是玩法底座，不冒充已经可见可玩的战斗纵切。
 - 已设计 Service Worker/CDN 内容缓存，以及可选的跨设备云同步协议；设计不等于运行时已落地。
 - 旧版 Web 原型完整保存在 [`codex/archive-legacy-web-v1`](https://github.com/falling-feather/TianGongDu/tree/codex/archive-legacy-web-v1)，含 V1.1.0 可玩闭环和 52 项自动化测试。
 
@@ -42,9 +43,9 @@
 | 领域 | 状态 | 已有 | 仍没有 |
 | --- | --- | --- | --- |
 | 产品/世界/1.0 范围 | Scope Approved | 三地区、战斗/武器、14 Boss、24 NPC、内容预算 | 全量任务/POI 实例和最终平衡 |
-| 技术架构 | In Progress（`F1-DEV-03`） | 精确工具链与分层；60 Hz Session、量化回放；Web ABI 1.0、存档信封、Profile CAS/分块桥与 Guest 正常保存/刷新证据 | IndexedDB 异常/离线/迁移与导入收口、正式玩法纵切和真实设备性能证据 |
-| 可玩纵切 | Scope Approved | F1“雨夜试伞”唯一流程与验收 | 新主线 WASM 纵切代码/资产 |
-| 内容工具 | Scope Approved | 9 类模板注册表与工作台范围 | 可用 Workbench/ContentCore/baker |
+| 技术架构 | In Progress（`F1-GAME-01`，并行收口 `F1-DEV-03` 证据） | 精确工具链与分层；60 Hz Session、量化回放；Web ABI/Profile；F1 Definition Provider 与组合纵切会话 | IndexedDB 异常/离线聚合复验、迁移/导入、正式玩法纵切和真实设备性能证据 |
+| 可玩纵切 | In Progress（基础会话） | F1 唯一流程、5 Cell/7 Beat 机器合同、目标驱动组合快照 | 可见斜向全景 Cell、战斗/敌人/Boss/任务/结算与占位资产 |
+| 内容工具 | In Progress（Bootstrap） | 9 类模板注册表、工作台范围、F1 JSON/Schema/确定性 C++ 生成 | 可用 Workbench、通用 ContentCore/baker、迁移与预览 |
 | 本地存档/云同步 | In Progress（`F1-DEV-03`） | IndexedDB v1 六 store、`SaveEnvelopeV1`、Profile Head CAS/C++ 异步桥、Guest 首存与刷新恢复 | 配额/冲突/损坏/离线证据、迁移/导入、多标签主动接管、云 API/DDL/OIDC |
 | 发布运维 | Accepted Baseline | 渠道、缓存、回滚、证据与灾备门；F1 Windows 2022 干净 CI 已落地 | CD、正式 origin/CDN/监控与演练 |
 

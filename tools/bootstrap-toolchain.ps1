@@ -134,6 +134,19 @@ function Find-Gpg {
     return $candidate
 }
 
+function ConvertTo-GpgPath([string]$Gpg, [string]$Path) {
+    if ($Gpg -notmatch '[\\/]usr[\\/]bin[\\/]gpg\.exe$') {
+        return $Path
+    }
+    $absolute = [System.IO.Path]::GetFullPath($Path)
+    if ($absolute -notmatch '^([A-Za-z]):[\\/](.*)$') {
+        throw "Cannot convert path for Git GPG: $Path"
+    }
+    $drive = $Matches[1].ToLowerInvariant()
+    $tail = $Matches[2].Replace('\', '/')
+    return "/$drive/$tail"
+}
+
 function Confirm-LlvmSignature {
     $gpg = Find-Gpg
     $gpgHome = Resolve-RepositoryPath ".cache/gnupg-llvm"
@@ -142,13 +155,17 @@ function Confirm-LlvmSignature {
     $signature = Resolve-RepositoryPath $lock.supportArtifacts.llvmDetachedSignature.cachePath
     $binary = Resolve-RepositoryPath $lock.tools.clang.cachePath
     $fingerprint = "B6C8F98282B944E3B0D5C2530FC3042E345AD05D"
+    $gpgHomeArgument = ConvertTo-GpgPath $gpg $gpgHome
+    $keysArgument = ConvertTo-GpgPath $gpg $keys
+    $signatureArgument = ConvertTo-GpgPath $gpg $signature
+    $binaryArgument = ConvertTo-GpgPath $gpg $binary
 
     $previousErrorAction = $ErrorActionPreference
     try {
         $ErrorActionPreference = "Continue"
-        $importOutput = & $gpg --homedir $gpgHome --batch --no-autostart --import $keys 2>&1
+        $importOutput = & $gpg --homedir $gpgHomeArgument --batch --no-autostart --import $keysArgument 2>&1
         $importOutput | ForEach-Object { Write-Host $_ }
-        $verifyOutput = & $gpg --homedir $gpgHome --batch --no-autostart --status-fd 1 --verify $signature $binary 2>&1
+        $verifyOutput = & $gpg --homedir $gpgHomeArgument --batch --no-autostart --status-fd 1 --verify $signatureArgument $binaryArgument 2>&1
         $verifyCode = $LASTEXITCODE
         $verifyOutput | ForEach-Object { Write-Host $_ }
     } finally {

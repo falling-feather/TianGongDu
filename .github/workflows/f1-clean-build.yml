@@ -36,12 +36,12 @@ jobs:
           cache: npm
 
       - name: Restore immutable toolchain downloads
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .cache
-          key: f1-toolchains-${{ runner.os }}-${{ hashFiles('toolchains/toolchain-lock.json') }}
+          key: f1-toolchains-${{ runner.os }}-${{ hashFiles('toolchains/toolchain-lock.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            f1-toolchains-${{ runner.os }}-
+            f1-toolchains-${{ runner.os }}-${{ hashFiles('toolchains/toolchain-lock.json') }}-
 
       - name: Install locked JavaScript test dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
@@ -112,3 +112,10 @@ jobs:
             build/windows-msvc-debug/tests/native/Release/tgd_native_bootstrap_smoke.exe
             build/windows-clang-debug/tests/native/tgd_native_bootstrap_smoke.exe
             build/windows-clang-release/tests/native/tgd_native_bootstrap_smoke.exe
+
+      - name: Save resumable toolchain and browser cache
+        if: always()
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache
+          key: f1-toolchains-${{ runner.os }}-${{ hashFiles('toolchains/toolchain-lock.json') }}-${{ github.run_id }}-${{ github.run_attempt }}

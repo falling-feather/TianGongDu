@@ -56,4 +56,6 @@ test("toolchain bootstrap hashes without PowerShell module autoloading", async (
   const bootstrap = await readFile(resolve(root, "tools/bootstrap-toolchain.ps1"), "utf8");
   assert.match(bootstrap, /System\.Security\.Cryptography\.SHA256/);
   assert.doesNotMatch(bootstrap, /Get-FileHash/);
+  assert.match(bootstrap, /function ConvertTo-GpgPath/);
+  assert.match(bootstrap, /return "\/\$drive\/\$tail"/);
 });

@@ -160,6 +160,37 @@ export function validateF1SliceContract(contract, catalog) {
   ) {
     fail("the first playable beat must be fully covered by scene interactions");
   }
+  const combatTriggers = contract.questCombatTriggers;
+  if (!Array.isArray(combatTriggers) || combatTriggers.length < 2 || combatTriggers.length > 64) {
+    fail("quest combat triggers must contain 2..64 definitions");
+  }
+  const combatTriggerKinds = new Set(["player_hit_guarded", "player_hit_evaded"]);
+  for (const trigger of combatTriggers) {
+    if (!combatTriggerKinds.has(trigger.kind)) {
+      fail(`${trigger.id} has an unsupported quest combat trigger kind`);
+    }
+    if (!objectiveIds.includes(trigger.objectiveId)) {
+      fail(`${trigger.id} references an unknown objective`);
+    }
+    if (typeof trigger.requiredStanceId !== "string" || trigger.requiredStanceId.length === 0) {
+      fail(`${trigger.id} has an invalid required stance`);
+    }
+  }
+  assertUnique(combatTriggers.map((trigger) => trigger.id), "quest combat trigger id");
+  assertUnique(
+    combatTriggers.map((trigger) => trigger.objectiveId),
+    "quest combat trigger objective"
+  );
+  const trainingCombatObjectives = new Set(contract.beats[1].objectiveIds.slice(1));
+  const coveredTrainingObjectives = combatTriggers
+    .filter((trigger) => trainingCombatObjectives.has(trigger.objectiveId))
+    .map((trigger) => trigger.objectiveId);
+  if (
+    coveredTrainingObjectives.length !== trainingCombatObjectives.size ||
+    coveredTrainingObjectives.some((objective) => !trainingCombatObjectives.has(objective))
+  ) {
+    fail("the training beat combat objectives must be fully covered by combat triggers");
+  }
   if (
     contract.paddingPolicy?.repeatableCombatCountsTowardTarget !== false ||
     contract.paddingPolicy?.forcedWaitingCountsTowardTarget !== false ||
@@ -318,6 +349,11 @@ export function validateF1SliceContract(contract, catalog) {
       }
     }
   }
+  for (const trigger of combatTriggers) {
+    if (!stanceIds.has(trigger.requiredStanceId)) {
+      fail(`${trigger.id} references an unknown required stance`);
+    }
+  }
   const playerCombatSeed = combat.actors.find((actor) => actor.actorKey === seed.actorKey);
   if (
     playerCombatSeed?.faction !== "player" ||
@@ -394,6 +430,7 @@ export function validateF1SliceContract(contract, catalog) {
     ...beatIds,
     ...objectiveIds,
     ...interactions.map((interaction) => interaction.id),
+    ...combatTriggers.map((trigger) => trigger.id),
     combat.id,
     ...combat.actors.map((actor) => actor.archetypeId),
     ...stanceIds,
@@ -439,6 +476,10 @@ function questInteractionRow(interaction) {
   return `    {${contentId(interaction.id)}, contracts::QuestInteractionKind::${interaction.kind}, ${contentId(interaction.cellId)}, ${contentId(interaction.objectiveId)}, {${pose.x}, ${pose.y}, ${pose.height}, ${pose.floorLayer}}, ${interaction.radiusMm}},`;
 }
 
+function questCombatTriggerRow(trigger) {
+  return `    {${contentId(trigger.id)}, contracts::QuestCombatTriggerKind::${trigger.kind}, ${contentId(trigger.objectiveId)}, ${stableKey(trigger.requiredStanceId)}},`;
+}
+
 export function renderF1SliceContract(contract) {
   const refs = contract.catalogReferences;
   const seed = contract.playerSeed;
@@ -462,6 +503,9 @@ ${arrayRows(beat.objectiveIds)}
   const combatActorRows = combat.actors.map(combatActorRow).join("\n");
   const combatAbilityRows = combat.abilities.map(combatAbilityRow).join("\n");
   const questInteractionRows = contract.questInteractions.map(questInteractionRow).join("\n");
+  const questCombatTriggerRows = contract.questCombatTriggers
+    .map(questCombatTriggerRow)
+    .join("\n");
 
   return `// Generated from content/design/f1-vertical-slice.json. Do not edit by hand.
 #pragma once
@@ -498,6 +542,10 @@ ${arrayRows(contract.cellIds)}
 
 inline constexpr std::array<contracts::QuestInteractionDefinition, ${contract.questInteractions.length}> f1_quest_interactions{{
 ${questInteractionRows}
+}};
+
+inline constexpr std::array<contracts::QuestCombatTriggerDefinition, ${contract.questCombatTriggers.length}> f1_quest_combat_triggers{{
+${questCombatTriggerRows}
 }};
 
 inline constexpr std::array<contracts::CombatActorConfig, ${combat.actors.length}> f1_combat_actors{{
@@ -546,6 +594,7 @@ inline constexpr contracts::VerticalSliceDefinition f1_vertical_slice_definition
     std::span<const contracts::ContentId>{f1_cells},
     std::span<const contracts::VerticalSliceBeatDefinition>{f1_beats},
     std::span<const contracts::QuestInteractionDefinition>{f1_quest_interactions},
+    std::span<const contracts::QuestCombatTriggerDefinition>{f1_quest_combat_triggers},
 };
 
 }  // namespace tgd::content::generated

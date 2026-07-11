@@ -15,7 +15,9 @@ namespace {
 
 using tgd::gameplay::DeterministicQuestRuntime;
 using tgd::gameplay::DeterministicQuestInteractionResolver;
+using tgd::gameplay::DeterministicQuestCombatTriggerResolver;
 using tgd::gameplay::QuestError;
+using tgd::gameplay::QuestCombatTriggerError;
 using tgd::gameplay::QuestInteractionError;
 using tgd::gameplay::QuestLifecycle;
 using tgd::gameplay::QuestObjectiveState;
@@ -315,6 +317,106 @@ bool test_scene_interaction_ties_are_stable() {
     return ok;
 }
 
+bool test_combat_signals_resolve_training_objectives() {
+    DeterministicQuestRuntime quest;
+    DeterministicQuestCombatTriggerResolver triggers;
+    CollectingSink sink;
+    bool ok = quest.initialize(definition(), definition().player.actor) == QuestError::none;
+    ok &= quest.start() == QuestError::none;
+    tgd::contracts::CommandSequence sequence = 1;
+    for (const auto& objective : definition().beats.front().objectives) {
+        ok &= quest.apply(
+                  {sequence, definition().player.actor, sequence, {}, objective.key},
+                  sink
+              ).error == QuestError::none;
+        ++sequence;
+    }
+    ok &= expect(
+        quest.snapshot().stage_index == 1,
+        "combat trigger tests enter the authored training beat"
+    );
+    ok &= expect(
+        triggers.initialize(definition().quest_combat_triggers) ==
+            QuestCombatTriggerError::none,
+        "generated combat-to-quest bindings initialize once"
+    );
+
+    const auto wrong_stance = triggers.resolve(
+        {
+            definition().player.actor,
+            tgd::contracts::QuestCombatTriggerKind::player_hit_guarded,
+            tgd::contracts::stable_content_key("stance_flower_turn"),
+        },
+        quest
+    );
+    ok &= expect(!wrong_stance.found, "guard counters require the authored stance");
+    const auto guarded = triggers.resolve(
+        {
+            definition().player.actor,
+            tgd::contracts::QuestCombatTriggerKind::player_hit_guarded,
+            tgd::contracts::stable_content_key("stance_eavesguard"),
+        },
+        quest
+    );
+    ok &= expect(
+        guarded.found && guarded.objective ==
+                             tgd::contracts::stable_content_key(
+                                 "f1_objective_eavesguard_counter"
+                             ),
+        "a guarded player hit resolves the eavesguard training objective"
+    );
+    ok &= quest.apply(
+              {sequence, definition().player.actor, sequence, {}, guarded.objective},
+              sink
+          ).error == QuestError::none;
+    ++sequence;
+    ok &= expect(
+        !triggers
+             .resolve(
+                 {
+                     definition().player.actor,
+                     tgd::contracts::QuestCombatTriggerKind::player_hit_guarded,
+                     tgd::contracts::stable_content_key("stance_eavesguard"),
+                 },
+                 quest
+             )
+             .found,
+        "completed counter objectives no longer consume combat signals"
+    );
+    const auto evaded = triggers.resolve(
+        {
+            definition().player.actor,
+            tgd::contracts::QuestCombatTriggerKind::player_hit_evaded,
+            tgd::contracts::stable_content_key("stance_flower_turn"),
+        },
+        quest
+    );
+    ok &= expect(
+        evaded.found && evaded.objective ==
+                            tgd::contracts::stable_content_key(
+                                "f1_objective_flower_turn_counter"
+                            ),
+        "an evaded player hit resolves the flower-turn training objective"
+    );
+    ok &= expect(
+        triggers.resolve({0, {}, 0}, quest).error ==
+            QuestCombatTriggerError::invalid_signal,
+        "invalid combat signals fail closed"
+    );
+
+    std::array invalid{
+        definition().quest_combat_triggers[0],
+        definition().quest_combat_triggers[1],
+    };
+    invalid[1].objective_id = invalid[0].objective_id;
+    DeterministicQuestCombatTriggerResolver invalid_triggers;
+    ok &= expect(
+        invalid_triggers.initialize(invalid) == QuestCombatTriggerError::invalid_definition,
+        "duplicate combat trigger objectives fail definition validation"
+    );
+    return ok;
+}
+
 }  // namespace
 
 int main() {
@@ -324,5 +426,6 @@ int main() {
     ok &= test_invalid_definition_fails_closed();
     ok &= test_scene_interactions_resolve_from_active_objectives();
     ok &= test_scene_interaction_ties_are_stable();
+    ok &= test_combat_signals_resolve_training_objectives();
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

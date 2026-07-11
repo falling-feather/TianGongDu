@@ -15,6 +15,7 @@
     "cellIds",
     "beats",
     "questInteractions",
+    "questCombatTriggers",
     "paddingPolicy",
     "ports"
   ],
@@ -112,6 +113,12 @@
       "minItems": 2,
       "maxItems": 64,
       "items": { "$ref": "#/$defs/questInteraction" }
+    },
+    "questCombatTriggers": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 64,
+      "items": { "$ref": "#/$defs/questCombatTrigger" }
     },
     "paddingPolicy": {
       "type": "object",
@@ -355,6 +362,17 @@
         "objectiveId": { "$ref": "#/$defs/id" },
         "poseMm": { "$ref": "#/$defs/pose" },
         "radiusMm": { "type": "integer", "minimum": 1, "maximum": 10000 }
+      }
+    },
+    "questCombatTrigger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "objectiveId", "requiredStanceId"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": { "enum": ["player_hit_guarded", "player_hit_evaded"] },
+        "objectiveId": { "$ref": "#/$defs/id" },
+        "requiredStanceId": { "$ref": "#/$defs/id" }
       }
     },
     "port": {

@@ -120,6 +120,60 @@ QuestInteractionResult DeterministicQuestInteractionResolver::resolve(
     return result;
 }
 
+QuestCombatTriggerError DeterministicQuestCombatTriggerResolver::initialize(
+    std::span<const contracts::QuestCombatTriggerDefinition> definitions
+) noexcept {
+    if (initialized_) {
+        return QuestCombatTriggerError::invalid_lifecycle;
+    }
+    if (definitions.empty() || definitions.size() > trigger_capacity) {
+        return QuestCombatTriggerError::invalid_definition;
+    }
+    for (std::size_t index = 0; index < definitions.size(); ++index) {
+        const auto& definition = definitions[index];
+        if (definition.id.key == 0 || definition.objective_id.key == 0 ||
+            definition.required_stance == 0) {
+            return QuestCombatTriggerError::invalid_definition;
+        }
+        for (std::size_t prior = 0; prior < index; ++prior) {
+            if (definitions[prior].id.key == definition.id.key ||
+                definitions[prior].objective_id.key == definition.objective_id.key) {
+                return QuestCombatTriggerError::invalid_definition;
+            }
+        }
+    }
+    definitions_ = definitions;
+    initialized_ = true;
+    return QuestCombatTriggerError::none;
+}
+
+QuestCombatTriggerResult DeterministicQuestCombatTriggerResolver::resolve(
+    const QuestCombatSignal& signal,
+    const IQuestRuntime& quest
+) const noexcept {
+    QuestCombatTriggerResult result{};
+    if (!initialized_) {
+        result.error = QuestCombatTriggerError::invalid_lifecycle;
+        return result;
+    }
+    if (signal.actor == 0 || signal.stance == 0) {
+        result.error = QuestCombatTriggerError::invalid_signal;
+        return result;
+    }
+    for (const auto& definition : definitions_) {
+        if (definition.kind != signal.kind || definition.required_stance != signal.stance ||
+            quest.objective_state(definition.objective_id.key) != QuestObjectiveState::active) {
+            continue;
+        }
+        if (!result.found || definition.id.key < result.trigger) {
+            result.found = true;
+            result.trigger = definition.id.key;
+            result.objective = definition.objective_id.key;
+        }
+    }
+    return result;
+}
+
 QuestError DeterministicQuestRuntime::initialize(
     const contracts::VerticalSliceDefinition& definition,
     contracts::StableActorKey player_actor

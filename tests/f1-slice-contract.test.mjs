@@ -31,10 +31,18 @@ test("F1 one-hour contract and generated C++ stay synchronized", async () => {
   assert.equal(contract.combatBootstrap.abilities.length, 9);
   assert.equal(contract.combatBootstrap.director.maxSimultaneousAttackers, 1);
   assert.equal(contract.combatBootstrap.director.formationRadiusMm, 1500);
-  assert.equal(contract.questInteractions.length, 2);
+  assert.equal(contract.questInteractions.length, 3);
   assert.deepEqual(
-    new Set(contract.questInteractions.map((interaction) => interaction.objectiveId)),
+    new Set(
+      contract.questInteractions
+        .filter((interaction) => contract.beats[0].objectiveIds.includes(interaction.objectiveId))
+        .map((interaction) => interaction.objectiveId)
+    ),
     new Set(contract.beats[0].objectiveIds)
+  );
+  assert.deepEqual(
+    new Set(contract.questCombatTriggers.map((trigger) => trigger.objectiveId)),
+    new Set(contract.beats[1].objectiveIds.slice(1))
   );
   assert(
     contract.combatBootstrap.actors.every((actor) =>
@@ -51,7 +59,8 @@ test("F1 stable content IDs have unique 64-bit keys", async () => {
     contract.id,
     ...contract.cellIds,
     ...contract.beats.flatMap((beat) => [beat.id, ...beat.objectiveIds]),
-    ...contract.questInteractions.map((interaction) => interaction.id)
+    ...contract.questInteractions.map((interaction) => interaction.id),
+    ...contract.questCombatTriggers.map((trigger) => trigger.id)
   ];
   assert.equal(new Set(ids.map((id) => fnv1a64(id))).size, ids.length);
 });
@@ -70,6 +79,23 @@ test("F1 opening objectives require valid content-driven scene interactions", as
   assert.throws(
     () => validateF1SliceContract(duplicateObjective, catalog),
     /duplicate quest interaction objective/
+  );
+});
+
+test("F1 training counters require valid content-driven combat triggers", async () => {
+  const unknownStance = structuredClone(await loadF1SliceContract());
+  unknownStance.questCombatTriggers[0].requiredStanceId = "stance_missing";
+  assert.throws(
+    () => validateF1SliceContract(unknownStance, catalog),
+    /unknown required stance/
+  );
+
+  const duplicateObjective = structuredClone(await loadF1SliceContract());
+  duplicateObjective.questCombatTriggers[1].objectiveId =
+    duplicateObjective.questCombatTriggers[0].objectiveId;
+  assert.throws(
+    () => validateF1SliceContract(duplicateObjective, catalog),
+    /duplicate quest combat trigger objective/
   );
 });
 

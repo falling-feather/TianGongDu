@@ -82,9 +82,15 @@ inline constexpr std::array<contracts::ContentId, 5> f1_cells{{
     contracts::content_id("f1_cell_return_safe_point"),
 }};
 
-inline constexpr std::array<contracts::QuestInteractionDefinition, 2> f1_quest_interactions{{
+inline constexpr std::array<contracts::QuestInteractionDefinition, 3> f1_quest_interactions{{
     {contracts::content_id("f1_interaction_travel_writ"), contracts::QuestInteractionKind::inspect, contracts::content_id("f1_cell_rain_ferry"), contracts::content_id("f1_objective_inspect_travel_writ"), {-12000, -1600, 0, 0}, 800},
     {contracts::content_id("f1_interaction_ferry_gate"), contracts::QuestInteractionKind::operate, contracts::content_id("f1_cell_rain_ferry"), contracts::content_id("f1_objective_reach_ferry_gate"), {-10450, -100, 0, 0}, 900},
+    {contracts::content_id("f1_interaction_meet_shen_yan"), contracts::QuestInteractionKind::talk, contracts::content_id("f1_cell_rain_ferry"), contracts::content_id("f1_objective_meet_shen_yan"), {-10500, -600, 0, 0}, 800},
+}};
+
+inline constexpr std::array<contracts::QuestCombatTriggerDefinition, 2> f1_quest_combat_triggers{{
+    {contracts::content_id("f1_trigger_eavesguard_counter"), contracts::QuestCombatTriggerKind::player_hit_guarded, contracts::content_id("f1_objective_eavesguard_counter"), contracts::stable_content_key("stance_eavesguard")},
+    {contracts::content_id("f1_trigger_flower_turn_counter"), contracts::QuestCombatTriggerKind::player_hit_evaded, contracts::content_id("f1_objective_flower_turn_counter"), contracts::stable_content_key("stance_flower_turn")},
 }};
 
 inline constexpr std::array<contracts::CombatActorConfig, 4> f1_combat_actors{{
@@ -144,6 +150,7 @@ inline constexpr contracts::VerticalSliceDefinition f1_vertical_slice_definition
     std::span<const contracts::ContentId>{f1_cells},
     std::span<const contracts::VerticalSliceBeatDefinition>{f1_beats},
     std::span<const contracts::QuestInteractionDefinition>{f1_quest_interactions},
+    std::span<const contracts::QuestCombatTriggerDefinition>{f1_quest_combat_triggers},
 };
 
 }  // namespace tgd::content::generated

@@ -59,10 +59,16 @@ int main() {
         "the first route, cells, and enemy families are explicit"
     );
     ok &= expect(
-        definition->quest_interactions.size() == 2 &&
+        definition->quest_interactions.size() == 3 &&
             definition->quest_interactions.front().objective_id.key ==
                 tgd::contracts::stable_content_key("f1_objective_inspect_travel_writ"),
         "the opening scene interactions are generated content, not presentation rules"
+    );
+    ok &= expect(
+        definition->quest_combat_triggers.size() == 2 &&
+            definition->quest_combat_triggers.front().required_stance ==
+                tgd::contracts::stable_content_key("stance_eavesguard"),
+        "training counters are generated combat-to-quest bindings"
     );
 
     std::uint32_t minutes = 0;

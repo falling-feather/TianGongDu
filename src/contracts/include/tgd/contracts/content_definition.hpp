@@ -75,6 +75,18 @@ struct QuestInteractionDefinition final {
     std::int32_t radius_mm{};
 };
 
+enum class QuestCombatTriggerKind : std::uint8_t {
+    player_hit_guarded,
+    player_hit_evaded,
+};
+
+struct QuestCombatTriggerDefinition final {
+    ContentId id{};
+    QuestCombatTriggerKind kind{QuestCombatTriggerKind::player_hit_guarded};
+    ContentId objective_id{};
+    StableContentKey required_stance{};
+};
+
 struct VerticalSliceDefinition final {
     ContentId id{};
     std::string_view view_model{};
@@ -93,6 +105,7 @@ struct VerticalSliceDefinition final {
     std::span<const ContentId> cell_ids{};
     std::span<const VerticalSliceBeatDefinition> beats{};
     std::span<const QuestInteractionDefinition> quest_interactions{};
+    std::span<const QuestCombatTriggerDefinition> quest_combat_triggers{};
 };
 
 }  // namespace tgd::contracts

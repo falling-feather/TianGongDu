@@ -112,6 +112,45 @@ class DeterministicQuestInteractionResolver final {
     bool initialized_{};
 };
 
+enum class QuestCombatTriggerError : std::uint8_t {
+    none,
+    invalid_lifecycle,
+    invalid_definition,
+    invalid_signal,
+};
+
+struct QuestCombatSignal final {
+    contracts::StableActorKey actor{};
+    contracts::QuestCombatTriggerKind kind{
+        contracts::QuestCombatTriggerKind::player_hit_guarded
+    };
+    contracts::StableContentKey stance{};
+};
+
+struct QuestCombatTriggerResult final {
+    QuestCombatTriggerError error{QuestCombatTriggerError::none};
+    bool found{};
+    contracts::StableContentKey trigger{};
+    contracts::StableContentKey objective{};
+};
+
+class DeterministicQuestCombatTriggerResolver final {
+  public:
+    static constexpr std::size_t trigger_capacity = 64;
+
+    [[nodiscard]] QuestCombatTriggerError initialize(
+        std::span<const contracts::QuestCombatTriggerDefinition> definitions
+    ) noexcept;
+    [[nodiscard]] QuestCombatTriggerResult resolve(
+        const QuestCombatSignal& signal,
+        const IQuestRuntime& quest
+    ) const noexcept;
+
+  private:
+    std::span<const contracts::QuestCombatTriggerDefinition> definitions_{};
+    bool initialized_{};
+};
+
 class DeterministicQuestRuntime final : public IQuestRuntime {
   public:
     static constexpr std::size_t stage_capacity = 16;

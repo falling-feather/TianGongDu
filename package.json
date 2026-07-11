@@ -7,7 +7,9 @@
     "node": ">=20"
   },
   "scripts": {
-    "test": "node tests/design-foundation.test.mjs",
-    "validate:design": "node tools/validate-design.mjs"
+    "test": "node --test tests/design-foundation.test.mjs tests/architecture.test.mjs",
+    "validate:design": "node tools/validate-design.mjs",
+    "lint:architecture": "node tools/check-architecture.mjs",
+    "test:cpp:msvc": "cmake --workflow --preset windows-msvc-debug"
   }
 }

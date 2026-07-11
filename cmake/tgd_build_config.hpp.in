@@ -1,0 +1,11 @@
+#pragma once
+
+#include <string_view>
+
+namespace tgd::contracts::build {
+
+inline constexpr std::string_view semantic_version = "@TGD_SEMANTIC_VERSION@";
+inline constexpr std::string_view git_commit = "@TGD_GIT_COMMIT@";
+inline constexpr std::string_view channel = "@TGD_CHANNEL@";
+
+}  // namespace tgd::contracts::build

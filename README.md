@@ -38,7 +38,7 @@
 | 领域 | 状态 | 已有 | 仍没有 |
 | --- | --- | --- | --- |
 | 产品/世界/1.0 范围 | Scope Approved | 三地区、战斗/武器、14 Boss、24 NPC、内容预算 | 全量任务/POI 实例和最终平衡 |
-| 技术架构 | Accepted Baseline | C++/WASM/Axmol 分层、存档/同步/部署合同 | 已锁工具链和可编译 CMake 工程 |
+| 技术架构 | In Progress（`F1-DEV-01`） | C++/WASM/Axmol 分层、存档/同步/部署合同；可编译 Native CMake target graph、宿主生命周期 smoke 与架构 lint | 已锁工具链、Clang/WASM 对照、Axmol Web Single 与真实浏览器证据 |
 | 可玩纵切 | Scope Approved | F1“雨夜试伞”唯一流程与验收 | 新主线 WASM 纵切代码/资产 |
 | 内容工具 | Scope Approved | 9 类模板注册表与工作台范围 | 可用 Workbench/ContentCore/baker |
 | 本地存档/云同步 | Accepted Baseline | IndexedDB 主路径、Operation/冲突模型 | 实际 DB migration、API、DDL、OIDC |

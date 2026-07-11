@@ -3,7 +3,6 @@
 #include <tgd/runtime/fixed_step_driver.hpp>
 #include <tgd/runtime/game_session.hpp>
 
-#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <cstdlib>
@@ -22,8 +21,6 @@ using tgd::runtime::GameSessionError;
 using tgd::runtime::StaticCollisionWorld;
 
 constexpr tgd::contracts::StableActorKey player_actor = 1;
-constexpr std::uint64_t target_ticks = 10'000;
-
 bool expect(bool condition, std::string_view message) {
     if (!condition) {
         std::cerr << "game session determinism failure: " << message << '\n';
@@ -50,79 +47,6 @@ bool expect(bool condition, std::string_view message) {
 
 [[nodiscard]] SessionCommand jump_command(std::uint64_t tick, std::uint64_t sequence) {
     return {{tick, player_actor, sequence, SessionCommandType::jump_pressed}, {}};
-}
-
-[[nodiscard]] GroundVectorQ15 direction_for_tick(std::uint64_t tick) {
-    constexpr std::int32_t diagonal = 23'170;
-    constexpr std::array<GroundVectorQ15, 8> directions{{
-        {tgd::contracts::ground_axis_one, 0},
-        {diagonal, diagonal},
-        {0, tgd::contracts::ground_axis_one},
-        {-diagonal, diagonal},
-        {-tgd::contracts::ground_axis_one, 0},
-        {-diagonal, -diagonal},
-        {0, -tgd::contracts::ground_axis_one},
-        {diagonal, -diagonal},
-    }};
-    return directions[((tick - 1) / 125) % directions.size()];
-}
-
-struct ReplayResult final {
-    tgd::runtime::PresentationSnapshot snapshot{};
-    bool ok{};
-};
-
-[[nodiscard]] ReplayResult run_replay(std::uint64_t render_fps) {
-    GameSession session;
-    GameSessionConfig config{};
-    config.collision_radius = 100;
-    config.collision_height = 1'800;
-    bool ok = session.initialize(config, empty_world()) == GameSessionError::none;
-    ok &= session.start() == GameSessionError::none;
-
-    tgd::runtime::FixedStepDriver driver;
-    std::uint64_t scheduled_through = 0;
-    std::uint64_t frame_index = 0;
-    std::uint64_t elapsed_at_previous_frame = 0;
-    while (session.current_snapshot().tick < target_ticks && ok) {
-        const auto schedule_target = std::min<std::uint64_t>(
-            target_ticks,
-            session.current_snapshot().tick +
-                tgd::runtime::FixedStepDriver::max_ticks_per_frame
-        );
-        while (scheduled_through < schedule_target) {
-            ++scheduled_through;
-            std::array<SessionCommand, 2> batch{};
-            batch[0] = move_command(
-                scheduled_through,
-                scheduled_through * 2,
-                direction_for_tick(scheduled_through)
-            );
-            std::size_t batch_size = 1;
-            if (scheduled_through % 240 == 1) {
-                batch[1] = jump_command(scheduled_through, scheduled_through * 2 + 1);
-                batch_size = 2;
-            }
-            ok &= session.submit(std::span{batch}.first(batch_size)) == GameSessionError::none;
-        }
-
-        ++frame_index;
-        const auto elapsed_at_frame = frame_index * 1'000'000'000ULL / render_fps;
-        const auto frame_delta = elapsed_at_frame - elapsed_at_previous_frame;
-        elapsed_at_previous_frame = elapsed_at_frame;
-        const auto remaining = target_ticks - session.current_snapshot().tick;
-        const auto result = driver.advance_frame(
-            session,
-            frame_delta,
-            static_cast<std::uint32_t>(std::min<std::uint64_t>(
-                remaining,
-                tgd::runtime::FixedStepDriver::max_ticks_per_frame
-            ))
-        );
-        ok &= result.error == GameSessionError::none;
-        ok &= !result.simulation_overrun;
-    }
-    return {session.current_snapshot(), ok};
 }
 
 bool test_collision_height_and_floor_layers() {
@@ -257,23 +181,5 @@ int main() {
     ok &= test_collision_height_and_floor_layers();
     ok &= test_command_order_jump_and_lifecycle();
     ok &= test_frame_overrun_and_visibility();
-
-    const auto replay_30 = run_replay(30);
-    const auto replay_60 = run_replay(60);
-    const auto replay_144 = run_replay(144);
-    ok &= expect(replay_30.ok && replay_60.ok && replay_144.ok, "all replay cadences execute");
-    ok &= expect(replay_30.snapshot.tick == target_ticks, "30 Hz reaches exactly 10,000 ticks");
-    ok &= expect(replay_60.snapshot.tick == target_ticks, "60 Hz reaches exactly 10,000 ticks");
-    ok &= expect(replay_144.snapshot.tick == target_ticks, "144 Hz reaches exactly 10,000 ticks");
-    ok &= expect(
-        replay_30.snapshot.checksum == replay_60.snapshot.checksum &&
-            replay_60.snapshot.checksum == replay_144.snapshot.checksum,
-        "30/60/144 render cadences share one discrete checksum"
-    );
-    ok &= expect(
-        replay_30.snapshot.player_pose == replay_60.snapshot.player_pose &&
-            replay_60.snapshot.player_pose == replay_144.snapshot.player_pose,
-        "30/60/144 render cadences share one ground/height/layer pose"
-    );
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

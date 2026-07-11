@@ -283,3 +283,9 @@ IGameSession::platform_completion(Completion)
 ```
 
 Snapshot 的 previous/current 双缓冲是 F1 基线，Presentation 用 accumulator alpha 插值位置/视觉量；权威 UI/阶段/资源显示 current，不插值。一次性表现事件带单调 sequence，Presentation ack 后释放；掉帧可以延后但不能重复播放关键音效/演出。View/context 重建时丢弃过期纯表现事件，从 current Snapshot 重建；持久结算事件由 UI 模型和事务状态恢复，不依赖一次性粒子事件。
+
+## 23. 命令回放契约
+
+F1 命令回放使用版本化、显式小端的 `CommandReplay` 二进制格式。回放只记录内容指纹、`GameSessionConfig`、最终 Tick、期望校验和及已映射到世界坐标的权威命令；物理键位、浏览器帧时间、Axmol 对象、屏幕坐标和 Presentation 状态不得进入格式。相同回放必须在 Web/Native 以及 30/60/144 Hz 渲染节奏下抵达同一量化 `x/y/height/floorLayer` 和校验和。
+
+解码器先进入受限 DTO，再构造可执行回放；未知 major、超出当前能力的 minor、截断、尾随字节、越界 Tick、非法方向、未排序或重复排序键、单 Tick 命令溢出、总命令/Tick 上限超限以及校验和不符均须失败关闭。回放版本变化若改变已有字节语义或权威结果，必须新增迁移/兼容决策，不能静默重解释历史数据。

@@ -30,6 +30,19 @@ add_test(
   COMMAND tgd_native_game_session_determinism
 )
 
+add_executable(tgd_native_command_replay command_replay.cpp)
+target_compile_features(tgd_native_command_replay PRIVATE cxx_std_20)
+tgd_enable_strict_warnings(tgd_native_command_replay)
+target_link_libraries(
+  tgd_native_command_replay
+  PRIVATE
+    tgd_contracts
+    tgd_runtime
+    tgd_test_replay_fixture
+)
+
+add_test(NAME tgd.native.command-replay COMMAND tgd_native_command_replay)
+
 add_executable(tgd_native_session_input_state session_input_state.cpp)
 target_compile_features(tgd_native_session_input_state PRIVATE cxx_std_20)
 tgd_enable_strict_warnings(tgd_native_session_input_state)

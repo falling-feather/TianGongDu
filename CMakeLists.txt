@@ -75,6 +75,7 @@ target_sources(
   tgd_runtime
   PRIVATE
     src/runtime/src/collision_world.cpp
+    src/runtime/src/command_replay.cpp
     src/runtime/src/fixed_step_driver.cpp
     src/runtime/src/game_session.cpp
     src/runtime/src/runtime_facade.cpp
@@ -146,6 +147,10 @@ if(TGD_ENABLE_AXMOL_HOST)
 endif()
 
 tgd_validate_architecture()
+
+if(TGD_BUILD_TESTS)
+  add_subdirectory(tests/replay)
+endif()
 
 if(TGD_BUILD_TESTS)
   include(CTest)

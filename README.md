@@ -14,6 +14,7 @@
 - 设计 1.0 的 3 个地区、18 个大型子地区、14 个 Boss、24 个核心 NPC、2 套战斗系统和 2 条武器体系。
 - 建立可机器校验的 1.0 内容目录、9 类模板注册表（含独立精英机制战）和 C++ Web 技术基线。
 - 确立 C++ Contracts / Runtime / Gameplay / Presentation / Platform 分层，玩法状态不归渲染树或 JavaScript 所有。
+- 完成 F1 固定 60 Hz `GameSession`、斜向世界输入与版本化命令回放；同一 C++ 黄金夹具已通过 Native 双编译器双配置和 Web Single 三浏览器验证。
 - 设计 IndexedDB 本地存档、Service Worker/CDN 内容缓存，以及可选的跨设备云同步协议。
 - 旧版 Web 原型完整保存在 [`codex/archive-legacy-web-v1`](https://github.com/falling-feather/TianGongDu/tree/codex/archive-legacy-web-v1)，含 V1.1.0 可玩闭环和 52 项自动化测试。
 
@@ -40,7 +41,7 @@
 | 领域 | 状态 | 已有 | 仍没有 |
 | --- | --- | --- | --- |
 | 产品/世界/1.0 范围 | Scope Approved | 三地区、战斗/武器、14 Boss、24 NPC、内容预算 | 全量任务/POI 实例和最终平衡 |
-| 技术架构 | In Progress（`F1-DEV-02`） | C++/WASM/Axmol 分层与精确工具链锁；Native MSVC/Clang Debug/Release、Axmol Web Single Debug/Release、三浏览器生命周期和干净 CI 证据已通过 | 60 Hz Session、命令/事件、斜向纵深输入、快照与黄金回放；正式玩法纵切仍未实现 |
+| 技术架构 | In Progress（`F1-DEV-03`） | 精确工具链与分层；60 Hz Session、斜向世界输入、量化 `x/y/height/floorLayer`、版本化回放及 Native/Web 三浏览器一致性证据已通过 | 正式 Web Shell、IndexedDB 事务/迁移/导出恢复、玩法纵切与真实设备性能证据 |
 | 可玩纵切 | Scope Approved | F1“雨夜试伞”唯一流程与验收 | 新主线 WASM 纵切代码/资产 |
 | 内容工具 | Scope Approved | 9 类模板注册表与工作台范围 | 可用 Workbench/ContentCore/baker |
 | 本地存档/云同步 | Accepted Baseline | IndexedDB 主路径、Operation/冲突模型 | 实际 DB migration、API、DDL、OIDC |

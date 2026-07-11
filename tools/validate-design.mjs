@@ -72,8 +72,9 @@ const architectureSkeleton = [
 ];
 
 const handoffContractMarkers = [
-  ["docs/01-开发者文档.md", ["团队拓扑与模块所有权", "Definition of Ready", "首个 Bootstrap 迭代"]],
-  ["docs/02-版本规划与验收.md", ["f1_rainy_umbrella_trial", "0–30 / 31–60 / 61–90", "标准证据包"]],
+  ["docs/00-项目总纲.md", ["团队交付入口", "第一轮必读顺序", "任务卡必须同时写明"]],
+  ["docs/01-开发者文档.md", ["团队拓扑与模块所有权", "Definition of Ready", "首个 Bootstrap 迭代", "工程能力工作包索引", "DEV-CAP-04"]],
+  ["docs/02-版本规划与验收.md", ["f1_rainy_umbrella_trial", "当前可交接成熟度", "0–30 / 31–60 / 61–90", "标准证据包", "F1 跨团队派工表", "F1-DEV-04", "任务卡复制模板"]],
   ["docs/04-游戏设计总纲.md", ["玩家本体、推进与装备边界", "F1 战斗手感种子", "命名遭遇等级"]],
   ["docs/05-世界与叙事圣经.md", ["玩家角色正史边界", "技术年代感与幻想边界", "天工院介入程序"]],
   ["docs/06-内容生产规范.md", ["内容 Definition of Ready", "template_elite_encounter", "F1 金标准实例"]],

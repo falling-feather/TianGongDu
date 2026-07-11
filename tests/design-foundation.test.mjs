@@ -30,7 +30,7 @@ test("1.0 内容规模达到承诺下限", async () => {
   assert.equal(summary.activeArchitectureDecisions, 4);
   assert.equal(summary.platformTargets, 4);
   assert.equal(summary.architectureModules, 11);
-  assert.equal(summary.handoffContractMarkers, 13);
+  assert.equal(summary.handoffContractMarkers, 14);
   assert.equal(summary.actionContexts, 5);
   assert.equal(summary.actions, 26);
   assert.equal(summary.mainMinutes, 945);

@@ -22,6 +22,8 @@
 3. 技术路线以 [`docs/01-developer/10-技术架构与依赖规则.md`](docs/01-developer/10-技术架构与依赖规则.md) 和 [`content/design/technical-baseline.json`](content/design/technical-baseline.json) 为准。
 4. 内容/叙事/关卡团队依次读 [`docs/04-游戏设计总纲.md`](docs/04-游戏设计总纲.md)、[`docs/05-世界与叙事圣经.md`](docs/05-世界与叙事圣经.md)、[`docs/06-内容生产规范.md`](docs/06-内容生产规范.md)、[`docs/07-1.0地区与内容蓝图.md`](docs/07-1.0地区与内容蓝图.md) 与 [`docs/08-UI-UX与可访问性.md`](docs/08-UI-UX与可访问性.md)。
 
+按开发、美术、叙事、关卡、UI、音频、QA/发布分别交接时，直接使用 00 §1.1 的团队阅读路线；开发能力编号见 01 §15，当前 F1 可复制派工卡见 02 §4.3–4.4。05 是世界/叙事文档，技术栈入口是 01 与 10–19。
+
 开发组开工前先统一四个结论：
 
 - **F1 不是缩小版 1.0**：它只验证一条端到端生产与运行链，原型存档使用独立命名空间，不直接迁入正式档。
@@ -75,7 +77,7 @@ npm test
 npm run validate:design
 ```
 
-它会检查文档层级/元信息/链接、稳定 ID、21 章与分钟、18 支线与 24 NPC 参与关系、25 敌人家族、F1 纵切引用、9 类模板、Action/Context/默认输入映射、13 组开发对接合同，以及 C++20、Axmol、Emscripten、WebGL2、DOM UI、IndexedDB 主路径和云同步基线。
+它会检查文档层级/元信息/链接、稳定 ID、21 章与分钟、18 支线与 24 NPC 参与关系、25 敌人家族、F1 纵切引用、9 类模板、Action/Context/默认输入映射、14 组开发对接合同，以及 C++20、Axmol、Emscripten、WebGL2、DOM UI、IndexedDB 主路径和云同步基线。
 
 当前脚本执行项目语义守卫并解析 Schema；完整 JSON Schema Draft 2020-12 validator、pack/save/API 机器合同与负向 fixture 属于 G1/G3 工具交付，限制见 [`docs/01-developer/16-测试CI与发布门禁.md`](docs/01-developer/16-测试CI与发布门禁.md)。
 

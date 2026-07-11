@@ -26,7 +26,7 @@ test("1.0 内容规模达到承诺下限", async () => {
   assert.equal(summary.engine, "Axmol");
   assert.equal(summary.viewModel, "2.5d-oblique-panoramic");
   assert.equal(summary.primaryGuidance, "douzhanshen");
-  assert.equal(summary.toolchainLockStatus, "planned-not-locked");
+  assert.equal(summary.toolchainLockStatus, "locked-and-validated");
   assert.equal(summary.webTarget, "wasm32");
   assert.equal(summary.cloudSync, true);
   assert.equal(summary.activeArchitectureDecisions, 5);

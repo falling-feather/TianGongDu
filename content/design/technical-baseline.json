@@ -30,7 +30,7 @@
   "toolchainLock": {
     "requiredByGate": "G1",
     "manifestPath": "toolchains/toolchain-lock.json",
-    "status": "planned-not-locked"
+    "status": "locked-and-validated"
   },
   "browserVariants": [
     {

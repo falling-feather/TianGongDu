@@ -10,7 +10,7 @@ const root = resolve(import.meta.dirname, "..");
 const lock = JSON.parse(await readFile(resolve(root, "toolchains/toolchain-lock.json"), "utf8"));
 const baseline = JSON.parse(await readFile(resolve(root, "content/design/technical-baseline.json"), "utf8"));
 
-test("candidate toolchain lock is exact and synchronized with the technical baseline", () => {
+test("validated toolchain lock is exact and synchronized with the technical baseline", () => {
   assert.deepEqual(validateToolchainLock(lock, baseline), []);
 });
 

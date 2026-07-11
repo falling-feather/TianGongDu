@@ -1,9 +1,9 @@
 {
   "$schema": "./toolchain-lock.schema.json",
   "schemaVersion": "1.0.0",
-  "status": "candidate-being-validated",
+  "status": "locked-and-validated",
   "target": "windows-x86_64-web-single",
-  "g1EvidenceBuildId": null,
+  "g1EvidenceBuildId": "g1-gh-29152364317-1",
   "policy": {
     "cacheRoot": ".cache/toolchains",
     "downloadsRoot": ".cache/downloads",

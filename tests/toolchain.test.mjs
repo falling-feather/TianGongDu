@@ -51,3 +51,9 @@ test("toolchain runner selects the exact locked MSVC directory", () => {
     /exact toolset directory/
   );
 });
+
+test("toolchain bootstrap hashes without PowerShell module autoloading", async () => {
+  const bootstrap = await readFile(resolve(root, "tools/bootstrap-toolchain.ps1"), "utf8");
+  assert.match(bootstrap, /System\.Security\.Cryptography\.SHA256/);
+  assert.doesNotMatch(bootstrap, /Get-FileHash/);
+});

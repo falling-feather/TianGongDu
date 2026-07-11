@@ -50,6 +50,13 @@ target_link_libraries(tgd_native_save_envelope PRIVATE tgd_contracts)
 
 add_test(NAME tgd.native.save-envelope COMMAND tgd_native_save_envelope)
 
+add_executable(tgd_native_profile_storage profile_storage_coordinator.cpp)
+target_compile_features(tgd_native_profile_storage PRIVATE cxx_std_20)
+tgd_enable_strict_warnings(tgd_native_profile_storage)
+target_link_libraries(tgd_native_profile_storage PRIVATE tgd_contracts tgd_runtime)
+
+add_test(NAME tgd.native.profile-storage COMMAND tgd_native_profile_storage)
+
 add_executable(tgd_native_session_input_state session_input_state.cpp)
 target_compile_features(tgd_native_session_input_state PRIVATE cxx_std_20)
 tgd_enable_strict_warnings(tgd_native_session_input_state)

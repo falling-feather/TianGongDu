@@ -873,6 +873,39 @@
         stores: Array.from(database.objectStoreNames)
       };
     }
+
+    async exportProfile(profileId) {
+      const database = await this.open();
+      const transaction = database.transaction(["profile_heads", "snapshots"], "readonly");
+      const done = transactionDone(transaction);
+      const headRecord = await requestResult(
+        transaction.objectStore("profile_heads").get([CHANNEL, profileId])
+      );
+      const head = headFromRecord(headRecord, profileId);
+      const snapshotId = idToHex(head.snapshotId);
+      const snapshotRecord = await requestResult(
+        transaction.objectStore("snapshots").get([profileId, snapshotId])
+      );
+      await done;
+      if (
+        !snapshotRecord ||
+        snapshotRecord.schemaVersion !== 1 ||
+        snapshotRecord.profileId !== profileId ||
+        snapshotRecord.snapshotId !== snapshotId ||
+        !(snapshotRecord.bytes instanceof ArrayBuffer)
+      ) {
+        throw new WireError("Current Profile snapshot is missing or unreadable");
+      }
+      return Object.freeze({
+        fileName: `tiangongdu-${CHANNEL}-${profileId.slice(0, 8)}-${snapshotId.slice(0, 8)}.tgdprofile`,
+        mediaType: "application/vnd.tiangongdu.profile+octet-stream",
+        profileId,
+        snapshotId,
+        logicalSequence: head.logicalSequence.toString(),
+        envelopeHash: head.envelopeHash,
+        bytes: new Uint8Array(snapshotRecord.bytes)
+      });
+    }
   }
 
   function randomId(cryptoObject) {
@@ -1098,6 +1131,10 @@
       return publicProfileState(latestProfileEvent);
     }
 
+    function exportProfile() {
+      return backend.exportProfile(idToHex(profileId));
+    }
+
     function shutdown() {
       call("tgd_web_request_shutdown", null);
       backend.close();
@@ -1106,6 +1143,7 @@
     return Object.freeze({
       boot,
       drain,
+      exportProfile,
       retryPendingSave,
       saveGuestCheckpoint,
       shutdown,

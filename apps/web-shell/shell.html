@@ -78,7 +78,7 @@
 
       .profile-controls {
         display: grid;
-        grid-template-columns: auto auto 1fr;
+        grid-template-columns: auto auto auto 1fr;
         align-items: center;
         gap: 10px;
         margin-top: 12px;
@@ -164,6 +164,7 @@
       <section class="profile-controls" aria-label="Guest 本地存档">
         <span class="profile-label">Guest · 本地优先</span>
         <button id="save-profile" data-testid="save-profile" type="button" disabled>保存检查点</button>
+        <button id="export-profile" data-testid="export-profile" type="button" disabled>导出修复包</button>
         <p id="profile-state" data-testid="profile-state" role="status" aria-live="polite" data-save-state="booting">等待 IndexedDB…</p>
       </section>
       <section id="qa-controls" class="qa-controls" aria-label="Lifecycle QA controls" hidden>
@@ -184,6 +185,7 @@
       const lastEventElement = document.getElementById("last-event");
       const canvasElement = document.getElementById("canvas");
       const saveProfileButton = document.getElementById("save-profile");
+      const exportProfileButton = document.getElementById("export-profile");
       const profileStateElement = document.getElementById("profile-state");
       const qaControlsElement = document.getElementById("qa-controls");
       const qaStateElement = document.getElementById("qa-state");
@@ -228,6 +230,11 @@
         if (!state) return;
         const retryable = state.stateName === "save_failed" && state.hasPendingSave;
         saveProfileButton.disabled = state.stateName !== "ready" && !retryable;
+        exportProfileButton.disabled = !state.hasSnapshot && ![
+          "save_failed",
+          "conflict_read_only",
+          "recovery_required"
+        ].includes(state.stateName);
         saveProfileButton.textContent = retryable ? "重试保存" : "保存检查点";
         profileStateElement.dataset.saveState = state.stateName;
         if (state.stateName === "loading_head" || state.stateName === "loading_snapshot") {
@@ -274,6 +281,7 @@
         });
         window.__tgdProfile = Object.freeze({
           getState: profileBridge.getProfileState,
+          export: profileBridge.exportProfile,
           retry: profileBridge.retryPendingSave,
           save: profileBridge.saveGuestCheckpoint,
           inspectSchema: profileBridge.inspectSchema,
@@ -341,6 +349,28 @@
           profileStateElement.dataset.saveState = "error";
           profileStateElement.textContent = `保存失败 · ${String(error)}`;
           recordLifecycle("profile.save_failed", { message: String(error) });
+        }
+      });
+
+      exportProfileButton.addEventListener("click", async () => {
+        exportProfileButton.disabled = true;
+        try {
+          const exported = await profileBridge.exportProfile();
+          const url = URL.createObjectURL(new Blob([exported.bytes], { type: exported.mediaType }));
+          const anchor = document.createElement("a");
+          anchor.href = url;
+          anchor.download = exported.fileName;
+          anchor.click();
+          window.setTimeout(() => URL.revokeObjectURL(url), 0);
+          recordLifecycle("profile.exported", {
+            snapshotId: exported.snapshotId,
+            logicalSequence: exported.logicalSequence,
+            byteLength: exported.bytes.byteLength
+          });
+        } catch (error) {
+          recordLifecycle("profile.export_failed", { message: String(error) });
+        } finally {
+          exportProfileButton.disabled = false;
         }
       });
 

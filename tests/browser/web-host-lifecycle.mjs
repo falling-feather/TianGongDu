@@ -581,6 +581,129 @@ async function runBrowser(target, origin) {
     assert.equal(retryRestoredProfile.snapshotId, retriedProfile.snapshotId);
     await waitForText(page, profileState, "已恢复");
 
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 45_000 });
+    await waitForText(page, status, "宿主已就绪", 45_000);
+    await page.waitForFunction(
+      () => window.__tgdProfile?.getState()?.stateName === "ready",
+      undefined,
+      { timeout: 45_000 }
+    );
+    assert.equal((await page.evaluate(() => window.__tgdProfile.getState())).logicalSequence, "2");
+
+    const contenderProblems = [];
+    const contender = await page.context().newPage();
+    contender.on("pageerror", (error) => contenderProblems.push(error.message));
+    contender.on("console", (message) => {
+      if (message.type() === "error") contenderProblems.push(message.text());
+    });
+    const contenderResponse = await contender.goto(url, {
+      waitUntil: "domcontentloaded",
+      timeout: 45_000
+    });
+    assert(contenderResponse?.ok(), `${target} failed to open the second Profile tab.`);
+    await waitForText(contender, contender.getByTestId("profile-state"), "已恢复", 45_000);
+    assert.equal(
+      (await contender.evaluate(() => window.__tgdProfile.getState())).logicalSequence,
+      "2"
+    );
+
+    await saveProfile.click();
+    await page.waitForFunction(
+      () => window.__tgdProfile?.getState()?.committedSaveCount === "1",
+      undefined,
+      { timeout: 15_000 }
+    );
+    const winningProfile = await page.evaluate(() => window.__tgdProfile.getState());
+    assert.equal(winningProfile.logicalSequence, "3");
+
+    await contender.getByTestId("save-profile").click();
+    await contender.waitForFunction(
+      () => window.__tgdProfile?.getState()?.stateName === "conflict_read_only",
+      undefined,
+      { timeout: 15_000 }
+    );
+    const losingProfile = await contender.evaluate(() => window.__tgdProfile.getState());
+    assert.equal(losingProfile.errorName, "storage_conflict");
+    assert.equal(losingProfile.committedSaveCount, "0");
+    assert.equal(losingProfile.logicalSequence, "2");
+    assert.equal(await contender.getByTestId("save-profile").isDisabled(), true);
+    assert.doesNotMatch(await contender.getByTestId("profile-state").innerText(), /已保存/);
+    assert.deepEqual(contenderProblems, [], `${target} second tab emitted browser errors.`);
+    await contender.close();
+
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 45_000 });
+    await waitForText(page, status, "宿主已就绪", 45_000);
+    await page.waitForFunction(
+      () => window.__tgdProfile?.getState()?.stateName === "ready",
+      undefined,
+      { timeout: 45_000 }
+    );
+    const conflictRestoredProfile = await page.evaluate(() => window.__tgdProfile.getState());
+    assert.equal(conflictRestoredProfile.logicalSequence, "3");
+    assert.equal(conflictRestoredProfile.snapshotId, winningProfile.snapshotId);
+
+    await page.evaluate(async () => {
+      const profile = window.__tgdProfile.getState();
+      const profileId = window.__tgdProfile.identity.profileId;
+      const database = await new Promise((resolveOpen, rejectOpen) => {
+        const request = indexedDB.open("tiangongdu.prototype_f1.internal.profile", 1);
+        request.onsuccess = () => resolveOpen(request.result);
+        request.onerror = () => rejectOpen(request.error);
+      });
+      const transaction = database.transaction("snapshots", "readwrite");
+      const store = transaction.objectStore("snapshots");
+      const record = await new Promise((resolveRecord, rejectRecord) => {
+        const request = store.get([profileId, profile.snapshotId]);
+        request.onsuccess = () => resolveRecord(request.result);
+        request.onerror = () => rejectRecord(request.error);
+      });
+      const corrupted = new Uint8Array(record.bytes);
+      corrupted[0] ^= 0xff;
+      record.bytes = corrupted.buffer;
+      store.put(record);
+      await new Promise((resolveTransaction, rejectTransaction) => {
+        transaction.oncomplete = resolveTransaction;
+        transaction.onabort = () => rejectTransaction(transaction.error);
+        transaction.onerror = () => rejectTransaction(transaction.error);
+      });
+      database.close();
+    });
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 45_000 });
+    await waitForText(page, status, "宿主已就绪", 45_000);
+    await page.waitForFunction(
+      () => window.__tgdProfile?.getState()?.stateName === "recovery_required",
+      undefined,
+      { timeout: 45_000 }
+    );
+    const corruptProfile = await page.evaluate(() => window.__tgdProfile.getState());
+    assert.equal(corruptProfile.errorName, "storage_corrupt");
+    assert.equal(corruptProfile.committedSaveCount, "0");
+    assert.equal(await saveProfile.isDisabled(), true);
+    assert.doesNotMatch(await profileState.innerText(), /已保存/);
+    assert.equal(await page.getByTestId("export-profile").isEnabled(), true);
+    const recoveryExport = await page.evaluate(async () => {
+      const exported = await window.__tgdProfile.export();
+      return {
+        expectedProfileId: window.__tgdProfile.identity.profileId,
+        fileName: exported.fileName,
+        mediaType: exported.mediaType,
+        profileId: exported.profileId,
+        snapshotId: exported.snapshotId,
+        logicalSequence: exported.logicalSequence,
+        envelopeHash: exported.envelopeHash,
+        byteLength: exported.bytes.byteLength,
+        firstByte: exported.bytes[0]
+      };
+    });
+    assert.match(recoveryExport.fileName, /\.tgdprofile$/);
+    assert.equal(recoveryExport.mediaType, "application/vnd.tiangongdu.profile+octet-stream");
+    assert.equal(recoveryExport.profileId, recoveryExport.expectedProfileId);
+    assert.equal(recoveryExport.snapshotId, winningProfile.snapshotId);
+    assert.equal(recoveryExport.logicalSequence, "3");
+    assert.match(recoveryExport.envelopeHash, /^[0-9a-f]{64}$/);
+    assert(recoveryExport.byteLength > 176);
+    assert.notEqual(recoveryExport.firstByte, 0x54);
+
     await page.evaluate(() => {
       const canvasElement = document.querySelector("canvas");
       if (canvasElement) canvasElement.style.boxShadow = "none";

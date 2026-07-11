@@ -17,7 +17,7 @@
 - 完成 F1 固定 60 Hz `GameSession`、斜向世界输入与版本化命令回放；同一 C++ 黄金夹具已通过 Native 双编译器双配置和 Web Single 三浏览器验证。
 - 已实现 Web ABI 1.0、`SaveEnvelopeV1`、Profile 原子提交协调器和 256 KiB 分块存储桥；Guest IndexedDB v1 首次保存与刷新恢复已通过三浏览器阶段门，配额/CAS/损坏导出/离线实现等待下一个阶段门聚合复验，迁移/导入仍保留为缺项。
 - 已将 F1 的 5 个 Cell、7 个目标驱动玩法段、斜向相机基和 60/70 分钟口径固化为 JSON→C++ 机器合同，并用 `VerticalSliceSession` 组合既有移动核心。
-- 已实现数据驱动的首个战斗遭遇合同与确定性 `ICombatResolver` / `ICombatEventSink` 启动边界：当前 Web 灰盒可移动接敌，使用檐守/翻花、轻重击、守势和闪身，并显示生命、体力、定力、姿态和只读战斗事件；敌人 AI、资源恢复、任务/Boss/结算和最终资产仍未完成。
+- 已实现数据驱动的首个战斗遭遇合同与确定性 `ICombatResolver` / `ICombatEventSink` / `IEncounterDirector` 启动边界：当前 Web 灰盒可移动接敌，使用檐守/翻花、轻重击、守势和闪身；两伞偶与纸鹭会按量化地面坐标追击/归位、占据稳定接敌位并由单一进攻令牌轮流出招。完整感知/导航/编队、资源恢复、任务/Boss/结算和最终资产仍未完成。
 - 已设计 Service Worker/CDN 内容缓存，以及可选的跨设备云同步协议；设计不等于运行时已落地。
 - 旧版 Web 原型完整保存在 [`codex/archive-legacy-web-v1`](https://github.com/falling-feather/TianGongDu/tree/codex/archive-legacy-web-v1)，含 V1.1.0 可玩闭环和 52 项自动化测试。
 
@@ -47,7 +47,7 @@
 | --- | --- | --- | --- |
 | 产品/世界/1.0 范围 | Scope Approved | 三地区、战斗/武器、14 Boss、24 NPC、内容预算 | 全量任务/POI 实例和最终平衡 |
 | 技术架构 | In Progress（`F1-GAME-01`，并行收口 `F1-DEV-03` 证据） | 精确工具链与分层；60 Hz Session、量化回放；Web ABI/Profile；F1 Definition Provider、组合纵切会话、确定性战斗解析/事件/权威位姿批次 | IndexedDB 异常/离线聚合复验、迁移/导入、完整玩法纵切和真实设备性能证据 |
-| 可玩纵切 | In Progress（可操作战斗灰盒） | F1 唯一流程、5 Cell/7 Beat 机器合同；代码绘制的 2.5D 斜向全景雨夜场景；移动/纵跃、双姿态、轻重击、守势、闪身、三名静态敌人与战斗 HUD | 敌人 AI/遭遇编排、资源恢复与失败、真实 5 Cell、NPC/任务/工灯/调校、Boss 四阶段、双结算和 60 分钟盲测 |
+| 可玩纵切 | In Progress（可操作战斗灰盒） | F1 唯一流程、5 Cell/7 Beat 机器合同；代码绘制的 2.5D 斜向全景雨夜场景；移动/纵跃、双姿态、轻重击、守势、闪身；三敌追击/归位、环形接敌位、单进攻令牌与战斗 HUD | 完整敌人感知/导航/编队/掉落、资源恢复与失败重试、真实 5 Cell、NPC/任务/工灯/调校、Boss 四阶段、双结算和 60 分钟盲测 |
 | 内容工具 | In Progress（Bootstrap） | 9 类模板注册表、工作台范围、F1 纵切及首个 4 实体/9 能力战斗包的 JSON/Schema/确定性 C++ 生成 | 可用 Workbench、通用 ContentCore/baker、迁移、资源预览与错误定位 UI |
 | 本地存档/云同步 | In Progress（`F1-DEV-03`） | IndexedDB v1 六 store、`SaveEnvelopeV1`、Profile Head CAS/C++ 异步桥、Guest 首存与刷新恢复 | 配额/冲突/损坏/离线证据、迁移/导入、多标签主动接管、云 API/DDL/OIDC |
 | 发布运维 | Accepted Baseline | 渠道、缓存、回滚、证据与灾备门；F1 Windows 2022 干净 CI 已落地 | CD、正式 origin/CDN/监控与演练 |

@@ -83,6 +83,20 @@ export function validateToolchainLock(lock, baseline) {
   for (const tool of requiredTools) validateEntry(tool, lock?.tools?.[tool], errors);
   for (const [name, entry] of Object.entries(lock?.supportArtifacts ?? {})) validateEntry(`supportArtifacts.${name}`, entry, errors);
 
+  const msvc = lock?.tools?.msvc;
+  pushIf(
+    errors,
+    !/^Microsoft\.VisualStudio\.Component\.VC\.\d+\.\d+\.\d+\.\d+\.x86\.x64$/.test(msvc?.componentId ?? ""),
+    "MSVC 缺少精确的 Visual Studio x86/x64 component ID。"
+  );
+  const msvcDirectory = /MSVC[\\/]([^\\/]+)[\\/]/i.exec(msvc?.executable ?? "")?.[1];
+  const componentToolset = /\.VC\.(\d+\.\d+)\./.exec(msvc?.componentId ?? "")?.[1];
+  pushIf(
+    errors,
+    !msvcDirectory || !componentToolset || !msvcDirectory.startsWith(`${componentToolset}.`),
+    "MSVC component ID 与锁定的 toolset 目录不一致。"
+  );
+
   const baselineStatus = baseline?.toolchainLock?.status;
   const manifestPath = baseline?.toolchainLock?.manifestPath;
   pushIf(errors, manifestPath !== "toolchains/toolchain-lock.json", "技术基线的工具链锁路径不一致。");

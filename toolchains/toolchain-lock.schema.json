@@ -130,6 +130,7 @@
         "cachePath": { "type": ["string", "null"] },
         "installRoot": { "type": ["string", "null"] },
         "executable": { "type": ["string", "null"] },
+        "componentId": { "type": ["string", "null"] },
         "artifactVerified": { "type": "boolean" }
       }
     },

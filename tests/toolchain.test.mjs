@@ -4,7 +4,7 @@ import test from "node:test";
 import { resolve } from "node:path";
 
 import { validateToolchainLock } from "../tools/verify-toolchain.mjs";
-import { buildToolchainEnvironment } from "../tools/run-toolchain.mjs";
+import { buildToolchainEnvironment, lockedMsvcToolsetVersion } from "../tools/run-toolchain.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const lock = JSON.parse(await readFile(resolve(root, "toolchains/toolchain-lock.json"), "utf8"));
@@ -38,4 +38,16 @@ test("toolchain runner folds duplicate Windows PATH keys", () => {
   assert.deepEqual(pathKeys, ["PATH"]);
   assert.match(environment.PATH, /cmake-4\.3\.1-windows-x86_64/);
   assert.equal(environment.EMSDK_KEEP_DOWNLOADS, "1");
+});
+
+test("toolchain runner selects the exact locked MSVC directory", () => {
+  assert.equal(lockedMsvcToolsetVersion(lock.tools.msvc), "14.43.34808");
+  assert.equal(
+    lock.tools.msvc.componentId,
+    "Microsoft.VisualStudio.Component.VC.14.43.17.13.x86.x64"
+  );
+  assert.throws(
+    () => lockedMsvcToolsetVersion({ executable: "vswhere:VC/Tools/MSVC/*/bin/Hostx64/x64/cl.exe" }),
+    /exact toolset directory/
+  );
 });

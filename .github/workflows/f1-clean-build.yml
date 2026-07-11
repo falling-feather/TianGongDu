@@ -1,0 +1,114 @@
+name: F1 clean build and browser evidence
+
+on:
+  push:
+    branches:
+      - codex/f1-development
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: f1-clean-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-web-single:
+    name: Windows native + Web Single + browsers
+    runs-on: windows-2022
+    timeout-minutes: 90
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}\.cache\playwright
+      TGD_BROWSER_TARGETS: chrome,edge,firefox
+      TGD_BUILD_ID: g1-gh-${{ github.run_id }}-${{ github.run_attempt }}
+      TGD_EXPECT_COMMIT: ${{ github.sha }}
+
+    steps:
+      - name: Check out the exact revision
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Select locked Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20.18.0
+          cache: npm
+
+      - name: Restore immutable toolchain downloads
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache
+          key: f1-toolchains-${{ runner.os }}-${{ hashFiles('toolchains/toolchain-lock.json') }}
+          restore-keys: |
+            f1-toolchains-${{ runner.os }}-
+
+      - name: Install locked JavaScript test dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Ensure exact MSVC component on the disposable runner
+        shell: powershell
+        run: ./tools/ensure-msvc-component.ps1 -InstallIfMissing
+
+      - name: Restore and verify the locked native and Web toolchain
+        run: npm run bootstrap:toolchain
+
+      - name: Validate design, architecture, and lock contracts
+        shell: powershell
+        run: |
+          npm test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run validate:design
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run validate:toolchain:cache
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build and test MSVC Debug and Release
+        shell: powershell
+        run: |
+          npm run test:cpp:msvc
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run test:cpp:msvc:release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build and test Clang Debug and Release
+        shell: powershell
+        run: |
+          npm run test:cpp:clang
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run test:cpp:clang:release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build Axmol Web Single Debug and Release
+        shell: powershell
+        run: |
+          npm run build:web:debug
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run build:web:release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Install locked Playwright Firefox runtime
+        run: npx playwright install firefox
+
+      - name: Verify lifecycle and context restore in three browsers
+        run: npm run test:browser -- --targets=chrome,edge,firefox
+
+      - name: Bind the G1 evidence manifest to this build
+        run: npm run evidence:g1
+
+      - name: Upload browser, native, Web, and manifest evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: f1-g1-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            build/browser-qa
+            build/evidence
+            build/web-debug/dist/web
+            build/web-release-single/dist/web
+            build/windows-msvc-debug/tests/native/Debug/tgd_native_bootstrap_smoke.exe
+            build/windows-msvc-debug/tests/native/Release/tgd_native_bootstrap_smoke.exe
+            build/windows-clang-debug/tests/native/tgd_native_bootstrap_smoke.exe
+            build/windows-clang-release/tests/native/tgd_native_bootstrap_smoke.exe

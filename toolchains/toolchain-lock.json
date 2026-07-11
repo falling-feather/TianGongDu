@@ -13,7 +13,8 @@
     "selectionNotes": [
       "Emscripten 3.1.73 is pinned to Axmol 2.11.4's documented Windows browser-debug compatibility line.",
       "CMake 4.2.1 was rejected because it exited without diagnostics on this Unicode Windows source path; 4.3.1 passed MSVC and Clang Debug/Release and remains gated on the Axmol Web build.",
-      "axslcc 1.14.0 is the exact shader compiler declared by Axmol 2.11.4's immutable 1k/build.profiles."
+      "axslcc 1.14.0 is the exact shader compiler declared by Axmol 2.11.4's immutable 1k/build.profiles.",
+      "MSVC 19.43.34809 is selected through the exact Visual Studio component and 14.43.34808 toolset directory, then verified by cl.exe SHA-256."
     ],
     "promotionRequirements": [
       "all-artifacts-sha256-verified",
@@ -119,6 +120,7 @@
       "cachePath": null,
       "installRoot": null,
       "executable": "vswhere:VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/cl.exe",
+      "componentId": "Microsoft.VisualStudio.Component.VC.14.43.17.13.x86.x64",
       "artifactVerified": true
     },
     "node": {

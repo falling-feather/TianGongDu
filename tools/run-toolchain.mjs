@@ -83,7 +83,19 @@ function mergeEnvironment(base, overlay) {
   return merged;
 }
 
-function findVisualStudioEnvironment(environment) {
+export function lockedMsvcToolsetVersion(entry) {
+  const locator = entry?.executable ?? "";
+  if (!locator.toLowerCase().startsWith("vswhere:")) {
+    throw new Error("MSVC executable must use the vswhere: locator.");
+  }
+  const match = locator.slice("vswhere:".length).match(/(?:^|[\\/])VC[\\/]Tools[\\/]MSVC[\\/]([^\\/]+)(?:[\\/]|$)/i);
+  if (!match || !/^\d+\.\d+\.\d+$/.test(match[1])) {
+    throw new Error(`MSVC locator does not contain an exact toolset directory: ${locator}`);
+  }
+  return match[1];
+}
+
+function findVisualStudioEnvironment(root, environment, msvcEntry) {
   const programFilesX86 = environment["ProgramFiles(x86)"] ?? "C:\\Program Files (x86)";
   const vswhere = join(programFilesX86, "Microsoft Visual Studio", "Installer", "vswhere.exe");
   if (!existsSync(vswhere)) throw new Error(`vswhere not found: ${vswhere}`);
@@ -107,11 +119,12 @@ function findVisualStudioEnvironment(environment) {
   }
 
   const vsDevCmd = join(discovery.stdout.trim(), "Common7", "Tools", "VsDevCmd.bat");
-  const commandFile = resolve(defaultRoot, ".cache", "tgd-vsdev-env.cmd");
+  const toolsetVersion = lockedMsvcToolsetVersion(msvcEntry);
+  const commandFile = resolve(root, ".cache", "tgd-vsdev-env.cmd");
   mkdirSync(dirname(commandFile), { recursive: true });
   writeFileSync(
     commandFile,
-    `@echo off\r\ncall "${vsDevCmd}" -no_logo -arch=x64 -host_arch=x64 >nul\r\nif errorlevel 1 exit /b %errorlevel%\r\nset\r\n`,
+    `@echo off\r\ncall "${vsDevCmd}" -no_logo -arch=x64 -host_arch=x64 -vcvars_ver=${toolsetVersion} >nul\r\nif errorlevel 1 exit /b %errorlevel%\r\nset\r\n`,
     "utf8"
   );
   const capture = spawnSync(
@@ -129,6 +142,10 @@ function findVisualStudioEnvironment(environment) {
     const separator = line.indexOf("=");
     if (separator <= 0) continue;
     visualStudioEnvironment[line.slice(0, separator)] = line.slice(separator + 1);
+  }
+  const selectedToolset = visualStudioEnvironment.VCToolsVersion?.replace(/[\\/]+$/, "");
+  if (selectedToolset !== toolsetVersion) {
+    throw new Error(`VsDevCmd selected MSVC ${selectedToolset ?? "unknown"}; expected ${toolsetVersion}.`);
   }
   return visualStudioEnvironment;
 }
@@ -178,7 +195,7 @@ async function main() {
   const lock = JSON.parse(readFileSync(resolve(root, "toolchains", "toolchain-lock.json"), "utf8"));
   let environment = buildToolchainEnvironment(root, lock);
   if (useVsDev) {
-    environment = mergeEnvironment(environment, findVisualStudioEnvironment(environment));
+    environment = mergeEnvironment(environment, findVisualStudioEnvironment(root, environment, lock.tools.msvc));
     environment = buildToolchainEnvironment(root, lock, environment);
   }
 

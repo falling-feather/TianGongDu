@@ -165,19 +165,33 @@ function Confirm-ExecutableHash([string]$Name, $Entry, [string]$Path) {
     Write-Output "verified executable: $Name"
 }
 
-function Find-MsvcCompiler {
+function Find-MsvcCompiler($Entry) {
     $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
     if (-not (Test-Path -LiteralPath $vswhere)) {
         throw "vswhere not found: $vswhere"
     }
-    $compiler = & $vswhere `
+
+    $prefix = "vswhere:"
+    if (-not $Entry.executable.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "MSVC executable must use the vswhere: locator."
+    }
+    $relativeCompiler = $Entry.executable.Substring($prefix.Length).Replace('/', '\')
+    if ([System.IO.Path]::IsPathRooted($relativeCompiler) -or $relativeCompiler.Split('\') -contains '..') {
+        throw "MSVC executable locator must stay inside the Visual Studio installation."
+    }
+
+    $installationPath = & $vswhere `
         -latest `
         -products * `
         -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
-        -find "VC\Tools\MSVC\*\bin\Hostx64\x64\cl.exe" |
+        -property installationPath |
         Select-Object -First 1
-    if ([string]::IsNullOrWhiteSpace($compiler)) {
-        throw "MSVC x64 compiler was not found."
+    if ([string]::IsNullOrWhiteSpace($installationPath)) {
+        throw "Visual Studio with the C++ toolset was not found."
+    }
+    $compiler = Join-Path $installationPath $relativeCompiler
+    if (-not (Test-Path -LiteralPath $compiler)) {
+        throw "Locked MSVC x64 compiler was not found: $compiler"
     }
     return $compiler
 }
@@ -227,7 +241,7 @@ try {
     $python = Join-Path (Resolve-RepositoryPath $lock.tools.python.installRoot) $lock.tools.python.executable
     Confirm-ExecutableHash "node" $lock.tools.node $node
     Confirm-ExecutableHash "python" $lock.tools.python $python
-    Confirm-ExecutableHash "msvc" $lock.tools.msvc (Find-MsvcCompiler)
+    Confirm-ExecutableHash "msvc" $lock.tools.msvc (Find-MsvcCompiler $lock.tools.msvc)
 
     & $node "tools/verify-toolchain.mjs" --cache
     if ($LASTEXITCODE -ne 0) {

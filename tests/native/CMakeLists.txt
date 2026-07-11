@@ -133,6 +133,21 @@ add_test(
   COMMAND tgd_native_combat_resolver
 )
 
+add_executable(tgd_native_encounter_director encounter_director.cpp)
+target_compile_features(tgd_native_encounter_director PRIVATE cxx_std_20)
+tgd_enable_strict_warnings(tgd_native_encounter_director)
+target_link_libraries(
+  tgd_native_encounter_director
+  PRIVATE
+    tgd_contracts
+    tgd_gameplay
+)
+
+add_test(
+  NAME tgd.native.encounter-director
+  COMMAND tgd_native_encounter_director
+)
+
 add_test(
   NAME tgd.architecture.reject-reverse-link
   COMMAND

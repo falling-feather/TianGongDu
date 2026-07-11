@@ -126,10 +126,21 @@ struct CombatEvent final {
     std::uint32_t feedback_tags{};
 };
 
+struct EncounterDirectorDefinition final {
+    StableActorKey player_actor{};
+    std::int32_t aggro_range_mm{};
+    std::int32_t leash_range_mm{};
+    std::int32_t chase_speed_mm_per_second{};
+    std::uint16_t decision_interval_ticks{};
+    std::uint16_t post_attack_cooldown_ticks{};
+    std::uint8_t max_simultaneous_attackers{};
+};
+
 struct CombatEncounterDefinition final {
     ContentId id{};
     std::span<const CombatActorConfig> actors{};
     std::span<const AbilityDefinition> abilities{};
+    EncounterDirectorDefinition director{};
 };
 
 }  // namespace tgd::contracts

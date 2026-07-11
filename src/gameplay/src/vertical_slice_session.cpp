@@ -299,6 +299,10 @@ const contracts::QuestSnapshot& VerticalSliceSession::quest_snapshot() const noe
     return quest_.snapshot();
 }
 
+const IQuestRuntime& VerticalSliceSession::quest_runtime() const noexcept {
+    return quest_;
+}
+
 QuestObjectiveState VerticalSliceSession::objective_state(
     contracts::StableContentKey objective
 ) const noexcept {

@@ -96,6 +96,7 @@ class VerticalSliceSession final {
     [[nodiscard]] const VerticalSliceSnapshot& previous_snapshot() const noexcept;
     [[nodiscard]] const VerticalSliceSnapshot& current_snapshot() const noexcept;
     [[nodiscard]] const contracts::QuestSnapshot& quest_snapshot() const noexcept;
+    [[nodiscard]] const IQuestRuntime& quest_runtime() const noexcept;
     [[nodiscard]] QuestObjectiveState objective_state(
         contracts::StableContentKey objective
     ) const noexcept;

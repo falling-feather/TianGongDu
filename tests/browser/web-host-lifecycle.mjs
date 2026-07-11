@@ -842,6 +842,26 @@ async function runBrowser(target, origin) {
     }
 
     await canvas.focus();
+    await page.waitForFunction(
+      () => window.__tgdTest?.getF1State()?.questRequiredObjectives === 2,
+      undefined,
+      { timeout: 5_000 }
+    );
+    const openingQuestState = await page.evaluate(() => window.__tgdTest.getF1State());
+    assert.equal(openingQuestState.questBeatIndex, 0);
+    assert.equal(openingQuestState.questCompletedObjectives, 0);
+    await captureRenderedFrame(
+      page,
+      canvas,
+      resolve(reportDirectory, `${target}-quest-interaction-ready.png`),
+      `${target} opening quest interaction`
+    );
+    await page.keyboard.press("f");
+    await page.waitForFunction(
+      () => window.__tgdTest?.getF1State()?.questCompletedObjectives === 1,
+      undefined,
+      { timeout: 5_000 }
+    );
     const stationaryFrame = analyzePng(await canvas.screenshot({ type: "png" }));
     await page.keyboard.down("w");
     await page.waitForTimeout(600);
@@ -855,6 +875,21 @@ async function runBrowser(target, origin) {
       `${target} oblique movement changed ${(
         movementComparison.changedPixelRatio * 100
       ).toFixed(2)}% of the frame.`
+    );
+    await page.keyboard.press("f");
+    await page.waitForFunction(
+      () => window.__tgdTest?.getF1State()?.questBeatIndex === 1,
+      undefined,
+      { timeout: 5_000 }
+    );
+    const advancedQuestState = await page.evaluate(() => window.__tgdTest.getF1State());
+    assert.equal(advancedQuestState.questCompletedObjectives, 0);
+    assert.equal(advancedQuestState.questRequiredObjectives, 3);
+    await captureRenderedFrame(
+      page,
+      canvas,
+      resolve(reportDirectory, `${target}-quest-stage-advanced.png`),
+      `${target} quest stage advanced`
     );
 
     await page.keyboard.down("w");
@@ -966,6 +1001,9 @@ async function runBrowser(target, origin) {
     const retryState = await page.evaluate(() => window.__tgdTest.getF1State());
     assert.equal(retryState.playerHealth, 120, `${target} retry did not restore player health.`);
     assert.equal(retryState.activeHostiles, 3, `${target} retry did not restore every hostile.`);
+    assert.equal(retryState.questBeatIndex, 1, `${target} retry discarded quest progress.`);
+    assert.equal(retryState.questCompletedObjectives, 0);
+    assert.equal(retryState.questRequiredObjectives, 3);
     const combatRetriedFrame = await captureRenderedFrame(
       page,
       canvas,

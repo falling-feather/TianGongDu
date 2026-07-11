@@ -420,7 +420,16 @@
           playerHealth: invokeBridge("tgd_web_f1_qa_player_health", "number"),
           playerActive: invokeBridge("tgd_web_f1_qa_player_active", "number") !== 0,
           activeHostiles: invokeBridge("tgd_web_f1_qa_active_hostiles", "number"),
-          retryCount: invokeBridge("tgd_web_f1_qa_retry_count", "number")
+          retryCount: invokeBridge("tgd_web_f1_qa_retry_count", "number"),
+          questBeatIndex: invokeBridge("tgd_web_f1_qa_quest_beat_index", "number"),
+          questCompletedObjectives: invokeBridge(
+            "tgd_web_f1_qa_quest_completed_objectives",
+            "number"
+          ),
+          questRequiredObjectives: invokeBridge(
+            "tgd_web_f1_qa_quest_required_objectives",
+            "number"
+          )
         }),
         getTrace: () => lifecycleTrace.map((entry) => ({ ...entry })),
         setHidden: (hidden) => dispatchVisibility(Boolean(hidden)),

@@ -180,6 +180,54 @@ void solidPolygon(
     return node;
 }
 
+[[nodiscard]] ax::Node* questInteractionVisual(
+    tgd::contracts::QuestInteractionKind kind
+) {
+    const bool inspect = kind == tgd::contracts::QuestInteractionKind::inspect;
+    const auto accent = inspect ? color(103, 213, 191, 235) : color(230, 174, 87, 235);
+    auto* node = ax::Node::create();
+    auto* draw = ax::DrawNode::create();
+    draw->drawSolidCircle({0.0F, 0.0F}, 11.0F, 0.0F, 24, accent);
+    draw->drawSolidCircle({0.0F, 0.0F}, 27.0F, 0.0F, 28, color(103, 213, 191, 34));
+    draw->drawLine({0.0F, 8.0F}, {0.0F, 39.0F}, accent, 2.0F);
+    solidPolygon(
+        draw,
+        {{0.0F, 52.0F}, {8.0F, 42.0F}, {0.0F, 32.0F}, {-8.0F, 42.0F}},
+        accent,
+        color(242, 222, 171, 245),
+        1.0F
+    );
+    node->addChild(draw);
+    auto* key = label("F", 12.0F, ax::Color4B(5, 18, 22, 255));
+    key->setAnchorPoint({0.5F, 0.5F});
+    key->setPosition({0.0F, 42.0F});
+    node->addChild(key, 1);
+    return node;
+}
+
+[[nodiscard]] std::string_view interactionPrompt(
+    tgd::contracts::StableContentKey interaction,
+    tgd::contracts::QuestInteractionKind kind
+) noexcept {
+    if (interaction == tgd::contracts::stable_content_key("f1_interaction_travel_writ")) {
+        return "F / INSPECT TRAVEL WRIT";
+    }
+    if (interaction == tgd::contracts::stable_content_key("f1_interaction_ferry_gate")) {
+        return "F / OPEN FERRY GATE";
+    }
+    switch (kind) {
+        case tgd::contracts::QuestInteractionKind::inspect:
+            return "F / INSPECT";
+        case tgd::contracts::QuestInteractionKind::operate:
+            return "F / OPERATE";
+        case tgd::contracts::QuestInteractionKind::talk:
+            return "F / TALK";
+        case tgd::contracts::QuestInteractionKind::choose:
+            return "F / CHOOSE";
+    }
+    return "F / INTERACT";
+}
+
 }  // namespace
 
 bool F1GrayboxLayer::init() {
@@ -213,6 +261,8 @@ bool F1GrayboxLayer::init() {
         session_.initialize(*definition_, std::move(collision_world)) !=
             tgd::gameplay::VerticalSliceError::none ||
         session_.start() != tgd::gameplay::VerticalSliceError::none ||
+        quest_interactions_.initialize(definition_->quest_interactions) !=
+            tgd::gameplay::QuestInteractionError::none ||
         combat_.initialize(combat_definition_->actors, combat_definition_->abilities) !=
             tgd::gameplay::CombatError::none ||
         combat_.start() != tgd::gameplay::CombatError::none ||
@@ -231,6 +281,7 @@ bool F1GrayboxLayer::init() {
     createKeyboardInput();
     updatePlayerPresentation();
     updateCombatPresentation();
+    updateQuestPresentation();
     scheduleUpdate();
     return true;
 }
@@ -252,6 +303,7 @@ void F1GrayboxLayer::update(float delta_seconds) {
     }
     updatePlayerPresentation();
     updateCombatPresentation();
+    updateQuestPresentation();
 }
 
 void F1GrayboxLayer::clearInput(tgd::contracts::InputClearReason reason) noexcept {
@@ -272,6 +324,7 @@ void F1GrayboxLayer::clearHeldInput(
         queueCombatIntent(tgd::contracts::CombatCommandType::guard_ended);
     }
     jump_pressed_ = false;
+    interact_pressed_ = false;
     submitted_move_x_ = 0;
     submitted_move_y_ = 0;
     static_cast<void>(input_.clear(++platform_sequence_, reason));
@@ -360,6 +413,20 @@ void F1GrayboxLayer::createWorld() {
     }
     world_layer_->addChild(lanterns, -40);
 
+    quest_marker_count_ = 0;
+    for (const auto& interaction : definition_->quest_interactions) {
+        if (quest_marker_count_ >= quest_marker_capacity) {
+            break;
+        }
+        auto* marker = questInteractionVisual(interaction.kind);
+        const auto screen = project(interaction.pose);
+        marker->setPosition(screen);
+        world_layer_->addChild(marker, depthOrder(screen.y) + 2);
+        quest_marker_nodes_[quest_marker_count_] = marker;
+        quest_marker_objectives_[quest_marker_count_] = interaction.objective_id.key;
+        ++quest_marker_count_;
+    }
+
     foreground_awning_ = ax::DrawNode::create();
     solidPolygon(
         foreground_awning_,
@@ -421,16 +488,16 @@ void F1GrayboxLayer::createActors() {
 }
 
 void F1GrayboxLayer::createHud() {
-    auto* panel = ax::LayerColor::create(ax::Color4B(5, 15, 20, 218), 900.0F, 154.0F);
+    auto* panel = ax::LayerColor::create(ax::Color4B(5, 15, 20, 218), 1010.0F, 154.0F);
     panel->setPosition({22.0F, 542.0F});
     addChild(panel, 1000);
 
-    auto* title = label("F1 / RAIN FERRY COMBAT GRAYBOX", 19.0F, ax::Color4B(232, 210, 161, 255));
+    auto* title = label("F1 / RAIN FERRY PLAYABLE GRAYBOX", 19.0F, ax::Color4B(232, 210, 161, 255));
     title->setPosition({38.0F, 684.0F});
     addChild(title, 1001);
 
     auto* controls = label(
-        "WASD move | SPACE jump | J light | K heavy | SHIFT guard | C evade | 1/2 stance | R retry",
+        "WASD move | F interact | SPACE jump | J light | K heavy | SHIFT guard | C evade | 1/2 stance | R retry",
         13.0F,
         ax::Color4B(155, 210, 205, 255)
     );
@@ -438,7 +505,7 @@ void F1GrayboxLayer::createHud() {
     addChild(controls, 1001);
 
     auto* state = label(
-        "MOVE + COMBAT CORE: LIVE | ENCOUNTER DIRECTOR / QUEST / FINAL ASSETS: RESERVED",
+        "MOVE / COMBAT / QUEST INTERACTION: LIVE | LATER BEATS / FINAL ASSETS: RESERVED",
         12.0F,
         ax::Color4B(151, 159, 151, 255)
     );
@@ -449,13 +516,23 @@ void F1GrayboxLayer::createHud() {
     combat_resources_label_->setPosition({38.0F, 605.0F});
     addChild(combat_resources_label_, 1001);
 
+    quest_state_label_ = label("", 12.0F, ax::Color4B(151, 213, 198, 255));
+    quest_state_label_->setPosition({38.0F, 582.0F});
+    addChild(quest_state_label_, 1001);
+
     combat_event_label_ = label(
-        "Move uphill to engage the nearest hostile.",
+        "Inspect the travel writ, then move uphill to the ferry gate.",
         12.0F,
         ax::Color4B(174, 217, 203, 255)
     );
-    combat_event_label_->setPosition({38.0F, 580.0F});
+    combat_event_label_->setPosition({38.0F, 560.0F});
     addChild(combat_event_label_, 1001);
+
+    interaction_prompt_label_ = label("", 18.0F, ax::Color4B(244, 218, 157, 255));
+    interaction_prompt_label_->setAnchorPoint({0.5F, 0.5F});
+    interaction_prompt_label_->setPosition({640.0F, 112.0F});
+    interaction_prompt_label_->setVisible(false);
+    addChild(interaction_prompt_label_, 1001);
 
     auto* direction = label(
         "DOUZHANSHEN-FIRST / 2.5D OBLIQUE PANORAMA / SCALE / DEPTH / CONTROLLED CAMERA",
@@ -466,6 +543,7 @@ void F1GrayboxLayer::createHud() {
     direction->setPosition({1252.0F, 20.0F});
     addChild(direction, 1001);
     refreshCombatHud();
+    updateQuestPresentation();
 }
 
 void F1GrayboxLayer::createKeyboardInput() {
@@ -476,6 +554,10 @@ void F1GrayboxLayer::createKeyboardInput() {
             return;
         }
         if (player_defeated_) {
+            return;
+        }
+        if (key == ax::EventKeyboard::KeyCode::KEY_F) {
+            updateInteractKey(true);
             return;
         }
         if (updateCombatKey(key, true)) {
@@ -489,6 +571,10 @@ void F1GrayboxLayer::createKeyboardInput() {
     };
     listener->onKeyReleased = [this](ax::EventKeyboard::KeyCode key, ax::Event*) {
         if (key == ax::EventKeyboard::KeyCode::KEY_R || player_defeated_) {
+            return;
+        }
+        if (key == ax::EventKeyboard::KeyCode::KEY_F) {
+            updateInteractKey(false);
             return;
         }
         if (updateCombatKey(key, false)) {
@@ -526,7 +612,36 @@ void F1GrayboxLayer::simulateTick() noexcept {
     }
     const auto movement_result = session_.advance(1);
     if (movement_result.error != tgd::gameplay::VerticalSliceError::none ||
-        movement_result.executed_ticks != 1 || !submitCombatTick(next_tick)) {
+        movement_result.executed_ticks != 1) {
+        return;
+    }
+    if (commands.interact_pressed) {
+        const auto& snapshot = session_.current_snapshot();
+        const auto interaction = quest_interactions_.resolve(
+            {definition_->player.actor, snapshot.cell_id.key, snapshot.player_pose},
+            session_.quest_runtime()
+        );
+        if (interaction.error != tgd::gameplay::QuestInteractionError::none) {
+            if (combat_event_label_ != nullptr) {
+                combat_event_label_->setString("INTERACTION REJECTED / QUERY CONTRACT DRIFT");
+            }
+            return;
+        }
+        if (!interaction.found) {
+            if (combat_event_label_ != nullptr) {
+                combat_event_label_->setString("NO ACTIVE QUEST INTERACTION IN RANGE");
+            }
+        } else {
+            const auto completed = session_.complete_objective(interaction.objective, *this);
+            if (completed.error != tgd::gameplay::VerticalSliceError::none) {
+                if (combat_event_label_ != nullptr) {
+                    combat_event_label_->setString("OBJECTIVE REJECTED / QUEST STATE DRIFT");
+                }
+                return;
+            }
+        }
+    }
+    if (!submitCombatTick(next_tick)) {
         return;
     }
     if (player_action_ticks_ > 0) {
@@ -618,6 +733,46 @@ void F1GrayboxLayer::updateCombatPresentation() noexcept {
         node->setPosition(project(snapshot->pose));
         node->setLocalZOrder(depthOrder(node->getPositionY()));
         node->setScale(1.0F + static_cast<float>(hostile_flash_ticks_[node_index]) * 0.018F);
+    }
+}
+
+void F1GrayboxLayer::updateQuestPresentation() noexcept {
+    const auto& snapshot = session_.current_snapshot();
+    if (quest_state_label_ != nullptr) {
+        const auto beat_name = snapshot.beat_index == 0
+                                   ? "RAIN FERRY ARRIVAL"
+                                   : snapshot.beat_index == 1 ? "SHEN YAN TRAINING"
+                                                               : "LATER VERTICAL-SLICE BEAT";
+        quest_state_label_->setString(
+            "QUEST " + std::to_string(snapshot.beat_index + 1U) + "/" +
+            std::to_string(snapshot.beat_count) + " | OBJECTIVES " +
+            std::to_string(snapshot.completed_objectives) + "/" +
+            std::to_string(snapshot.required_objectives) + " | " + beat_name
+        );
+    }
+    for (std::size_t index = 0; index < quest_marker_count_; ++index) {
+        if (quest_marker_nodes_[index] != nullptr) {
+            quest_marker_nodes_[index]->setVisible(
+                session_.objective_state(quest_marker_objectives_[index]) ==
+                tgd::gameplay::QuestObjectiveState::active
+            );
+        }
+    }
+    if (interaction_prompt_label_ == nullptr) {
+        return;
+    }
+    const auto interaction = quest_interactions_.resolve(
+        {definition_->player.actor, snapshot.cell_id.key, snapshot.player_pose},
+        session_.quest_runtime()
+    );
+    const bool show = !player_defeated_ &&
+                      interaction.error == tgd::gameplay::QuestInteractionError::none &&
+                      interaction.found;
+    interaction_prompt_label_->setVisible(show);
+    if (show) {
+        interaction_prompt_label_->setString(
+            interactionPrompt(interaction.interaction, interaction.kind)
+        );
     }
 }
 
@@ -730,6 +885,31 @@ void F1GrayboxLayer::publish(
     }
 }
 
+void F1GrayboxLayer::publish(
+    std::span<const tgd::contracts::QuestEvent> events
+) noexcept {
+    for (const auto& event : events) {
+        if (combat_event_label_ == nullptr) {
+            continue;
+        }
+        switch (event.type) {
+            case tgd::contracts::QuestEventType::objective_completed:
+                combat_event_label_->setString("OBJECTIVE COMPLETE / QUEST STATE COMMITTED");
+                break;
+            case tgd::contracts::QuestEventType::stage_advanced:
+                combat_event_label_->setString("BEAT ADVANCED / SHEN YAN TRAINING UNLOCKED");
+                break;
+            case tgd::contracts::QuestEventType::quest_resolved:
+                combat_event_label_->setString("VERTICAL SLICE RESOLVED");
+                break;
+            case tgd::contracts::QuestEventType::objective_already_completed:
+                combat_event_label_->setString("OBJECTIVE ALREADY COMPLETE");
+                break;
+        }
+    }
+    updateQuestPresentation();
+}
+
 std::int32_t F1GrayboxLayer::qaPlayerHealth() const noexcept {
     const auto actors = combat_.actors();
     const auto player = std::find_if(
@@ -767,6 +947,18 @@ std::uint32_t F1GrayboxLayer::qaActiveHostiles() const noexcept {
 
 std::uint32_t F1GrayboxLayer::qaRetryCount() const noexcept {
     return retry_count_;
+}
+
+std::uint32_t F1GrayboxLayer::qaQuestBeatIndex() const noexcept {
+    return session_.current_snapshot().beat_index;
+}
+
+std::uint32_t F1GrayboxLayer::qaQuestCompletedObjectives() const noexcept {
+    return session_.current_snapshot().completed_objectives;
+}
+
+std::uint32_t F1GrayboxLayer::qaQuestRequiredObjectives() const noexcept {
+    return session_.current_snapshot().required_objectives;
 }
 
 bool F1GrayboxLayer::submitCombatTick(tgd::contracts::TickIndex tick) noexcept {
@@ -987,6 +1179,22 @@ void F1GrayboxLayer::updateJumpKey(bool pressed) noexcept {
     const tgd::contracts::ScalarActionSample sample{
         ++platform_sequence_,
         tgd::contracts::action_id("jump"),
+        pressed ? tgd::contracts::ground_axis_one : 0,
+        pressed ? tgd::contracts::ActionSampleEdge::pressed
+                : tgd::contracts::ActionSampleEdge::released,
+        false,
+    };
+    static_cast<void>(input_.submit(std::span{&sample, 1}));
+}
+
+void F1GrayboxLayer::updateInteractKey(bool pressed) noexcept {
+    if (interact_pressed_ == pressed) {
+        return;
+    }
+    interact_pressed_ = pressed;
+    const tgd::contracts::ScalarActionSample sample{
+        ++platform_sequence_,
+        tgd::contracts::action_id("interact"),
         pressed ? tgd::contracts::ground_axis_one : 0,
         pressed ? tgd::contracts::ActionSampleEdge::pressed
                 : tgd::contracts::ActionSampleEdge::released,

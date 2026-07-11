@@ -303,6 +303,18 @@ std::uint32_t AppDelegate::webF1QaRetryCount() const noexcept {
     return grayboxLayer_ == nullptr ? 0U : grayboxLayer_->qaRetryCount();
 }
 
+std::uint32_t AppDelegate::webF1QaQuestBeatIndex() const noexcept {
+    return grayboxLayer_ == nullptr ? 0U : grayboxLayer_->qaQuestBeatIndex();
+}
+
+std::uint32_t AppDelegate::webF1QaQuestCompletedObjectives() const noexcept {
+    return grayboxLayer_ == nullptr ? 0U : grayboxLayer_->qaQuestCompletedObjectives();
+}
+
+std::uint32_t AppDelegate::webF1QaQuestRequiredObjectives() const noexcept {
+    return grayboxLayer_ == nullptr ? 0U : grayboxLayer_->qaQuestRequiredObjectives();
+}
+
 std::int32_t AppDelegate::webBoot(std::span<const std::uint8_t> message) noexcept {
     using tgd::platform::web::WebAbiError;
 
@@ -626,6 +638,27 @@ EMSCRIPTEN_KEEPALIVE std::uint32_t tgd_web_f1_qa_active_hostiles() {
 EMSCRIPTEN_KEEPALIVE std::uint32_t tgd_web_f1_qa_retry_count() {
     if (const auto* app = AppDelegate::active(); app != nullptr) {
         return app->webF1QaRetryCount();
+    }
+    return 0;
+}
+
+EMSCRIPTEN_KEEPALIVE std::uint32_t tgd_web_f1_qa_quest_beat_index() {
+    if (const auto* app = AppDelegate::active(); app != nullptr) {
+        return app->webF1QaQuestBeatIndex();
+    }
+    return 0;
+}
+
+EMSCRIPTEN_KEEPALIVE std::uint32_t tgd_web_f1_qa_quest_completed_objectives() {
+    if (const auto* app = AppDelegate::active(); app != nullptr) {
+        return app->webF1QaQuestCompletedObjectives();
+    }
+    return 0;
+}
+
+EMSCRIPTEN_KEEPALIVE std::uint32_t tgd_web_f1_qa_quest_required_objectives() {
+    if (const auto* app = AppDelegate::active(); app != nullptr) {
+        return app->webF1QaQuestRequiredObjectives();
     }
     return 0;
 }

@@ -63,6 +63,7 @@ class F1GrayboxLayer final :
     ) noexcept;
     void updateJumpKey(bool pressed) noexcept;
     void updateInteractKey(bool pressed) noexcept;
+    void submitQuestCombatSignal(const tgd::contracts::CombatEvent& event) noexcept;
     void submitAxisState() noexcept;
     void clearHeldInput(
         tgd::contracts::InputClearReason reason,
@@ -89,6 +90,7 @@ class F1GrayboxLayer final :
     tgd::gameplay::DeterministicCombatResolver combat_{};
     tgd::gameplay::DeterministicEncounterDirector encounter_{};
     tgd::gameplay::DeterministicQuestInteractionResolver quest_interactions_{};
+    tgd::gameplay::DeterministicQuestCombatTriggerResolver quest_combat_triggers_{};
     tgd::gameplay::SessionInputState input_{};
     tgd::contracts::PlatformSequence platform_sequence_{};
     tgd::contracts::CommandSequence command_sequence_{1};

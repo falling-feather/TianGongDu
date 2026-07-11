@@ -21,6 +21,15 @@ constexpr float design_height = 720.0F;
 constexpr float fixed_tick_seconds = 1.0F / 60.0F;
 constexpr std::uint32_t max_catch_up_ticks = 4;
 constexpr std::uint8_t combat_feedback_ticks = 12;
+inline constexpr std::array<std::string_view, 7> quest_beat_labels{
+    "RAIN FERRY ARRIVAL",
+    "SHEN YAN TRAINING",
+    "UMBRELLA LANE ENCOUNTER",
+    "WORKBENCH INVESTIGATION",
+    "CANOPY RETURN ENCOUNTER",
+    "FOUR SEASONS WRAITH",
+    "RESOLUTION AND RETURN",
+};
 
 [[nodiscard]] ax::Color4F color(
     std::uint8_t red,
@@ -215,6 +224,9 @@ void solidPolygon(
     if (interaction == tgd::contracts::stable_content_key("f1_interaction_ferry_gate")) {
         return "F / OPEN FERRY GATE";
     }
+    if (interaction == tgd::contracts::stable_content_key("f1_interaction_meet_shen_yan")) {
+        return "F / TALK TO SHEN YAN";
+    }
     switch (kind) {
         case tgd::contracts::QuestInteractionKind::inspect:
             return "F / INSPECT";
@@ -263,6 +275,8 @@ bool F1GrayboxLayer::init() {
         session_.start() != tgd::gameplay::VerticalSliceError::none ||
         quest_interactions_.initialize(definition_->quest_interactions) !=
             tgd::gameplay::QuestInteractionError::none ||
+        quest_combat_triggers_.initialize(definition_->quest_combat_triggers) !=
+            tgd::gameplay::QuestCombatTriggerError::none ||
         combat_.initialize(combat_definition_->actors, combat_definition_->abilities) !=
             tgd::gameplay::CombatError::none ||
         combat_.start() != tgd::gameplay::CombatError::none ||
@@ -739,15 +753,14 @@ void F1GrayboxLayer::updateCombatPresentation() noexcept {
 void F1GrayboxLayer::updateQuestPresentation() noexcept {
     const auto& snapshot = session_.current_snapshot();
     if (quest_state_label_ != nullptr) {
-        const auto beat_name = snapshot.beat_index == 0
-                                   ? "RAIN FERRY ARRIVAL"
-                                   : snapshot.beat_index == 1 ? "SHEN YAN TRAINING"
-                                                               : "LATER VERTICAL-SLICE BEAT";
+        const auto beat_name = snapshot.beat_index < quest_beat_labels.size()
+                                   ? quest_beat_labels[snapshot.beat_index]
+                                   : std::string_view{"UNKNOWN BEAT"};
         quest_state_label_->setString(
             "QUEST " + std::to_string(snapshot.beat_index + 1U) + "/" +
             std::to_string(snapshot.beat_count) + " | OBJECTIVES " +
             std::to_string(snapshot.completed_objectives) + "/" +
-            std::to_string(snapshot.required_objectives) + " | " + beat_name
+            std::to_string(snapshot.required_objectives) + " | " + std::string{beat_name}
         );
     }
     for (std::size_t index = 0; index < quest_marker_count_; ++index) {
@@ -780,6 +793,7 @@ void F1GrayboxLayer::publish(
     std::span<const tgd::contracts::CombatEvent> events
 ) noexcept {
     for (const auto& event : events) {
+        submitQuestCombatSignal(event);
         if (event.type == tgd::contracts::CombatEventType::ability_started &&
             event.source == definition_->player.actor) {
             player_action_ticks_ = combat_feedback_ticks;
@@ -908,6 +922,47 @@ void F1GrayboxLayer::publish(
         }
     }
     updateQuestPresentation();
+}
+
+void F1GrayboxLayer::submitQuestCombatSignal(
+    const tgd::contracts::CombatEvent& event
+) noexcept {
+    if (event.target != definition_->player.actor ||
+        (event.type != tgd::contracts::CombatEventType::hit_guarded &&
+         event.type != tgd::contracts::CombatEventType::hit_evaded)) {
+        return;
+    }
+    const auto actors = combat_.actors();
+    const auto player = std::find_if(
+        actors.begin(),
+        actors.end(),
+        [this](const tgd::contracts::CombatActorSnapshot& actor) {
+            return actor.actor == definition_->player.actor;
+        }
+    );
+    if (player == actors.end()) {
+        return;
+    }
+    const auto kind = event.type == tgd::contracts::CombatEventType::hit_guarded
+                          ? tgd::contracts::QuestCombatTriggerKind::player_hit_guarded
+                          : tgd::contracts::QuestCombatTriggerKind::player_hit_evaded;
+    const auto resolved = quest_combat_triggers_.resolve(
+        {player->actor, kind, player->stance},
+        session_.quest_runtime()
+    );
+    if (resolved.error != tgd::gameplay::QuestCombatTriggerError::none) {
+        if (combat_event_label_ != nullptr) {
+            combat_event_label_->setString("COMBAT QUEST SIGNAL REJECTED / CONTRACT DRIFT");
+        }
+        return;
+    }
+    if (resolved.found) {
+        const auto completed = session_.complete_objective(resolved.objective, *this);
+        if (completed.error != tgd::gameplay::VerticalSliceError::none &&
+            combat_event_label_ != nullptr) {
+            combat_event_label_->setString("TRAINING OBJECTIVE REJECTED / QUEST STATE DRIFT");
+        }
+    }
 }
 
 std::int32_t F1GrayboxLayer::qaPlayerHealth() const noexcept {

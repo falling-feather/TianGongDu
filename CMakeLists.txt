@@ -87,7 +87,16 @@ target_link_libraries(tgd_runtime PUBLIC tgd_contracts)
 tgd_register_layer(tgd_runtime ALLOW tgd_contracts)
 
 tgd_add_static_layer(tgd_gameplay)
-target_sources(tgd_gameplay PRIVATE src/gameplay/src/layer_probe.cpp)
+target_sources(
+  tgd_gameplay
+  PRIVATE
+    src/gameplay/src/layer_probe.cpp
+    src/gameplay/src/session_input_state.cpp
+)
+target_include_directories(
+  tgd_gameplay
+  PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/gameplay/include>"
+)
 target_link_libraries(tgd_gameplay PUBLIC tgd_runtime tgd_contracts)
 tgd_register_layer(tgd_gameplay ALLOW tgd_runtime tgd_contracts)
 

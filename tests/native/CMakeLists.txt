@@ -30,6 +30,22 @@ add_test(
   COMMAND tgd_native_game_session_determinism
 )
 
+add_executable(tgd_native_session_input_state session_input_state.cpp)
+target_compile_features(tgd_native_session_input_state PRIVATE cxx_std_20)
+tgd_enable_strict_warnings(tgd_native_session_input_state)
+target_link_libraries(
+  tgd_native_session_input_state
+  PRIVATE
+    tgd_contracts
+    tgd_runtime
+    tgd_gameplay
+)
+
+add_test(
+  NAME tgd.native.session-input-state
+  COMMAND tgd_native_session_input_state
+)
+
 add_test(
   NAME tgd.architecture.reject-reverse-link
   COMMAND

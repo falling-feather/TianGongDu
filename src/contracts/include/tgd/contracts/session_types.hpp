@@ -21,6 +21,17 @@ struct GroundVectorQ15 final {
     ) noexcept = default;
 };
 
+struct CameraBasisQ15 final {
+    GroundVectorQ15 screen_right_world{ground_axis_one, 0};
+    GroundVectorQ15 screen_forward_world{0, ground_axis_one};
+    std::uint32_t revision{1};
+
+    [[nodiscard]] friend constexpr bool operator==(
+        const CameraBasisQ15&,
+        const CameraBasisQ15&
+    ) noexcept = default;
+};
+
 struct GroundPoseMm final {
     std::int32_t x{};
     std::int32_t y{};

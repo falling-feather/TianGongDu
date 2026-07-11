@@ -874,6 +874,16 @@ async function runBrowser(target, origin) {
       combatReadyPath,
       `${target} combat ready`
     );
+    await page.keyboard.down("Shift");
+    await page.waitForTimeout(80);
+    await captureRenderedFrame(
+      page,
+      canvas,
+      combatGuardPath,
+      `${target} guard held`
+    );
+    await page.keyboard.up("Shift");
+    await page.waitForTimeout(120);
     await page.keyboard.press("k");
     await page.waitForTimeout(50);
     const combatActionFrame = await captureRenderedFrame(
@@ -924,17 +934,11 @@ async function runBrowser(target, origin) {
     );
     await page.waitForTimeout(850);
     await page.keyboard.press("c");
-    await page.waitForTimeout(650);
-    await page.keyboard.down("Shift");
-    await page.waitForTimeout(80);
-    await captureRenderedFrame(
-      page,
-      canvas,
-      combatGuardPath,
-      `${target} guard held`
-    );
-    await page.keyboard.up("Shift");
     await page.waitForTimeout(120);
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 45_000 });
+    await waitForText(page, status, "宿主已就绪", 45_000);
+    await canvas.click({ position: { x: 380, y: 360 } });
+    await page.waitForTimeout(150);
 
     const beforePath = resolve(reportDirectory, `${target}-before.png`);
     const afterPath = resolve(reportDirectory, `${target}-after-context-restore.png`);

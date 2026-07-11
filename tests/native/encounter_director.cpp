@@ -107,7 +107,7 @@ bool expect(bool condition, std::string_view message) {
 }
 
 [[nodiscard]] tgd::contracts::EncounterDirectorDefinition director_definition() {
-    return {1, 5'000, 7'000, 1'800, 1, 3, 1};
+    return {1, 5'000, 7'000, 1'800, 900, 1, 3, 1};
 }
 
 struct SimulationResult final {

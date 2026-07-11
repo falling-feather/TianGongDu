@@ -114,6 +114,8 @@ EncounterDirectorError DeterministicEncounterDirector::initialize(
         definition.leash_range_mm < definition.aggro_range_mm ||
         definition.chase_speed_mm_per_second <= 0 ||
         definition.chase_speed_mm_per_second % 60 != 0 ||
+        definition.formation_radius_mm <= 0 ||
+        definition.formation_radius_mm >= definition.aggro_range_mm ||
         definition.decision_interval_ticks == 0 ||
         definition.max_simultaneous_attackers == 0 ||
         definition.max_simultaneous_attackers > hostile_capacity || actors.empty() ||
@@ -253,7 +255,11 @@ EncounterPlanResult DeterministicEncounterDirector::plan_tick(
             result.error = EncounterDirectorError::missing_ability;
             return result;
         }
-        const bool attack_range = engaged &&
+        const auto approach = formation_target(player->pose, index);
+        const auto approach_distance = distance_squared(hostile->pose, approach);
+        const auto chase_step = definition_.chase_speed_mm_per_second / 60;
+        const bool at_approach = approach_distance <= range_squared(chase_step);
+        const bool attack_range = engaged && at_approach &&
                                   height_matches(hostile->pose, player->pose, light->height_tolerance_mm) &&
                                   player_distance <= range_squared(light->range_mm);
         if (attack_range) {
@@ -264,7 +270,7 @@ EncounterPlanResult DeterministicEncounterDirector::plan_tick(
             continue;
         }
 
-        const auto& target = engaged ? player->pose : hostiles_[index].home_pose;
+        const auto& target = engaged ? approach : hostiles_[index].home_pose;
         const auto next_pose = move_toward(hostile->pose, target);
         if (next_pose != hostile->pose) {
             if (result.batch.pose_update_count >= EncounterPlanBatch::capacity) {
@@ -395,6 +401,37 @@ contracts::GroundPoseMm DeterministicEncounterDirector::move_toward(
     };
 }
 
+contracts::GroundPoseMm DeterministicEncounterDirector::formation_target(
+    const contracts::GroundPoseMm& player,
+    std::size_t hostile_index
+) const noexcept {
+    constexpr std::array<contracts::GroundVectorQ15, 8> directions{{
+        {contracts::ground_axis_one, 0},
+        {23'170, 23'170},
+        {0, contracts::ground_axis_one},
+        {-23'170, 23'170},
+        {-contracts::ground_axis_one, 0},
+        {-23'170, -23'170},
+        {0, -contracts::ground_axis_one},
+        {23'170, -23'170},
+    }};
+    const auto& direction = directions[hostile_index % directions.size()];
+    const auto ring = static_cast<std::int64_t>(hostile_index / directions.size() + 1U);
+    const auto radius = static_cast<std::int64_t>(definition_.formation_radius_mm) * ring;
+    return {
+        saturating_add(
+            player.x,
+            radius * direction.x / contracts::ground_axis_one
+        ),
+        saturating_add(
+            player.y,
+            radius * direction.y / contracts::ground_axis_one
+        ),
+        player.height,
+        player.floor_layer,
+    };
+}
+
 void DeterministicEncounterDirector::update_checksum() noexcept {
     auto hash = fnv_offset;
     hash_integer(hash, current_tick_);
@@ -402,6 +439,7 @@ void DeterministicEncounterDirector::update_checksum() noexcept {
     hash_integer(hash, definition_.aggro_range_mm);
     hash_integer(hash, definition_.leash_range_mm);
     hash_integer(hash, definition_.chase_speed_mm_per_second);
+    hash_integer(hash, definition_.formation_radius_mm);
     hash_integer(hash, definition_.decision_interval_ticks);
     hash_integer(hash, definition_.post_attack_cooldown_ticks);
     hash_integer(hash, definition_.max_simultaneous_attackers);

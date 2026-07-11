@@ -29,8 +29,10 @@ test("F1 one-hour contract and generated C++ stay synchronized", async () => {
   assert.equal(contract.beats.length, 7);
   assert.equal(contract.combatBootstrap.actors.length, 4);
   assert.equal(contract.combatBootstrap.abilities.length, 9);
-  assert.equal(contract.ports.filter((port) => port.status === "reserved").length, 6);
-  assert.equal(contract.ports.filter((port) => port.status === "bootstrap_implemented").length, 3);
+  assert.equal(contract.combatBootstrap.director.maxSimultaneousAttackers, 1);
+  assert.equal(contract.combatBootstrap.director.formationRadiusMm, 1500);
+  assert.equal(contract.ports.filter((port) => port.status === "reserved").length, 5);
+  assert.equal(contract.ports.filter((port) => port.status === "bootstrap_implemented").length, 4);
 });
 
 test("F1 stable content IDs have unique 64-bit keys", async () => {
@@ -63,4 +65,8 @@ test("F1 combat contract requires stance abilities and stance-neutral evade", as
   const stanceBoundEvade = structuredClone(await loadF1SliceContract());
   stanceBoundEvade.combatBootstrap.abilities.at(-1).requiredStanceId = "stance_eavesguard";
   assert.throws(() => validateF1SliceContract(stanceBoundEvade, catalog), /stance-neutral/);
+
+  const fractionalChase = structuredClone(await loadF1SliceContract());
+  fractionalChase.combatBootstrap.director.chaseSpeedMmPerSecond = 1801;
+  assert.throws(() => validateF1SliceContract(fractionalChase, catalog), /director definition/);
 });

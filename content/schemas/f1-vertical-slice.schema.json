@@ -258,9 +258,10 @@
     "combatBootstrap": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "actors", "abilities"],
+      "required": ["id", "director", "actors", "abilities"],
       "properties": {
         "id": { "const": "f1_encounter_umbrella_lane_bootstrap" },
+        "director": { "$ref": "#/$defs/encounterDirector" },
         "actors": {
           "type": "array",
           "minItems": 2,
@@ -273,6 +274,30 @@
           "maxItems": 32,
           "items": { "$ref": "#/$defs/combatAbility" }
         }
+      }
+    },
+    "encounterDirector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "playerActorKey",
+        "aggroRangeMm",
+        "leashRangeMm",
+        "chaseSpeedMmPerSecond",
+        "formationRadiusMm",
+        "decisionIntervalTicks",
+        "postAttackCooldownTicks",
+        "maxSimultaneousAttackers"
+      ],
+      "properties": {
+        "playerActorKey": { "type": "integer", "minimum": 1 },
+        "aggroRangeMm": { "type": "integer", "minimum": 1, "maximum": 100000 },
+        "leashRangeMm": { "type": "integer", "minimum": 1, "maximum": 100000 },
+        "chaseSpeedMmPerSecond": { "type": "integer", "minimum": 60, "maximum": 100000 },
+        "formationRadiusMm": { "type": "integer", "minimum": 1, "maximum": 100000 },
+        "decisionIntervalTicks": { "type": "integer", "minimum": 1, "maximum": 600 },
+        "postAttackCooldownTicks": { "type": "integer", "minimum": 0, "maximum": 3600 },
+        "maxSimultaneousAttackers": { "type": "integer", "minimum": 1, "maximum": 15 }
       }
     },
     "beat": {

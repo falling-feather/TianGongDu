@@ -105,6 +105,7 @@ inline constexpr contracts::CombatEncounterDefinition f1_combat_encounter_defini
     contracts::content_id("f1_encounter_umbrella_lane_bootstrap"),
     std::span<const contracts::CombatActorConfig>{f1_combat_actors},
     std::span<const contracts::AbilityDefinition>{f1_combat_abilities},
+    {1ULL, 5500, 9000, 1800, 1500, 6, 30, 1U},
 };
 
 inline constexpr contracts::VerticalSliceDefinition f1_vertical_slice_definition{

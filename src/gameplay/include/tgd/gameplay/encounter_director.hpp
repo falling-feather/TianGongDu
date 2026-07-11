@@ -64,7 +64,7 @@ class IEncounterDirector {
 
 class DeterministicEncounterDirector final : public IEncounterDirector {
   public:
-    static constexpr std::size_t hostile_capacity = EncounterPlanBatch::capacity;
+    static constexpr std::size_t hostile_capacity = EncounterPlanBatch::capacity - 1;
     static constexpr std::size_t ability_capacity = 32;
 
     [[nodiscard]] EncounterDirectorError initialize(
@@ -104,6 +104,10 @@ class DeterministicEncounterDirector final : public IEncounterDirector {
     [[nodiscard]] contracts::GroundPoseMm move_toward(
         const contracts::GroundPoseMm& source,
         const contracts::GroundPoseMm& target
+    ) const noexcept;
+    [[nodiscard]] contracts::GroundPoseMm formation_target(
+        const contracts::GroundPoseMm& player,
+        std::size_t hostile_index
     ) const noexcept;
     void update_checksum() noexcept;
 

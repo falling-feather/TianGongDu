@@ -80,6 +80,13 @@ int main() {
             combat->actors.size() == 4 && combat->abilities.size() == 9,
             "the first player and enemy combat set is explicit"
         );
+        ok &= expect(
+            combat->director.player_actor == definition->player.actor &&
+                combat->director.max_simultaneous_attackers == 1 &&
+                combat->director.formation_radius_mm > 0 &&
+                combat->director.chase_speed_mm_per_second % 60 == 0,
+            "the encounter director has deterministic player and attack-token rules"
+        );
         bool found_player = false;
         std::unordered_set<tgd::contracts::StableContentKey> ability_ids;
         for (const auto& actor : combat->actors) {

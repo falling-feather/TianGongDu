@@ -215,7 +215,12 @@ bool F1GrayboxLayer::init() {
         session_.start() != tgd::gameplay::VerticalSliceError::none ||
         combat_.initialize(combat_definition_->actors, combat_definition_->abilities) !=
             tgd::gameplay::CombatError::none ||
-        combat_.start() != tgd::gameplay::CombatError::none) {
+        combat_.start() != tgd::gameplay::CombatError::none ||
+        encounter_.initialize(
+            combat_definition_->director,
+            combat_definition_->actors,
+            combat_definition_->abilities
+        ) != tgd::gameplay::EncounterDirectorError::none) {
         return false;
     }
 
@@ -519,6 +524,9 @@ void F1GrayboxLayer::simulateTick() noexcept {
     if (player_action_ticks_ > 0) {
         --player_action_ticks_;
     }
+    if (player_hit_ticks_ > 0) {
+        --player_hit_ticks_;
+    }
     if (attack_fx_ticks_ > 0) {
         --attack_fx_ticks_;
     }
@@ -547,7 +555,10 @@ void F1GrayboxLayer::updateCombatPresentation() noexcept {
     if (player_node_ == nullptr) {
         return;
     }
-    player_node_->setScale(1.0F + static_cast<float>(player_action_ticks_) * 0.008F);
+    player_node_->setScale(
+        1.0F + static_cast<float>(player_action_ticks_) * 0.008F +
+        static_cast<float>(player_hit_ticks_) * 0.012F
+    );
     const auto player_position = project(session_.current_snapshot().player_pose);
     if (combat_fx_ != nullptr) {
         combat_fx_->clear();
@@ -609,6 +620,15 @@ void F1GrayboxLayer::publish(
                         : "ABILITY COMMITTED / WAIT FOR HIT WINDOW"
                 );
             }
+        } else if (event.type == tgd::contracts::CombatEventType::ability_started) {
+            for (std::size_t index = 0; index < hostile_capacity; ++index) {
+                if (hostile_actor_keys_[index] == event.source) {
+                    hostile_flash_ticks_[index] = combat_feedback_ticks;
+                }
+            }
+            if (combat_event_label_ != nullptr) {
+                combat_event_label_->setString("HOSTILE ATTACK TELEGRAPH / GUARD OR EVADE");
+            }
         }
         if (event.type == tgd::contracts::CombatEventType::hit_landed ||
             event.type == tgd::contracts::CombatEventType::hit_guarded ||
@@ -618,6 +638,12 @@ void F1GrayboxLayer::publish(
                     hostile_flash_ticks_[index] = combat_feedback_ticks;
                 }
             }
+        }
+        if ((event.type == tgd::contracts::CombatEventType::hit_landed ||
+             event.type == tgd::contracts::CombatEventType::hit_guarded ||
+             event.type == tgd::contracts::CombatEventType::poise_broken) &&
+            event.target == definition_->player.actor) {
+            player_hit_ticks_ = combat_feedback_ticks;
         }
         if (combat_event_label_ == nullptr) {
             continue;
@@ -637,10 +663,18 @@ void F1GrayboxLayer::publish(
                 combat_event_label_->setString("MISS / MOVE INTO RANGE AND MATCH HEIGHT");
                 break;
             case tgd::contracts::CombatEventType::hit_landed:
-                combat_event_label_->setString("HIT CONFIRMED / HEALTH AND POISE RESOLVED");
+                combat_event_label_->setString(
+                    event.target == definition_->player.actor
+                        ? "PLAYER HIT / HEALTH AND POISE RESOLVED"
+                        : "HIT CONFIRMED / HEALTH AND POISE RESOLVED"
+                );
                 break;
             case tgd::contracts::CombatEventType::hit_guarded:
-                combat_event_label_->setString("GUARDED HIT / POISE ABSORBED THE IMPACT");
+                combat_event_label_->setString(
+                    event.target == definition_->player.actor
+                        ? "GUARD ABSORBED THE HOSTILE IMPACT"
+                        : "GUARDED HIT / POISE ABSORBED THE IMPACT"
+                );
                 break;
             case tgd::contracts::CombatEventType::hit_evaded:
                 combat_event_label_->setString("EVADED / ACTIVE WINDOW WON");
@@ -649,10 +683,16 @@ void F1GrayboxLayer::publish(
                 combat_event_label_->setString("POISE BROKEN");
                 break;
             case tgd::contracts::CombatEventType::actor_defeated:
-                combat_event_label_->setString("HOSTILE DEFEATED");
+                combat_event_label_->setString(
+                    event.target == definition_->player.actor
+                        ? "PLAYER DEFEATED / RETRY FLOW RESERVED"
+                        : "HOSTILE DEFEATED"
+                );
                 break;
             case tgd::contracts::CombatEventType::command_ignored:
-                combat_event_label_->setString("ACTION UNAVAILABLE / RECOVERY OR RESOURCE LOCK");
+                if (event.source == definition_->player.actor) {
+                    combat_event_label_->setString("ACTION UNAVAILABLE / RECOVERY OR RESOURCE LOCK");
+                }
                 break;
             default:
                 break;
@@ -665,6 +705,15 @@ bool F1GrayboxLayer::submitCombatTick(tgd::contracts::TickIndex tick) noexcept {
         combat_.current_tick() + 1 != tick) {
         return false;
     }
+    const auto encounter_plan = encounter_.plan_tick(
+        tick,
+        combat_.actors(),
+        encounter_command_sequence_
+    );
+    if (encounter_plan.error != tgd::gameplay::EncounterDirectorError::none) {
+        return false;
+    }
+    encounter_command_sequence_ += encounter_plan.batch.command_count;
     const tgd::contracts::CombatPoseUpdate pose_update{
         tick,
         definition_->player.actor,
@@ -674,8 +723,16 @@ bool F1GrayboxLayer::submitCombatTick(tgd::contracts::TickIndex tick) noexcept {
         tgd::gameplay::CombatError::none) {
         return false;
     }
+    if (!encounter_plan.batch.poses().empty() &&
+        combat_.synchronize_poses(encounter_plan.batch.poses()) !=
+            tgd::gameplay::CombatError::none) {
+        return false;
+    }
 
-    std::array<tgd::contracts::CombatCommand, combat_intent_capacity> commands{};
+    std::array<
+        tgd::contracts::CombatCommand,
+        combat_intent_capacity + tgd::gameplay::EncounterPlanBatch::capacity>
+        commands{};
     std::size_t command_count = 0;
     for (std::size_t index = 0; index < combat_intent_count_; ++index) {
         const auto& intent = combat_intents_[index];
@@ -698,6 +755,9 @@ bool F1GrayboxLayer::submitCombatTick(tgd::contracts::TickIndex tick) noexcept {
             target,
             intent.stance,
         };
+    }
+    for (const auto& command : encounter_plan.batch.command_view()) {
+        commands[command_count++] = command;
     }
     if (command_count != 0 &&
         combat_.submit(std::span{commands}.first(command_count)) !=

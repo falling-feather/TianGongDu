@@ -52,6 +52,16 @@
   },
   "combatBootstrap": {
     "id": "f1_encounter_umbrella_lane_bootstrap",
+    "director": {
+      "playerActorKey": 1,
+      "aggroRangeMm": 5500,
+      "leashRangeMm": 9000,
+      "chaseSpeedMmPerSecond": 1800,
+      "formationRadiusMm": 1500,
+      "decisionIntervalTicks": 6,
+      "postAttackCooldownTicks": 30,
+      "maxSimultaneousAttackers": 1
+    },
     "actors": [
       {
         "actorKey": 1,
@@ -372,7 +382,11 @@
       "owner": "gameplay",
       "status": "bootstrap_implemented"
     },
-    { "name": "IEncounterDirector", "owner": "gameplay", "status": "reserved" },
+    {
+      "name": "IEncounterDirector",
+      "owner": "gameplay",
+      "status": "bootstrap_implemented"
+    },
     { "name": "IQuestRuntime", "owner": "gameplay", "status": "reserved" },
     { "name": "ISnapshotContributor", "owner": "runtime", "status": "reserved" },
     {

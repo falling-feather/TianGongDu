@@ -5,6 +5,7 @@
 #include <tgd/content/content_definition_provider.hpp>
 #include <tgd/contracts/input_action.hpp>
 #include <tgd/gameplay/combat_resolver.hpp>
+#include <tgd/gameplay/encounter_director.hpp>
 #include <tgd/gameplay/session_input_state.hpp>
 #include <tgd/gameplay/vertical_slice_session.hpp>
 
@@ -67,10 +68,12 @@ class F1GrayboxLayer final : public ax::Layer, public tgd::gameplay::ICombatEven
     const tgd::contracts::CombatEncounterDefinition* combat_definition_{};
     tgd::gameplay::VerticalSliceSession session_{};
     tgd::gameplay::DeterministicCombatResolver combat_{};
+    tgd::gameplay::DeterministicEncounterDirector encounter_{};
     tgd::gameplay::SessionInputState input_{};
     tgd::contracts::PlatformSequence platform_sequence_{};
     tgd::contracts::CommandSequence command_sequence_{1};
     tgd::contracts::CommandSequence combat_command_sequence_{1};
+    tgd::contracts::CommandSequence encounter_command_sequence_{1};
     std::array<bool, 8> directional_keys_{};
     std::array<bool, 7> combat_keys_{};
     std::array<PendingCombatIntent, combat_intent_capacity> combat_intents_{};
@@ -90,6 +93,7 @@ class F1GrayboxLayer final : public ax::Layer, public tgd::gameplay::ICombatEven
     ax::Label* combat_event_label_{};
     std::array<std::uint8_t, hostile_capacity> hostile_flash_ticks_{};
     std::uint8_t player_action_ticks_{};
+    std::uint8_t player_hit_ticks_{};
     std::uint8_t attack_fx_ticks_{};
 };
 

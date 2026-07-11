@@ -149,7 +149,8 @@ export function validateF1SliceContract(contract, catalog) {
   const implementedPorts = new Set([
     "IContentDefinitionProvider",
     "ICombatResolver",
-    "ICombatEventSink"
+    "ICombatEventSink",
+    "IEncounterDirector"
   ]);
   for (const port of contract.ports) {
     const expected = implementedPorts.has(port.name) ? "bootstrap_implemented" : "reserved";
@@ -198,6 +199,29 @@ export function validateF1SliceContract(contract, catalog) {
   if (!Array.isArray(combat.abilities) || combat.abilities.length === 0 || combat.abilities.length > 32) {
     fail("combat bootstrap requires 1..32 abilities");
   }
+  const director = combat.director;
+  if (
+    director?.playerActorKey !== seed.actorKey ||
+    !Number.isInteger(director.aggroRangeMm) ||
+    director.aggroRangeMm <= 0 ||
+    !Number.isInteger(director.leashRangeMm) ||
+    director.leashRangeMm < director.aggroRangeMm ||
+    !Number.isInteger(director.chaseSpeedMmPerSecond) ||
+    director.chaseSpeedMmPerSecond <= 0 ||
+    director.chaseSpeedMmPerSecond % 60 !== 0 ||
+    !Number.isInteger(director.formationRadiusMm) ||
+    director.formationRadiusMm <= 0 ||
+    director.formationRadiusMm >= director.aggroRangeMm ||
+    !Number.isInteger(director.decisionIntervalTicks) ||
+    director.decisionIntervalTicks <= 0 ||
+    !Number.isInteger(director.postAttackCooldownTicks) ||
+    director.postAttackCooldownTicks < 0 ||
+    !Number.isInteger(director.maxSimultaneousAttackers) ||
+    director.maxSimultaneousAttackers <= 0 ||
+    director.maxSimultaneousAttackers > 15
+  ) {
+    fail("combat encounter director definition is invalid");
+  }
   assertUnique(combat.actors.map((actor) => actor.actorKey), "combat actor key");
   const stanceIds = new Set();
   const resourcePairs = [
@@ -244,6 +268,10 @@ export function validateF1SliceContract(contract, catalog) {
     !sameValues(playerCombatSeed.poseMm, seed.initialPoseMm)
   ) {
     fail("combat player seed must match the movement player seed");
+  }
+  const hostileCount = combat.actors.filter((actor) => actor.faction === "hostile").length;
+  if (director.maxSimultaneousAttackers > hostileCount) {
+    fail("combat attack token count exceeds hostile actors");
   }
 
   assertUnique(combat.abilities.map((ability) => ability.id), "combat ability id");
@@ -352,6 +380,7 @@ export function renderF1SliceContract(contract) {
   const refs = contract.catalogReferences;
   const seed = contract.playerSeed;
   const combat = contract.combatBootstrap;
+  const director = combat.director;
   const objectiveArrays = contract.beats
     .map(
       (beat, index) => `inline constexpr std::array<contracts::ContentId, ${beat.objectiveIds.length}> beat_${index}_objectives{{
@@ -415,6 +444,7 @@ inline constexpr contracts::CombatEncounterDefinition f1_combat_encounter_defini
     ${contentId(combat.id)},
     std::span<const contracts::CombatActorConfig>{f1_combat_actors},
     std::span<const contracts::AbilityDefinition>{f1_combat_abilities},
+    {${director.playerActorKey}ULL, ${director.aggroRangeMm}, ${director.leashRangeMm}, ${director.chaseSpeedMmPerSecond}, ${director.formationRadiusMm}, ${director.decisionIntervalTicks}, ${director.postAttackCooldownTicks}, ${director.maxSimultaneousAttackers}U},
 };
 
 inline constexpr contracts::VerticalSliceDefinition f1_vertical_slice_definition{

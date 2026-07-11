@@ -11,6 +11,8 @@
 #include <span>
 #include <string_view>
 
+class F1GrayboxLayer;
+
 class AppDelegate final : private ax::Application {
   public:
     AppDelegate();
@@ -53,6 +55,7 @@ class AppDelegate final : private ax::Application {
     tgd::platform::web::WebPlatformBridge webPlatform_;
     tgd::runtime::ProfileStorageCoordinator profileStorage_;
     tgd::platform::web::WebBootConfig webBootConfig_{};
+    F1GrayboxLayer* grayboxLayer_{};
     std::uint64_t traceSequence_{0};
     bool profileBooted_{false};
     bool pageHidden_{false};

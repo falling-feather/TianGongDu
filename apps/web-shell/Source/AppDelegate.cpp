@@ -1,4 +1,5 @@
 #include "AppDelegate.hpp"
+#include "F1GrayboxLayer.hpp"
 
 #include <tgd/contracts/build_identity.hpp>
 #include <tgd/contracts/tgd_web_abi.h>
@@ -143,25 +144,6 @@ toWebError(tgd::runtime::ProfileStorageError error) noexcept {
     return WebAbiError::internal;
 }
 
-ax::Scene* createBootstrapScene() {
-    auto* scene = ax::Scene::create();
-    auto* background = ax::LayerColor::create(ax::Color4B(8, 17, 24, 255), designWidth, designHeight);
-    scene->addChild(background);
-
-    auto* horizon = ax::LayerColor::create(ax::Color4B(27, 67, 73, 255), designWidth, 180.0F);
-    horizon->setPosition(ax::Vec2(0.0F, 0.0F));
-    scene->addChild(horizon);
-
-    auto* bridge = ax::LayerColor::create(ax::Color4B(208, 157, 85, 255), 620.0F, 20.0F);
-    bridge->setPosition(ax::Vec2(330.0F, 235.0F));
-    scene->addChild(bridge);
-
-    auto* gate = ax::LayerColor::create(ax::Color4B(75, 118, 121, 255), 110.0F, 250.0F);
-    gate->setPosition(ax::Vec2(585.0F, 255.0F));
-    scene->addChild(gate);
-    return scene;
-}
-
 }  // namespace
 
 AppDelegate* AppDelegate::active_ = nullptr;
@@ -216,7 +198,13 @@ bool AppDelegate::applicationDidFinishLaunching() {
 #endif
     director->setAnimationInterval(1.0F / 60.0F);
     renderView->setDesignResolutionSize(designWidth, designHeight, ResolutionPolicy::SHOW_ALL);
-    director->runWithScene(createBootstrapScene());
+    auto* scene = createF1GrayboxScene(&grayboxLayer_);
+    if (scene == nullptr) {
+        static_cast<void>(presentation_.stop());
+        static_cast<void>(runtime_.shutdown());
+        return false;
+    }
+    director->runWithScene(scene);
     presentationOutputActive_ = true;
     trace("host.ready", "none");
     return true;
@@ -227,6 +215,9 @@ void AppDelegate::applicationDidEnterBackground() {
         return;
     }
     pageHidden_ = true;
+    if (grayboxLayer_ != nullptr) {
+        grayboxLayer_->clearInput(tgd::contracts::InputClearReason::visibility_hidden);
+    }
     trace("page.hidden", toString(synchronizeSuspension()));
     pausePresentationOutput();
 }
@@ -241,6 +232,10 @@ void AppDelegate::applicationWillEnterForeground() {
 }
 
 void AppDelegate::applicationWillQuit() {
+    if (grayboxLayer_ != nullptr) {
+        grayboxLayer_->shutdown();
+        grayboxLayer_ = nullptr;
+    }
     if (presentation_.state() != tgd::presentation::PresentationState::stopped) {
         trace("presentation.stop", toString(presentation_.stop()));
     }
@@ -251,6 +246,9 @@ void AppDelegate::applicationWillQuit() {
 
 void AppDelegate::webFocusChanged(bool focused) noexcept {
     pageFocused_ = focused;
+    if (!focused && grayboxLayer_ != nullptr) {
+        grayboxLayer_->clearInput(tgd::contracts::InputClearReason::blur);
+    }
     trace(focused ? "page.focus" : "page.blur", toString(synchronizeSuspension()));
     if (focused) {
         resumePresentationOutputIfEligible();
@@ -269,6 +267,9 @@ void AppDelegate::webVisibilityChanged(bool hidden) noexcept {
 
 void AppDelegate::webContextLost() noexcept {
     graphicsContextLost_ = true;
+    if (grayboxLayer_ != nullptr) {
+        grayboxLayer_->clearInput(tgd::contracts::InputClearReason::device_disconnected);
+    }
     pausePresentationOutput();
     trace("webgl.context_lost", toString(presentation_.context_lost()));
 }

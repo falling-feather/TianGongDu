@@ -8,6 +8,8 @@ add_executable(
   ${TGD_WEB_APP}
   Source/AppDelegate.cpp
   Source/AppDelegate.hpp
+  Source/F1GrayboxLayer.cpp
+  Source/F1GrayboxLayer.hpp
   Source/main.cpp
 )
 target_compile_features(${TGD_WEB_APP} PRIVATE cxx_std_20)
@@ -44,8 +46,8 @@ set_property(
     "${CMAKE_CURRENT_SOURCE_DIR}/service-worker.js"
 )
 
-# The F1 host has no external game assets yet. Keeping this list explicitly
-# empty prevents a second, accidental resource packaging path.
+# The first oblique control graybox is code-drawn and has no external assets.
+# Keeping this list explicitly empty prevents a second packaging truth.
 set(_APP_RES_FOLDER "")
 set(
   AX_WASM_SHELL_FILE

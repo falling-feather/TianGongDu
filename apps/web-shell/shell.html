@@ -290,6 +290,22 @@
         await profileBridge.boot();
       }
 
+      async function waitForActiveServiceWorker(registration) {
+        const deadline = performance.now() + 15_000;
+        while (performance.now() < deadline) {
+          const activeWorker = registration.active ??
+            (await navigator.serviceWorker.getRegistration("./"))?.active ?? null;
+          if (
+            activeWorker &&
+            (activeWorker.state === "activated" || navigator.serviceWorker.controller)
+          ) {
+            return activeWorker;
+          }
+          await new Promise((resolveWait) => window.setTimeout(resolveWait, 50));
+        }
+        throw new Error("Service Worker activation timed out");
+      }
+
       async function initializeOfflineShell() {
         const state = { supported: "serviceWorker" in navigator, ready: false };
         window.__tgdServiceWorker = state;
@@ -297,12 +313,18 @@
           recordLifecycle("service_worker.unavailable");
           return state;
         }
-        const registration = await navigator.serviceWorker.register("./service-worker.js", {
-          scope: "./"
-        });
-        await navigator.serviceWorker.ready;
+        const existingRegistration = await navigator.serviceWorker.getRegistration("./");
+        const registration = existingRegistration ??
+          await navigator.serviceWorker.register("./service-worker.js", { scope: "./" });
+        if (existingRegistration) {
+          void registration.update().catch((error) => {
+            recordLifecycle("service_worker.update_deferred", { message: String(error) });
+          });
+        }
+        const activeWorker = await waitForActiveServiceWorker(registration);
         state.ready = true;
         state.scope = registration.scope;
+        state.scriptUrl = activeWorker.scriptURL;
         recordLifecycle("service_worker.ready", { scope: registration.scope });
         return state;
       }
@@ -443,18 +465,15 @@
             recordLifecycle("runtime.ready", { state: presentationState() });
             if (!qaControlsElement.hidden) updateQaState("runtime.ready");
             canvasElement.focus({ preventScroll: true });
-            try {
-              await initializeProfile();
-            } catch (error) {
+            const profileInitialization = initializeProfile().catch((error) => {
               profileStateElement.dataset.saveState = "fatal";
               profileStateElement.textContent = `本地档启动失败 · ${String(error)}`;
               recordLifecycle("profile.boot_failed", { message: String(error) });
-            }
-            try {
-              await initializeOfflineShell();
-            } catch (error) {
+            });
+            const offlineInitialization = initializeOfflineShell().catch((error) => {
               recordLifecycle("service_worker.failed", { message: String(error) });
-            }
+            });
+            await Promise.allSettled([profileInitialization, offlineInitialization]);
           }, 0);
         }],
         print: (...parts) => console.log(parts.join(" ")),

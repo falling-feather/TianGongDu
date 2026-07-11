@@ -413,6 +413,8 @@ async function runBrowser(target, origin) {
   const checkpoints = [];
   let browser;
   let context;
+  let contextLossProbeActive = false;
+  let pendingEmptyContextDiagnostics = 0;
 
   try {
     browser = await definition.browserType.launch(definition.launchOptions);
@@ -423,7 +425,22 @@ async function runBrowser(target, origin) {
       const type = message.type();
       if (type === "warning" || type === "error") {
         const diagnostic = { type, text };
-        if (isExpectedConsoleDiagnostic(target, type, text)) {
+        const expectedContextError =
+          contextLossProbeActive &&
+          type === "error" &&
+          /OpenGL error 0x(?:9242|0500).*CommandBufferGL\.cpp beginRenderPass/.test(text);
+        const expectedEmptyContextError =
+          contextLossProbeActive &&
+          type === "error" &&
+          text === "" &&
+          pendingEmptyContextDiagnostics > 0;
+        if (expectedContextError) pendingEmptyContextDiagnostics += 1;
+        if (expectedEmptyContextError) pendingEmptyContextDiagnostics -= 1;
+        if (
+          isExpectedConsoleDiagnostic(target, type, text) ||
+          expectedContextError ||
+          expectedEmptyContextError
+        ) {
           expectedConsoleDiagnostics.push(diagnostic);
         } else {
           consoleProblems.push(diagnostic);
@@ -528,37 +545,64 @@ async function runBrowser(target, origin) {
     assert.doesNotMatch(await profileState.innerText(), /已保存/);
 
     const quotaUrl = `${origin}/tiangongdu-f1.html?qa=1&storageFault=quota_once`;
-    const quotaResponse = await page.goto(quotaUrl, {
+    const quotaPage = await context.newPage();
+    quotaPage.on("console", (message) => {
+      if (message.type() === "warning" || message.type() === "error") {
+        consoleProblems.push({
+          page: "quota",
+          type: message.type(),
+          text: message.text()
+        });
+      }
+    });
+    quotaPage.on("pageerror", (error) => pageErrors.push(`quota: ${error.message}`));
+    quotaPage.on("requestfailed", (request) => {
+      if (request.url().startsWith(origin)) {
+        requestFailures.push({
+          page: "quota",
+          url: request.url(),
+          error: request.failure()?.errorText ?? "unknown"
+        });
+      }
+    });
+    const quotaResponse = await quotaPage.goto(quotaUrl, {
       waitUntil: "domcontentloaded",
       timeout: 45_000
     });
     assert(quotaResponse?.ok(), `${target} failed to load quota fixture.`);
-    await waitForText(page, status, "宿主已就绪", 45_000);
-    await waitForText(page, state, "presentation: running");
-    await page.waitForFunction(
+    const quotaStatus = quotaPage.locator("#status");
+    const quotaState = quotaPage.getByTestId("qa-state");
+    const quotaProfileState = quotaPage.getByTestId("profile-state");
+    const quotaSaveProfile = quotaPage.getByTestId("save-profile");
+    await waitForText(quotaPage, quotaStatus, "宿主已就绪", 45_000);
+    await waitForText(quotaPage, quotaState, "presentation: running");
+    await quotaPage.waitForFunction(
       () => window.__tgdProfile?.getState()?.stateName === "ready",
       undefined,
       { timeout: 45_000 }
     );
-    assert.equal((await page.evaluate(() => window.__tgdProfile.getState())).logicalSequence, "1");
-    await saveProfile.click();
-    await page.waitForFunction(
+    assert.equal(
+      (await quotaPage.evaluate(() => window.__tgdProfile.getState())).logicalSequence,
+      "1"
+    );
+    await quotaSaveProfile.click();
+    await quotaPage.waitForFunction(
       () => window.__tgdProfile?.getState()?.errorName === "storage_quota",
       undefined,
       { timeout: 15_000 }
     );
-    const quotaProfile = await page.evaluate(() => window.__tgdProfile.getState());
+    const quotaProfile = await quotaPage.evaluate(() => window.__tgdProfile.getState());
     assert.equal(quotaProfile.stateName, "save_failed");
     assert.equal(quotaProfile.hasPendingSave, true);
     assert.equal(quotaProfile.committedSaveCount, "0");
     assert.equal(quotaProfile.logicalSequence, "1");
-    assert.equal((await profileState.getAttribute("data-save-state")), "retryable");
-    assert.doesNotMatch(await profileState.innerText(), /已保存/);
-    assert.match(await saveProfile.innerText(), /重试保存/);
-    assert.equal(await saveProfile.isEnabled(), true);
+    assert.equal((await quotaProfileState.getAttribute("data-save-state")), "retryable");
+    assert.doesNotMatch(await quotaProfileState.innerText(), /已保存/);
+    assert.match(await quotaSaveProfile.innerText(), /重试保存/);
+    assert.equal(await quotaSaveProfile.isEnabled(), true);
 
-    await saveProfile.click();
-    await page.waitForFunction(
+    await quotaSaveProfile.click();
+    await quotaPage.waitForFunction(
       () => {
         const profile = window.__tgdProfile?.getState();
         return profile?.stateName === "ready" && profile.committedSaveCount === "1";
@@ -566,25 +610,27 @@ async function runBrowser(target, origin) {
       undefined,
       { timeout: 15_000 }
     );
-    const retriedProfile = await page.evaluate(() => window.__tgdProfile.getState());
+    const retriedProfile = await quotaPage.evaluate(() => window.__tgdProfile.getState());
     assert.equal(retriedProfile.hasPendingSave, false);
     assert.equal(retriedProfile.logicalSequence, "2");
-    await waitForText(page, profileState, "已保存");
+    await waitForText(quotaPage, quotaProfileState, "已保存");
 
-    await page.reload({ waitUntil: "domcontentloaded", timeout: 45_000 });
-    await waitForText(page, status, "宿主已就绪", 45_000);
-    await waitForText(page, state, "presentation: running");
-    await page.waitForFunction(
+    await quotaPage.reload({ waitUntil: "domcontentloaded", timeout: 45_000 });
+    await waitForText(quotaPage, quotaStatus, "宿主已就绪", 45_000);
+    await waitForText(quotaPage, quotaState, "presentation: running");
+    await quotaPage.waitForFunction(
       () => window.__tgdProfile?.getState()?.stateName === "ready",
       undefined,
       { timeout: 45_000 }
     );
-    const retryRestoredProfile = await page.evaluate(() => window.__tgdProfile.getState());
+    const retryRestoredProfile = await quotaPage.evaluate(() => window.__tgdProfile.getState());
     assert.equal(retryRestoredProfile.logicalSequence, "2");
     assert.equal(retryRestoredProfile.snapshotId, retriedProfile.snapshotId);
-    await waitForText(page, profileState, "已恢复");
+    await waitForText(quotaPage, quotaProfileState, "已恢复");
+    await quotaPage.close();
 
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 45_000 });
+    await page.bringToFront();
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 45_000 });
     await waitForText(page, status, "宿主已就绪", 45_000);
     await page.waitForFunction(
       () => window.__tgdProfile?.getState()?.stateName === "ready",
@@ -645,11 +691,24 @@ async function runBrowser(target, origin) {
     assert.equal(conflictRestoredProfile.logicalSequence, "3");
     assert.equal(conflictRestoredProfile.snapshotId, winningProfile.snapshotId);
 
-    await page.waitForFunction(
-      () => window.__tgdServiceWorker?.ready === true,
-      undefined,
-      { timeout: 45_000 }
-    );
+    try {
+      await page.waitForFunction(
+        () => window.__tgdServiceWorker?.ready === true,
+        undefined,
+        { timeout: 45_000 }
+      );
+    } catch (error) {
+      const serviceWorker = await page.evaluate(async () => ({
+        state: window.__tgdServiceWorker ?? null,
+        controller: navigator.serviceWorker.controller?.scriptURL ?? null,
+        registration: (await navigator.serviceWorker.getRegistration())?.active?.scriptURL ?? null,
+        webTrace: window.__tgdLifecycleTrace?.slice(-10) ?? []
+      }));
+      throw new Error(
+        `${target} Service Worker did not become ready: ${JSON.stringify(serviceWorker)}`,
+        { cause: error }
+      );
+    }
     let offlineSavedProfile;
     await page.context().setOffline(true);
     try {
@@ -782,6 +841,22 @@ async function runBrowser(target, origin) {
       assert.equal(await button(testId).count(), 1, `${target} is missing ${testId}.`);
     }
 
+    await canvas.click({ position: { x: 380, y: 360 } });
+    const stationaryFrame = analyzePng(await canvas.screenshot({ type: "png" }));
+    await page.keyboard.down("w");
+    await page.waitForTimeout(600);
+    await page.keyboard.up("w");
+    await page.waitForTimeout(150);
+    const movedFrame = analyzePng(await canvas.screenshot({ type: "png" }));
+    const movementComparison = compareFrames(stationaryFrame, movedFrame);
+    assert(
+      movementComparison.changedPixelRatio >= 0.001 &&
+        movementComparison.changedPixelRatio <= 0.03,
+      `${target} oblique movement changed ${(
+        movementComparison.changedPixelRatio * 100
+      ).toFixed(2)}% of the frame.`
+    );
+
     const beforePath = resolve(reportDirectory, `${target}-before.png`);
     const afterPath = resolve(reportDirectory, `${target}-after-context-restore.png`);
     const beforeFrame = await captureRenderedFrame(
@@ -819,6 +894,7 @@ async function runBrowser(target, origin) {
     await clickAndExpect("qa-show", "running", "document.visible");
     await clickAndExpect("qa-blur", "suspended", "window.blur");
     await clickAndExpect("qa-focus", "running", "window.focus");
+    contextLossProbeActive = true;
     await clickAndExpect("qa-context-lost", "context_lost", "webgl.context_lost");
     await clickAndExpect("qa-hide", "context_lost", "document.hidden");
     await clickAndExpect("qa-context-restored", "suspended", "webgl.context_restored");
@@ -826,6 +902,7 @@ async function runBrowser(target, origin) {
 
     // Axmol recreates buffers/programs asynchronously after the browser event.
     await page.waitForTimeout(4_000);
+    contextLossProbeActive = false;
     const afterFrame = await captureRenderedFrame(
       page,
       canvas,
@@ -895,6 +972,7 @@ async function runBrowser(target, origin) {
       requestFailures,
       beforeFrame: publicFrame(beforeFrame),
       afterFrame: publicFrame(afterFrame),
+      movementComparison,
       frameComparison,
       screenshots: [projectPath(beforePath), projectPath(afterPath)]
     };

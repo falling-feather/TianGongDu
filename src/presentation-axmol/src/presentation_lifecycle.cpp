@@ -17,6 +17,10 @@ PresentationError PresentationLifecycle::start(const runtime::RuntimeFacade& run
 }
 
 PresentationError PresentationLifecycle::suspend() noexcept {
+    if (state_ == PresentationState::context_lost && state_before_context_loss_ == PresentationState::running) {
+        state_before_context_loss_ = PresentationState::suspended;
+        return PresentationError::none;
+    }
     if (state_ != PresentationState::running) {
         return PresentationError::invalid_transition;
     }
@@ -26,6 +30,10 @@ PresentationError PresentationLifecycle::suspend() noexcept {
 }
 
 PresentationError PresentationLifecycle::resume() noexcept {
+    if (state_ == PresentationState::context_lost && state_before_context_loss_ == PresentationState::suspended) {
+        state_before_context_loss_ = PresentationState::running;
+        return PresentationError::none;
+    }
     if (state_ != PresentationState::suspended) {
         return PresentationError::invalid_transition;
     }

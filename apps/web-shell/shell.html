@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#081118" />
+    <title>天工渡 · F1 Web Host</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: ui-sans-serif, system-ui, "Microsoft YaHei", sans-serif;
+        background: #081118;
+        color: #e7e0cf;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background:
+          radial-gradient(circle at 50% 20%, rgba(75, 118, 121, 0.2), transparent 38rem),
+          #081118;
+      }
+
+      main {
+        width: min(100vw, 1280px);
+        padding: clamp(12px, 2vw, 24px);
+      }
+
+      header {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 10px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(18px, 2vw, 26px);
+        font-weight: 560;
+        letter-spacing: 0.08em;
+      }
+
+      #status, #last-event {
+        margin: 0;
+        color: #aab9b7;
+        font: 13px/1.4 ui-monospace, "Cascadia Mono", monospace;
+      }
+
+      .playfield {
+        overflow: hidden;
+        border: 1px solid rgba(208, 157, 85, 0.45);
+        border-radius: 12px;
+        background: #050a0e;
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.38);
+      }
+
+      canvas {
+        display: block;
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        outline: none;
+      }
+
+      canvas:focus-visible { box-shadow: inset 0 0 0 3px #d09d55; }
+
+      footer {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        margin-top: 10px;
+      }
+      .qa-controls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        margin-top: 12px;
+        padding: 10px;
+        border: 1px solid rgba(170, 185, 183, 0.28);
+        border-radius: 10px;
+        background: rgba(5, 10, 14, 0.82);
+      }
+
+      .qa-controls[hidden] { display: none; }
+
+      .qa-controls button {
+        border: 1px solid rgba(208, 157, 85, 0.55);
+        border-radius: 7px;
+        padding: 7px 10px;
+        background: #17252b;
+        color: #e7e0cf;
+        font: 12px/1 ui-monospace, "Cascadia Mono", monospace;
+        cursor: pointer;
+      }
+
+      .qa-controls button:focus-visible {
+        outline: 2px solid #d09d55;
+        outline-offset: 2px;
+      }
+
+      #qa-state {
+        margin: 0 0 0 auto;
+        color: #aab9b7;
+        font: 12px/1.4 ui-monospace, "Cascadia Mono", monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>天工渡 · F1 Web Host</h1>
+        <p id="status" role="status" aria-live="polite">准备 WebAssembly…</p>
+      </header>
+      <div class="playfield">
+        <canvas id="canvas" width="1280" height="720" tabindex="0" aria-label="天工渡 F1 游戏画面"></canvas>
+      </div>
+      <footer>
+        <p id="last-event" aria-live="polite">等待生命周期事件</p>
+        <p id="variant">Web Single · WebGL2</p>
+      </footer>
+      <section id="qa-controls" class="qa-controls" aria-label="Lifecycle QA controls" hidden>
+        <button type="button" data-testid="qa-hide">Simulate hidden</button>
+        <button type="button" data-testid="qa-show">Simulate visible</button>
+        <button type="button" data-testid="qa-blur">Simulate blur</button>
+        <button type="button" data-testid="qa-focus">Simulate focus</button>
+        <button type="button" data-testid="qa-context-lost">Lose WebGL context</button>
+        <button type="button" data-testid="qa-context-restored">Restore WebGL context</button>
+        <p id="qa-state" data-testid="qa-state" aria-live="polite">presentation: pending</p>
+      </section>
+    </main>
+
+    <script>
+      "use strict";
+
+      const statusElement = document.getElementById("status");
+      const lastEventElement = document.getElementById("last-event");
+      const canvasElement = document.getElementById("canvas");
+      const qaControlsElement = document.getElementById("qa-controls");
+      const qaStateElement = document.getElementById("qa-state");
+      const lifecycleTrace = [];
+      let contextLossExtension = null;
+      const presentationStateNames = Object.freeze({
+        0: "stopped",
+        1: "running",
+        2: "suspended",
+        3: "context_lost"
+      });
+
+      function recordLifecycle(event, detail = {}) {
+        const record = Object.freeze({
+          sequence: lifecycleTrace.length + 1,
+          time: performance.now(),
+          event,
+          ...detail
+        });
+        lifecycleTrace.push(record);
+        if (lifecycleTrace.length > 256) lifecycleTrace.shift();
+        lastEventElement.textContent = `${record.sequence}. ${event}`;
+        console.info(`[tgd.web.trace] ${JSON.stringify(record)}`);
+        return record;
+      }
+
+      function invokeBridge(name, resultType = null, argumentTypes = [], arguments_ = []) {
+        if (typeof Module.ccall !== "function") {
+          recordLifecycle("bridge.not_ready", { name });
+          return -1;
+        }
+        return Module.ccall(name, resultType, argumentTypes, arguments_);
+      }
+
+      function presentationState() {
+        return invokeBridge("tgd_web_presentation_state", "number");
+      }
+
+      function updateQaState(action) {
+        const state = presentationState();
+        const stateName = presentationStateNames[state] ?? `unknown(${state})`;
+        qaStateElement.textContent = `${action} · presentation: ${stateName}`;
+      }
+
+      function dispatchVisibility(hidden) {
+        recordLifecycle(hidden ? "document.hidden" : "document.visible", { hidden });
+        invokeBridge("axmol_hdoc_visibilitychange", null, ["number"], [hidden ? 1 : 0]);
+        invokeBridge("tgd_web_visibility_changed", null, ["number"], [hidden ? 1 : 0]);
+      }
+
+      function dispatchFocus(focused) {
+        recordLifecycle(focused ? "window.focus" : "window.blur", { focused });
+        invokeBridge("tgd_web_focus_changed", null, ["number"], [focused ? 1 : 0]);
+      }
+
+      function getContextLossExtension() {
+        if (contextLossExtension) return contextLossExtension;
+        const context = canvasElement.getContext("webgl2");
+        contextLossExtension = context?.getExtension("WEBGL_lose_context") ?? null;
+        return contextLossExtension;
+      }
+
+      canvasElement.addEventListener("webglcontextlost", (event) => {
+        event.preventDefault();
+        recordLifecycle("webgl.context_lost", { stateBefore: presentationState() });
+        invokeBridge("tgd_web_context_lost");
+        invokeBridge("axmol_webglcontextlost");
+      });
+
+      canvasElement.addEventListener("webglcontextrestored", (event) => {
+        event.preventDefault();
+        invokeBridge("axmol_webglcontextrestored");
+        invokeBridge("tgd_web_context_restored");
+        recordLifecycle("webgl.context_restored", { stateAfter: presentationState() });
+      });
+
+      document.addEventListener("visibilitychange", () => dispatchVisibility(document.hidden));
+      window.addEventListener("blur", () => dispatchFocus(false));
+      window.addEventListener("focus", () => dispatchFocus(true));
+      window.addEventListener("error", (event) => {
+        recordLifecycle("window.error", { message: event.message });
+      });
+
+      window.__tgdLifecycleTrace = lifecycleTrace;
+      window.__tgdTest = Object.freeze({
+        getState: presentationState,
+        getTrace: () => lifecycleTrace.map((entry) => ({ ...entry })),
+        setHidden: (hidden) => dispatchVisibility(Boolean(hidden)),
+        setFocused: (focused) => dispatchFocus(Boolean(focused)),
+        loseContext: () => {
+          const extension = getContextLossExtension();
+          if (!extension) throw new Error("WEBGL_lose_context is unavailable");
+          extension.loseContext();
+        },
+        restoreContext: () => {
+          const extension = getContextLossExtension();
+          if (!extension) throw new Error("WEBGL_lose_context is unavailable");
+          extension.restoreContext();
+        }
+      });
+
+      if (new URLSearchParams(window.location.search).get("qa") === "1") {
+        qaControlsElement.hidden = false;
+        const qaActions = Object.freeze({
+          "qa-hide": () => dispatchVisibility(true),
+          "qa-show": () => dispatchVisibility(false),
+          "qa-blur": () => dispatchFocus(false),
+          "qa-focus": () => dispatchFocus(true),
+          "qa-context-lost": () => window.__tgdTest.loseContext(),
+          "qa-context-restored": () => window.__tgdTest.restoreContext()
+        });
+
+        for (const [testId, action] of Object.entries(qaActions)) {
+          document.querySelector(`[data-testid="${testId}"]`).addEventListener("click", () => {
+            try {
+              action();
+              window.setTimeout(() => updateQaState(testId), 250);
+            } catch (error) {
+              qaStateElement.textContent = `${testId} · error: ${String(error)}`;
+              console.error(`[tgd.web.qa] ${testId}: ${String(error)}`);
+            }
+          });
+        }
+      }
+
+      var Module = {
+        preRun: [],
+        postRun: [() => {
+          window.setTimeout(() => {
+            statusElement.textContent = "宿主已就绪";
+            dispatchFocus(document.hasFocus());
+            dispatchVisibility(document.hidden);
+            recordLifecycle("runtime.ready", { state: presentationState() });
+            if (!qaControlsElement.hidden) updateQaState("runtime.ready");
+            canvasElement.focus({ preventScroll: true });
+          }, 0);
+        }],
+        print: (...parts) => console.log(parts.join(" ")),
+        printErr: (...parts) => console.error(parts.join(" ")),
+        canvas: canvasElement,
+        setStatus: (text) => {
+          statusElement.textContent = text || "宿主已就绪";
+        },
+        monitorRunDependencies: (remaining) => {
+          if (remaining > 0) statusElement.textContent = `加载依赖：${remaining}`;
+        },
+        onAbort: (reason) => {
+          statusElement.textContent = "宿主启动失败";
+          recordLifecycle("runtime.abort", { reason: String(reason) });
+        }
+      };
+    </script>
+    {{{ SCRIPT }}}
+  </body>
+</html>

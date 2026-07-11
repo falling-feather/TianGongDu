@@ -12,7 +12,8 @@
     "persistentSystemMutation": "forbidden",
     "selectionNotes": [
       "Emscripten 3.1.73 is pinned to Axmol 2.11.4's documented Windows browser-debug compatibility line.",
-      "CMake 4.2.1 was rejected because it exited without diagnostics on this Unicode Windows source path; 4.3.1 passed MSVC and Clang Debug/Release and remains gated on the Axmol Web build."
+      "CMake 4.2.1 was rejected because it exited without diagnostics on this Unicode Windows source path; 4.3.1 passed MSVC and Clang Debug/Release and remains gated on the Axmol Web build.",
+      "axslcc 1.14.0 is the exact shader compiler declared by Axmol 2.11.4's immutable 1k/build.profiles."
     ],
     "promotionRequirements": [
       "all-artifacts-sha256-verified",
@@ -212,6 +213,21 @@
       },
       "cachePath": ".cache/downloads/7z2301-x64.zip",
       "installRoot": ".cache/toolchains/7z2301-x64/7z2301-x64",
+      "artifactVerified": true
+    },
+    "axslcc": {
+      "version": "1.14.0",
+      "integrity": "sha256:5ea1ae25517a14a81b578836563837fddcb3feca005581761446f3e75986e828",
+      "integrityScope": "archive",
+      "provenance": {
+        "kind": "official-release-archive",
+        "url": "https://github.com/axmolengine/axslcc/releases/download/v1.14.0/axslcc-1.14.0-win64.zip",
+        "revision": "v1.14.0",
+        "expectedSizeBytes": 5796948,
+        "parent": "axmol@2.11.4"
+      },
+      "cachePath": ".cache/downloads/axslcc-1.14.0-win64.zip",
+      "installRoot": ".cache/toolchains/axmol-2.11.4-release/axmol-2.11.4/tools/external/axslcc",
       "artifactVerified": true
     }
   }

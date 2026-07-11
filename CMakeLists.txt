@@ -5,15 +5,28 @@ project(TianGongDu LANGUAGES CXX)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 include(TgdArchitecture)
+include(TgdAxmol)
 include(TgdWarnings)
 
 option(TGD_BUILD_TESTS "Build TianGongDu native and cross-compiled smoke tests." ON)
+option(TGD_ENABLE_AXMOL_HOST "Build the Axmol presentation host." OFF)
+set(TGD_AXMOL_ROOT "$ENV{AX_ROOT}" CACHE PATH "Path to the locked Axmol source tree.")
+set(
+  TGD_WEB_STAGING_ROOT
+  ""
+  CACHE PATH
+  "ASCII-only staging root for Emscripten file packaging on Windows."
+)
 set(TGD_CHANNEL "prototype_f1" CACHE STRING "Build channel embedded in diagnostics.")
 
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+if(TGD_ENABLE_AXMOL_HOST)
+  tgd_enable_axmol()
+endif()
 
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/package.json" TGD_PACKAGE_JSON)
 string(JSON TGD_SEMANTIC_VERSION GET "${TGD_PACKAGE_JSON}" version)
@@ -81,6 +94,9 @@ target_include_directories(
   PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/presentation-axmol/include>"
 )
 target_link_libraries(tgd_presentation_axmol PUBLIC tgd_runtime tgd_contracts)
+if(TGD_ENABLE_AXMOL_HOST)
+  target_link_libraries(tgd_presentation_axmol PRIVATE "${TGD_AXMOL_TARGET}")
+endif()
 tgd_register_layer(tgd_presentation_axmol ALLOW tgd_runtime tgd_contracts)
 
 tgd_add_static_layer(tgd_platform_web)
@@ -108,6 +124,10 @@ tgd_register_layer(tgd_sync_contracts ALLOW tgd_contracts)
 add_library(tgd_sync_service INTERFACE)
 target_link_libraries(tgd_sync_service INTERFACE tgd_sync_contracts)
 tgd_register_layer(tgd_sync_service ALLOW tgd_sync_contracts)
+
+if(TGD_ENABLE_AXMOL_HOST)
+  add_subdirectory(apps/web-shell)
+endif()
 
 tgd_validate_architecture()
 

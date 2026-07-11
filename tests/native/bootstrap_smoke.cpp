@@ -49,6 +49,17 @@ int main() {
         "context restore preserves suspended state"
     );
     ok &= expect(presentation.resume() == PresentationError::none, "presentation resumes");
+    ok &= expect(presentation.context_lost() == PresentationError::none, "running context can be lost");
+    ok &= expect(
+        presentation.suspend() == PresentationError::none,
+        "page can become hidden while the graphics context is lost"
+    );
+    ok &= expect(
+        presentation.context_restored() == PresentationError::none &&
+            presentation.state() == PresentationState::suspended,
+        "context restore keeps a hidden page suspended"
+    );
+    ok &= expect(presentation.resume() == PresentationError::none, "restored hidden page resumes explicitly");
     ok &= expect(presentation.stop() == PresentationError::none, "presentation stops");
     ok &= expect(runtime.shutdown() == RuntimeError::none, "runtime shuts down after presentation");
     ok &= expect(runtime.shutdown() == RuntimeError::not_initialized, "duplicate shutdown is explicit");

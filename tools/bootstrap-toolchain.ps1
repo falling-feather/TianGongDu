@@ -196,6 +196,7 @@ try {
 
     Expand-ZipIfMissing $lock.supportArtifacts.sevenZip "7z.exe"
     Expand-ZipIfMissing $lock.tools.axmol "core\CMakeLists.txt"
+    Expand-ZipIfMissing $lock.supportArtifacts.axslcc "axslcc.exe" -IntoInstallRoot
     Expand-ZipIfMissing $lock.tools.cmake "bin\cmake.exe"
     Expand-ZipIfMissing $lock.tools.ninja "ninja.exe" -IntoInstallRoot
 

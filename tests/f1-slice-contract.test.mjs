@@ -36,8 +36,8 @@ test("F1 one-hour contract and generated C++ stay synchronized", async () => {
       Object.values(actor.recovery).every((value) => Number.isInteger(value) && value > 0)
     )
   );
-  assert.equal(contract.ports.filter((port) => port.status === "reserved").length, 5);
-  assert.equal(contract.ports.filter((port) => port.status === "bootstrap_implemented").length, 4);
+  assert.equal(contract.ports.filter((port) => port.status === "reserved").length, 4);
+  assert.equal(contract.ports.filter((port) => port.status === "bootstrap_implemented").length, 5);
 });
 
 test("F1 stable content IDs have unique 64-bit keys", async () => {

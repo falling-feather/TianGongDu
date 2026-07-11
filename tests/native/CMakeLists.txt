@@ -148,6 +148,22 @@ add_test(
   COMMAND tgd_native_encounter_director
 )
 
+add_executable(tgd_native_quest_runtime quest_runtime.cpp)
+target_compile_features(tgd_native_quest_runtime PRIVATE cxx_std_20)
+tgd_enable_strict_warnings(tgd_native_quest_runtime)
+target_link_libraries(
+  tgd_native_quest_runtime
+  PRIVATE
+    tgd_contracts
+    tgd_gameplay
+    tgd_content_core
+)
+
+add_test(
+  NAME tgd.native.quest-runtime
+  COMMAND tgd_native_quest_runtime
+)
+
 add_test(
   NAME tgd.architecture.reject-reverse-link
   COMMAND

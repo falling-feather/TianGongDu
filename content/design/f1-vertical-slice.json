@@ -419,7 +419,11 @@
       "owner": "gameplay",
       "status": "bootstrap_implemented"
     },
-    { "name": "IQuestRuntime", "owner": "gameplay", "status": "reserved" },
+    {
+      "name": "IQuestRuntime",
+      "owner": "gameplay",
+      "status": "bootstrap_implemented"
+    },
     { "name": "ISnapshotContributor", "owner": "runtime", "status": "reserved" },
     {
       "name": "IPresentationEventSink",

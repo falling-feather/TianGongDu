@@ -150,7 +150,8 @@ export function validateF1SliceContract(contract, catalog) {
     "IContentDefinitionProvider",
     "ICombatResolver",
     "ICombatEventSink",
-    "IEncounterDirector"
+    "IEncounterDirector",
+    "IQuestRuntime"
   ]);
   for (const port of contract.ports) {
     const expected = implementedPorts.has(port.name) ? "bootstrap_implemented" : "reserved";

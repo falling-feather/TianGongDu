@@ -77,3 +77,4 @@ if (-not (Test-Path -LiteralPath $compiler)) {
     throw "Visual Studio installer completed, but the locked compiler is still missing: $compiler"
 }
 Write-Output "installed locked MSVC component: $($entry.componentId)"
+exit 0

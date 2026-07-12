@@ -17,9 +17,11 @@ using tgd::gameplay::DeterministicQuestRuntime;
 using tgd::gameplay::DeterministicQuestInteractionResolver;
 using tgd::gameplay::DeterministicQuestCombatTriggerResolver;
 using tgd::gameplay::DeterministicQuestCombatOutcomeResolver;
+using tgd::gameplay::DeterministicQuestBossPhaseResolver;
 using tgd::gameplay::QuestError;
 using tgd::gameplay::QuestCombatOutcomeError;
 using tgd::gameplay::QuestCombatTriggerError;
+using tgd::gameplay::QuestBossPhaseError;
 using tgd::gameplay::QuestInteractionError;
 using tgd::gameplay::QuestLifecycle;
 using tgd::gameplay::QuestObjectiveState;
@@ -473,7 +475,7 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
     ok &= interactions.initialize(definition().quest_interactions) ==
           QuestInteractionError::none;
 
-    std::array<tgd::contracts::CombatActorSnapshot, 4> actors{};
+    std::array<tgd::contracts::CombatActorSnapshot, 5> actors{};
     for (std::size_t index = 0; index < combat_definition().actors.size(); ++index) {
         const auto& config = combat_definition().actors[index];
         actors[index] = {
@@ -485,7 +487,7 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
             config.initial_stance,
             0,
             false,
-            true,
+            config.initially_active,
         };
     }
     ok &= expect(
@@ -688,18 +690,22 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
     );
 
     auto return_actors = actors;
-    for (auto& actor : return_actors) {
-        if (actor.faction == tgd::contracts::CombatFaction::hostile) {
-            actor.active = true;
+    for (const auto actor_key : definition().quest_encounter_activations.front().actor_keys) {
+        for (auto& actor : return_actors) {
+            if (actor.actor == actor_key) {
+                actor.active = true;
+            }
         }
     }
     ok &= expect(
         !outcomes.resolve(return_actors, quest).found,
         "reactivated return hostiles block calibration validation"
     );
-    for (auto& actor : return_actors) {
-        if (actor.faction == tgd::contracts::CombatFaction::hostile) {
-            actor.active = false;
+    for (const auto actor_key : definition().quest_encounter_activations.front().actor_keys) {
+        for (auto& actor : return_actors) {
+            if (actor.actor == actor_key) {
+                actor.active = false;
+            }
         }
     }
     const auto return_clear = outcomes.resolve(return_actors, quest);
@@ -771,6 +777,125 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
     return ok;
 }
 
+bool test_four_seasons_boss_phases_are_ordered() {
+    DeterministicQuestRuntime quest;
+    DeterministicQuestBossPhaseResolver phases;
+    CollectingSink sink;
+    bool ok = quest.initialize(definition(), definition().player.actor) == QuestError::none;
+    ok &= quest.start() == QuestError::none;
+    tgd::contracts::TickIndex tick = 1;
+    tgd::contracts::CommandSequence sequence = 1;
+    for (std::size_t stage = 0; stage < 5; ++stage) {
+        for (const auto& objective : definition().beats[stage].objectives) {
+            const auto applied = quest.apply(
+                {
+                    tick++,
+                    definition().player.actor,
+                    sequence++,
+                    {},
+                    objective.key,
+                    selection_for_objective(objective.key),
+                },
+                sink
+            );
+            ok &= applied.error == QuestError::none;
+        }
+    }
+    ok &= expect(
+        quest.snapshot().stage_index == 5,
+        "boss phase tests enter the authored four-seasons beat"
+    );
+    ok &= expect(
+        phases.initialize(definition().quest_boss_phases) == QuestBossPhaseError::none,
+        "generated boss phase bindings initialize once"
+    );
+
+    std::array<tgd::contracts::CombatActorSnapshot, 5> actors{};
+    for (std::size_t index = 0; index < combat_definition().actors.size(); ++index) {
+        const auto& config = combat_definition().actors[index];
+        actors[index] = {
+            config.actor,
+            config.archetype_id.key,
+            config.faction,
+            config.initial_pose,
+            config.initial_resources,
+            config.initial_stance,
+            0,
+            false,
+            config.initially_active,
+        };
+    }
+    const auto boss = std::find_if(
+        actors.begin(),
+        actors.end(),
+        [](const tgd::contracts::CombatActorSnapshot& actor) { return actor.actor == 201; }
+    );
+    ok &= expect(boss != actors.end(), "the boss actor exists in the combat snapshot");
+    if (boss == actors.end()) {
+        return false;
+    }
+    boss->active = true;
+    ok &= expect(
+        !phases.resolve(actors, quest).found,
+        "full boss health does not complete the spring threshold"
+    );
+    ok &= expect(
+        phases.resolve(std::span{actors}.first(4), quest).error ==
+            QuestBossPhaseError::invalid_actor_snapshot,
+        "a missing authored boss snapshot fails closed"
+    );
+
+    for (std::size_t index = 0; index < definition().quest_boss_phases.size(); ++index) {
+        const auto& phase = definition().quest_boss_phases[index];
+        boss->resources.health =
+            boss->resources.health_max * static_cast<std::int32_t>(phase.health_percent) / 100;
+        boss->active = boss->resources.health > 0;
+        const auto resolved = phases.resolve(actors, quest);
+        ok &= expect(
+            resolved.error == QuestBossPhaseError::none && resolved.found &&
+                resolved.phase == phase.id.key && resolved.objective == phase.objective_id.key &&
+                resolved.actor == 201 && resolved.next_stance == phase.next_stance,
+            "each boss threshold resolves exactly its next authored phase"
+        );
+        if (resolved.next_stance != 0) {
+            boss->stance = resolved.next_stance;
+        }
+        const auto applied = quest.apply(
+            {
+                tick++,
+                definition().player.actor,
+                sequence++,
+                {},
+                resolved.objective,
+            },
+            sink
+        );
+        ok &= expect(
+            applied.error == QuestError::none && applied.accepted &&
+                applied.stage_advanced == (index + 1 == definition().quest_boss_phases.size()),
+            "boss objectives advance only after all four ordered phases"
+        );
+    }
+    ok &= expect(
+        quest.snapshot().stage_index == 6,
+        "defeating the winter phase advances into resolution"
+    );
+
+    auto invalid = std::array<tgd::contracts::QuestBossPhaseDefinition, 4>{};
+    std::copy(
+        definition().quest_boss_phases.begin(),
+        definition().quest_boss_phases.end(),
+        invalid.begin()
+    );
+    invalid[1].health_percent = 80;
+    DeterministicQuestBossPhaseResolver invalid_phases;
+    ok &= expect(
+        invalid_phases.initialize(invalid) == QuestBossPhaseError::invalid_definition,
+        "out-of-order boss thresholds fail definition validation"
+    );
+    return ok;
+}
+
 }  // namespace
 
 int main() {
@@ -782,5 +907,6 @@ int main() {
     ok &= test_scene_interaction_ties_are_stable();
     ok &= test_combat_signals_resolve_training_objectives();
     ok &= test_hostile_group_outcomes_unlock_lane_choice();
+    ok &= test_four_seasons_boss_phases_are_ordered();
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

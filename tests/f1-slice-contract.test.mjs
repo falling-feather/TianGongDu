@@ -27,8 +27,8 @@ test("F1 one-hour contract and generated C++ stay synchronized", async () => {
   assert.equal(contract.timing.endToEndTestBudgetMinutes, 70);
   assert.equal(contract.view.primaryGuidance, "douzhanshen");
   assert.equal(contract.beats.length, 7);
-  assert.equal(contract.combatBootstrap.actors.length, 4);
-  assert.equal(contract.combatBootstrap.abilities.length, 9);
+  assert.equal(contract.combatBootstrap.actors.length, 5);
+  assert.equal(contract.combatBootstrap.abilities.length, 17);
   assert.equal(contract.combatBootstrap.director.maxSimultaneousAttackers, 1);
   assert.equal(contract.combatBootstrap.director.formationRadiusMm, 1500);
   const flowerLight = contract.combatBootstrap.abilities.find(
@@ -91,6 +91,7 @@ test("F1 stable content IDs have unique 64-bit keys", async () => {
     ...contract.questCombatTriggers.map((trigger) => trigger.id),
     ...contract.questCombatOutcomes.map((outcome) => outcome.id),
     ...contract.questEncounterActivations.map((activation) => activation.id),
+    ...contract.questBossPhases.map((phase) => phase.id),
     ...contract.questInteractions.map((interaction) => interaction.selectionId).filter(Boolean)
   ];
   assert.equal(new Set(ids.map((id) => fnv1a64(id))).size, ids.length);
@@ -195,6 +196,12 @@ test("F1 canopy return reactivates combat before opening its shortcut", async ()
       beatId: contract.beats[4].id,
       encounterId: contract.combatBootstrap.id,
       actorKeys: [101, 102, 103]
+    },
+    {
+      id: "f1_activation_four_seasons_wraith",
+      beatId: contract.beats[5].id,
+      encounterId: contract.combatBootstrap.id,
+      actorKeys: [201]
     }
   ]);
   assert.equal(
@@ -208,7 +215,46 @@ test("F1 canopy return reactivates combat before opening its shortcut", async ()
   wrongBeat.questEncounterActivations[0].beatId = contract.beats[3].id;
   assert.throws(
     () => validateF1SliceContract(wrongBeat, catalog),
-    /canopy return beat must own/
+    /canopy return and four-seasons boss beats must own/
+  );
+});
+
+test("F1 four-seasons wraith is an inactive actor with ordered health phases", async () => {
+  const contract = await loadF1SliceContract();
+  const boss = contract.combatBootstrap.actors.find((actor) => actor.actorKey === 201);
+  assert.equal(boss.archetypeId, contract.catalogReferences.bossId);
+  assert.equal(boss.initiallyActive, false);
+  assert.deepEqual(boss.stanceIds, [
+    "stance_wraith_spring",
+    "stance_wraith_summer",
+    "stance_wraith_autumn",
+    "stance_wraith_winter"
+  ]);
+  assert.deepEqual(
+    contract.questBossPhases.map((phase) => ({
+      objectiveId: phase.objectiveId,
+      actorKey: phase.actorKey,
+      healthPercent: phase.healthPercent,
+      nextStanceId: phase.nextStanceId
+    })),
+    contract.beats[5].objectiveIds.map((objectiveId, index) => ({
+      objectiveId,
+      actorKey: 201,
+      healthPercent: [75, 50, 25, 0][index],
+      nextStanceId: [
+        "stance_wraith_summer",
+        "stance_wraith_autumn",
+        "stance_wraith_winter",
+        null
+      ][index]
+    }))
+  );
+
+  const outOfOrder = structuredClone(contract);
+  outOfOrder.questBossPhases[1].healthPercent = 80;
+  assert.throws(
+    () => validateF1SliceContract(outOfOrder, catalog),
+    /phase order or thresholds drifted/
   );
 });
 

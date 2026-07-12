@@ -278,10 +278,38 @@ export function validateF1SliceContract(contract, catalog) {
     encounterActivations.map((activation) => activation.beatId),
     "encounter activation beat"
   );
-  if (encounterActivations.length !== 1 ||
+  const bossBeat = contract.beats[5];
+  if (encounterActivations.length !== 2 ||
       encounterActivations[0].beatId !== returnBeat.id ||
-      !sameValues(encounterActivations[0].actorKeys, [101, 102, 103])) {
-    fail("the canopy return beat must own the authored encounter activation");
+      !sameValues(encounterActivations[0].actorKeys, [101, 102, 103]) ||
+      encounterActivations[1].beatId !== bossBeat.id ||
+      !sameValues(encounterActivations[1].actorKeys, [201])) {
+    fail("the canopy return and four-seasons boss beats must own authored activations");
+  }
+  const bossPhases = contract.questBossPhases;
+  if (!Array.isArray(bossPhases) || bossPhases.length !== 4) {
+    fail("the four-seasons wraith must contain exactly four authored phases");
+  }
+  for (const phase of bossPhases) {
+    if (!bossBeat.objectiveIds.includes(phase.objectiveId) || phase.actorKey !== 201 ||
+        !Number.isInteger(phase.healthPercent) || phase.healthPercent < 0 ||
+        phase.healthPercent > 100 ||
+        (phase.healthPercent === 0 ? phase.nextStanceId !== null :
+          typeof phase.nextStanceId !== "string" || phase.nextStanceId.length === 0)) {
+      fail(`${phase.id} is not a valid four-seasons boss phase`);
+    }
+  }
+  assertUnique(bossPhases.map((phase) => phase.id), "boss phase id");
+  assertUnique(bossPhases.map((phase) => phase.objectiveId), "boss phase objective");
+  if (!sameValues(bossPhases.map((phase) => phase.objectiveId), bossBeat.objectiveIds) ||
+      !sameValues(bossPhases.map((phase) => phase.healthPercent), [75, 50, 25, 0]) ||
+      !sameValues(bossPhases.map((phase) => phase.nextStanceId), [
+        "stance_wraith_summer",
+        "stance_wraith_autumn",
+        "stance_wraith_winter",
+        null
+      ])) {
+    fail("the four-seasons boss phase order or thresholds drifted");
   }
   const combatTriggers = contract.questCombatTriggers;
   if (!Array.isArray(combatTriggers) || combatTriggers.length < 2 || combatTriggers.length > 64) {
@@ -477,8 +505,8 @@ export function validateF1SliceContract(contract, catalog) {
     if (!["player", "hostile", "neutral"].includes(actor.faction)) {
       fail(`${actor.actorKey} has an invalid faction`);
     }
-    if (!Array.isArray(actor.stanceIds) || actor.stanceIds.length === 0 || actor.stanceIds.length > 3) {
-      fail(`${actor.actorKey} must declare 1..3 stances`);
+    if (!Array.isArray(actor.stanceIds) || actor.stanceIds.length === 0 || actor.stanceIds.length > 4) {
+      fail(`${actor.actorKey} must declare 1..4 stances`);
     }
     assertUnique(actor.stanceIds, `${actor.actorKey} stance`);
     if (!actor.stanceIds.includes(actor.initialStanceId)) {
@@ -545,6 +573,19 @@ export function validateF1SliceContract(contract, catalog) {
   const hostileCount = combat.actors.filter((actor) => actor.faction === "hostile").length;
   if (director.maxSimultaneousAttackers > hostileCount) {
     fail("combat attack token count exceeds hostile actors");
+  }
+  const bossActor = combat.actors.find((actor) => actor.actorKey === 201);
+  if (bossActor?.archetypeId !== refs.bossId || bossActor.faction !== "hostile" ||
+      bossActor.initiallyActive !== false || !sameValues(bossActor.stanceIds, [
+        "stance_wraith_spring",
+        "stance_wraith_summer",
+        "stance_wraith_autumn",
+        "stance_wraith_winter"
+      ]) || bossActor.initialStanceId !== "stance_wraith_spring" ||
+      bossPhases.some((phase) => phase.actorKey !== bossActor.actorKey) ||
+      bossPhases.some((phase) => phase.nextStanceId !== null &&
+        !bossActor.stanceIds.includes(phase.nextStanceId))) {
+    fail("the inactive four-seasons boss actor does not match its authored phases");
   }
 
   assertUnique(combat.abilities.map((ability) => ability.id), "combat ability id");
@@ -613,6 +654,7 @@ export function validateF1SliceContract(contract, catalog) {
     ...interactions.map((interaction) => interaction.id),
     ...interactions.map((interaction) => interaction.selectionId).filter(Boolean),
     ...encounterActivations.map((activation) => activation.id),
+    ...bossPhases.map((phase) => phase.id),
     ...combatTriggers.map((trigger) => trigger.id),
     ...combatOutcomes.map((outcome) => outcome.id),
     combat.id,
@@ -644,7 +686,7 @@ function combatActorRow(actor) {
   const pose = actor.poseMm;
   const resources = actor.resources;
   const recovery = actor.recovery;
-  const stances = [...actor.stanceIds.map(stableKey), ...Array(3 - actor.stanceIds.length).fill("0")];
+  const stances = [...actor.stanceIds.map(stableKey), ...Array(4 - actor.stanceIds.length).fill("0")];
   return `    {${actor.actorKey}ULL, ${contentId(actor.archetypeId)}, contracts::CombatFaction::${actor.faction}, {${pose.x}, ${pose.y}, ${pose.height}, ${pose.floorLayer}}, {${resources.health}, ${resources.healthMax}, ${resources.stamina}, ${resources.staminaMax}, ${resources.poise}, ${resources.poiseMax}, ${resources.lantern}, ${resources.lanternMax}, ${resources.evidence}}, {${stances.join(", ")}}, ${actor.stanceIds.length}U, ${stableKey(actor.initialStanceId)}, {${recovery.staminaDelayTicks}, ${recovery.staminaIntervalTicks}, ${recovery.staminaPerInterval}, ${recovery.poiseDelayTicks}, ${recovery.poiseIntervalTicks}, ${recovery.poisePerInterval}}, ${actor.initiallyActive}},`;
 }
 
@@ -677,6 +719,10 @@ function questCombatOutcomeRow(outcome) {
 
 function questEncounterActivationRow(activation, index) {
   return `    {${contentId(activation.id)}, ${contentId(activation.beatId)}, ${contentId(activation.encounterId)}, std::span<const contracts::StableActorKey>{encounter_activation_${index}_actors}},`;
+}
+
+function questBossPhaseRow(phase) {
+  return `    {${contentId(phase.id)}, ${contentId(phase.objectiveId)}, ${phase.actorKey}ULL, ${phase.healthPercent}U, ${stableKey(phase.nextStanceId)}},`;
 }
 
 export function renderF1SliceContract(contract) {
@@ -725,6 +771,7 @@ ${arrayRows(interaction.prerequisiteObjectiveIds)}
       (activation, index) => `inline constexpr std::array<contracts::StableActorKey, ${activation.actorKeys.length}> encounter_activation_${index}_actors{{${activation.actorKeys.map((actor) => `\n    ${actor}ULL,`).join("")}\n}};`
     )
     .join("\n\n");
+  const questBossPhaseRows = contract.questBossPhases.map(questBossPhaseRow).join("\n");
 
   return `// Generated from content/design/f1-vertical-slice.json. Do not edit by hand.
 #pragma once
@@ -779,6 +826,10 @@ inline constexpr std::array<contracts::QuestEncounterActivationDefinition, ${con
 ${questEncounterActivationRows}
 }};
 
+inline constexpr std::array<contracts::QuestBossPhaseDefinition, ${contract.questBossPhases.length}> f1_quest_boss_phases{{
+${questBossPhaseRows}
+}};
+
 inline constexpr std::array<contracts::CombatActorConfig, ${combat.actors.length}> f1_combat_actors{{
 ${combatActorRows}
 }};
@@ -828,6 +879,7 @@ inline constexpr contracts::VerticalSliceDefinition f1_vertical_slice_definition
     std::span<const contracts::QuestCombatTriggerDefinition>{f1_quest_combat_triggers},
     std::span<const contracts::QuestCombatOutcomeDefinition>{f1_quest_combat_outcomes},
     std::span<const contracts::QuestEncounterActivationDefinition>{f1_quest_encounter_activations},
+    std::span<const contracts::QuestBossPhaseDefinition>{f1_quest_boss_phases},
 };
 
 }  // namespace tgd::content::generated

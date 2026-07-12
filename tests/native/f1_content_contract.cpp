@@ -102,7 +102,7 @@ int main() {
         "the shared workbench exposes two generated calibration choices"
     );
     ok &= expect(
-        combat != nullptr && definition->quest_encounter_activations.size() == 1 &&
+        combat != nullptr && definition->quest_encounter_activations.size() == 2 &&
             definition->quest_encounter_activations.front().beat_id.key ==
                 tgd::contracts::stable_content_key(
                     "f1_beat_canopy_return_encounter"
@@ -111,6 +111,17 @@ int main() {
                 combat->id.key &&
             definition->quest_encounter_activations.front().actor_keys.size() == 3,
         "the canopy return encounter activation is generated content"
+    );
+    ok &= expect(
+        definition->quest_encounter_activations.back().beat_id.key ==
+                tgd::contracts::stable_content_key("f1_beat_four_seasons_wraith") &&
+            definition->quest_encounter_activations.back().actor_keys.size() == 1 &&
+            definition->quest_encounter_activations.back().actor_keys.front() == 201 &&
+            definition->quest_boss_phases.size() == 4 &&
+            definition->quest_boss_phases.front().health_percent == 75 &&
+            definition->quest_boss_phases.back().health_percent == 0 &&
+            definition->quest_boss_phases.back().next_stance == 0,
+        "the four-season boss activation and ordered thresholds are generated content"
     );
 
     std::uint32_t minutes = 0;
@@ -131,8 +142,8 @@ int main() {
 
     if (combat != nullptr) {
         ok &= expect(
-            combat->actors.size() == 4 && combat->abilities.size() == 9,
-            "the first player and enemy combat set is explicit"
+            combat->actors.size() == 5 && combat->abilities.size() == 17,
+            "the player, enemy groups, and four-season boss combat set is explicit"
         );
         ok &= expect(
             combat->director.player_actor == definition->player.actor &&
@@ -142,11 +153,16 @@ int main() {
             "the encounter director has deterministic player and attack-token rules"
         );
         bool found_player = false;
+        bool found_inactive_boss = false;
         std::unordered_set<tgd::contracts::StableContentKey> ability_ids;
         for (const auto& actor : combat->actors) {
             found_player |= actor.actor == definition->player.actor &&
                             actor.faction == tgd::contracts::CombatFaction::player &&
                             actor.initial_pose == definition->player.initial_pose;
+            found_inactive_boss |= actor.actor == 201 &&
+                                   actor.archetype_id.key == definition->boss_id.key &&
+                                   actor.faction == tgd::contracts::CombatFaction::hostile &&
+                                   actor.stance_count == 4 && !actor.initially_active;
             ok &= expect(
                 actor.stance_count > 0 && actor.initial_stance != 0,
                 "each combat actor declares a stance"
@@ -169,6 +185,7 @@ int main() {
             ok &= expect(ability.active_ticks > 0, "ability has an authoritative active window");
         }
         ok &= expect(found_player, "combat and movement share the same player seed");
+        ok &= expect(found_inactive_boss, "the four-season boss starts inactive with four stances");
     }
 
     const auto& basis = definition->player.camera_basis;

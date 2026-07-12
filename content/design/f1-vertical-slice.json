@@ -174,6 +174,39 @@
         "stanceIds": ["stance_paper_egret"],
         "initialStanceId": "stance_paper_egret",
         "initiallyActive": true
+      },
+      {
+        "actorKey": 201,
+        "archetypeId": "jn_boss_umbrella_wraith",
+        "faction": "hostile",
+        "poseMm": { "x": 4000, "y": 1900, "height": 0, "floorLayer": 0 },
+        "resources": {
+          "health": 420,
+          "healthMax": 420,
+          "stamina": 240,
+          "staminaMax": 240,
+          "poise": 120,
+          "poiseMax": 120,
+          "lantern": 0,
+          "lanternMax": 0,
+          "evidence": 0
+        },
+        "recovery": {
+          "staminaDelayTicks": 24,
+          "staminaIntervalTicks": 6,
+          "staminaPerInterval": 4,
+          "poiseDelayTicks": 90,
+          "poiseIntervalTicks": 10,
+          "poisePerInterval": 5
+        },
+        "stanceIds": [
+          "stance_wraith_spring",
+          "stance_wraith_summer",
+          "stance_wraith_autumn",
+          "stance_wraith_winter"
+        ],
+        "initialStanceId": "stance_wraith_spring",
+        "initiallyActive": false
       }
     ],
     "abilities": [
@@ -287,6 +320,118 @@
         "heightToleranceMm": 1500,
         "healthDamage": 26,
         "poiseDamage": 30,
+        "feedbackTags": ["heavy"]
+      },
+      {
+        "id": "ability_wraith_spring_light",
+        "trigger": "light_attack",
+        "requiredStanceId": "stance_wraith_spring",
+        "staminaCost": 8,
+        "windupTicks": 24,
+        "activeTicks": 5,
+        "recoveryTicks": 24,
+        "rangeMm": 2500,
+        "heightToleranceMm": 1100,
+        "healthDamage": 12,
+        "poiseDamage": 18,
+        "feedbackTags": ["light"]
+      },
+      {
+        "id": "ability_wraith_spring_heavy",
+        "trigger": "heavy_attack",
+        "requiredStanceId": "stance_wraith_spring",
+        "staminaCost": 20,
+        "windupTicks": 42,
+        "activeTicks": 8,
+        "recoveryTicks": 38,
+        "rangeMm": 3100,
+        "heightToleranceMm": 1300,
+        "healthDamage": 22,
+        "poiseDamage": 34,
+        "feedbackTags": ["heavy"]
+      },
+      {
+        "id": "ability_wraith_summer_light",
+        "trigger": "light_attack",
+        "requiredStanceId": "stance_wraith_summer",
+        "staminaCost": 10,
+        "windupTicks": 16,
+        "activeTicks": 6,
+        "recoveryTicks": 20,
+        "rangeMm": 2700,
+        "heightToleranceMm": 1200,
+        "healthDamage": 14,
+        "poiseDamage": 20,
+        "feedbackTags": ["light"]
+      },
+      {
+        "id": "ability_wraith_summer_heavy",
+        "trigger": "heavy_attack",
+        "requiredStanceId": "stance_wraith_summer",
+        "staminaCost": 22,
+        "windupTicks": 32,
+        "activeTicks": 9,
+        "recoveryTicks": 34,
+        "rangeMm": 3300,
+        "heightToleranceMm": 1400,
+        "healthDamage": 24,
+        "poiseDamage": 38,
+        "feedbackTags": ["heavy"]
+      },
+      {
+        "id": "ability_wraith_autumn_light",
+        "trigger": "light_attack",
+        "requiredStanceId": "stance_wraith_autumn",
+        "staminaCost": 11,
+        "windupTicks": 20,
+        "activeTicks": 6,
+        "recoveryTicks": 18,
+        "rangeMm": 2850,
+        "heightToleranceMm": 1200,
+        "healthDamage": 16,
+        "poiseDamage": 24,
+        "feedbackTags": ["light"]
+      },
+      {
+        "id": "ability_wraith_autumn_heavy",
+        "trigger": "heavy_attack",
+        "requiredStanceId": "stance_wraith_autumn",
+        "staminaCost": 24,
+        "windupTicks": 36,
+        "activeTicks": 10,
+        "recoveryTicks": 32,
+        "rangeMm": 3500,
+        "heightToleranceMm": 1500,
+        "healthDamage": 28,
+        "poiseDamage": 44,
+        "feedbackTags": ["heavy"]
+      },
+      {
+        "id": "ability_wraith_winter_light",
+        "trigger": "light_attack",
+        "requiredStanceId": "stance_wraith_winter",
+        "staminaCost": 12,
+        "windupTicks": 14,
+        "activeTicks": 7,
+        "recoveryTicks": 17,
+        "rangeMm": 3000,
+        "heightToleranceMm": 1300,
+        "healthDamage": 18,
+        "poiseDamage": 28,
+        "feedbackTags": ["light"]
+      },
+      {
+        "id": "ability_wraith_winter_heavy",
+        "trigger": "heavy_attack",
+        "requiredStanceId": "stance_wraith_winter",
+        "staminaCost": 26,
+        "windupTicks": 28,
+        "activeTicks": 11,
+        "recoveryTicks": 30,
+        "rangeMm": 3700,
+        "heightToleranceMm": 1600,
+        "healthDamage": 32,
+        "poiseDamage": 50,
         "feedbackTags": ["heavy"]
       },
       {
@@ -517,6 +662,42 @@
       "beatId": "f1_beat_canopy_return_encounter",
       "encounterId": "f1_encounter_umbrella_lane_bootstrap",
       "actorKeys": [101, 102, 103]
+    },
+    {
+      "id": "f1_activation_four_seasons_wraith",
+      "beatId": "f1_beat_four_seasons_wraith",
+      "encounterId": "f1_encounter_umbrella_lane_bootstrap",
+      "actorKeys": [201]
+    }
+  ],
+  "questBossPhases": [
+    {
+      "id": "f1_boss_phase_spring",
+      "objectiveId": "f1_objective_survive_spring_phase",
+      "actorKey": 201,
+      "healthPercent": 75,
+      "nextStanceId": "stance_wraith_summer"
+    },
+    {
+      "id": "f1_boss_phase_summer",
+      "objectiveId": "f1_objective_survive_summer_phase",
+      "actorKey": 201,
+      "healthPercent": 50,
+      "nextStanceId": "stance_wraith_autumn"
+    },
+    {
+      "id": "f1_boss_phase_autumn",
+      "objectiveId": "f1_objective_survive_autumn_phase",
+      "actorKey": 201,
+      "healthPercent": 25,
+      "nextStanceId": "stance_wraith_winter"
+    },
+    {
+      "id": "f1_boss_phase_winter",
+      "objectiveId": "f1_objective_survive_winter_phase",
+      "actorKey": 201,
+      "healthPercent": 0,
+      "nextStanceId": null
     }
   ],
   "questCombatTriggers": [

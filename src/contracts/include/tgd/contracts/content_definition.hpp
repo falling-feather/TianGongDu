@@ -109,6 +109,14 @@ struct QuestEncounterActivationDefinition final {
     std::span<const StableActorKey> actor_keys{};
 };
 
+struct QuestBossPhaseDefinition final {
+    ContentId id{};
+    ContentId objective_id{};
+    StableActorKey actor{};
+    std::uint8_t health_percent{};
+    StableContentKey next_stance{};
+};
+
 struct VerticalSliceDefinition final {
     ContentId id{};
     std::string_view view_model{};
@@ -130,6 +138,7 @@ struct VerticalSliceDefinition final {
     std::span<const QuestCombatTriggerDefinition> quest_combat_triggers{};
     std::span<const QuestCombatOutcomeDefinition> quest_combat_outcomes{};
     std::span<const QuestEncounterActivationDefinition> quest_encounter_activations{};
+    std::span<const QuestBossPhaseDefinition> quest_boss_phases{};
 };
 
 }  // namespace tgd::contracts

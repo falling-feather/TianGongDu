@@ -111,7 +111,7 @@ struct CombatActorConfig final {
     CombatFaction faction{CombatFaction::neutral};
     GroundPoseMm initial_pose{};
     CombatResources initial_resources{};
-    std::array<StableContentKey, 3> stance_ids{};
+    std::array<StableContentKey, 4> stance_ids{};
     std::uint8_t stance_count{};
     StableContentKey initial_stance{};
     CombatRecoveryDefinition recovery{};

@@ -189,6 +189,39 @@ class DeterministicQuestCombatOutcomeResolver final {
     bool initialized_{};
 };
 
+enum class QuestBossPhaseError : std::uint8_t {
+    none,
+    invalid_lifecycle,
+    invalid_definition,
+    invalid_actor_snapshot,
+};
+
+struct QuestBossPhaseResult final {
+    QuestBossPhaseError error{QuestBossPhaseError::none};
+    bool found{};
+    contracts::StableContentKey phase{};
+    contracts::StableContentKey objective{};
+    contracts::StableActorKey actor{};
+    contracts::StableContentKey next_stance{};
+};
+
+class DeterministicQuestBossPhaseResolver final {
+  public:
+    static constexpr std::size_t phase_capacity = 16;
+
+    [[nodiscard]] QuestBossPhaseError initialize(
+        std::span<const contracts::QuestBossPhaseDefinition> definitions
+    ) noexcept;
+    [[nodiscard]] QuestBossPhaseResult resolve(
+        std::span<const contracts::CombatActorSnapshot> actors,
+        const IQuestRuntime& quest
+    ) const noexcept;
+
+  private:
+    std::span<const contracts::QuestBossPhaseDefinition> definitions_{};
+    bool initialized_{};
+};
+
 class DeterministicQuestRuntime final : public IQuestRuntime {
   public:
     static constexpr std::size_t stage_capacity = 16;

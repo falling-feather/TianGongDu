@@ -327,6 +327,95 @@ QuestCombatOutcomeResult DeterministicQuestCombatOutcomeResolver::resolve(
     return result;
 }
 
+QuestBossPhaseError DeterministicQuestBossPhaseResolver::initialize(
+    std::span<const contracts::QuestBossPhaseDefinition> definitions
+) noexcept {
+    if (initialized_) {
+        return QuestBossPhaseError::invalid_lifecycle;
+    }
+    if (definitions.empty() || definitions.size() > phase_capacity) {
+        return QuestBossPhaseError::invalid_definition;
+    }
+    for (std::size_t index = 0; index < definitions.size(); ++index) {
+        const auto& definition = definitions[index];
+        const auto valid_transition =
+            (definition.health_percent == 0 && definition.next_stance == 0) ||
+            (definition.health_percent > 0 && definition.health_percent <= 100 &&
+             definition.next_stance != 0);
+        if (definition.id.key == 0 || definition.id.name.empty() ||
+            definition.objective_id.key == 0 || definition.objective_id.name.empty() ||
+            definition.actor == 0 || !valid_transition) {
+            return QuestBossPhaseError::invalid_definition;
+        }
+        for (std::size_t prior = 0; prior < index; ++prior) {
+            const auto& previous = definitions[prior];
+            if (previous.id.key == definition.id.key ||
+                previous.objective_id.key == definition.objective_id.key ||
+                (previous.actor == definition.actor &&
+                 previous.health_percent <= definition.health_percent)) {
+                return QuestBossPhaseError::invalid_definition;
+            }
+        }
+    }
+    definitions_ = definitions;
+    initialized_ = true;
+    return QuestBossPhaseError::none;
+}
+
+QuestBossPhaseResult DeterministicQuestBossPhaseResolver::resolve(
+    std::span<const contracts::CombatActorSnapshot> actors,
+    const IQuestRuntime& quest
+) const noexcept {
+    QuestBossPhaseResult result{};
+    if (!initialized_) {
+        result.error = QuestBossPhaseError::invalid_lifecycle;
+        return result;
+    }
+    for (std::size_t index = 0; index < actors.size(); ++index) {
+        const auto& actor = actors[index];
+        if (actor.actor == 0 || actor.archetype == 0 || actor.resources.health_max <= 0 ||
+            actor.resources.health < 0 || actor.resources.health > actor.resources.health_max) {
+            result.error = QuestBossPhaseError::invalid_actor_snapshot;
+            return result;
+        }
+        for (std::size_t prior = 0; prior < index; ++prior) {
+            if (actors[prior].actor == actor.actor) {
+                result.error = QuestBossPhaseError::invalid_actor_snapshot;
+                return result;
+            }
+        }
+    }
+
+    for (const auto& definition : definitions_) {
+        if (quest.objective_state(definition.objective_id.key) != QuestObjectiveState::active) {
+            continue;
+        }
+        const auto actor = std::find_if(
+            actors.begin(),
+            actors.end(),
+            [&definition](const contracts::CombatActorSnapshot& candidate) {
+                return candidate.actor == definition.actor;
+            }
+        );
+        if (actor == actors.end()) {
+            result.error = QuestBossPhaseError::invalid_actor_snapshot;
+            return result;
+        }
+        const auto health_scaled = static_cast<std::int64_t>(actor->resources.health) * 100;
+        const auto threshold_scaled =
+            static_cast<std::int64_t>(actor->resources.health_max) * definition.health_percent;
+        if (health_scaled <= threshold_scaled) {
+            result.found = true;
+            result.phase = definition.id.key;
+            result.objective = definition.objective_id.key;
+            result.actor = definition.actor;
+            result.next_stance = definition.next_stance;
+        }
+        return result;
+    }
+    return result;
+}
+
 QuestError DeterministicQuestRuntime::initialize(
     const contracts::VerticalSliceDefinition& definition,
     contracts::StableActorKey player_actor

@@ -289,3 +289,11 @@ Snapshot 的 previous/current 双缓冲是 F1 基线，Presentation 用 accumula
 F1 命令回放使用版本化、显式小端的 `CommandReplay` 二进制格式。回放只记录内容指纹、`GameSessionConfig`、最终 Tick、期望校验和及已映射到世界坐标的权威命令；物理键位、浏览器帧时间、Axmol 对象、屏幕坐标和 Presentation 状态不得进入格式。相同回放必须在 Web/Native 以及 30/60/144 Hz 渲染节奏下抵达同一量化 `x/y/height/floorLayer` 和校验和。
 
 解码器先进入受限 DTO，再构造可执行回放；未知 major、超出当前能力的 minor、截断、尾随字节、越界 Tick、非法方向、未排序或重复排序键、单 Tick 命令溢出、总命令/Tick 上限超限以及校验和不符均须失败关闭。回放版本变化若改变已有字节语义或权威结果，必须新增迁移/兼容决策，不能静默重解释历史数据。
+
+## 24. 合格玩法时长审计
+
+`DeterministicPlaytimeAudit` 与 60 Hz Session 同步推进，但不以经过的全部墙钟或模拟 Tick 冒充玩法时长。F1 内容合同固定 180 Tick 活动宽限：移动、纵跃、已被战斗解析器接受的玩家事件和已提交任务进度只负责续期；宽限耗尽后的运行 Tick 进入 `idle_ticks`。当前 Beat 的合格/闲置时间先留在尝试区，安全推进下一 Beat 才提交；`SafePointRetryCommand` 会把当前尝试全部重分类到 `failure_retry_ticks`，不会删掉诊断证据，也不会让失败刷时进入合格总数。
+
+总合格 Tick 达到 60 分钟仍不足以过门；每个 Beat 必须分别达到 `target_minutes`，防止在单段绕圈后快速跳过薄弱内容。只有任务已经归位、合格总数达标且 7 个 Beat 预算全部达标时，`playable_target_met` 才为真。`PlaytimeAuditSnapshot` 是 Presentation、浏览器 QA 与未来盲测导出器的只读边界，包含合格、闲置、失败重试、当前 Beat 和逐 Beat 达标数及确定性校验和；任何 HUD、JavaScript 或测试工具都不得回写这些计数。
+
+该审计器只能拒绝已知伪时长，不能自动判断移动绕圈、原样敌群、文本质量或探索是否真正非重复。正式 1H 验收仍需真人首玩记录、主持规则、路线/事件 trace 和观察结论；正式盲测记录导出器及其证据包格式目前保持 Missing，不得因 HUD 显示 `1H PENDING/PASS` 而冒充已完成内容密度验收。

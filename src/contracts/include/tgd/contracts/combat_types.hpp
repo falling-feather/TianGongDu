@@ -128,6 +128,7 @@ struct CombatActorSnapshot final {
     StableContentKey active_ability{};
     bool guarding{};
     bool active{};
+    bool defeated{};
 };
 
 struct CombatEvent final {

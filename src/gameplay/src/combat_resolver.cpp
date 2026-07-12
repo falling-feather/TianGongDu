@@ -217,7 +217,8 @@ CombatError DeterministicCombatResolver::retry_from_initial(
         return CombatError::retry_not_allowed;
     }
     if (command.reason != contracts::SafePointRetryReason::player_defeated ||
-        actor_snapshots_[player_index].active) {
+        actor_snapshots_[player_index].active ||
+        !actor_snapshots_[player_index].defeated) {
         return CombatError::retry_not_allowed;
     }
     if (command.sequence == 0 || command.sequence <= last_retry_sequence_) {
@@ -292,11 +293,13 @@ CombatError DeterministicCombatResolver::activate_group(
         ) != activation_indices.begin() + static_cast<std::ptrdiff_t>(actor_keys.size());
         if (selected) {
             actor_snapshots_[actor].active = actor_snapshots_[actor].resources.health > 0;
+            actor_snapshots_[actor].defeated = false;
         } else {
             actor_snapshots_[actor].resources.health = 0;
             actor_snapshots_[actor].active_ability = 0;
             actor_snapshots_[actor].guarding = false;
             actor_snapshots_[actor].active = false;
+            actor_snapshots_[actor].defeated = false;
         }
     }
     command_count_ = 0;
@@ -570,6 +573,7 @@ void DeterministicCombatResolver::restore_actor(std::size_t index) noexcept {
         0,
         false,
         config.initially_active && config.initial_resources.health > 0,
+        false,
     };
     actor_runtime_[index] = {};
     actor_runtime_[index].active_ability = ability_capacity;
@@ -855,6 +859,7 @@ bool DeterministicCombatResolver::resolve_hit(
     }
     if (target.resources.health == 0) {
         target.active = false;
+        target.defeated = true;
         target.guarding = false;
         target.active_ability = 0;
         actor_runtime_[target_index] = {};
@@ -897,6 +902,7 @@ void DeterministicCombatResolver::update_checksum() noexcept {
         hash_integer(hash, actor.active_ability);
         hash_byte(hash, actor.guarding ? 1U : 0U);
         hash_byte(hash, actor.active ? 1U : 0U);
+        hash_byte(hash, actor.defeated ? 1U : 0U);
         hash_integer(hash, runtime.target);
         hash_integer(hash, runtime.ability_started_tick);
         hash_integer(hash, runtime.evade_until_tick);

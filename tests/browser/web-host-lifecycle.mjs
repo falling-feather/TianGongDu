@@ -1059,8 +1059,8 @@ async function runBrowser(target, origin) {
     );
     assert.equal(
       trainingState.activeHostiles,
-      3,
-      `${target} umbrella-lane group did not replace the training rigs.`
+      2,
+      `${target} umbrella-lane doll wave did not replace the training rigs.`
     );
     await captureRenderedFrame(
       page,
@@ -1108,7 +1108,7 @@ async function runBrowser(target, origin) {
     );
     const retryState = await page.evaluate(() => window.__tgdTest.getF1State());
     assert.equal(retryState.playerHealth, 120, `${target} retry did not restore player health.`);
-    assert.equal(retryState.activeHostiles, 3, `${target} retry did not restore every hostile.`);
+    assert.equal(retryState.activeHostiles, 2, `${target} retry did not restore the active wave.`);
     assert.equal(retryState.safePointPoseX, -5_600);
     assert.equal(retryState.safePointPoseY, -1_200);
     assert.equal(retryState.playerPoseX, retryState.safePointPoseX);
@@ -1158,6 +1158,7 @@ async function runBrowser(target, origin) {
     let victoryState = await page.evaluate(() => window.__tgdTest.getF1State());
     let readyToAttack = false;
     let sawTelegraph = false;
+    let sawPaperEgretWave = false;
     const victoryDeadline = Date.now() + 45_000;
     while (victoryState.activeHostiles > 0 && Date.now() < victoryDeadline) {
       assert.equal(
@@ -1175,10 +1176,24 @@ async function runBrowser(target, origin) {
         await page.keyboard.press("j");
         readyToAttack = false;
       }
+      if (
+        victoryState.questCompletedObjectives >= 1 &&
+        victoryState.activeHostiles === 1 &&
+        !sawPaperEgretWave
+      ) {
+        sawPaperEgretWave = true;
+        await captureRenderedFrame(
+          page,
+          canvas,
+          resolve(reportDirectory, `${target}-umbrella-lane-paper-egret-wave.png`),
+          `${target} umbrella-lane paper-egret wave`
+        );
+      }
       await page.waitForTimeout(40);
       victoryState = await page.evaluate(() => window.__tgdTest.getF1State());
     }
     assert.equal(sawTelegraph, true, `${target} never exposed a hostile telegraph.`);
+    assert.equal(sawPaperEgretWave, true, `${target} never activated the paper-egret wave.`);
     assert.equal(victoryState.activeHostiles, 0, `${target} did not clear the authored hostile groups.`);
     assert.equal(victoryState.questBeatIndex, 2);
     assert.equal(victoryState.questCompletedObjectives, 2);
@@ -1563,6 +1578,9 @@ async function runBrowser(target, origin) {
         projectPath(resolve(reportDirectory, `${target}-quest-interaction-ready.png`)),
         projectPath(resolve(reportDirectory, `${target}-quest-stage-advanced.png`)),
         projectPath(resolve(reportDirectory, `${target}-training-complete.png`)),
+        projectPath(
+          resolve(reportDirectory, `${target}-umbrella-lane-paper-egret-wave.png`)
+        ),
         projectPath(resolve(reportDirectory, `${target}-umbrella-lane-complete.png`)),
         projectPath(
           resolve(reportDirectory, `${target}-workbench-investigation-complete.png`)

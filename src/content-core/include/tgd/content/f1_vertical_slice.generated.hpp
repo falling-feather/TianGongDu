@@ -130,19 +130,22 @@ inline constexpr std::array<contracts::StableActorKey, 1> encounter_activation_1
     105ULL,
 }};
 
-inline constexpr std::array<contracts::StableActorKey, 3> encounter_activation_2_actors{{
+inline constexpr std::array<contracts::StableActorKey, 2> encounter_activation_2_actors{{
+    101ULL,
+    102ULL,
+}};
+
+inline constexpr std::array<contracts::StableActorKey, 1> encounter_activation_3_actors{{
+    103ULL,
+}};
+
+inline constexpr std::array<contracts::StableActorKey, 3> encounter_activation_4_actors{{
     101ULL,
     102ULL,
     103ULL,
 }};
 
-inline constexpr std::array<contracts::StableActorKey, 3> encounter_activation_3_actors{{
-    101ULL,
-    102ULL,
-    103ULL,
-}};
-
-inline constexpr std::array<contracts::StableActorKey, 1> encounter_activation_4_actors{{
+inline constexpr std::array<contracts::StableActorKey, 1> encounter_activation_5_actors{{
     201ULL,
 }};
 
@@ -222,12 +225,13 @@ inline constexpr std::array<contracts::QuestCombatOutcomeDefinition, 3> f1_quest
     {contracts::content_id("f1_outcome_validate_return_calibration"), contracts::QuestCombatOutcomeKind::all_hostiles_defeated, contracts::content_id("f1_objective_validate_calibration"), contracts::ContentId{}, 0U},
 }};
 
-inline constexpr std::array<contracts::QuestEncounterActivationDefinition, 5> f1_quest_encounter_activations{{
+inline constexpr std::array<contracts::QuestEncounterActivationDefinition, 6> f1_quest_encounter_activations{{
     {contracts::content_id("f1_activation_shen_yan_training_rigs"), contracts::content_id("f1_beat_shen_yan_training"), contracts::ContentId{}, contracts::content_id("f1_encounter_umbrella_lane_bootstrap"), std::span<const contracts::StableActorKey>{encounter_activation_0_actors}},
     {contracts::content_id("f1_activation_shen_yan_flower_turn_rig"), contracts::content_id("f1_beat_shen_yan_training"), contracts::content_id("f1_objective_eavesguard_counter"), contracts::content_id("f1_encounter_umbrella_lane_bootstrap"), std::span<const contracts::StableActorKey>{encounter_activation_1_actors}},
     {contracts::content_id("f1_activation_umbrella_lane_first_encounter"), contracts::content_id("f1_beat_umbrella_lane_first_encounter"), contracts::ContentId{}, contracts::content_id("f1_encounter_umbrella_lane_bootstrap"), std::span<const contracts::StableActorKey>{encounter_activation_2_actors}},
-    {contracts::content_id("f1_activation_canopy_return_encounter"), contracts::content_id("f1_beat_canopy_return_encounter"), contracts::ContentId{}, contracts::content_id("f1_encounter_umbrella_lane_bootstrap"), std::span<const contracts::StableActorKey>{encounter_activation_3_actors}},
-    {contracts::content_id("f1_activation_four_seasons_wraith"), contracts::content_id("f1_beat_four_seasons_wraith"), contracts::ContentId{}, contracts::content_id("f1_encounter_umbrella_lane_bootstrap"), std::span<const contracts::StableActorKey>{encounter_activation_4_actors}},
+    {contracts::content_id("f1_activation_umbrella_lane_paper_egret"), contracts::content_id("f1_beat_umbrella_lane_first_encounter"), contracts::content_id("f1_objective_defeat_leaking_dolls"), contracts::content_id("f1_encounter_umbrella_lane_bootstrap"), std::span<const contracts::StableActorKey>{encounter_activation_3_actors}},
+    {contracts::content_id("f1_activation_canopy_return_encounter"), contracts::content_id("f1_beat_canopy_return_encounter"), contracts::ContentId{}, contracts::content_id("f1_encounter_umbrella_lane_bootstrap"), std::span<const contracts::StableActorKey>{encounter_activation_4_actors}},
+    {contracts::content_id("f1_activation_four_seasons_wraith"), contracts::content_id("f1_beat_four_seasons_wraith"), contracts::ContentId{}, contracts::content_id("f1_encounter_umbrella_lane_bootstrap"), std::span<const contracts::StableActorKey>{encounter_activation_5_actors}},
 }};
 
 inline constexpr std::array<contracts::QuestBossPhaseDefinition, 4> f1_quest_boss_phases{{

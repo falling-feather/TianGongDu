@@ -406,7 +406,10 @@ bool test_defeat_retry_restores_initial_encounter() {
     for (int tick = 0; tick < 5; ++tick) {
         ok &= resolver.advance_one_tick(sink) == CombatError::none;
     }
-    ok &= expect(!resolver.actors()[0].active, "zero health enters the defeated state");
+    ok &= expect(
+        !resolver.actors()[0].active && resolver.actors()[0].defeated,
+        "zero health enters the explicit defeated state"
+    );
     ok &= expect(sink.contains(CombatEventType::actor_defeated), "defeat emits an event");
 
     const tgd::contracts::SafePointRetryCommand zero_sequence{5, 1, 0};
@@ -421,6 +424,7 @@ bool test_defeat_retry_restores_initial_encounter() {
     );
     ok &= expect(
         resolver.current_tick() == 5 && resolver.actors()[0].active &&
+            !resolver.actors()[0].defeated &&
             resolver.actors()[0].resources == actor_configs[0].initial_resources &&
             resolver.actors()[1].resources == actor_configs[1].initial_resources,
         "retry preserves the tick and restores every actor resource"
@@ -483,9 +487,11 @@ bool test_authored_group_activation_isolates_hostiles() {
     );
     ok &= expect(
         resolver.actors()[0].active && !resolver.actors()[1].active &&
+            !resolver.actors()[1].defeated &&
             resolver.actors()[1].resources.health == 0 && resolver.actors()[2].active &&
+            !resolver.actors()[2].defeated &&
             resolver.actors()[2].resources == actor_configs[2].initial_resources,
-        "activating a group restores only its selected hostile actors"
+        "activating a group distinguishes dormant actors from defeated actors"
     );
     const std::array<tgd::contracts::StableActorKey, 1> lane_group{2};
     ok &= expect(
@@ -497,7 +503,8 @@ bool test_authored_group_activation_isolates_hostiles() {
         "a later authored group can replace the current encounter"
     );
     ok &= expect(
-        resolver.actors()[1].active && !resolver.actors()[2].active &&
+        resolver.actors()[1].active && !resolver.actors()[1].defeated &&
+            !resolver.actors()[2].active && !resolver.actors()[2].defeated &&
             resolver.actors()[2].resources.health == 0,
         "replaced hostile groups remain inactive across stage and retry boundaries"
     );
@@ -521,7 +528,10 @@ bool test_defeat_cancels_pending_ability() {
     for (int tick = 0; tick < 6; ++tick) {
         ok &= resolver.advance_one_tick(sink) == CombatError::none;
     }
-    ok &= expect(!resolver.actors()[1].active, "the earlier hit defeats the hostile");
+    ok &= expect(
+        !resolver.actors()[1].active && resolver.actors()[1].defeated,
+        "the earlier hit explicitly defeats the hostile"
+    );
     ok &= expect(
         resolver.actors()[0].resources.health == 120,
         "a defeated hostile cannot finish its pending heavy attack"

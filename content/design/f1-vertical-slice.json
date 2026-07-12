@@ -859,7 +859,14 @@
       "beatId": "f1_beat_umbrella_lane_first_encounter",
       "triggerObjectiveId": null,
       "encounterId": "f1_encounter_umbrella_lane_bootstrap",
-      "actorKeys": [101, 102, 103]
+      "actorKeys": [101, 102]
+    },
+    {
+      "id": "f1_activation_umbrella_lane_paper_egret",
+      "beatId": "f1_beat_umbrella_lane_first_encounter",
+      "triggerObjectiveId": "f1_objective_defeat_leaking_dolls",
+      "encounterId": "f1_encounter_umbrella_lane_bootstrap",
+      "actorKeys": [103]
     },
     {
       "id": "f1_activation_canopy_return_encounter",

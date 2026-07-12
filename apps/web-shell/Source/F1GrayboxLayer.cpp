@@ -1837,6 +1837,12 @@ bool F1GrayboxLayer::activateEncounterForBeat(
     incoming_attack_source_ = 0;
     if (combat_event_label_ != nullptr) {
         if (trigger_objective == tgd::contracts::stable_content_key(
+                                     "f1_objective_defeat_leaking_dolls"
+                                 )) {
+            combat_event_label_->setString(
+                "LANE WAVE 2 / PAPER EGRET DEPLOYED"
+            );
+        } else if (trigger_objective == tgd::contracts::stable_content_key(
                                      "f1_objective_eavesguard_counter"
                                  )) {
             combat_event_label_->setString(
@@ -1851,7 +1857,9 @@ bool F1GrayboxLayer::activateEncounterForBeat(
         } else if (beat == tgd::contracts::stable_content_key(
                                       "f1_beat_umbrella_lane_first_encounter"
                                   )) {
-            combat_event_label_->setString("UMBRELLA LANE GROUP DEPLOYED");
+            combat_event_label_->setString(
+                "LANE WAVE 1 / LEAKING DOLLS DEPLOYED"
+            );
         } else if (beat == tgd::contracts::stable_content_key(
                                       "f1_beat_canopy_return_encounter"
                                   )) {

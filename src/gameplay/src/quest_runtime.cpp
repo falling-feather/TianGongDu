@@ -311,7 +311,10 @@ QuestCombatOutcomeResult DeterministicQuestCombatOutcomeResolver::resolve(
         return result;
     }
     for (std::size_t index = 0; index < actors.size(); ++index) {
-        if (actors[index].actor == 0 || actors[index].archetype == 0) {
+        if (actors[index].actor == 0 || actors[index].archetype == 0 ||
+            (actors[index].active &&
+             (actors[index].defeated || actors[index].resources.health == 0)) ||
+            (actors[index].defeated && actors[index].resources.health != 0)) {
             result.error = QuestCombatOutcomeError::invalid_actor_snapshot;
             return result;
         }
@@ -336,7 +339,7 @@ QuestCombatOutcomeResult DeterministicQuestCombatOutcomeResolver::resolve(
                 actors.end(),
                 [&definition](const contracts::CombatActorSnapshot& actor) {
                     return actor.faction == contracts::CombatFaction::hostile &&
-                           !actor.active &&
+                           actor.defeated &&
                            actor.archetype == definition.archetype_id.key;
                 }
             ));
@@ -349,7 +352,15 @@ QuestCombatOutcomeResult DeterministicQuestCombatOutcomeResolver::resolve(
                     return actor.faction == contracts::CombatFaction::hostile;
                 }
             ));
-            condition_met = hostile_count != 0 &&
+            const auto defeated_count = static_cast<std::size_t>(std::count_if(
+                actors.begin(),
+                actors.end(),
+                [](const contracts::CombatActorSnapshot& actor) {
+                    return actor.faction == contracts::CombatFaction::hostile &&
+                           actor.defeated;
+                }
+            ));
+            condition_met = hostile_count != 0 && defeated_count != 0 &&
                             std::none_of(
                                 actors.begin(),
                                 actors.end(),

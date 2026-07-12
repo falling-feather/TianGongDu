@@ -303,7 +303,14 @@ test("F1 encounters activate authored groups at beat and objective boundaries", 
       beatId: contract.beats[2].id,
       triggerObjectiveId: null,
       encounterId: contract.combatBootstrap.id,
-      actorKeys: [101, 102, 103]
+      actorKeys: [101, 102]
+    },
+    {
+      id: "f1_activation_umbrella_lane_paper_egret",
+      beatId: contract.beats[2].id,
+      triggerObjectiveId: contract.beats[2].objectiveIds[0],
+      encounterId: contract.combatBootstrap.id,
+      actorKeys: [103]
     },
     {
       id: "f1_activation_canopy_return_encounter",
@@ -331,7 +338,7 @@ test("F1 encounters activate authored groups at beat and objective boundaries", 
   wrongBeat.questEncounterActivations[0].beatId = contract.beats[3].id;
   assert.throws(
     () => validateF1SliceContract(wrongBeat, catalog),
-    /training waves, lane, return, and boss beats must own/
+    /training waves, lane waves, return, and boss beats must own/
   );
 
   const crossBeatTrigger = structuredClone(contract);

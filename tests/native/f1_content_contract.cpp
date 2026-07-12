@@ -156,7 +156,7 @@ int main() {
         "two resolutions gate the authored return and map to stable reward receipts"
     );
     ok &= expect(
-        combat != nullptr && definition->quest_encounter_activations.size() == 5 &&
+        combat != nullptr && definition->quest_encounter_activations.size() == 6 &&
             definition->quest_encounter_activations.front().beat_id.key ==
                 tgd::contracts::stable_content_key(
                     "f1_beat_shen_yan_training"
@@ -180,13 +180,19 @@ int main() {
                 tgd::contracts::stable_content_key(
                     "f1_beat_umbrella_lane_first_encounter"
                 ) &&
-            definition->quest_encounter_activations[2].actor_keys.size() == 3 &&
-            definition->quest_encounter_activations[3].beat_id.key ==
+            definition->quest_encounter_activations[2].actor_keys.size() == 2 &&
+            definition->quest_encounter_activations[3].trigger_objective_id.key ==
+                tgd::contracts::stable_content_key(
+                    "f1_objective_defeat_leaking_dolls"
+                ) &&
+            definition->quest_encounter_activations[3].actor_keys.size() == 1 &&
+            definition->quest_encounter_activations[3].actor_keys.front() == 103 &&
+            definition->quest_encounter_activations[4].beat_id.key ==
                 tgd::contracts::stable_content_key(
                     "f1_beat_canopy_return_encounter"
                 ) &&
-            definition->quest_encounter_activations[3].actor_keys.size() == 3,
-        "objective-driven training waves, lane, and return activations are generated content"
+            definition->quest_encounter_activations[4].actor_keys.size() == 3,
+        "objective-driven training, lane waves, and return activations are generated content"
     );
     ok &= expect(
         definition->quest_encounter_activations.back().beat_id.key ==

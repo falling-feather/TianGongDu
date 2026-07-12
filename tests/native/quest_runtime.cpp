@@ -620,6 +620,7 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
             0,
             false,
             config.initially_active,
+            false,
         };
     }
     for (const auto actor_key : definition().quest_encounter_activations[2].actor_keys) {
@@ -632,6 +633,7 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
         );
         if (actor != actors.end()) {
             actor->active = true;
+            actor->defeated = false;
         }
     }
     ok &= expect(
@@ -669,7 +671,9 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
         if (actor.archetype ==
                 tgd::contracts::stable_content_key("jn_enemy_leaking_umbrella_doll") &&
             defeated_dolls < 2) {
+            actor.resources.health = 0;
             actor.active = false;
+            actor.defeated = true;
             ++defeated_dolls;
             const auto resolved = outcomes.resolve(actors, quest);
             if (defeated_dolls == 1) {
@@ -695,10 +699,37 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
             }
         }
     }
+    ok &= expect(
+        !outcomes.resolve(actors, quest).found,
+        "a dormant paper egret is not misclassified as defeated"
+    );
+    for (const auto actor_key : definition().quest_encounter_activations[3].actor_keys) {
+        const auto actor = std::find_if(
+            actors.begin(),
+            actors.end(),
+            [actor_key](const tgd::contracts::CombatActorSnapshot& candidate) {
+                return candidate.actor == actor_key;
+            }
+        );
+        const auto config = std::find_if(
+            combat_definition().actors.begin(),
+            combat_definition().actors.end(),
+            [actor_key](const tgd::contracts::CombatActorConfig& candidate) {
+                return candidate.actor == actor_key;
+            }
+        );
+        if (actor != actors.end() && config != combat_definition().actors.end()) {
+            actor->resources = config->initial_resources;
+            actor->active = true;
+            actor->defeated = false;
+        }
+    }
     for (auto& actor : actors) {
         if (actor.archetype ==
             tgd::contracts::stable_content_key("jn_enemy_faded_paper_egret")) {
+            actor.resources.health = 0;
             actor.active = false;
+            actor.defeated = true;
         }
     }
     const auto egret = outcomes.resolve(actors, quest);
@@ -834,10 +865,21 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
     );
 
     auto return_actors = actors;
-    for (const auto actor_key : definition().quest_encounter_activations[3].actor_keys) {
+    for (const auto actor_key : definition().quest_encounter_activations[4].actor_keys) {
         for (auto& actor : return_actors) {
             if (actor.actor == actor_key) {
+                const auto config = std::find_if(
+                    combat_definition().actors.begin(),
+                    combat_definition().actors.end(),
+                    [actor_key](const tgd::contracts::CombatActorConfig& candidate) {
+                        return candidate.actor == actor_key;
+                    }
+                );
+                if (config != combat_definition().actors.end()) {
+                    actor.resources = config->initial_resources;
+                }
                 actor.active = true;
+                actor.defeated = false;
             }
         }
     }
@@ -845,10 +887,12 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
         !outcomes.resolve(return_actors, quest).found,
         "reactivated return hostiles block calibration validation"
     );
-    for (const auto actor_key : definition().quest_encounter_activations[3].actor_keys) {
+    for (const auto actor_key : definition().quest_encounter_activations[4].actor_keys) {
         for (auto& actor : return_actors) {
             if (actor.actor == actor_key) {
+                actor.resources.health = 0;
                 actor.active = false;
+                actor.defeated = true;
             }
         }
     }
@@ -918,6 +962,14 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
             QuestCombatOutcomeError::invalid_actor_snapshot,
         "duplicate actor snapshots fail closed"
     );
+    auto invalid_lifecycle = actors;
+    invalid_lifecycle[1].active = true;
+    invalid_lifecycle[1].defeated = true;
+    ok &= expect(
+        outcomes.resolve(invalid_lifecycle, quest).error ==
+            QuestCombatOutcomeError::invalid_actor_snapshot,
+        "an actor cannot be active and defeated at the same time"
+    );
     return ok;
 }
 
@@ -970,6 +1022,7 @@ bool test_four_seasons_boss_phases_are_ordered() {
             0,
             false,
             config.initially_active,
+            false,
         };
     }
     const auto boss = std::find_if(
@@ -997,6 +1050,7 @@ bool test_four_seasons_boss_phases_are_ordered() {
         boss->resources.health =
             boss->resources.health_max * static_cast<std::int32_t>(phase.health_percent) / 100;
         boss->active = boss->resources.health > 0;
+        boss->defeated = boss->resources.health == 0;
         const auto resolved = phases.resolve(actors, quest);
         ok &= expect(
             resolved.error == QuestBossPhaseError::none && resolved.found &&

@@ -351,7 +351,7 @@ export function validateF1SliceContract(contract, catalog) {
   const trainingBeat = contract.beats[1];
   const laneBeat = contract.beats[2];
   const bossBeat = contract.beats[5];
-  if (encounterActivations.length !== 5 ||
+  if (encounterActivations.length !== 6 ||
       encounterActivations[0].beatId !== trainingBeat.id ||
       encounterActivations[0].triggerObjectiveId !== null ||
       !sameValues(encounterActivations[0].actorKeys, [104]) ||
@@ -360,14 +360,17 @@ export function validateF1SliceContract(contract, catalog) {
       !sameValues(encounterActivations[1].actorKeys, [105]) ||
       encounterActivations[2].beatId !== laneBeat.id ||
       encounterActivations[2].triggerObjectiveId !== null ||
-      !sameValues(encounterActivations[2].actorKeys, [101, 102, 103]) ||
-      encounterActivations[3].beatId !== returnBeat.id ||
-      encounterActivations[3].triggerObjectiveId !== null ||
-      !sameValues(encounterActivations[3].actorKeys, [101, 102, 103]) ||
-      encounterActivations[4].beatId !== bossBeat.id ||
+      !sameValues(encounterActivations[2].actorKeys, [101, 102]) ||
+      encounterActivations[3].beatId !== laneBeat.id ||
+      encounterActivations[3].triggerObjectiveId !== laneBeat.objectiveIds[0] ||
+      !sameValues(encounterActivations[3].actorKeys, [103]) ||
+      encounterActivations[4].beatId !== returnBeat.id ||
       encounterActivations[4].triggerObjectiveId !== null ||
-      !sameValues(encounterActivations[4].actorKeys, [201])) {
-    fail("training waves, lane, return, and boss beats must own authored activations");
+      !sameValues(encounterActivations[4].actorKeys, [101, 102, 103]) ||
+      encounterActivations[5].beatId !== bossBeat.id ||
+      encounterActivations[5].triggerObjectiveId !== null ||
+      !sameValues(encounterActivations[5].actorKeys, [201])) {
+    fail("training waves, lane waves, return, and boss beats must own authored activations");
   }
   const bossPhases = contract.questBossPhases;
   if (!Array.isArray(bossPhases) || bossPhases.length !== 4) {

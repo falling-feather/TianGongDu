@@ -458,6 +458,52 @@ bool test_defeat_retry_restores_initial_encounter() {
     return ok;
 }
 
+bool test_authored_group_activation_isolates_hostiles() {
+    DeterministicCombatResolver resolver;
+    CollectingSink sink;
+    const auto base = actors();
+    std::array<tgd::contracts::CombatActorConfig, 3> actor_configs{
+        base[0],
+        base[1],
+        base[1],
+    };
+    actor_configs[2].actor = 3;
+    actor_configs[2].archetype_id = tgd::contracts::content_id("enemy_b");
+    actor_configs[2].initially_active = false;
+    bool ok = resolver.initialize(actor_configs, abilities()) == CombatError::none;
+    ok &= resolver.start() == CombatError::none;
+    const std::array<tgd::contracts::StableActorKey, 1> boss_group{3};
+    ok &= expect(
+        resolver.activate_group(
+            {0, 1, 1, tgd::contracts::SafePointRetryReason::quest_stage_advanced},
+            boss_group,
+            sink
+        ) == CombatError::none,
+        "an authored inactive hostile group can become the current encounter"
+    );
+    ok &= expect(
+        resolver.actors()[0].active && !resolver.actors()[1].active &&
+            resolver.actors()[1].resources.health == 0 && resolver.actors()[2].active &&
+            resolver.actors()[2].resources == actor_configs[2].initial_resources,
+        "activating a group restores only its selected hostile actors"
+    );
+    const std::array<tgd::contracts::StableActorKey, 1> lane_group{2};
+    ok &= expect(
+        resolver.activate_group(
+            {0, 1, 2, tgd::contracts::SafePointRetryReason::quest_stage_advanced},
+            lane_group,
+            sink
+        ) == CombatError::none,
+        "a later authored group can replace the current encounter"
+    );
+    ok &= expect(
+        resolver.actors()[1].active && !resolver.actors()[2].active &&
+            resolver.actors()[2].resources.health == 0,
+        "replaced hostile groups remain inactive across stage and retry boundaries"
+    );
+    return ok;
+}
+
 bool test_defeat_cancels_pending_ability() {
     DeterministicCombatResolver resolver;
     CollectingSink sink;
@@ -494,6 +540,7 @@ int main() {
     ok &= test_authoritative_pose_sync();
     ok &= test_delayed_resource_recovery();
     ok &= test_defeat_retry_restores_initial_encounter();
+    ok &= test_authored_group_activation_isolates_hostiles();
     ok &= test_defeat_cancels_pending_ability();
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

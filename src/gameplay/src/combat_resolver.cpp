@@ -280,10 +280,24 @@ CombatError DeterministicCombatResolver::activate_group(
     }
 
     restore_actor(player_index);
-    for (std::size_t index = 0; index < actor_keys.size(); ++index) {
-        const auto actor = activation_indices[index];
+    for (std::size_t actor = 0; actor < actor_count_; ++actor) {
+        if (actor_snapshots_[actor].faction != contracts::CombatFaction::hostile) {
+            continue;
+        }
         restore_actor(actor);
-        actor_snapshots_[actor].active = actor_snapshots_[actor].resources.health > 0;
+        const auto selected = std::find(
+            activation_indices.begin(),
+            activation_indices.begin() + static_cast<std::ptrdiff_t>(actor_keys.size()),
+            actor
+        ) != activation_indices.begin() + static_cast<std::ptrdiff_t>(actor_keys.size());
+        if (selected) {
+            actor_snapshots_[actor].active = actor_snapshots_[actor].resources.health > 0;
+        } else {
+            actor_snapshots_[actor].resources.health = 0;
+            actor_snapshots_[actor].active_ability = 0;
+            actor_snapshots_[actor].guarding = false;
+            actor_snapshots_[actor].active = false;
+        }
     }
     command_count_ = 0;
     pose_update_count_ = 0;

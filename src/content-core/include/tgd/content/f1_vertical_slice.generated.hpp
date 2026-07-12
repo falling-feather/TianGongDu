@@ -71,6 +71,12 @@ inline constexpr std::array<contracts::ContentId, 1> interaction_9_prerequisites
     contracts::content_id("f1_objective_validate_calibration"),
 }};
 
+inline constexpr std::array<contracts::StableActorKey, 3> encounter_activation_0_actors{{
+    101ULL,
+    102ULL,
+    103ULL,
+}};
+
 inline constexpr std::array<contracts::VerticalSliceBeatDefinition, 7> f1_beats{{
     {contracts::content_id("f1_beat_rain_ferry_arrival"), contracts::VerticalSliceBeatKind::exploration, 9, contracts::content_id("f1_cell_rain_ferry"), std::span<const contracts::ContentId>{beat_0_objectives}},
     {contracts::content_id("f1_beat_shen_yan_training"), contracts::VerticalSliceBeatKind::training, 8, contracts::content_id("f1_cell_rain_ferry"), std::span<const contracts::ContentId>{beat_1_objectives}},
@@ -128,14 +134,14 @@ inline constexpr std::array<contracts::QuestCombatOutcomeDefinition, 3> f1_quest
 }};
 
 inline constexpr std::array<contracts::QuestEncounterActivationDefinition, 1> f1_quest_encounter_activations{{
-    {contracts::content_id("f1_activation_canopy_return_encounter"), contracts::content_id("f1_beat_canopy_return_encounter"), contracts::content_id("f1_encounter_umbrella_lane_bootstrap")},
+    {contracts::content_id("f1_activation_canopy_return_encounter"), contracts::content_id("f1_beat_canopy_return_encounter"), contracts::content_id("f1_encounter_umbrella_lane_bootstrap"), std::span<const contracts::StableActorKey>{encounter_activation_0_actors}},
 }};
 
 inline constexpr std::array<contracts::CombatActorConfig, 4> f1_combat_actors{{
-    {1ULL, contracts::content_id("actor_f1_player"), contracts::CombatFaction::player, {-12000, -1600, 0, 0}, {120, 120, 100, 100, 80, 80, 30, 30, 0}, {contracts::stable_content_key("stance_eavesguard"), contracts::stable_content_key("stance_flower_turn"), 0}, 2U, contracts::stable_content_key("stance_eavesguard"), {30, 6, 2, 120, 12, 4}},
-    {101ULL, contracts::content_id("jn_enemy_leaking_umbrella_doll"), contracts::CombatFaction::hostile, {-4000, -2600, 0, 0}, {90, 90, 80, 80, 40, 40, 0, 0, 0}, {contracts::stable_content_key("stance_umbrella_rust"), 0, 0}, 1U, contracts::stable_content_key("stance_umbrella_rust"), {45, 10, 2, 150, 15, 3}},
-    {102ULL, contracts::content_id("jn_enemy_leaking_umbrella_doll"), contracts::CombatFaction::hostile, {-3000, -400, 0, 0}, {90, 90, 80, 80, 40, 40, 0, 0, 0}, {contracts::stable_content_key("stance_umbrella_rust"), 0, 0}, 1U, contracts::stable_content_key("stance_umbrella_rust"), {45, 10, 2, 150, 15, 3}},
-    {103ULL, contracts::content_id("jn_enemy_faded_paper_egret"), contracts::CombatFaction::hostile, {-1500, 900, 700, 0}, {70, 70, 100, 100, 28, 28, 0, 0, 0}, {contracts::stable_content_key("stance_paper_egret"), 0, 0}, 1U, contracts::stable_content_key("stance_paper_egret"), {36, 8, 2, 120, 12, 3}},
+    {1ULL, contracts::content_id("actor_f1_player"), contracts::CombatFaction::player, {-12000, -1600, 0, 0}, {120, 120, 100, 100, 80, 80, 30, 30, 0}, {contracts::stable_content_key("stance_eavesguard"), contracts::stable_content_key("stance_flower_turn"), 0}, 2U, contracts::stable_content_key("stance_eavesguard"), {30, 6, 2, 120, 12, 4}, true},
+    {101ULL, contracts::content_id("jn_enemy_leaking_umbrella_doll"), contracts::CombatFaction::hostile, {-4000, -2600, 0, 0}, {90, 90, 80, 80, 40, 40, 0, 0, 0}, {contracts::stable_content_key("stance_umbrella_rust"), 0, 0}, 1U, contracts::stable_content_key("stance_umbrella_rust"), {45, 10, 2, 150, 15, 3}, true},
+    {102ULL, contracts::content_id("jn_enemy_leaking_umbrella_doll"), contracts::CombatFaction::hostile, {-3000, -400, 0, 0}, {90, 90, 80, 80, 40, 40, 0, 0, 0}, {contracts::stable_content_key("stance_umbrella_rust"), 0, 0}, 1U, contracts::stable_content_key("stance_umbrella_rust"), {45, 10, 2, 150, 15, 3}, true},
+    {103ULL, contracts::content_id("jn_enemy_faded_paper_egret"), contracts::CombatFaction::hostile, {-1500, 900, 700, 0}, {70, 70, 100, 100, 28, 28, 0, 0, 0}, {contracts::stable_content_key("stance_paper_egret"), 0, 0}, 1U, contracts::stable_content_key("stance_paper_egret"), {36, 8, 2, 120, 12, 3}, true},
 }};
 
 inline constexpr std::array<contracts::AbilityDefinition, 9> f1_combat_abilities{{

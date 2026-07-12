@@ -1402,7 +1402,7 @@ bool F1GrayboxLayer::activateEncounterForBeat(
     clearHeldInput(tgd::contracts::InputClearReason::safe_point_retry, false);
     if (encounter_.retry_from_initial(command) !=
             tgd::gameplay::EncounterDirectorError::none ||
-        combat_.retry_from_initial(command, *this) !=
+        combat_.activate_group(command, activation->actor_keys, *this) !=
             tgd::gameplay::CombatError::none) {
         return false;
     }

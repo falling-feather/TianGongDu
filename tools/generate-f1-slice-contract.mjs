@@ -261,6 +261,17 @@ export function validateF1SliceContract(contract, catalog) {
     if (activation.encounterId !== contract.combatBootstrap?.id) {
       fail(`${activation.id} references an unknown encounter`);
     }
+    const hostileActorKeys = new Set(
+      contract.combatBootstrap.actors
+        .filter((actor) => actor.faction === "hostile")
+        .map((actor) => actor.actorKey)
+    );
+    if (!Array.isArray(activation.actorKeys) || activation.actorKeys.length === 0 ||
+        activation.actorKeys.length > 15 ||
+        activation.actorKeys.some((actor) => !hostileActorKeys.has(actor))) {
+      fail(`${activation.id} references an invalid hostile actor group`);
+    }
+    assertUnique(activation.actorKeys, `${activation.id} actor key`);
   }
   assertUnique(encounterActivations.map((activation) => activation.id), "encounter activation id");
   assertUnique(
@@ -268,7 +279,8 @@ export function validateF1SliceContract(contract, catalog) {
     "encounter activation beat"
   );
   if (encounterActivations.length !== 1 ||
-      encounterActivations[0].beatId !== returnBeat.id) {
+      encounterActivations[0].beatId !== returnBeat.id ||
+      !sameValues(encounterActivations[0].actorKeys, [101, 102, 103])) {
     fail("the canopy return beat must own the authored encounter activation");
   }
   const combatTriggers = contract.questCombatTriggers;
@@ -472,6 +484,10 @@ export function validateF1SliceContract(contract, catalog) {
     if (!actor.stanceIds.includes(actor.initialStanceId)) {
       fail(`${actor.actorKey} initial stance is not allowed`);
     }
+    if (typeof actor.initiallyActive !== "boolean" ||
+        (actor.faction === "player" && !actor.initiallyActive)) {
+      fail(`${actor.actorKey} has an invalid initial active state`);
+    }
     for (const stance of actor.stanceIds) stanceIds.add(stance);
     for (const [valueField, maxField, positiveMax] of resourcePairs) {
       const value = actor.resources?.[valueField];
@@ -629,7 +645,7 @@ function combatActorRow(actor) {
   const resources = actor.resources;
   const recovery = actor.recovery;
   const stances = [...actor.stanceIds.map(stableKey), ...Array(3 - actor.stanceIds.length).fill("0")];
-  return `    {${actor.actorKey}ULL, ${contentId(actor.archetypeId)}, contracts::CombatFaction::${actor.faction}, {${pose.x}, ${pose.y}, ${pose.height}, ${pose.floorLayer}}, {${resources.health}, ${resources.healthMax}, ${resources.stamina}, ${resources.staminaMax}, ${resources.poise}, ${resources.poiseMax}, ${resources.lantern}, ${resources.lanternMax}, ${resources.evidence}}, {${stances.join(", ")}}, ${actor.stanceIds.length}U, ${stableKey(actor.initialStanceId)}, {${recovery.staminaDelayTicks}, ${recovery.staminaIntervalTicks}, ${recovery.staminaPerInterval}, ${recovery.poiseDelayTicks}, ${recovery.poiseIntervalTicks}, ${recovery.poisePerInterval}}},`;
+  return `    {${actor.actorKey}ULL, ${contentId(actor.archetypeId)}, contracts::CombatFaction::${actor.faction}, {${pose.x}, ${pose.y}, ${pose.height}, ${pose.floorLayer}}, {${resources.health}, ${resources.healthMax}, ${resources.stamina}, ${resources.staminaMax}, ${resources.poise}, ${resources.poiseMax}, ${resources.lantern}, ${resources.lanternMax}, ${resources.evidence}}, {${stances.join(", ")}}, ${actor.stanceIds.length}U, ${stableKey(actor.initialStanceId)}, {${recovery.staminaDelayTicks}, ${recovery.staminaIntervalTicks}, ${recovery.staminaPerInterval}, ${recovery.poiseDelayTicks}, ${recovery.poiseIntervalTicks}, ${recovery.poisePerInterval}}, ${actor.initiallyActive}},`;
 }
 
 function combatAbilityRow(ability) {
@@ -659,8 +675,8 @@ function questCombatOutcomeRow(outcome) {
   return `    {${contentId(outcome.id)}, contracts::QuestCombatOutcomeKind::${outcome.kind}, ${contentId(outcome.objectiveId)}, ${archetype}, ${outcome.requiredCount}U},`;
 }
 
-function questEncounterActivationRow(activation) {
-  return `    {${contentId(activation.id)}, ${contentId(activation.beatId)}, ${contentId(activation.encounterId)}},`;
+function questEncounterActivationRow(activation, index) {
+  return `    {${contentId(activation.id)}, ${contentId(activation.beatId)}, ${contentId(activation.encounterId)}, std::span<const contracts::StableActorKey>{encounter_activation_${index}_actors}},`;
 }
 
 export function renderF1SliceContract(contract) {
@@ -704,6 +720,11 @@ ${arrayRows(interaction.prerequisiteObjectiveIds)}
   const questEncounterActivationRows = contract.questEncounterActivations
     .map(questEncounterActivationRow)
     .join("\n");
+  const questEncounterActivationActorArrays = contract.questEncounterActivations
+    .map(
+      (activation, index) => `inline constexpr std::array<contracts::StableActorKey, ${activation.actorKeys.length}> encounter_activation_${index}_actors{{${activation.actorKeys.map((actor) => `\n    ${actor}ULL,`).join("")}\n}};`
+    )
+    .join("\n\n");
 
   return `// Generated from content/design/f1-vertical-slice.json. Do not edit by hand.
 #pragma once
@@ -719,6 +740,8 @@ namespace tgd::content::generated {
 ${objectiveArrays}
 
 ${interactionPrerequisiteArrays}
+
+${questEncounterActivationActorArrays}
 
 inline constexpr std::array<contracts::VerticalSliceBeatDefinition, ${contract.beats.length}> f1_beats{{
 ${beatRows}

@@ -88,7 +88,8 @@
           "poisePerInterval": 4
         },
         "stanceIds": ["stance_eavesguard", "stance_flower_turn"],
-        "initialStanceId": "stance_eavesguard"
+        "initialStanceId": "stance_eavesguard",
+        "initiallyActive": true
       },
       {
         "actorKey": 101,
@@ -115,7 +116,8 @@
           "poisePerInterval": 3
         },
         "stanceIds": ["stance_umbrella_rust"],
-        "initialStanceId": "stance_umbrella_rust"
+        "initialStanceId": "stance_umbrella_rust",
+        "initiallyActive": true
       },
       {
         "actorKey": 102,
@@ -142,7 +144,8 @@
           "poisePerInterval": 3
         },
         "stanceIds": ["stance_umbrella_rust"],
-        "initialStanceId": "stance_umbrella_rust"
+        "initialStanceId": "stance_umbrella_rust",
+        "initiallyActive": true
       },
       {
         "actorKey": 103,
@@ -169,7 +172,8 @@
           "poisePerInterval": 3
         },
         "stanceIds": ["stance_paper_egret"],
-        "initialStanceId": "stance_paper_egret"
+        "initialStanceId": "stance_paper_egret",
+        "initiallyActive": true
       }
     ],
     "abilities": [
@@ -511,7 +515,8 @@
     {
       "id": "f1_activation_canopy_return_encounter",
       "beatId": "f1_beat_canopy_return_encounter",
-      "encounterId": "f1_encounter_umbrella_lane_bootstrap"
+      "encounterId": "f1_encounter_umbrella_lane_bootstrap",
+      "actorKeys": [101, 102, 103]
     }
   ],
   "questCombatTriggers": [

@@ -397,8 +397,20 @@ bool VerticalSliceSession::valid_definition(
         );
         if (activation.id.key == 0 || activation.id.name.empty() ||
             activation.beat_id.key == 0 || activation.encounter_id.key == 0 ||
-            activation.encounter_id.name.empty() || !beat_exists) {
+            activation.encounter_id.name.empty() || activation.actor_keys.empty() ||
+            !beat_exists) {
             return false;
+        }
+        for (std::size_t actor = 0; actor < activation.actor_keys.size(); ++actor) {
+            if (activation.actor_keys[actor] == 0 ||
+                std::find(
+                    activation.actor_keys.begin(),
+                    activation.actor_keys.begin() + static_cast<std::ptrdiff_t>(actor),
+                    activation.actor_keys[actor]
+                ) != activation.actor_keys.begin() +
+                         static_cast<std::ptrdiff_t>(actor)) {
+                return false;
+            }
         }
         for (std::size_t prior = 0; prior < index; ++prior) {
             const auto& previous = definition.quest_encounter_activations[prior];

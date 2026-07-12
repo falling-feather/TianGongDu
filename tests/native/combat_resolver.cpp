@@ -440,8 +440,13 @@ bool test_defeat_retry_restores_initial_encounter() {
         tgd::contracts::SafePointRetryReason::quest_stage_advanced,
     };
     ok &= expect(
-        resolver.retry_from_initial(stage_restart, sink) == CombatError::none,
-        "an active player can restart combat for an authored quest stage transition"
+        resolver.retry_from_initial(stage_restart, sink) == CombatError::retry_not_allowed,
+        "safe-point retry remains exclusive to defeated players"
+    );
+    const std::array<tgd::contracts::StableActorKey, 1> return_group{2};
+    ok &= expect(
+        resolver.activate_group(stage_restart, return_group, sink) == CombatError::none,
+        "an active player can activate an authored hostile group"
     );
     for (int tick = 5; tick < 10; ++tick) {
         ok &= resolver.advance_one_tick(sink) == CombatError::none;

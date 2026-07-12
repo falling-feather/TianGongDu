@@ -108,7 +108,8 @@ int main() {
                     "f1_beat_canopy_return_encounter"
                 ) &&
             definition->quest_encounter_activations.front().encounter_id.key ==
-                combat->id.key,
+                combat->id.key &&
+            definition->quest_encounter_activations.front().actor_keys.size() == 3,
         "the canopy return encounter activation is generated content"
     );
 

@@ -216,13 +216,8 @@ CombatError DeterministicCombatResolver::retry_from_initial(
         actor_snapshots_[player_index].faction != contracts::CombatFaction::player) {
         return CombatError::retry_not_allowed;
     }
-    const auto defeated_retry =
-        command.reason == contracts::SafePointRetryReason::player_defeated &&
-        !actor_snapshots_[player_index].active;
-    const auto stage_restart =
-        command.reason == contracts::SafePointRetryReason::quest_stage_advanced &&
-        actor_snapshots_[player_index].active;
-    if (!defeated_retry && !stage_restart) {
+    if (command.reason != contracts::SafePointRetryReason::player_defeated ||
+        actor_snapshots_[player_index].active) {
         return CombatError::retry_not_allowed;
     }
     if (command.sequence == 0 || command.sequence <= last_retry_sequence_) {
@@ -231,6 +226,64 @@ CombatError DeterministicCombatResolver::retry_from_initial(
 
     for (std::size_t index = 0; index < actor_count_; ++index) {
         restore_actor(index);
+    }
+    command_count_ = 0;
+    pose_update_count_ = 0;
+    event_count_ = 0;
+    last_retry_sequence_ = command.sequence;
+    static_cast<void>(emit({
+        current_tick_,
+        contracts::CombatEventType::encounter_restarted,
+        command.actor,
+        command.actor,
+    }));
+    update_checksum();
+    sink.publish(std::span{events_}.first(event_count_));
+    return CombatError::none;
+}
+
+CombatError DeterministicCombatResolver::activate_group(
+    const contracts::SafePointRetryCommand& command,
+    std::span<const contracts::StableActorKey> actor_keys,
+    ICombatEventSink& sink
+) noexcept {
+    if (lifecycle_ != CombatLifecycle::running && lifecycle_ != CombatLifecycle::paused) {
+        return CombatError::invalid_lifecycle;
+    }
+    if (command.completed_tick != current_tick_) {
+        return CombatError::retry_targets_wrong_tick;
+    }
+    const auto player_index = actor_index(command.actor);
+    if (player_index == actor_capacity ||
+        actor_snapshots_[player_index].faction != contracts::CombatFaction::player ||
+        !actor_snapshots_[player_index].active ||
+        command.reason != contracts::SafePointRetryReason::quest_stage_advanced ||
+        actor_keys.empty() || actor_keys.size() >= actor_count_) {
+        return CombatError::retry_not_allowed;
+    }
+    if (command.sequence == 0 || command.sequence <= last_retry_sequence_) {
+        return CombatError::stale_retry_sequence;
+    }
+    std::array<std::size_t, actor_capacity> activation_indices{};
+    for (std::size_t index = 0; index < actor_keys.size(); ++index) {
+        const auto actor = actor_index(actor_keys[index]);
+        if (actor == actor_capacity ||
+            actor_snapshots_[actor].faction != contracts::CombatFaction::hostile) {
+            return CombatError::retry_not_allowed;
+        }
+        for (std::size_t prior = 0; prior < index; ++prior) {
+            if (activation_indices[prior] == actor) {
+                return CombatError::retry_not_allowed;
+            }
+        }
+        activation_indices[index] = actor;
+    }
+
+    restore_actor(player_index);
+    for (std::size_t index = 0; index < actor_keys.size(); ++index) {
+        const auto actor = activation_indices[index];
+        restore_actor(actor);
+        actor_snapshots_[actor].active = actor_snapshots_[actor].resources.health > 0;
     }
     command_count_ = 0;
     pose_update_count_ = 0;
@@ -318,6 +371,9 @@ CombatError DeterministicCombatResolver::validate_config(
             actor.stance_count == 0 || actor.stance_count > actor.stance_ids.size() ||
             actor.initial_stance == 0 || !valid_resources(actor.initial_resources) ||
             !valid_recovery(actor.recovery)) {
+            return CombatError::invalid_config;
+        }
+        if (actor.faction == contracts::CombatFaction::player && !actor.initially_active) {
             return CombatError::invalid_config;
         }
         bool initial_stance_found = false;
@@ -499,7 +555,7 @@ void DeterministicCombatResolver::restore_actor(std::size_t index) noexcept {
         config.initial_stance,
         0,
         false,
-        config.initial_resources.health > 0,
+        config.initially_active && config.initial_resources.health > 0,
     };
     actor_runtime_[index] = {};
     actor_runtime_[index].active_ability = ability_capacity;

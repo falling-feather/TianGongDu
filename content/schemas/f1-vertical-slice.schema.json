@@ -250,7 +250,8 @@
         "resources",
         "recovery",
         "stanceIds",
-        "initialStanceId"
+        "initialStanceId",
+        "initiallyActive"
       ],
       "properties": {
         "actorKey": { "type": "integer", "minimum": 1 },
@@ -266,7 +267,8 @@
           "uniqueItems": true,
           "items": { "$ref": "#/$defs/id" }
         },
-        "initialStanceId": { "$ref": "#/$defs/id" }
+        "initialStanceId": { "$ref": "#/$defs/id" },
+        "initiallyActive": { "type": "boolean" }
       }
     },
     "combatAbility": {
@@ -430,11 +432,18 @@
     "questEncounterActivation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "beatId", "encounterId"],
+      "required": ["id", "beatId", "encounterId", "actorKeys"],
       "properties": {
         "id": { "$ref": "#/$defs/id" },
         "beatId": { "$ref": "#/$defs/id" },
-        "encounterId": { "$ref": "#/$defs/id" }
+        "encounterId": { "$ref": "#/$defs/id" },
+        "actorKeys": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 15,
+          "uniqueItems": true,
+          "items": { "type": "integer", "minimum": 1 }
+        }
       }
     },
     "port": {

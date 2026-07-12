@@ -193,7 +193,8 @@ test("F1 canopy return reactivates combat before opening its shortcut", async ()
     {
       id: "f1_activation_canopy_return_encounter",
       beatId: contract.beats[4].id,
-      encounterId: contract.combatBootstrap.id
+      encounterId: contract.combatBootstrap.id,
+      actorKeys: [101, 102, 103]
     }
   ]);
   assert.equal(

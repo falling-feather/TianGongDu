@@ -106,6 +106,7 @@ struct QuestEncounterActivationDefinition final {
     ContentId id{};
     ContentId beat_id{};
     ContentId encounter_id{};
+    std::span<const StableActorKey> actor_keys{};
 };
 
 struct VerticalSliceDefinition final {

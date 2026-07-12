@@ -115,6 +115,7 @@ struct CombatActorConfig final {
     std::uint8_t stance_count{};
     StableContentKey initial_stance{};
     CombatRecoveryDefinition recovery{};
+    bool initially_active{true};
 };
 
 struct CombatActorSnapshot final {

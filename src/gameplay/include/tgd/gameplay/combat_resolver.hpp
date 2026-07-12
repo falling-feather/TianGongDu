@@ -68,6 +68,11 @@ class ICombatResolver {
         const contracts::SafePointRetryCommand& command,
         ICombatEventSink& sink
     ) noexcept = 0;
+    [[nodiscard]] virtual CombatError activate_group(
+        const contracts::SafePointRetryCommand& command,
+        std::span<const contracts::StableActorKey> actor_keys,
+        ICombatEventSink& sink
+    ) noexcept = 0;
     [[nodiscard]] virtual CombatError advance_one_tick(ICombatEventSink& sink) noexcept = 0;
 
     [[nodiscard]] virtual contracts::TickIndex current_tick() const noexcept = 0;
@@ -98,6 +103,11 @@ class DeterministicCombatResolver final : public ICombatResolver {
     ) noexcept override;
     [[nodiscard]] CombatError retry_from_initial(
         const contracts::SafePointRetryCommand& command,
+        ICombatEventSink& sink
+    ) noexcept override;
+    [[nodiscard]] CombatError activate_group(
+        const contracts::SafePointRetryCommand& command,
+        std::span<const contracts::StableActorKey> actor_keys,
         ICombatEventSink& sink
     ) noexcept override;
     [[nodiscard]] CombatError advance_one_tick(ICombatEventSink& sink) noexcept override;

@@ -303,3 +303,9 @@ F1 命令回放使用版本化、显式小端的 `CommandReplay` 二进制格式
 `QuestCombatTriggerDefinition` 把任务目标与稳定的战斗语义连接起来，而不是读取按键或动画帧。F1 当前支持 `player_ability_started`、`player_stance_changed`、`player_hit_guarded` 和 `player_hit_evaded`；Ability 触发器必须提供 `required_ability`，所有触发器都必须提供非空、无重复且不自指的 `prerequisite_objectives`。运行时只在目标处于 Active、姿态/Ability 匹配且全部前置目标已完成时提交进度，错序信号保持无副作用。
 
 沈砚训练的 5 项触发依次为檐守重击起手、檐守格挡反制、切换翻花式、翻花轻击起手和翻花闪避反制。Web Shell 只把已经由战斗解析器接受的 `CombatEvent` 映射成 `QuestCombatSignal`；物理键、Presentation 特效和敌人偶然命中不能直接完成任务。新增 Ability/Stance/防御触发种类可复用这一合同，但通用条件表达式、等待/失败替代节点和编辑器预览仍为 Missing/Reserved，不能继续向解析器加入 F1 专属分支。
+
+## 26. Beat 边界的敌群激活
+
+F1 的敌对 Actor Definition 全部以 `initially_active=false` 烘焙；`QuestEncounterActivationDefinition` 为训练、伞巷首战、调校回程和 Boss Beat 指定稳定 Actor Key 组。进入 Beat 时，宿主用同一 Tick、单调命令序列和 `SafePointRetryReason::quest_stage_advanced` 请求 `ICombatResolver::activate_group`；失败重试先恢复 Definition 初态，再重新应用当前 Beat 的同一激活组。休眠不等于已击败，训练构件因此使用独立 Archetype，不能进入正式伞偶/纸鹭击败计数。
+
+Stage Advance 既可能由场景交互产生，也可能由 `CombatEvent` 中的最终训练动作产生。Web Shell 只能先记录待激活 Beat，再在交互解析后或战斗事件发布完成后的 Tick 安全点应用，禁止在 `ICombatEventSink::publish` 回调栈中重入修改 Combat Resolver。当前合同只支持每个 Beat 一个完整替换组；Objective 条件波次、组叠加、刷出/退场演出、复杂编队和通用 Workbench 预览仍为 Missing/Reserved。

@@ -315,6 +315,14 @@ std::uint32_t AppDelegate::webF1QaQuestRequiredObjectives() const noexcept {
     return grayboxLayer_ == nullptr ? 0U : grayboxLayer_->qaQuestRequiredObjectives();
 }
 
+std::uint32_t AppDelegate::webF1QaIncomingAttackTicks() const noexcept {
+    return grayboxLayer_ == nullptr ? 0U : grayboxLayer_->qaIncomingAttackTicks();
+}
+
+int AppDelegate::webF1QaPlayerBusy() const noexcept {
+    return grayboxLayer_ != nullptr && grayboxLayer_->qaPlayerBusy() ? 1 : 0;
+}
+
 std::int32_t AppDelegate::webBoot(std::span<const std::uint8_t> message) noexcept {
     using tgd::platform::web::WebAbiError;
 
@@ -659,6 +667,20 @@ EMSCRIPTEN_KEEPALIVE std::uint32_t tgd_web_f1_qa_quest_completed_objectives() {
 EMSCRIPTEN_KEEPALIVE std::uint32_t tgd_web_f1_qa_quest_required_objectives() {
     if (const auto* app = AppDelegate::active(); app != nullptr) {
         return app->webF1QaQuestRequiredObjectives();
+    }
+    return 0;
+}
+
+EMSCRIPTEN_KEEPALIVE std::uint32_t tgd_web_f1_qa_incoming_attack_ticks() {
+    if (const auto* app = AppDelegate::active(); app != nullptr) {
+        return app->webF1QaIncomingAttackTicks();
+    }
+    return 0;
+}
+
+EMSCRIPTEN_KEEPALIVE int tgd_web_f1_qa_player_busy() {
+    if (const auto* app = AppDelegate::active(); app != nullptr) {
+        return app->webF1QaPlayerBusy();
     }
     return 0;
 }

@@ -227,6 +227,9 @@ void solidPolygon(
     if (interaction == tgd::contracts::stable_content_key("f1_interaction_meet_shen_yan")) {
         return "F / TALK TO SHEN YAN";
     }
+    if (interaction == tgd::contracts::stable_content_key("f1_interaction_choose_lane_route")) {
+        return "F / CHOOSE CANOPY ROUTE";
+    }
     switch (kind) {
         case tgd::contracts::QuestInteractionKind::inspect:
             return "F / INSPECT";
@@ -277,6 +280,8 @@ bool F1GrayboxLayer::init() {
             tgd::gameplay::QuestInteractionError::none ||
         quest_combat_triggers_.initialize(definition_->quest_combat_triggers) !=
             tgd::gameplay::QuestCombatTriggerError::none ||
+        quest_combat_outcomes_.initialize(definition_->quest_combat_outcomes) !=
+            tgd::gameplay::QuestCombatOutcomeError::none ||
         combat_.initialize(combat_definition_->actors, combat_definition_->abilities) !=
             tgd::gameplay::CombatError::none ||
         combat_.start() != tgd::gameplay::CombatError::none ||
@@ -794,6 +799,7 @@ void F1GrayboxLayer::publish(
 ) noexcept {
     for (const auto& event : events) {
         submitQuestCombatSignal(event);
+        submitQuestCombatOutcome(event);
         if (event.type == tgd::contracts::CombatEventType::ability_started &&
             event.source == definition_->player.actor) {
             player_action_ticks_ = combat_feedback_ticks;
@@ -808,6 +814,17 @@ void F1GrayboxLayer::publish(
                 );
             }
         } else if (event.type == tgd::contracts::CombatEventType::ability_started) {
+            const auto ability = std::find_if(
+                combat_definition_->abilities.begin(),
+                combat_definition_->abilities.end(),
+                [&event](const tgd::contracts::AbilityDefinition& definition) {
+                    return definition.id.key == event.ability;
+                }
+            );
+            if (ability != combat_definition_->abilities.end()) {
+                incoming_attack_tick_ = event.tick + ability->windup_ticks;
+                incoming_attack_source_ = event.source;
+            }
             for (std::size_t index = 0; index < hostile_capacity; ++index) {
                 if (hostile_actor_keys_[index] == event.source) {
                     hostile_flash_ticks_[index] = combat_feedback_ticks;
@@ -831,6 +848,14 @@ void F1GrayboxLayer::publish(
              event.type == tgd::contracts::CombatEventType::poise_broken) &&
             event.target == definition_->player.actor) {
             player_hit_ticks_ = combat_feedback_ticks;
+        }
+        if ((event.type == tgd::contracts::CombatEventType::attack_missed ||
+             event.type == tgd::contracts::CombatEventType::hit_landed ||
+             event.type == tgd::contracts::CombatEventType::hit_guarded ||
+             event.type == tgd::contracts::CombatEventType::hit_evaded) &&
+            event.source == incoming_attack_source_) {
+            incoming_attack_tick_ = 0;
+            incoming_attack_source_ = 0;
         }
         if (event.type == tgd::contracts::CombatEventType::actor_defeated &&
             event.target == definition_->player.actor) {
@@ -911,7 +936,17 @@ void F1GrayboxLayer::publish(
                 combat_event_label_->setString("OBJECTIVE COMPLETE / QUEST STATE COMMITTED");
                 break;
             case tgd::contracts::QuestEventType::stage_advanced:
-                combat_event_label_->setString("BEAT ADVANCED / SHEN YAN TRAINING UNLOCKED");
+                if (session_.current_snapshot().beat_index < quest_beat_labels.size()) {
+                    combat_event_label_->setString(
+                        "BEAT ADVANCED / " +
+                        std::string{
+                            quest_beat_labels[session_.current_snapshot().beat_index]
+                        } +
+                        " UNLOCKED"
+                    );
+                } else {
+                    combat_event_label_->setString("BEAT ADVANCED");
+                }
                 break;
             case tgd::contracts::QuestEventType::quest_resolved:
                 combat_event_label_->setString("VERTICAL SLICE RESOLVED");
@@ -965,6 +1000,32 @@ void F1GrayboxLayer::submitQuestCombatSignal(
     }
 }
 
+void F1GrayboxLayer::submitQuestCombatOutcome(
+    const tgd::contracts::CombatEvent& event
+) noexcept {
+    if (event.type != tgd::contracts::CombatEventType::actor_defeated ||
+        event.target == definition_->player.actor) {
+        return;
+    }
+    const auto resolved = quest_combat_outcomes_.resolve(
+        combat_.actors(),
+        session_.quest_runtime()
+    );
+    if (resolved.error != tgd::gameplay::QuestCombatOutcomeError::none) {
+        if (combat_event_label_ != nullptr) {
+            combat_event_label_->setString("COMBAT OUTCOME REJECTED / SNAPSHOT CONTRACT DRIFT");
+        }
+        return;
+    }
+    if (resolved.found) {
+        const auto completed = session_.complete_objective(resolved.objective, *this);
+        if (completed.error != tgd::gameplay::VerticalSliceError::none &&
+            combat_event_label_ != nullptr) {
+            combat_event_label_->setString("COMBAT OUTCOME REJECTED / QUEST STATE DRIFT");
+        }
+    }
+}
+
 std::int32_t F1GrayboxLayer::qaPlayerHealth() const noexcept {
     const auto actors = combat_.actors();
     const auto player = std::find_if(
@@ -1014,6 +1075,28 @@ std::uint32_t F1GrayboxLayer::qaQuestCompletedObjectives() const noexcept {
 
 std::uint32_t F1GrayboxLayer::qaQuestRequiredObjectives() const noexcept {
     return session_.current_snapshot().required_objectives;
+}
+
+std::uint32_t F1GrayboxLayer::qaIncomingAttackTicks() const noexcept {
+    if (incoming_attack_tick_ <= combat_.current_tick()) {
+        return 0;
+    }
+    const auto remaining = incoming_attack_tick_ - combat_.current_tick();
+    return remaining > std::numeric_limits<std::uint32_t>::max()
+               ? std::numeric_limits<std::uint32_t>::max()
+               : static_cast<std::uint32_t>(remaining);
+}
+
+bool F1GrayboxLayer::qaPlayerBusy() const noexcept {
+    const auto actors = combat_.actors();
+    const auto player = std::find_if(
+        actors.begin(),
+        actors.end(),
+        [this](const tgd::contracts::CombatActorSnapshot& actor) {
+            return actor.actor == definition_->player.actor;
+        }
+    );
+    return player != actors.end() && player->active_ability != 0;
 }
 
 bool F1GrayboxLayer::submitCombatTick(tgd::contracts::TickIndex tick) noexcept {
@@ -1117,6 +1200,8 @@ bool F1GrayboxLayer::retryEncounter() noexcept {
     player_hit_ticks_ = 0;
     attack_fx_ticks_ = 0;
     hostile_flash_ticks_.fill(0);
+    incoming_attack_tick_ = 0;
+    incoming_attack_source_ = 0;
     return true;
 }
 

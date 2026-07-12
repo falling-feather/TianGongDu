@@ -35,6 +35,8 @@ class F1GrayboxLayer final :
     [[nodiscard]] std::uint32_t qaQuestBeatIndex() const noexcept;
     [[nodiscard]] std::uint32_t qaQuestCompletedObjectives() const noexcept;
     [[nodiscard]] std::uint32_t qaQuestRequiredObjectives() const noexcept;
+    [[nodiscard]] std::uint32_t qaIncomingAttackTicks() const noexcept;
+    [[nodiscard]] bool qaPlayerBusy() const noexcept;
 
   private:
     struct PendingCombatIntent final {
@@ -64,6 +66,7 @@ class F1GrayboxLayer final :
     void updateJumpKey(bool pressed) noexcept;
     void updateInteractKey(bool pressed) noexcept;
     void submitQuestCombatSignal(const tgd::contracts::CombatEvent& event) noexcept;
+    void submitQuestCombatOutcome(const tgd::contracts::CombatEvent& event) noexcept;
     void submitAxisState() noexcept;
     void clearHeldInput(
         tgd::contracts::InputClearReason reason,
@@ -91,6 +94,7 @@ class F1GrayboxLayer final :
     tgd::gameplay::DeterministicEncounterDirector encounter_{};
     tgd::gameplay::DeterministicQuestInteractionResolver quest_interactions_{};
     tgd::gameplay::DeterministicQuestCombatTriggerResolver quest_combat_triggers_{};
+    tgd::gameplay::DeterministicQuestCombatOutcomeResolver quest_combat_outcomes_{};
     tgd::gameplay::SessionInputState input_{};
     tgd::contracts::PlatformSequence platform_sequence_{};
     tgd::contracts::CommandSequence command_sequence_{1};
@@ -108,6 +112,8 @@ class F1GrayboxLayer final :
     bool player_defeated_{};
     bool retry_requested_{};
     std::uint32_t retry_count_{};
+    tgd::contracts::TickIndex incoming_attack_tick_{};
+    tgd::contracts::StableActorKey incoming_attack_source_{};
     float tick_accumulator_{};
 
     ax::Node* world_layer_{};

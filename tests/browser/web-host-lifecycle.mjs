@@ -1057,6 +1057,60 @@ async function runBrowser(target, origin) {
         retryFrameComparison.changedPixelRatio * 100
       ).toFixed(2)}% of the frame.`
     );
+
+    await page.keyboard.down("w");
+    await page.waitForTimeout(600);
+    await page.keyboard.up("w");
+    await page.keyboard.down("w");
+    await page.keyboard.down("d");
+    await page.waitForTimeout(1_800);
+    await page.keyboard.up("d");
+    await page.keyboard.up("w");
+    await page.waitForTimeout(150);
+    await page.keyboard.press("2");
+    await page.waitForTimeout(100);
+    let victoryState = await page.evaluate(() => window.__tgdTest.getF1State());
+    let readyToAttack = false;
+    let sawTelegraph = false;
+    const victoryDeadline = Date.now() + 45_000;
+    while (victoryState.activeHostiles > 0 && Date.now() < victoryDeadline) {
+      assert.equal(
+        victoryState.playerActive,
+        true,
+        `${target} player fell during telegraph-driven victory route: ${JSON.stringify(victoryState)}`
+      );
+      if (victoryState.incomingAttackTicks > 0) {
+        sawTelegraph = true;
+        if (victoryState.incomingAttackTicks <= 10 && !victoryState.playerBusy) {
+          await page.keyboard.press("c");
+          readyToAttack = true;
+        }
+      } else if (readyToAttack && !victoryState.playerBusy) {
+        await page.keyboard.press("j");
+        readyToAttack = false;
+      }
+      await page.waitForTimeout(40);
+      victoryState = await page.evaluate(() => window.__tgdTest.getF1State());
+    }
+    assert.equal(sawTelegraph, true, `${target} never exposed a hostile telegraph.`);
+    assert.equal(victoryState.activeHostiles, 0, `${target} did not clear the authored hostile groups.`);
+    assert.equal(victoryState.questBeatIndex, 2);
+    assert.equal(victoryState.questCompletedObjectives, 2);
+    assert.equal(victoryState.questRequiredObjectives, 3);
+
+    await page.waitForTimeout(100);
+    await page.keyboard.press("f");
+    await page.waitForFunction(
+      () => window.__tgdTest?.getF1State()?.questBeatIndex === 3,
+      undefined,
+      { timeout: 5_000 }
+    );
+    await captureRenderedFrame(
+      page,
+      canvas,
+      resolve(reportDirectory, `${target}-umbrella-lane-complete.png`),
+      `${target} umbrella-lane beat complete`
+    );
     await page.reload({ waitUntil: "domcontentloaded", timeout: 45_000 });
     await waitForText(page, status, "宿主已就绪", 45_000);
     await canvas.focus();

@@ -429,7 +429,12 @@
           questRequiredObjectives: invokeBridge(
             "tgd_web_f1_qa_quest_required_objectives",
             "number"
-          )
+          ),
+          incomingAttackTicks: invokeBridge(
+            "tgd_web_f1_qa_incoming_attack_ticks",
+            "number"
+          ),
+          playerBusy: invokeBridge("tgd_web_f1_qa_player_busy", "number") !== 0
         }),
         getTrace: () => lifecycleTrace.map((entry) => ({ ...entry })),
         setHidden: (hidden) => dispatchVisibility(Boolean(hidden)),

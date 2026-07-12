@@ -7,6 +7,7 @@ namespace tgd::contracts {
 using TickIndex = std::uint64_t;
 using CommandSequence = std::uint64_t;
 using StableActorKey = std::uint64_t;
+using StableContentKey = std::uint64_t;
 using CollisionShapeId = std::uint32_t;
 
 inline constexpr std::int32_t ground_axis_one = 32'767;
@@ -71,6 +72,14 @@ struct SafePointRetryCommand final {
     StableActorKey actor{};
     CommandSequence sequence{};
     SafePointRetryReason reason{SafePointRetryReason::player_defeated};
+};
+
+struct SafePointCommitCommand final {
+    TickIndex completed_tick{};
+    StableActorKey actor{};
+    CommandSequence sequence{};
+    StableContentKey safe_point{};
+    GroundPoseMm pose{};
 };
 
 }  // namespace tgd::contracts

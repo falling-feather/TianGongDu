@@ -40,6 +40,8 @@ struct VerticalSliceSnapshot final {
     contracts::ContentId slice_id{};
     contracts::ContentId beat_id{};
     contracts::ContentId cell_id{};
+    contracts::ContentId safe_point_id{};
+    contracts::GroundPoseMm safe_point_pose{};
     contracts::GroundPoseMm player_pose{};
     std::uint16_t beat_index{};
     std::uint16_t beat_count{};
@@ -120,6 +122,9 @@ class VerticalSliceSession final {
     [[nodiscard]] bool valid_definition(
         const contracts::VerticalSliceDefinition& definition
     ) const noexcept;
+    [[nodiscard]] bool commit_safe_point_for_beat(
+        contracts::StableContentKey beat
+    ) noexcept;
     void refresh_snapshot() noexcept;
     void update_checksum() noexcept;
 
@@ -130,6 +135,7 @@ class VerticalSliceSession final {
     runtime::GameSessionError last_movement_error_{runtime::GameSessionError::none};
     DeterministicQuestRuntime quest_{};
     contracts::CommandSequence quest_command_sequence_{1};
+    contracts::CommandSequence safe_point_command_sequence_{1};
     std::uint64_t simulation_ticks_{};
     VerticalSliceSnapshot previous_snapshot_{};
     VerticalSliceSnapshot current_snapshot_{};

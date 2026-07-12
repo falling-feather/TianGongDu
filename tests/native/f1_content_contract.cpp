@@ -60,6 +60,19 @@ int main() {
         "the first route, cells, and enemy families are explicit"
     );
     ok &= expect(
+        definition->safe_points.size() == definition->beats.size() &&
+            definition->safe_points.front().beat_id.key ==
+                definition->beats.front().id.key &&
+            definition->safe_points.front().pose == definition->player.initial_pose &&
+            definition->safe_points[5].id.key ==
+                tgd::contracts::stable_content_key(
+                    "f1_safe_point_four_seasons_court"
+                ) &&
+            definition->safe_points[5].pose ==
+                tgd::contracts::GroundPoseMm{2200, 800, 0, 0},
+        "every beat owns an ordered content-driven movement safe point"
+    );
+    ok &= expect(
         definition->quest_interactions.size() == 13 &&
             definition->quest_interactions.front().objective_id.key ==
                 tgd::contracts::stable_content_key("f1_objective_inspect_travel_writ"),

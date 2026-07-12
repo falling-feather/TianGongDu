@@ -95,6 +95,16 @@ inline constexpr std::array<contracts::VerticalSliceBeatDefinition, 7> f1_beats{
     {contracts::content_id("f1_beat_resolution_and_return"), contracts::VerticalSliceBeatKind::resolution, 3, contracts::content_id("f1_cell_return_safe_point"), std::span<const contracts::ContentId>{beat_6_objectives}},
 }};
 
+inline constexpr std::array<contracts::VerticalSliceSafePointDefinition, 7> f1_safe_points{{
+    {contracts::content_id("f1_safe_point_rain_ferry_arrival"), contracts::content_id("f1_beat_rain_ferry_arrival"), {-12000, -1600, 0, 0}},
+    {contracts::content_id("f1_safe_point_shen_yan_training"), contracts::content_id("f1_beat_shen_yan_training"), {-10500, -600, 0, 0}},
+    {contracts::content_id("f1_safe_point_umbrella_lane"), contracts::content_id("f1_beat_umbrella_lane_first_encounter"), {-5600, -1200, 0, 0}},
+    {contracts::content_id("f1_safe_point_shared_workbench"), contracts::content_id("f1_beat_shared_workbench_investigation"), {-4300, -100, 0, 0}},
+    {contracts::content_id("f1_safe_point_canopy_return"), contracts::content_id("f1_beat_canopy_return_encounter"), {-4300, -100, 0, 0}},
+    {contracts::content_id("f1_safe_point_four_seasons_court"), contracts::content_id("f1_beat_four_seasons_wraith"), {2200, 800, 0, 0}},
+    {contracts::content_id("f1_safe_point_resolution_return"), contracts::content_id("f1_beat_resolution_and_return"), {3000, 800, 0, 0}},
+}};
+
 inline constexpr std::array<contracts::ContentId, 2> f1_subregions{{
     contracts::content_id("jn_rain_ferry"),
     contracts::content_id("jn_umbrella_lane"),
@@ -226,6 +236,7 @@ inline constexpr contracts::VerticalSliceDefinition f1_vertical_slice_definition
     std::span<const contracts::ContentId>{f1_enemy_families},
     std::span<const contracts::ContentId>{f1_cells},
     std::span<const contracts::VerticalSliceBeatDefinition>{f1_beats},
+    std::span<const contracts::VerticalSliceSafePointDefinition>{f1_safe_points},
     std::span<const contracts::QuestInteractionDefinition>{f1_quest_interactions},
     std::span<const contracts::QuestCombatTriggerDefinition>{f1_quest_combat_triggers},
     std::span<const contracts::QuestCombatOutcomeDefinition>{f1_quest_combat_outcomes},

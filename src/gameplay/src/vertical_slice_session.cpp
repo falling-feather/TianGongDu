@@ -97,6 +97,21 @@ VerticalSliceError VerticalSliceSession::initialize(
     }
 
     definition_ = &definition;
+    for (const auto& safe_point : definition.safe_points) {
+        last_movement_error_ = movement_.validate_safe_point_pose(safe_point.pose);
+        if (last_movement_error_ != runtime::GameSessionError::none) {
+            static_cast<void>(movement_.destroy());
+            static_cast<void>(quest_.destroy());
+            definition_ = nullptr;
+            return VerticalSliceError::movement_session_error;
+        }
+    }
+    if (!commit_safe_point_for_beat(definition.beats.front().id.key)) {
+        static_cast<void>(movement_.destroy());
+        static_cast<void>(quest_.destroy());
+        definition_ = nullptr;
+        return VerticalSliceError::movement_session_error;
+    }
     ++generation_;
     lifecycle_ = VerticalSliceLifecycle::ready_at_safe_point;
     refresh_snapshot();
@@ -278,6 +293,10 @@ CompleteObjectiveResult VerticalSliceSession::complete_objective(
     }
     ++quest_command_sequence_;
     previous_snapshot_ = current_snapshot_;
+    if (result.stage_advanced && !result.quest_resolved &&
+        !commit_safe_point_for_beat(quest_.snapshot().stage)) {
+        return {VerticalSliceError::movement_session_error, result.accepted, false, false};
+    }
     if (result.quest_resolved && lifecycle_ != VerticalSliceLifecycle::resolved) {
         last_movement_error_ = movement_.pause();
         if (last_movement_error_ != runtime::GameSessionError::none) {
@@ -381,6 +400,23 @@ bool VerticalSliceSession::valid_definition(
             ++objective_count;
         }
     }
+    if (definition.safe_points.size() != definition.beats.size()) {
+        return false;
+    }
+    for (std::size_t index = 0; index < definition.safe_points.size(); ++index) {
+        const auto& safe_point = definition.safe_points[index];
+        if (safe_point.id.key == 0 || safe_point.id.name.empty() ||
+            safe_point.beat_id.key != definition.beats[index].id.key ||
+            safe_point.pose.height < definition.player.initial_pose.height) {
+            return false;
+        }
+        for (std::size_t prior = 0; prior < index; ++prior) {
+            if (definition.safe_points[prior].id.key == safe_point.id.key ||
+                definition.safe_points[prior].beat_id.key == safe_point.beat_id.key) {
+                return false;
+            }
+        }
+    }
     if (definition.quest_encounter_activations.size() > max_beats) {
         return false;
     }
@@ -425,6 +461,35 @@ bool VerticalSliceSession::valid_definition(
            definition.end_to_end_test_budget_minutes >= definition.playable_target_minutes;
 }
 
+bool VerticalSliceSession::commit_safe_point_for_beat(
+    contracts::StableContentKey beat
+) noexcept {
+    const auto safe_point = std::find_if(
+        definition_->safe_points.begin(),
+        definition_->safe_points.end(),
+        [beat](const contracts::VerticalSliceSafePointDefinition& candidate) {
+            return candidate.beat_id.key == beat;
+        }
+    );
+    if (safe_point == definition_->safe_points.end()) {
+        return false;
+    }
+    last_movement_error_ = movement_.commit_safe_point(
+        {
+            movement_.current_snapshot().tick,
+            definition_->player.actor,
+            safe_point_command_sequence_,
+            safe_point->id.key,
+            safe_point->pose,
+        }
+    );
+    if (last_movement_error_ != runtime::GameSessionError::none) {
+        return false;
+    }
+    ++safe_point_command_sequence_;
+    return true;
+}
+
 void VerticalSliceSession::refresh_snapshot() noexcept {
     const auto& movement_snapshot = movement_.current_snapshot();
     const auto& quest_snapshot = quest_.snapshot();
@@ -433,6 +498,18 @@ void VerticalSliceSession::refresh_snapshot() noexcept {
     current_snapshot_.slice_id = definition_->id;
     current_snapshot_.beat_id = beat.id;
     current_snapshot_.cell_id = beat.cell_id;
+    current_snapshot_.safe_point_id = {};
+    const auto safe_point_definition = std::find_if(
+        definition_->safe_points.begin(),
+        definition_->safe_points.end(),
+        [this](const contracts::VerticalSliceSafePointDefinition& candidate) {
+            return candidate.id.key == movement_.active_safe_point();
+        }
+    );
+    if (safe_point_definition != definition_->safe_points.end()) {
+        current_snapshot_.safe_point_id = safe_point_definition->id;
+    }
+    current_snapshot_.safe_point_pose = movement_.active_safe_point_pose();
     current_snapshot_.player_pose = movement_snapshot.player_pose;
     current_snapshot_.beat_index = quest_snapshot.stage_index;
     current_snapshot_.beat_count = quest_snapshot.stage_count;
@@ -450,6 +527,11 @@ void VerticalSliceSession::update_checksum() noexcept {
     hash_integer(hash, current_snapshot_.slice_id.key);
     hash_integer(hash, current_snapshot_.beat_id.key);
     hash_integer(hash, current_snapshot_.cell_id.key);
+    hash_integer(hash, current_snapshot_.safe_point_id.key);
+    hash_integer(hash, current_snapshot_.safe_point_pose.x);
+    hash_integer(hash, current_snapshot_.safe_point_pose.y);
+    hash_integer(hash, current_snapshot_.safe_point_pose.height);
+    hash_integer(hash, current_snapshot_.safe_point_pose.floor_layer);
     hash_integer(hash, current_snapshot_.player_pose.x);
     hash_integer(hash, current_snapshot_.player_pose.y);
     hash_integer(hash, current_snapshot_.player_pose.height);

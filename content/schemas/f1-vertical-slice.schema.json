@@ -14,6 +14,7 @@
     "combatBootstrap",
     "cellIds",
     "beats",
+    "safePoints",
     "questInteractions",
     "questEncounterActivations",
     "questCombatTriggers",
@@ -111,6 +112,12 @@
       "type": "array",
       "minItems": 7,
       "items": { "$ref": "#/$defs/beat" }
+    },
+    "safePoints": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 16,
+      "items": { "$ref": "#/$defs/safePoint" }
     },
     "questInteractions": {
       "type": "array",
@@ -379,6 +386,16 @@
         "cellId": { "$ref": "#/$defs/id" },
         "objectiveIds": { "$ref": "#/$defs/idList" },
         "autoAdvance": { "const": false }
+      }
+    },
+    "safePoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "beatId", "poseMm"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "beatId": { "$ref": "#/$defs/id" },
+        "poseMm": { "$ref": "#/$defs/groundPose" }
       }
     },
     "questInteraction": {

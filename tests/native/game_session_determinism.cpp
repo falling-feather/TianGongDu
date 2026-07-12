@@ -192,6 +192,47 @@ bool test_safe_point_retry_boundary() {
         "movement and a future command exist before retry"
     );
 
+    const auto checksum_before_safe_point = session.current_snapshot().checksum;
+    constexpr tgd::contracts::StableContentKey safe_point_key = 77;
+    const tgd::contracts::GroundPoseMm safe_point_pose{400, 250, 0, 0};
+    const tgd::contracts::SafePointCommitCommand wrong_safe_point_tick{
+        0,
+        player_actor,
+        1,
+        safe_point_key,
+        safe_point_pose,
+    };
+    ok &= expect(
+        session.commit_safe_point(wrong_safe_point_tick) ==
+            GameSessionError::safe_point_targets_wrong_tick,
+        "safe-point commits bind to an exact completed tick"
+    );
+    const tgd::contracts::SafePointCommitCommand commit{
+        1,
+        player_actor,
+        1,
+        safe_point_key,
+        safe_point_pose,
+    };
+    ok &= expect(
+        session.commit_safe_point(commit) == GameSessionError::none &&
+            session.active_safe_point() == safe_point_key &&
+            session.active_safe_point_pose() == safe_point_pose &&
+            session.current_snapshot().checksum != checksum_before_safe_point,
+        "a valid authored safe point becomes deterministic retry state"
+    );
+    ok &= expect(
+        session.commit_safe_point(commit) == GameSessionError::stale_safe_point_sequence,
+        "duplicate safe-point sequences are rejected"
+    );
+    auto invalid_commit = commit;
+    invalid_commit.sequence = 2;
+    invalid_commit.safe_point = 0;
+    ok &= expect(
+        session.commit_safe_point(invalid_commit) == GameSessionError::invalid_safe_point,
+        "safe-point commits reject empty stable IDs"
+    );
+
     const tgd::contracts::SafePointRetryCommand wrong_tick{0, player_actor, 1};
     ok &= expect(
         session.retry_from_safe_point(wrong_tick) == GameSessionError::retry_targets_wrong_tick,
@@ -204,9 +245,9 @@ bool test_safe_point_retry_boundary() {
     );
     ok &= expect(
         session.current_snapshot().tick == 1 &&
-            session.current_snapshot().player_pose == config.initial_pose &&
+            session.current_snapshot().player_pose == safe_point_pose &&
             session.queued_command_count() == 0,
-        "retry preserves the monotonic tick and discards future movement"
+        "retry preserves the monotonic tick and restores the latest authored safe point"
     );
     ok &= expect(session.generation() == 2, "retry invalidates the movement generation");
     ok &= expect(
@@ -215,7 +256,7 @@ bool test_safe_point_retry_boundary() {
     );
     ok &= session.advance(1).error == GameSessionError::none;
     ok &= expect(
-        session.current_snapshot().player_pose == config.initial_pose,
+        session.current_snapshot().player_pose == safe_point_pose,
         "discarded future input cannot move the restored player"
     );
     return ok;

@@ -28,6 +28,9 @@ enum class GameSessionError : std::uint8_t {
     duplicate_command_key,
     command_targets_past_tick,
     command_queue_full,
+    safe_point_targets_wrong_tick,
+    stale_safe_point_sequence,
+    invalid_safe_point,
     retry_targets_wrong_tick,
     stale_retry_sequence,
 };
@@ -73,6 +76,12 @@ class GameSession final {
     [[nodiscard]] GameSessionError submit(
         std::span<const contracts::SessionCommand> commands
     ) noexcept;
+    [[nodiscard]] GameSessionError commit_safe_point(
+        const contracts::SafePointCommitCommand& command
+    ) noexcept;
+    [[nodiscard]] GameSessionError validate_safe_point_pose(
+        const contracts::GroundPoseMm& pose
+    ) const noexcept;
     [[nodiscard]] GameSessionError retry_from_safe_point(
         const contracts::SafePointRetryCommand& command
     ) noexcept;
@@ -81,6 +90,8 @@ class GameSession final {
     [[nodiscard]] GameSessionLifecycle lifecycle() const noexcept;
     [[nodiscard]] std::uint32_t generation() const noexcept;
     [[nodiscard]] std::size_t queued_command_count() const noexcept;
+    [[nodiscard]] contracts::StableContentKey active_safe_point() const noexcept;
+    [[nodiscard]] const contracts::GroundPoseMm& active_safe_point_pose() const noexcept;
     [[nodiscard]] const PresentationSnapshot& previous_snapshot() const noexcept;
     [[nodiscard]] const PresentationSnapshot& current_snapshot() const noexcept;
 
@@ -106,6 +117,9 @@ class GameSession final {
     std::unique_ptr<ICollisionWorld> collision_world_{};
     std::array<contracts::SessionCommand, command_capacity> commands_{};
     std::size_t command_count_{};
+    contracts::StableContentKey active_safe_point_{};
+    contracts::GroundPoseMm safe_point_pose_{};
+    contracts::CommandSequence last_safe_point_sequence_{};
     contracts::CommandSequence last_retry_sequence_{};
     PresentationSnapshot previous_snapshot_{};
     PresentationSnapshot current_snapshot_{};

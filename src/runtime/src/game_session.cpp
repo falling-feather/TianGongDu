@@ -103,6 +103,7 @@ GameSessionError GameSession::initialize(
         current_snapshot_.grounded = false;
     }
     current_snapshot_.vertical_velocity_mm_per_second = 0;
+    safe_point_pose_ = current_snapshot_.player_pose;
     update_checksum();
     previous_snapshot_ = current_snapshot_;
     return GameSessionError::none;
@@ -140,6 +141,9 @@ GameSessionError GameSession::destroy() noexcept {
     lifecycle_ = GameSessionLifecycle::destroyed;
     ++generation_;
     command_count_ = 0;
+    active_safe_point_ = 0;
+    last_safe_point_sequence_ = 0;
+    last_retry_sequence_ = 0;
     collision_world_.reset();
     return GameSessionError::none;
 }
@@ -172,6 +176,54 @@ GameSessionError GameSession::submit(
     return GameSessionError::none;
 }
 
+GameSessionError GameSession::commit_safe_point(
+    const contracts::SafePointCommitCommand& command
+) noexcept {
+    if (lifecycle_ != GameSessionLifecycle::ready_at_safe_point &&
+        lifecycle_ != GameSessionLifecycle::running &&
+        lifecycle_ != GameSessionLifecycle::paused) {
+        return GameSessionError::invalid_lifecycle;
+    }
+    if (command.completed_tick != current_snapshot_.tick) {
+        return GameSessionError::safe_point_targets_wrong_tick;
+    }
+    if (command.actor != config_.player_actor || command.sequence == 0 ||
+        command.safe_point == 0 ||
+        validate_safe_point_pose(command.pose) != GameSessionError::none) {
+        return GameSessionError::invalid_safe_point;
+    }
+    if (command.sequence <= last_safe_point_sequence_) {
+        return GameSessionError::stale_safe_point_sequence;
+    }
+    active_safe_point_ = command.safe_point;
+    safe_point_pose_ = command.pose;
+    last_safe_point_sequence_ = command.sequence;
+    update_checksum();
+    return GameSessionError::none;
+}
+
+GameSessionError GameSession::validate_safe_point_pose(
+    const contracts::GroundPoseMm& pose
+) const noexcept {
+    if (lifecycle_ == GameSessionLifecycle::uninitialized ||
+        lifecycle_ == GameSessionLifecycle::destroyed || !collision_world_) {
+        return GameSessionError::invalid_lifecycle;
+    }
+    if (pose.height < config_.ground_height) {
+        return GameSessionError::invalid_safe_point;
+    }
+    const auto collision = collision_world_->resolve_ground_move(
+        pose,
+        0,
+        0,
+        config_.collision_radius,
+        config_.collision_height
+    );
+    return collision.blocked_x || collision.blocked_y
+               ? GameSessionError::invalid_safe_point
+               : GameSessionError::none;
+}
+
 GameSessionError GameSession::retry_from_safe_point(
     const contracts::SafePointRetryCommand& command
 ) noexcept {
@@ -190,7 +242,7 @@ GameSessionError GameSession::retry_from_safe_point(
     }
 
     previous_snapshot_ = current_snapshot_;
-    current_snapshot_.player_pose = config_.initial_pose;
+    current_snapshot_.player_pose = safe_point_pose_;
     if (current_snapshot_.player_pose.height <= config_.ground_height) {
         current_snapshot_.player_pose.height = config_.ground_height;
         current_snapshot_.grounded = true;
@@ -250,6 +302,14 @@ std::uint32_t GameSession::generation() const noexcept {
 
 std::size_t GameSession::queued_command_count() const noexcept {
     return command_count_;
+}
+
+contracts::StableContentKey GameSession::active_safe_point() const noexcept {
+    return active_safe_point_;
+}
+
+const contracts::GroundPoseMm& GameSession::active_safe_point_pose() const noexcept {
+    return safe_point_pose_;
 }
 
 const PresentationSnapshot& GameSession::previous_snapshot() const noexcept {
@@ -398,6 +458,14 @@ void GameSession::update_checksum() noexcept {
     hash_integer(hash, current_snapshot_.player_pose.floor_layer);
     hash_integer(hash, current_snapshot_.vertical_velocity_mm_per_second);
     hash_byte(hash, current_snapshot_.grounded ? 1U : 0U);
+    if (active_safe_point_ != 0) {
+        hash_integer(hash, active_safe_point_);
+        hash_integer(hash, safe_point_pose_.x);
+        hash_integer(hash, safe_point_pose_.y);
+        hash_integer(hash, safe_point_pose_.height);
+        hash_integer(hash, safe_point_pose_.floor_layer);
+        hash_integer(hash, last_safe_point_sequence_);
+    }
     if (last_retry_sequence_ != 0) {
         hash_integer(hash, last_retry_sequence_);
     }

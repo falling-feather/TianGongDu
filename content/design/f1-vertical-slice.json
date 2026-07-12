@@ -541,6 +541,43 @@
       "autoAdvance": false
     }
   ],
+  "safePoints": [
+    {
+      "id": "f1_safe_point_rain_ferry_arrival",
+      "beatId": "f1_beat_rain_ferry_arrival",
+      "poseMm": { "x": -12000, "y": -1600, "height": 0, "floorLayer": 0 }
+    },
+    {
+      "id": "f1_safe_point_shen_yan_training",
+      "beatId": "f1_beat_shen_yan_training",
+      "poseMm": { "x": -10500, "y": -600, "height": 0, "floorLayer": 0 }
+    },
+    {
+      "id": "f1_safe_point_umbrella_lane",
+      "beatId": "f1_beat_umbrella_lane_first_encounter",
+      "poseMm": { "x": -5600, "y": -1200, "height": 0, "floorLayer": 0 }
+    },
+    {
+      "id": "f1_safe_point_shared_workbench",
+      "beatId": "f1_beat_shared_workbench_investigation",
+      "poseMm": { "x": -4300, "y": -100, "height": 0, "floorLayer": 0 }
+    },
+    {
+      "id": "f1_safe_point_canopy_return",
+      "beatId": "f1_beat_canopy_return_encounter",
+      "poseMm": { "x": -4300, "y": -100, "height": 0, "floorLayer": 0 }
+    },
+    {
+      "id": "f1_safe_point_four_seasons_court",
+      "beatId": "f1_beat_four_seasons_wraith",
+      "poseMm": { "x": 2200, "y": 800, "height": 0, "floorLayer": 0 }
+    },
+    {
+      "id": "f1_safe_point_resolution_return",
+      "beatId": "f1_beat_resolution_and_return",
+      "poseMm": { "x": 3000, "y": 800, "height": 0, "floorLayer": 0 }
+    }
+  ],
   "questInteractions": [
     {
       "id": "f1_interaction_travel_writ",

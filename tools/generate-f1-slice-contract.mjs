@@ -123,6 +123,39 @@ export function validateF1SliceContract(contract, catalog) {
   if (playableMinutes !== timing.playableTargetMinutes) {
     fail(`beat budgets total ${playableMinutes}, expected ${timing.playableTargetMinutes}`);
   }
+  const safePoints = contract.safePoints;
+  if (!Array.isArray(safePoints) || safePoints.length !== contract.beats.length) {
+    fail("every playable beat must own exactly one safe point");
+  }
+  for (const [index, safePoint] of safePoints.entries()) {
+    const pose = safePoint.poseMm;
+    if (
+      typeof safePoint.id !== "string" || safePoint.id.length === 0 ||
+      safePoint.beatId !== contract.beats[index].id ||
+      !pose || ![pose.x, pose.y, pose.height, pose.floorLayer].every(Number.isInteger) ||
+      pose.height < contract.playerSeed.initialPoseMm.height
+    ) {
+      fail(`${safePoint.id ?? "safe point"} is not valid for its authored beat`);
+    }
+  }
+  assertUnique(safePoints.map((safePoint) => safePoint.id), "safe point id");
+  assertUnique(safePoints.map((safePoint) => safePoint.beatId), "safe point beat");
+  const expectedSafePoints = [
+    ["f1_safe_point_rain_ferry_arrival", -12000, -1600],
+    ["f1_safe_point_shen_yan_training", -10500, -600],
+    ["f1_safe_point_umbrella_lane", -5600, -1200],
+    ["f1_safe_point_shared_workbench", -4300, -100],
+    ["f1_safe_point_canopy_return", -4300, -100],
+    ["f1_safe_point_four_seasons_court", 2200, 800],
+    ["f1_safe_point_resolution_return", 3000, 800]
+  ].map(([id, x, y], index) => ({
+    id,
+    beatId: contract.beats[index].id,
+    poseMm: {x, y, height: 0, floorLayer: 0}
+  }));
+  if (!sameValues(safePoints, expectedSafePoints)) {
+    fail("F1 safe-point route or authored poses drifted");
+  }
   const interactions = contract.questInteractions;
   if (!Array.isArray(interactions) || interactions.length < 2 || interactions.length > 64) {
     fail("quest interactions must contain 2..64 definitions");
@@ -731,6 +764,7 @@ export function validateF1SliceContract(contract, catalog) {
     ...contract.cellIds,
     ...beatIds,
     ...objectiveIds,
+    ...safePoints.map((safePoint) => safePoint.id),
     ...interactions.map((interaction) => interaction.id),
     ...interactions.map((interaction) => interaction.selectionId).filter(Boolean),
     ...encounterActivations.map((activation) => activation.id),
@@ -761,6 +795,11 @@ function arrayRows(values) {
 
 function beatKind(value) {
   return `contracts::VerticalSliceBeatKind::${value}`;
+}
+
+function safePointRow(safePoint) {
+  const pose = safePoint.poseMm;
+  return `    {${contentId(safePoint.id)}, ${contentId(safePoint.beatId)}, {${pose.x}, ${pose.y}, ${pose.height}, ${pose.floorLayer}}},`;
 }
 
 function stableKey(value) {
@@ -832,6 +871,7 @@ ${arrayRows(beat.objectiveIds)}
         `    {${contentId(beat.id)}, ${beatKind(beat.kind)}, ${beat.targetMinutes}, ${contentId(beat.cellId)}, std::span<const contracts::ContentId>{beat_${index}_objectives}},`
     )
     .join("\n");
+  const safePointRows = contract.safePoints.map(safePointRow).join("\n");
   const pose = seed.initialPoseMm;
   const basis = seed.cameraBasisQ15;
   const combatActorRows = combat.actors.map(combatActorRow).join("\n");
@@ -884,6 +924,10 @@ ${questEncounterActivationActorArrays}
 
 inline constexpr std::array<contracts::VerticalSliceBeatDefinition, ${contract.beats.length}> f1_beats{{
 ${beatRows}
+}};
+
+inline constexpr std::array<contracts::VerticalSliceSafePointDefinition, ${contract.safePoints.length}> f1_safe_points{{
+${safePointRows}
 }};
 
 inline constexpr std::array<contracts::ContentId, ${refs.subregionIds.length}> f1_subregions{{
@@ -971,6 +1015,7 @@ inline constexpr contracts::VerticalSliceDefinition f1_vertical_slice_definition
     std::span<const contracts::ContentId>{f1_enemy_families},
     std::span<const contracts::ContentId>{f1_cells},
     std::span<const contracts::VerticalSliceBeatDefinition>{f1_beats},
+    std::span<const contracts::VerticalSliceSafePointDefinition>{f1_safe_points},
     std::span<const contracts::QuestInteractionDefinition>{f1_quest_interactions},
     std::span<const contracts::QuestCombatTriggerDefinition>{f1_quest_combat_triggers},
     std::span<const contracts::QuestCombatOutcomeDefinition>{f1_quest_combat_outcomes},

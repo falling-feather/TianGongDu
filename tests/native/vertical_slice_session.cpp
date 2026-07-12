@@ -49,6 +49,28 @@ class CollectingQuestSink final : public tgd::gameplay::IQuestEventSink {
     return world;
 }
 
+[[nodiscard]] std::unique_ptr<tgd::runtime::StaticCollisionWorld> world_blocking(
+    const tgd::contracts::GroundPoseMm& pose
+) {
+    auto world = std::make_unique<tgd::runtime::StaticCollisionWorld>();
+    const std::array blockers{
+        tgd::runtime::GroundBlocker{
+            1,
+            pose.x - 100,
+            pose.x + 100,
+            pose.y - 100,
+            pose.y + 100,
+            pose.height,
+            pose.height + 2'000,
+            pose.floor_layer,
+        },
+    };
+    if (world->configure(blockers) != tgd::runtime::CollisionWorldError::none) {
+        std::abort();
+    }
+    return world;
+}
+
 [[nodiscard]] const tgd::contracts::VerticalSliceDefinition& definition() {
     static tgd::content::BuiltInF1ContentDefinitionProvider provider;
     const auto* value = provider.find_vertical_slice(
@@ -82,8 +104,11 @@ bool test_objective_driven_progression_and_lifecycle() {
         "initialization stops at a safe point"
     );
     ok &= expect(
-        session.current_snapshot().beat_id.name == "f1_beat_rain_ferry_arrival",
-        "the route starts at Rain Ferry"
+        session.current_snapshot().beat_id.name == "f1_beat_rain_ferry_arrival" &&
+            session.current_snapshot().safe_point_id == definition().safe_points.front().id &&
+            session.current_snapshot().safe_point_pose ==
+                definition().safe_points.front().pose,
+        "the route starts at the authored Rain Ferry safe point"
     );
     ok &= expect(session.start() == VerticalSliceError::none, "slice starts explicitly");
     ok &= expect(
@@ -138,10 +163,20 @@ bool test_objective_driven_progression_and_lifecycle() {
                 "objective completion is idempotent"
             );
         }
+        if (beat_index + 1 < definition().beats.size()) {
+            ok &= expect(
+                session.current_snapshot().safe_point_id ==
+                        definition().safe_points[beat_index + 1].id &&
+                    session.current_snapshot().safe_point_pose ==
+                        definition().safe_points[beat_index + 1].pose,
+                "beat advancement commits the next authored movement safe point"
+            );
+        }
     }
     ok &= expect(
         session.lifecycle() == VerticalSliceLifecycle::resolved &&
-            session.current_snapshot().resolved,
+            session.current_snapshot().resolved &&
+            session.current_snapshot().safe_point_id == definition().safe_points.back().id,
         "the final return objective resolves the slice"
     );
     ok &= expect(
@@ -212,6 +247,20 @@ bool test_retry_preserves_objective_progress() {
     ok &= session.advance(1).error == VerticalSliceError::none;
     ok &= session.complete_objective(definition().beats.front().objectives.front().key).error ==
           VerticalSliceError::none;
+    for (std::size_t index = 1; index < definition().beats.front().objectives.size(); ++index) {
+        ok &= session.complete_objective(
+                  definition().beats.front().objectives[index].key
+              ).error == VerticalSliceError::none;
+    }
+    for (const auto& objective : definition().beats[1].objectives) {
+        ok &= session.complete_objective(objective.key).error == VerticalSliceError::none;
+    }
+    ok &= expect(
+        session.current_snapshot().beat_index == 2 &&
+            session.current_snapshot().safe_point_id == definition().safe_points[2].id &&
+            session.current_snapshot().safe_point_pose == definition().safe_points[2].pose,
+        "entering the umbrella lane commits its authored retry pose"
+    );
     const auto completed_before = session.current_snapshot().completed_objectives;
     const auto quest_checksum_before = session.quest_snapshot().checksum;
     const tgd::contracts::SafePointRetryCommand retry{
@@ -224,7 +273,8 @@ bool test_retry_preserves_objective_progress() {
         "slice composes a movement safe-point retry"
     );
     ok &= expect(
-        session.current_snapshot().player_pose == definition().player.initial_pose &&
+        session.current_snapshot().player_pose == definition().safe_points[2].pose &&
+            session.current_snapshot().safe_point_id == definition().safe_points[2].id &&
             session.current_snapshot().completed_objectives == completed_before &&
             session.current_snapshot().simulation_ticks == 1 &&
             session.quest_snapshot().checksum == quest_checksum_before,
@@ -234,6 +284,17 @@ bool test_retry_preserves_objective_progress() {
     return ok;
 }
 
+bool test_every_authored_safe_point_is_collision_checked_before_start() {
+    VerticalSliceSession session;
+    const auto& boss_safe_point = definition().safe_points[5];
+    return expect(
+        session.initialize(definition(), world_blocking(boss_safe_point.pose)) ==
+            VerticalSliceError::movement_session_error &&
+            session.lifecycle() == VerticalSliceLifecycle::uninitialized,
+        "a blocked future safe point rejects the slice before any quest progress can commit"
+    );
+}
+
 }  // namespace
 
 int main() {
@@ -241,5 +302,6 @@ int main() {
     ok &= test_objective_driven_progression_and_lifecycle();
     ok &= test_same_commands_produce_same_composed_checksum();
     ok &= test_retry_preserves_objective_progress();
+    ok &= test_every_authored_safe_point_is_collision_checked_before_start();
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

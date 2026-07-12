@@ -8,8 +8,6 @@
 
 namespace tgd::contracts {
 
-using StableContentKey = std::uint64_t;
-
 [[nodiscard]] constexpr StableContentKey stable_content_key(std::string_view name) noexcept {
     StableContentKey hash = 14'695'981'039'346'656'037ULL;
     for (const auto character : name) {
@@ -57,6 +55,12 @@ struct VerticalSliceBeatDefinition final {
     std::uint16_t target_minutes{};
     ContentId cell_id{};
     std::span<const ContentId> objectives{};
+};
+
+struct VerticalSliceSafePointDefinition final {
+    ContentId id{};
+    ContentId beat_id{};
+    GroundPoseMm pose{};
 };
 
 enum class QuestInteractionKind : std::uint8_t {
@@ -142,6 +146,7 @@ struct VerticalSliceDefinition final {
     std::span<const ContentId> enemy_family_ids{};
     std::span<const ContentId> cell_ids{};
     std::span<const VerticalSliceBeatDefinition> beats{};
+    std::span<const VerticalSliceSafePointDefinition> safe_points{};
     std::span<const QuestInteractionDefinition> quest_interactions{};
     std::span<const QuestCombatTriggerDefinition> quest_combat_triggers{};
     std::span<const QuestCombatOutcomeDefinition> quest_combat_outcomes{};

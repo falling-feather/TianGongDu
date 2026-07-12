@@ -27,6 +27,7 @@ test("F1 one-hour contract and generated C++ stay synchronized", async () => {
   assert.equal(contract.timing.endToEndTestBudgetMinutes, 70);
   assert.equal(contract.view.primaryGuidance, "douzhanshen");
   assert.equal(contract.beats.length, 7);
+  assert.equal(contract.safePoints.length, 7);
   assert.equal(contract.combatBootstrap.actors.length, 5);
   assert.equal(contract.combatBootstrap.abilities.length, 17);
   assert.equal(contract.combatBootstrap.director.maxSimultaneousAttackers, 1);
@@ -87,6 +88,7 @@ test("F1 stable content IDs have unique 64-bit keys", async () => {
     contract.id,
     ...contract.cellIds,
     ...contract.beats.flatMap((beat) => [beat.id, ...beat.objectiveIds]),
+    ...contract.safePoints.map((safePoint) => safePoint.id),
     ...contract.questInteractions.map((interaction) => interaction.id),
     ...contract.questCombatTriggers.map((trigger) => trigger.id),
     ...contract.questCombatOutcomes.map((outcome) => outcome.id),
@@ -134,6 +136,47 @@ test("F1 opening objectives require valid content-driven scene interactions", as
   assert.throws(
     () => validateF1SliceContract(missingSelection, catalog),
     /requires a selection id/
+  );
+});
+
+test("F1 route owns one ordered content-driven safe point per beat", async () => {
+  const contract = await loadF1SliceContract();
+  assert.deepEqual(
+    contract.safePoints.map((safePoint) => ({
+      id: safePoint.id,
+      beatId: safePoint.beatId,
+      x: safePoint.poseMm.x,
+      y: safePoint.poseMm.y
+    })),
+    [
+      ["f1_safe_point_rain_ferry_arrival", -12000, -1600],
+      ["f1_safe_point_shen_yan_training", -10500, -600],
+      ["f1_safe_point_umbrella_lane", -5600, -1200],
+      ["f1_safe_point_shared_workbench", -4300, -100],
+      ["f1_safe_point_canopy_return", -4300, -100],
+      ["f1_safe_point_four_seasons_court", 2200, 800],
+      ["f1_safe_point_resolution_return", 3000, 800]
+    ].map(([id, x, y], index) => ({
+      id,
+      beatId: contract.beats[index].id,
+      x,
+      y
+    }))
+  );
+
+  const missing = structuredClone(contract);
+  missing.safePoints.pop();
+  assert.throws(
+    () => validateF1SliceContract(missing, catalog),
+    /every playable beat must own exactly one safe point/
+  );
+
+  const outOfOrder = structuredClone(contract);
+  [outOfOrder.safePoints[1], outOfOrder.safePoints[2]] =
+    [outOfOrder.safePoints[2], outOfOrder.safePoints[1]];
+  assert.throws(
+    () => validateF1SliceContract(outOfOrder, catalog),
+    /not valid for its authored beat/
   );
 });
 

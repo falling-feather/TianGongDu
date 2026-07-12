@@ -205,6 +205,38 @@ async function waitForChangedText(page, locator, previous, expected, timeoutMs =
   );
 }
 
+async function holdMovementKeys(page, keys, durationMs) {
+  for (const key of keys) await page.keyboard.down(key);
+  await page.waitForTimeout(durationMs);
+  for (const key of [...keys].reverse()) await page.keyboard.up(key);
+  await page.waitForTimeout(25);
+}
+
+async function moveF1PlayerTo(page, targetX, targetY, tolerance = 180) {
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    const state = await page.evaluate(() => window.__tgdTest.getF1State());
+    const deltaX = targetX - state.playerPoseX;
+    const deltaY = targetY - state.playerPoseY;
+    if (Math.abs(deltaX) <= tolerance && Math.abs(deltaY) <= tolerance) return state;
+
+    const moveX = Math.abs(deltaX) > tolerance;
+    const delta = moveX ? deltaX : deltaY;
+    const keys = moveX
+      ? delta > 0 ? ["w", "d"] : ["s", "a"]
+      : delta > 0 ? ["w", "a"] : ["s", "d"];
+    const durationMs = Math.min(
+      120,
+      Math.max(35, Math.floor(Math.abs(delta) / 3_600 * 750))
+    );
+    await holdMovementKeys(page, keys, durationMs);
+  }
+  const finalState = await page.evaluate(() => window.__tgdTest.getF1State());
+  throw new Error(
+    `F1 player did not reach (${targetX}, ${targetY}): ${JSON.stringify(finalState)}`
+  );
+}
+
 function analyzePng(buffer) {
   const png = PNG.sync.read(buffer);
   const uniqueColors = new Set();
@@ -1118,6 +1150,54 @@ async function runBrowser(target, origin) {
       canvas,
       resolve(reportDirectory, `${target}-umbrella-lane-complete.png`),
       `${target} umbrella-lane beat complete`
+    );
+    let workbenchState = await page.evaluate(() => window.__tgdTest.getF1State());
+    assert.equal(workbenchState.questCompletedObjectives, 0);
+    assert.equal(workbenchState.questRequiredObjectives, 4);
+    assert.equal(workbenchState.questSelectedChoices, 1);
+
+    await moveF1PlayerTo(page, -3_900, -100);
+    await page.keyboard.press("f");
+    await page.waitForFunction(
+      () => window.__tgdTest?.getF1State()?.questCompletedObjectives === 1,
+      undefined,
+      { timeout: 5_000 }
+    );
+    await moveF1PlayerTo(page, -3_100, -100);
+    await page.keyboard.press("f");
+    await page.waitForFunction(
+      () => window.__tgdTest?.getF1State()?.questCompletedObjectives === 2,
+      undefined,
+      { timeout: 5_000 }
+    );
+    await moveF1PlayerTo(page, -2_300, -100);
+    await page.keyboard.press("f");
+    await page.waitForFunction(
+      () => window.__tgdTest?.getF1State()?.questCompletedObjectives === 3,
+      undefined,
+      { timeout: 5_000 }
+    );
+    workbenchState = await page.evaluate(() => window.__tgdTest.getF1State());
+    assert.equal(workbenchState.questSelectedChoices, 1);
+
+    await moveF1PlayerTo(page, -1_500, 400);
+    await page.keyboard.press("f");
+    await page.waitForFunction(
+      () => {
+        const state = window.__tgdTest?.getF1State();
+        return state?.questBeatIndex === 4 && state.questSelectedChoices === 2;
+      },
+      undefined,
+      { timeout: 5_000 }
+    );
+    workbenchState = await page.evaluate(() => window.__tgdTest.getF1State());
+    assert.equal(workbenchState.questCompletedObjectives, 0);
+    assert.equal(workbenchState.questRequiredObjectives, 2);
+    await captureRenderedFrame(
+      page,
+      canvas,
+      resolve(reportDirectory, `${target}-workbench-investigation-complete.png`),
+      `${target} workbench investigation complete`
     );
     await page.reload({ waitUntil: "domcontentloaded", timeout: 45_000 });
     await waitForText(page, status, "宿主已就绪", 45_000);

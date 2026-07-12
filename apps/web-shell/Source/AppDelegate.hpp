@@ -36,6 +36,9 @@ class AppDelegate final : private ax::Application {
     [[nodiscard]] std::uint32_t webF1QaQuestBeatIndex() const noexcept;
     [[nodiscard]] std::uint32_t webF1QaQuestCompletedObjectives() const noexcept;
     [[nodiscard]] std::uint32_t webF1QaQuestRequiredObjectives() const noexcept;
+    [[nodiscard]] std::uint32_t webF1QaQuestSelectedChoices() const noexcept;
+    [[nodiscard]] std::int32_t webF1QaPlayerPoseX() const noexcept;
+    [[nodiscard]] std::int32_t webF1QaPlayerPoseY() const noexcept;
     [[nodiscard]] std::uint32_t webF1QaIncomingAttackTicks() const noexcept;
     [[nodiscard]] int webF1QaPlayerBusy() const noexcept;
     [[nodiscard]] std::int32_t webBoot(std::span<const std::uint8_t> message) noexcept;

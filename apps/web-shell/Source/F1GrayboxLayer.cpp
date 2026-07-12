@@ -214,6 +214,69 @@ void solidPolygon(
     return node;
 }
 
+[[nodiscard]] ax::Node* workbenchPropVisual(
+    tgd::contracts::StableContentKey interaction
+) {
+    const auto spring_trace =
+        tgd::contracts::stable_content_key("f1_interaction_reveal_spring_trace");
+    const auto winter_trace =
+        tgd::contracts::stable_content_key("f1_interaction_reveal_winter_trace");
+    const auto ledger =
+        tgd::contracts::stable_content_key("f1_interaction_review_shared_ledger");
+    const auto spring_rib =
+        tgd::contracts::stable_content_key("f1_interaction_calibrate_rib_spring");
+    const bool is_ledger = interaction == ledger;
+    const bool is_calibration = interaction == spring_rib ||
+                                interaction == tgd::contracts::stable_content_key(
+                                                   "f1_interaction_calibrate_rib_winter"
+                                               );
+    const auto accent = interaction == spring_trace || interaction == spring_rib
+                            ? color(116, 205, 135, 235)
+                            : interaction == winter_trace
+                                  ? color(128, 193, 225, 235)
+                                  : is_ledger ? color(218, 173, 103, 235)
+                                              : color(134, 180, 220, 235);
+
+    auto* node = ax::Node::create();
+    auto* draw = ax::DrawNode::create();
+    draw->drawSolidCircle({0.0F, -4.0F}, 30.0F, 0.0F, 28, 1.65F, 0.38F, color(2, 8, 11, 110));
+    solidPolygon(
+        draw,
+        {{-32.0F, 0.0F}, {32.0F, 0.0F}, {27.0F, 12.0F}, {-27.0F, 12.0F}},
+        color(63, 60, 51),
+        color(148, 118, 77),
+        1.5F
+    );
+    draw->drawLine({-22.0F, 1.0F}, {-18.0F, -25.0F}, color(82, 66, 48), 4.0F);
+    draw->drawLine({22.0F, 1.0F}, {18.0F, -25.0F}, color(82, 66, 48), 4.0F);
+    if (is_ledger) {
+        solidPolygon(
+            draw,
+            {{-21.0F, 15.0F}, {22.0F, 19.0F}, {18.0F, 48.0F}, {-24.0F, 44.0F}},
+            color(174, 151, 108),
+            accent,
+            1.5F
+        );
+        for (float y : std::array{25.0F, 32.0F, 39.0F}) {
+            draw->drawLine({-15.0F, y}, {12.0F, y + 2.0F}, color(75, 62, 49), 1.0F);
+        }
+    } else if (is_calibration) {
+        draw->drawLine({0.0F, 13.0F}, {0.0F, 59.0F}, accent, 3.0F);
+        draw->drawLine({0.0F, 21.0F}, {-28.0F, 47.0F}, accent, 2.0F);
+        draw->drawLine({0.0F, 25.0F}, {-13.0F, 59.0F}, accent, 2.0F);
+        draw->drawLine({0.0F, 25.0F}, {13.0F, 59.0F}, accent, 2.0F);
+        draw->drawLine({0.0F, 21.0F}, {28.0F, 47.0F}, accent, 2.0F);
+        draw->drawCircle({0.0F, 25.0F}, 8.0F, 0.0F, 24, false, accent);
+    } else {
+        draw->drawSolidCircle({0.0F, 29.0F}, 16.0F, 0.0F, 24, color(20, 42, 43, 220));
+        draw->drawCircle({0.0F, 29.0F}, 22.0F, 0.0F, 28, false, accent);
+        draw->drawLine({-12.0F, 29.0F}, {12.0F, 29.0F}, accent, 2.0F);
+        draw->drawLine({0.0F, 17.0F}, {0.0F, 41.0F}, accent, 2.0F);
+    }
+    node->addChild(draw);
+    return node;
+}
+
 [[nodiscard]] std::string_view interactionPrompt(
     tgd::contracts::StableContentKey interaction,
     tgd::contracts::QuestInteractionKind kind
@@ -229,6 +292,21 @@ void solidPolygon(
     }
     if (interaction == tgd::contracts::stable_content_key("f1_interaction_choose_lane_route")) {
         return "F / CHOOSE CANOPY ROUTE";
+    }
+    if (interaction == tgd::contracts::stable_content_key("f1_interaction_reveal_spring_trace")) {
+        return "F / REVEAL SPRING TRACE";
+    }
+    if (interaction == tgd::contracts::stable_content_key("f1_interaction_reveal_winter_trace")) {
+        return "F / REVEAL WINTER TRACE";
+    }
+    if (interaction == tgd::contracts::stable_content_key("f1_interaction_review_shared_ledger")) {
+        return "F / REVIEW SHARED LEDGER";
+    }
+    if (interaction == tgd::contracts::stable_content_key("f1_interaction_calibrate_rib_spring")) {
+        return "F / LOCK SPRING RIB CALIBRATION";
+    }
+    if (interaction == tgd::contracts::stable_content_key("f1_interaction_calibrate_rib_winter")) {
+        return "F / LOCK WINTER RIB CALIBRATION";
     }
     switch (kind) {
         case tgd::contracts::QuestInteractionKind::inspect:
@@ -498,6 +576,14 @@ void F1GrayboxLayer::createActors() {
     evidence->drawSolidCircle({0.0F, 0.0F}, 27.0F, 0.0F, 28, color(101, 214, 191, 32));
     evidence->drawLine({0.0F, -8.0F}, {0.0F, 42.0F}, color(101, 214, 191, 150), 2.0F);
     place(evidence, {start.x + 6'300, start.y + 2'700, 0, 0});
+
+    const auto workbench_cell =
+        tgd::contracts::stable_content_key("f1_cell_canopy_workstation");
+    for (const auto& interaction : definition_->quest_interactions) {
+        if (interaction.cell_id.key == workbench_cell) {
+            place(workbenchPropVisual(interaction.id.key), interaction.pose);
+        }
+    }
 
     player_node_ = playerVisual();
     world_layer_->addChild(player_node_);
@@ -769,7 +855,8 @@ void F1GrayboxLayer::updateQuestPresentation() noexcept {
             "QUEST " + std::to_string(snapshot.beat_index + 1U) + "/" +
             std::to_string(snapshot.beat_count) + " | OBJECTIVES " +
             std::to_string(snapshot.completed_objectives) + "/" +
-            std::to_string(snapshot.required_objectives) + " | " + std::string{beat_name}
+            std::to_string(snapshot.required_objectives) + " | CHOICES " +
+            std::to_string(snapshot.selected_choices) + " | " + std::string{beat_name}
         );
     }
     for (std::size_t index = 0; index < quest_marker_count_; ++index) {
@@ -937,10 +1024,36 @@ void F1GrayboxLayer::publish(
         }
         switch (event.type) {
             case tgd::contracts::QuestEventType::objective_completed:
-                combat_event_label_->setString("OBJECTIVE COMPLETE / QUEST STATE COMMITTED");
+                if (event.objective == tgd::contracts::stable_content_key(
+                                           "f1_objective_reveal_spring_trace"
+                                       )) {
+                    combat_event_label_->setString("SPRING TRACE REVEALED / EVIDENCE COMMITTED");
+                } else if (event.objective == tgd::contracts::stable_content_key(
+                                                  "f1_objective_reveal_winter_trace"
+                                              )) {
+                    combat_event_label_->setString("WINTER TRACE REVEALED / EVIDENCE COMMITTED");
+                } else if (event.objective == tgd::contracts::stable_content_key(
+                                                  "f1_objective_review_shared_ledger"
+                                              )) {
+                    combat_event_label_->setString("SHARED LEDGER REVIEWED / CALIBRATION UNLOCKED");
+                } else {
+                    combat_event_label_->setString("OBJECTIVE COMPLETE / QUEST STATE COMMITTED");
+                }
                 break;
             case tgd::contracts::QuestEventType::stage_advanced:
-                if (session_.current_snapshot().beat_index < quest_beat_labels.size()) {
+                if (event.selection == tgd::contracts::stable_content_key(
+                                           "f1_choice_rib_spring_calibration"
+                                       )) {
+                    combat_event_label_->setString(
+                        "SPRING RIB LOCKED / CANOPY RETURN ENCOUNTER UNLOCKED"
+                    );
+                } else if (event.selection == tgd::contracts::stable_content_key(
+                                                  "f1_choice_rib_winter_calibration"
+                                              )) {
+                    combat_event_label_->setString(
+                        "WINTER RIB LOCKED / CANOPY RETURN ENCOUNTER UNLOCKED"
+                    );
+                } else if (session_.current_snapshot().beat_index < quest_beat_labels.size()) {
                     combat_event_label_->setString(
                         "BEAT ADVANCED / " +
                         std::string{
@@ -1079,6 +1192,18 @@ std::uint32_t F1GrayboxLayer::qaQuestCompletedObjectives() const noexcept {
 
 std::uint32_t F1GrayboxLayer::qaQuestRequiredObjectives() const noexcept {
     return session_.current_snapshot().required_objectives;
+}
+
+std::uint32_t F1GrayboxLayer::qaQuestSelectedChoices() const noexcept {
+    return session_.current_snapshot().selected_choices;
+}
+
+std::int32_t F1GrayboxLayer::qaPlayerPoseX() const noexcept {
+    return session_.current_snapshot().player_pose.x;
+}
+
+std::int32_t F1GrayboxLayer::qaPlayerPoseY() const noexcept {
+    return session_.current_snapshot().player_pose.y;
 }
 
 std::uint32_t F1GrayboxLayer::qaIncomingAttackTicks() const noexcept {

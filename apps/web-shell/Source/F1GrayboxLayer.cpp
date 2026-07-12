@@ -31,6 +31,20 @@ inline constexpr std::array<std::string_view, 7> quest_beat_labels{
     "RESOLUTION AND RETURN",
 };
 
+[[nodiscard]] std::string playtimeText(std::uint64_t ticks) {
+    const auto total_seconds = ticks / 60U;
+    const auto minutes = total_seconds / 60U;
+    const auto seconds = total_seconds % 60U;
+    return std::to_string(minutes) + ":" + (seconds < 10U ? "0" : "") +
+           std::to_string(seconds);
+}
+
+[[nodiscard]] std::uint32_t qaTickCount(std::uint64_t ticks) noexcept {
+    return ticks > std::numeric_limits<std::uint32_t>::max()
+               ? std::numeric_limits<std::uint32_t>::max()
+               : static_cast<std::uint32_t>(ticks);
+}
+
 [[nodiscard]] ax::Color4F color(
     std::uint8_t red,
     std::uint8_t green,
@@ -740,13 +754,9 @@ void F1GrayboxLayer::createHud() {
     controls->setPosition({38.0F, 654.0F});
     addChild(controls, 1001);
 
-    auto* state = label(
-        "BEATS 1-7: LIVE | PERSISTENT REWARD / FINAL ASSETS: RESERVED",
-        12.0F,
-        ax::Color4B(151, 159, 151, 255)
-    );
-    state->setPosition({38.0F, 627.0F});
-    addChild(state, 1001);
+    playtime_audit_label_ = label("", 12.0F, ax::Color4B(151, 159, 151, 255));
+    playtime_audit_label_->setPosition({38.0F, 627.0F});
+    addChild(playtime_audit_label_, 1001);
 
     combat_resources_label_ = label("", 13.0F, ax::Color4B(230, 193, 126, 255));
     combat_resources_label_->setPosition({38.0F, 605.0F});
@@ -990,6 +1000,18 @@ void F1GrayboxLayer::updateCombatPresentation() noexcept {
 
 void F1GrayboxLayer::updateQuestPresentation() noexcept {
     const auto& snapshot = session_.current_snapshot();
+    if (playtime_audit_label_ != nullptr) {
+        const auto& audit = snapshot.playtime;
+        playtime_audit_label_->setString(
+            "AUDIT Q " + playtimeText(audit.eligible_ticks) + "/" +
+            playtimeText(audit.playable_target_ticks) + " | IDLE " +
+            playtimeText(audit.idle_ticks) + " | RETRY " +
+            playtimeText(audit.failure_retry_ticks) + " | TARGETS " +
+            std::to_string(audit.beat_targets_met) + "/" +
+            std::to_string(audit.beat_count) +
+            (audit.playable_target_met ? " | 1H PASS" : " | 1H PENDING")
+        );
+    }
     if (quest_state_label_ != nullptr) {
         const auto beat_name = snapshot.beat_index < quest_beat_labels.size()
                                    ? quest_beat_labels[snapshot.beat_index]
@@ -1032,6 +1054,20 @@ void F1GrayboxLayer::publish(
     std::span<const tgd::contracts::CombatEvent> events
 ) noexcept {
     for (const auto& event : events) {
+        const bool accepted_player_combat =
+            (event.source == definition_->player.actor &&
+             (event.type == tgd::contracts::CombatEventType::ability_started ||
+              event.type == tgd::contracts::CombatEventType::guard_changed ||
+              event.type == tgd::contracts::CombatEventType::stance_changed)) ||
+            (event.target == definition_->player.actor &&
+             (event.type == tgd::contracts::CombatEventType::hit_guarded ||
+              event.type == tgd::contracts::CombatEventType::hit_evaded));
+        if (accepted_player_combat &&
+            session_.report_playtime_activity(tgd::gameplay::PlaytimeActivityKind::combat) !=
+                tgd::gameplay::VerticalSliceError::none &&
+            combat_event_label_ != nullptr) {
+            combat_event_label_->setString("PLAYTIME AUDIT REJECTED / SESSION STATE DRIFT");
+        }
         submitQuestCombatSignal(event);
         submitQuestCombatOutcome(event);
         if (event.type == tgd::contracts::CombatEventType::ability_started &&
@@ -1446,6 +1482,26 @@ std::int32_t F1GrayboxLayer::qaPlayerPoseX() const noexcept {
 
 std::int32_t F1GrayboxLayer::qaPlayerPoseY() const noexcept {
     return session_.current_snapshot().player_pose.y;
+}
+
+std::uint32_t F1GrayboxLayer::qaEligiblePlayTicks() const noexcept {
+    return qaTickCount(session_.current_snapshot().playtime.eligible_ticks);
+}
+
+std::uint32_t F1GrayboxLayer::qaIdleTicks() const noexcept {
+    return qaTickCount(session_.current_snapshot().playtime.idle_ticks);
+}
+
+std::uint32_t F1GrayboxLayer::qaFailureRetryTicks() const noexcept {
+    return qaTickCount(session_.current_snapshot().playtime.failure_retry_ticks);
+}
+
+std::uint32_t F1GrayboxLayer::qaBeatTargetsMet() const noexcept {
+    return session_.current_snapshot().playtime.beat_targets_met;
+}
+
+bool F1GrayboxLayer::qaPlayableTargetMet() const noexcept {
+    return session_.current_snapshot().playtime.playable_target_met;
 }
 
 std::uint32_t F1GrayboxLayer::qaIncomingAttackTicks() const noexcept {

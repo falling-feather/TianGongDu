@@ -1076,6 +1076,11 @@ async function runBrowser(target, origin) {
     assert.equal(retryState.safePointPoseY, -1_200);
     assert.equal(retryState.playerPoseX, retryState.safePointPoseX);
     assert.equal(retryState.playerPoseY, retryState.safePointPoseY);
+    assert(
+      retryState.failureRetryTicks > defeatedState.failureRetryTicks,
+      `${target} failed attempt was not moved into the excluded retry bucket.`
+    );
+    assert.equal(retryState.playableTargetMet, false);
     assert.equal(
       retryState.questBeatIndex,
       defeatedState.questBeatIndex,
@@ -1372,6 +1377,14 @@ async function runBrowser(target, origin) {
     assert.equal(resolutionState.resolutionRewardReady, true);
     assert.equal(resolutionState.safePointPoseX, 3_000);
     assert.equal(resolutionState.safePointPoseY, 800);
+    assert(resolutionState.eligiblePlayTicks > 0);
+    assert(resolutionState.failureRetryTicks > 0);
+    assert.equal(resolutionState.beatTargetsMet, 0);
+    assert.equal(
+      resolutionState.playableTargetMet,
+      false,
+      `${target} fast functional route must not masquerade as a one-hour playtest.`
+    );
     await captureRenderedFrame(
       page,
       canvas,

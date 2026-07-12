@@ -43,6 +43,11 @@ class AppDelegate final : private ax::Application {
     [[nodiscard]] std::int32_t webF1QaSafePointPoseY() const noexcept;
     [[nodiscard]] std::int32_t webF1QaPlayerPoseX() const noexcept;
     [[nodiscard]] std::int32_t webF1QaPlayerPoseY() const noexcept;
+    [[nodiscard]] std::uint32_t webF1QaEligiblePlayTicks() const noexcept;
+    [[nodiscard]] std::uint32_t webF1QaIdleTicks() const noexcept;
+    [[nodiscard]] std::uint32_t webF1QaFailureRetryTicks() const noexcept;
+    [[nodiscard]] std::uint32_t webF1QaBeatTargetsMet() const noexcept;
+    [[nodiscard]] int webF1QaPlayableTargetMet() const noexcept;
     [[nodiscard]] std::uint32_t webF1QaIncomingAttackTicks() const noexcept;
     [[nodiscard]] int webF1QaPlayerBusy() const noexcept;
     [[nodiscard]] std::int32_t webBoot(std::span<const std::uint8_t> message) noexcept;

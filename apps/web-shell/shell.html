@@ -441,6 +441,15 @@
           safePointPoseY: invokeBridge("tgd_web_f1_qa_safe_point_pose_y", "number"),
           playerPoseX: invokeBridge("tgd_web_f1_qa_player_pose_x", "number"),
           playerPoseY: invokeBridge("tgd_web_f1_qa_player_pose_y", "number"),
+          eligiblePlayTicks: invokeBridge("tgd_web_f1_qa_eligible_play_ticks", "number"),
+          idleTicks: invokeBridge("tgd_web_f1_qa_idle_ticks", "number"),
+          failureRetryTicks: invokeBridge(
+            "tgd_web_f1_qa_failure_retry_ticks",
+            "number"
+          ),
+          beatTargetsMet: invokeBridge("tgd_web_f1_qa_beat_targets_met", "number"),
+          playableTargetMet:
+            invokeBridge("tgd_web_f1_qa_playable_target_met", "number") !== 0,
           incomingAttackTicks: invokeBridge(
             "tgd_web_f1_qa_incoming_attack_ticks",
             "number"

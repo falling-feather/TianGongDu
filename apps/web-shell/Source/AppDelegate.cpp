@@ -343,6 +343,26 @@ std::int32_t AppDelegate::webF1QaPlayerPoseY() const noexcept {
     return grayboxLayer_ == nullptr ? 0 : grayboxLayer_->qaPlayerPoseY();
 }
 
+std::uint32_t AppDelegate::webF1QaEligiblePlayTicks() const noexcept {
+    return grayboxLayer_ == nullptr ? 0U : grayboxLayer_->qaEligiblePlayTicks();
+}
+
+std::uint32_t AppDelegate::webF1QaIdleTicks() const noexcept {
+    return grayboxLayer_ == nullptr ? 0U : grayboxLayer_->qaIdleTicks();
+}
+
+std::uint32_t AppDelegate::webF1QaFailureRetryTicks() const noexcept {
+    return grayboxLayer_ == nullptr ? 0U : grayboxLayer_->qaFailureRetryTicks();
+}
+
+std::uint32_t AppDelegate::webF1QaBeatTargetsMet() const noexcept {
+    return grayboxLayer_ == nullptr ? 0U : grayboxLayer_->qaBeatTargetsMet();
+}
+
+int AppDelegate::webF1QaPlayableTargetMet() const noexcept {
+    return grayboxLayer_ != nullptr && grayboxLayer_->qaPlayableTargetMet() ? 1 : 0;
+}
+
 std::uint32_t AppDelegate::webF1QaIncomingAttackTicks() const noexcept {
     return grayboxLayer_ == nullptr ? 0U : grayboxLayer_->qaIncomingAttackTicks();
 }
@@ -744,6 +764,41 @@ EMSCRIPTEN_KEEPALIVE std::int32_t tgd_web_f1_qa_player_pose_x() {
 EMSCRIPTEN_KEEPALIVE std::int32_t tgd_web_f1_qa_player_pose_y() {
     if (const auto* app = AppDelegate::active(); app != nullptr) {
         return app->webF1QaPlayerPoseY();
+    }
+    return 0;
+}
+
+EMSCRIPTEN_KEEPALIVE std::uint32_t tgd_web_f1_qa_eligible_play_ticks() {
+    if (const auto* app = AppDelegate::active(); app != nullptr) {
+        return app->webF1QaEligiblePlayTicks();
+    }
+    return 0;
+}
+
+EMSCRIPTEN_KEEPALIVE std::uint32_t tgd_web_f1_qa_idle_ticks() {
+    if (const auto* app = AppDelegate::active(); app != nullptr) {
+        return app->webF1QaIdleTicks();
+    }
+    return 0;
+}
+
+EMSCRIPTEN_KEEPALIVE std::uint32_t tgd_web_f1_qa_failure_retry_ticks() {
+    if (const auto* app = AppDelegate::active(); app != nullptr) {
+        return app->webF1QaFailureRetryTicks();
+    }
+    return 0;
+}
+
+EMSCRIPTEN_KEEPALIVE std::uint32_t tgd_web_f1_qa_beat_targets_met() {
+    if (const auto* app = AppDelegate::active(); app != nullptr) {
+        return app->webF1QaBeatTargetsMet();
+    }
+    return 0;
+}
+
+EMSCRIPTEN_KEEPALIVE int tgd_web_f1_qa_playable_target_met() {
+    if (const auto* app = AppDelegate::active(); app != nullptr) {
+        return app->webF1QaPlayableTargetMet();
     }
     return 0;
 }

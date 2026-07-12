@@ -42,6 +42,11 @@ class F1GrayboxLayer final :
     [[nodiscard]] std::int32_t qaSafePointPoseY() const noexcept;
     [[nodiscard]] std::int32_t qaPlayerPoseX() const noexcept;
     [[nodiscard]] std::int32_t qaPlayerPoseY() const noexcept;
+    [[nodiscard]] std::uint32_t qaEligiblePlayTicks() const noexcept;
+    [[nodiscard]] std::uint32_t qaIdleTicks() const noexcept;
+    [[nodiscard]] std::uint32_t qaFailureRetryTicks() const noexcept;
+    [[nodiscard]] std::uint32_t qaBeatTargetsMet() const noexcept;
+    [[nodiscard]] bool qaPlayableTargetMet() const noexcept;
     [[nodiscard]] std::uint32_t qaIncomingAttackTicks() const noexcept;
     [[nodiscard]] bool qaPlayerBusy() const noexcept;
 
@@ -145,6 +150,7 @@ class F1GrayboxLayer final :
     ax::DrawNode* combat_fx_{};
     ax::DrawNode* foreground_awning_{};
     ax::Label* combat_resources_label_{};
+    ax::Label* playtime_audit_label_{};
     ax::Label* quest_state_label_{};
     ax::Label* interaction_prompt_label_{};
     ax::Label* combat_event_label_{};

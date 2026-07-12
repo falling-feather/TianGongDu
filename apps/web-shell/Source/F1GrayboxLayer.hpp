@@ -38,6 +38,8 @@ class F1GrayboxLayer final :
     [[nodiscard]] std::uint32_t qaQuestSelectedChoices() const noexcept;
     [[nodiscard]] bool qaQuestResolved() const noexcept;
     [[nodiscard]] bool qaResolutionRewardReady() const noexcept;
+    [[nodiscard]] std::int32_t qaSafePointPoseX() const noexcept;
+    [[nodiscard]] std::int32_t qaSafePointPoseY() const noexcept;
     [[nodiscard]] std::int32_t qaPlayerPoseX() const noexcept;
     [[nodiscard]] std::int32_t qaPlayerPoseY() const noexcept;
     [[nodiscard]] std::uint32_t qaIncomingAttackTicks() const noexcept;

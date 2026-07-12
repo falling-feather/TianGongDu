@@ -1432,6 +1432,14 @@ bool F1GrayboxLayer::qaResolutionRewardReady() const noexcept {
     return resolution_reward_ != 0 && resolution_reward_dedup_key_ != 0;
 }
 
+std::int32_t F1GrayboxLayer::qaSafePointPoseX() const noexcept {
+    return session_.current_snapshot().safe_point_pose.x;
+}
+
+std::int32_t F1GrayboxLayer::qaSafePointPoseY() const noexcept {
+    return session_.current_snapshot().safe_point_pose.y;
+}
+
 std::int32_t F1GrayboxLayer::qaPlayerPoseX() const noexcept {
     return session_.current_snapshot().player_pose.x;
 }

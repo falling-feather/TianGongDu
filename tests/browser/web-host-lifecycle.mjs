@@ -1072,6 +1072,10 @@ async function runBrowser(target, origin) {
     const retryState = await page.evaluate(() => window.__tgdTest.getF1State());
     assert.equal(retryState.playerHealth, 120, `${target} retry did not restore player health.`);
     assert.equal(retryState.activeHostiles, 3, `${target} retry did not restore every hostile.`);
+    assert.equal(retryState.safePointPoseX, -5_600);
+    assert.equal(retryState.safePointPoseY, -1_200);
+    assert.equal(retryState.playerPoseX, retryState.safePointPoseX);
+    assert.equal(retryState.playerPoseY, retryState.safePointPoseY);
     assert.equal(
       retryState.questBeatIndex,
       defeatedState.questBeatIndex,
@@ -1195,6 +1199,8 @@ async function runBrowser(target, origin) {
     assert.equal(workbenchState.questRequiredObjectives, 2);
     assert.equal(workbenchState.activeHostiles, 3);
     assert.equal(workbenchState.playerHealth, 120);
+    assert.equal(workbenchState.safePointPoseX, -4_300);
+    assert.equal(workbenchState.safePointPoseY, -100);
     await captureRenderedFrame(
       page,
       canvas,
@@ -1243,6 +1249,8 @@ async function runBrowser(target, origin) {
     assert.equal(returnState.questCompletedObjectives, 0);
     assert.equal(returnState.questRequiredObjectives, 4);
     assert.equal(returnState.activeHostiles, 1);
+    assert.equal(returnState.safePointPoseX, 2_200);
+    assert.equal(returnState.safePointPoseY, 800);
     const bossSpringPath = resolve(reportDirectory, `${target}-boss-spring-phase.png`);
     const bossWinterPath = resolve(reportDirectory, `${target}-boss-winter-phase.png`);
     const bossCompletePath = resolve(reportDirectory, `${target}-four-seasons-wraith-complete.png`);
@@ -1319,6 +1327,8 @@ async function runBrowser(target, origin) {
     assert.equal(bossState.questCompletedObjectives, 0);
     assert.equal(bossState.questRequiredObjectives, 2);
     assert.equal(bossState.activeHostiles, 0);
+    assert.equal(bossState.safePointPoseX, 3_000);
+    assert.equal(bossState.safePointPoseY, 800);
     await captureRenderedFrame(
       page,
       canvas,
@@ -1360,6 +1370,8 @@ async function runBrowser(target, origin) {
     assert.equal(resolutionState.activeHostiles, 0);
     assert.equal(resolutionState.questResolved, true);
     assert.equal(resolutionState.resolutionRewardReady, true);
+    assert.equal(resolutionState.safePointPoseX, 3_000);
+    assert.equal(resolutionState.safePointPoseY, 800);
     await captureRenderedFrame(
       page,
       canvas,

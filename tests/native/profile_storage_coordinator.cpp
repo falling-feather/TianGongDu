@@ -1,4 +1,5 @@
 #include <tgd/contracts/save_envelope.hpp>
+#include <tgd/runtime/profile_progress_coordinator.hpp>
 #include <tgd/runtime/profile_storage_coordinator.hpp>
 
 #include <algorithm>
@@ -22,6 +23,9 @@ using tgd::runtime::ProfileStorageConfig;
 using tgd::runtime::ProfileStorageCoordinator;
 using tgd::runtime::ProfileStorageError;
 using tgd::runtime::ProfileStorageState;
+using tgd::runtime::ProfileProgressCoordinator;
+using tgd::runtime::ProfileProgressCoordinatorError;
+using tgd::runtime::ProfileProgressPrepareDisposition;
 using tgd::runtime::StorageCompletion;
 using tgd::runtime::StorageCompletionError;
 using tgd::runtime::StorageDeleteRequest;
@@ -449,6 +453,142 @@ int main() {
             stale_session.state() == ProfileStorageState::loading_head &&
             stale_session.ignored_stale_completion_count() == 1,
         "old session generation completion is consumed and ignored"
+    );
+
+    constexpr std::uint64_t resolution_source = 0x7100000000000001ULL;
+    constexpr std::uint64_t reward_one = 0x7200000000000001ULL;
+    constexpr std::uint64_t reward_two = 0x7200000000000002ULL;
+    constexpr std::uint64_t reward_dedup_one = 0x7300000000000001ULL;
+    constexpr std::uint64_t reward_dedup_two = 0x7300000000000002ULL;
+    MockStorage reward_storage;
+    ProfileStorageCoordinator reward_storage_session;
+    ProfileProgressCoordinator reward_progress;
+    ok &= reward_storage_session.initialize(reward_storage, config(7, 7)) ==
+          ProfileStorageError::none;
+    ok &= restore(reward_storage_session);
+    ok &= expect(
+        reward_progress.initialize(profile_id, package_set_id) ==
+                ProfileProgressCoordinatorError::none &&
+            reward_progress.committed_operation_count() == 0,
+        "a new Profile progress ledger starts empty beside the storage Head"
+    );
+    const auto prepared_checkpoint = reward_progress.prepare_checkpoint(
+        snapshot_one,
+        tgd::contracts::CheckpointKind::safe_point
+    );
+    ok &= expect(
+        prepared_checkpoint.error == ProfileProgressCoordinatorError::none &&
+            prepared_checkpoint.disposition ==
+                ProfileProgressPrepareDisposition::prepared &&
+            reward_storage_session.begin_save(reward_progress.pending_snapshot()) ==
+                ProfileStorageError::none,
+        "Profile progress produces the SaveEnvelope consumed by the existing atomic coordinator"
+    );
+    reward_storage.complete_write();
+    ok &= expect(
+        reward_storage_session.pump().error == ProfileStorageError::none &&
+            reward_progress.accept_commit(reward_storage_session.current_head().snapshot_id) ==
+                ProfileProgressCoordinatorError::none &&
+            reward_progress.committed_progress().revision == 1,
+        "a verified storage ack advances both the Head and committed Profile progress"
+    );
+
+    const auto prepared_reward = reward_progress.prepare_reward_claim(
+        resolution_source,
+        reward_one,
+        reward_dedup_one
+    );
+    ok &= expect(
+        prepared_reward.error == ProfileProgressCoordinatorError::none &&
+            prepared_reward.disposition == ProfileProgressPrepareDisposition::prepared &&
+            reward_progress.has_pending() &&
+            !reward_progress.has_reward_claim(reward_dedup_one),
+        "a reward stays pending and invisible until its snapshot transaction commits"
+    );
+    ok &= reward_progress.prepare_reward_claim(
+              resolution_source,
+              reward_one,
+              reward_dedup_one
+          ).disposition == ProfileProgressPrepareDisposition::already_pending;
+    ok &= reward_storage_session.begin_save(reward_progress.pending_snapshot()) ==
+          ProfileStorageError::none;
+    reward_storage.complete_write();
+    ok &= expect(
+        reward_storage_session.pump().error == ProfileStorageError::none &&
+            reward_progress.accept_commit(reward_storage_session.current_head().snapshot_id) ==
+                ProfileProgressCoordinatorError::none &&
+            reward_progress.has_reward_claim(reward_dedup_one) &&
+            reward_progress.committed_operation_count() == 1,
+        "the reward becomes claimed only after an atomic storage acknowledgement"
+    );
+    ok &= expect(
+        reward_progress.prepare_reward_claim(
+            resolution_source,
+            reward_one,
+            reward_dedup_one
+        ).disposition == ProfileProgressPrepareDisposition::already_committed,
+        "replaying a committed reward receipt cannot prepare another save"
+    );
+
+    const auto prepared_quota_reward = reward_progress.prepare_reward_claim(
+        resolution_source,
+        reward_two,
+        reward_dedup_two
+    );
+    ok &= prepared_quota_reward.disposition == ProfileProgressPrepareDisposition::prepared;
+    ok &= reward_storage_session.begin_save(reward_progress.pending_snapshot()) ==
+          ProfileStorageError::none;
+    reward_storage.complete_write(StorageCompletionError::quota);
+    ok &= expect(
+        reward_storage_session.pump().error == ProfileStorageError::storage_quota &&
+            reward_progress.has_pending() &&
+            !reward_progress.has_reward_claim(reward_dedup_two),
+        "quota failure retains the pending Operation without publishing its reward"
+    );
+    ok &= reward_storage_session.retry_pending_save() == ProfileStorageError::none;
+    reward_storage.complete_write();
+    ok &= expect(
+        reward_storage_session.pump().error == ProfileStorageError::none &&
+            reward_progress.accept_commit(reward_storage_session.current_head().snapshot_id) ==
+                ProfileProgressCoordinatorError::none &&
+            reward_progress.has_reward_claim(reward_dedup_two) &&
+            reward_progress.committed_operation_count() == 2,
+        "retry commits the identical retained Operation exactly once"
+    );
+
+    const auto restored_reward_envelope = tgd::contracts::decode_save_envelope(
+        reward_storage_session.current_snapshot_bytes()
+    );
+    ProfileProgressCoordinator restored_progress;
+    ok &= expect(
+        restored_reward_envelope.error == tgd::contracts::SaveEnvelopeError::none &&
+            restored_progress.restore(restored_reward_envelope.envelope) ==
+                ProfileProgressCoordinatorError::none &&
+            restored_progress.has_reward_claim(reward_dedup_one) &&
+            restored_progress.has_reward_claim(reward_dedup_two) &&
+            restored_progress.prepare_reward_claim(
+                resolution_source,
+                reward_two,
+                reward_dedup_two
+            ).disposition == ProfileProgressPrepareDisposition::already_committed,
+        "restoring a new session preserves reward deduplication across refresh"
+    );
+
+    auto legacy_snapshot = snapshot(snapshot_external, {}, 5, "");
+    constexpr std::string_view legacy_magic = "tgd.f1.guest.profile.checkpoint.v1";
+    legacy_snapshot.payload.assign(legacy_magic.begin(), legacy_magic.end());
+    for (std::size_t index = 0; index < sizeof(legacy_snapshot.created_logical_sequence); ++index) {
+        legacy_snapshot.payload.push_back(static_cast<std::uint8_t>(
+            legacy_snapshot.created_logical_sequence >> static_cast<unsigned>(index * 8U)
+        ));
+    }
+    ProfileProgressCoordinator migrated_legacy_progress;
+    ok &= expect(
+        migrated_legacy_progress.restore(legacy_snapshot) ==
+                ProfileProgressCoordinatorError::none &&
+            migrated_legacy_progress.committed_progress().revision == 5 &&
+            migrated_legacy_progress.committed_operation_count() == 0,
+        "the previous F1 checkpoint payload migrates to an empty v1 Operation ledger"
     );
 
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;

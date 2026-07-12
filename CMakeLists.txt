@@ -86,6 +86,7 @@ target_sources(
     src/runtime/src/command_replay.cpp
     src/runtime/src/fixed_step_driver.cpp
     src/runtime/src/game_session.cpp
+    src/runtime/src/profile_progress_coordinator.cpp
     src/runtime/src/profile_storage_coordinator.cpp
     src/runtime/src/runtime_facade.cpp
 )

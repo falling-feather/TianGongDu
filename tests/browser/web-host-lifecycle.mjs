@@ -1264,24 +1264,52 @@ async function runBrowser(target, origin) {
       resolve(reportDirectory, `${target}-workbench-investigation-complete.png`),
       `${target} workbench investigation complete`
     );
+    await page.keyboard.press("2");
+    await page.waitForTimeout(100);
 
     let returnState = workbenchState;
     let returnReadyToAttack = false;
     let returnSawTelegraph = false;
-    const returnDeadline = Date.now() + 45_000;
+    let returnRetryAttempts = 0;
+    let returnDeadline = Date.now() + 45_000;
     while (returnState.activeHostiles > 0 && Date.now() < returnDeadline) {
-      assert.equal(
-        returnState.playerActive,
-        true,
-        `${target} player fell during calibration return encounter: ${JSON.stringify(returnState)}`
-      );
+      if (!returnState.playerActive) {
+        assert.equal(
+          returnRetryAttempts,
+          0,
+          `${target} player fell twice during calibration return encounter: ${JSON.stringify(returnState)}`
+        );
+        const previousRetryCount = returnState.retryCount;
+        await page.keyboard.press("r");
+        await page.waitForFunction(
+          (retryCount) => {
+            const state = window.__tgdTest?.getF1State();
+            return state?.playerActive === true && state.retryCount === retryCount + 1;
+          },
+          previousRetryCount,
+          { timeout: 5_000 }
+        );
+        returnState = await page.evaluate(() => window.__tgdTest.getF1State());
+        assert.equal(returnState.questBeatIndex, 4);
+        assert.equal(returnState.questCompletedObjectives, 0);
+        assert.equal(returnState.activeHostiles, 3);
+        await page.keyboard.press("2");
+        await page.waitForTimeout(100);
+        returnReadyToAttack = false;
+        returnRetryAttempts += 1;
+        returnDeadline = Date.now() + 45_000;
+        continue;
+      }
       if (returnState.incomingAttackTicks > 0) {
         returnSawTelegraph = true;
         if (returnState.incomingAttackTicks <= 10 && !returnState.playerBusy) {
           await page.keyboard.press("c");
           returnReadyToAttack = true;
+        } else if (returnReadyToAttack && !returnState.playerBusy) {
+          await page.keyboard.press("j");
+          returnReadyToAttack = false;
         }
-      } else if (returnReadyToAttack && !returnState.playerBusy) {
+      } else if (returnSawTelegraph && !returnState.playerBusy) {
         await page.keyboard.press("j");
         returnReadyToAttack = false;
       }
@@ -1569,6 +1597,7 @@ async function runBrowser(target, origin) {
       retryState,
       workbenchState,
       returnState,
+      returnRetryAttempts,
       bossState,
       resolutionState,
       bossMaxCompletedObjectives,

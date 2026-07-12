@@ -39,7 +39,7 @@ test("F1 one-hour contract and generated C++ stay synchronized", async () => {
     flowerLight.windupTicks + flowerLight.activeTicks + flowerLight.recoveryTicks,
     18
   );
-  assert.equal(contract.questInteractions.length, 4);
+  assert.equal(contract.questInteractions.length, 9);
   assert.deepEqual(
     new Set(
       contract.questInteractions
@@ -121,6 +121,28 @@ test("F1 opening objectives require valid content-driven scene interactions", as
   assert.throws(
     () => validateF1SliceContract(missingSelection, catalog),
     /requires a selection id/
+  );
+});
+
+test("F1 workbench investigation gates two stable calibration choices", async () => {
+  const contract = await loadF1SliceContract();
+  const workbench = contract.beats[3];
+  const calibration = contract.questInteractions.filter(
+    (interaction) => interaction.objectiveId === workbench.objectiveIds[3]
+  );
+  assert.deepEqual(
+    calibration.map((interaction) => interaction.selectionId).sort(),
+    ["f1_choice_rib_spring_calibration", "f1_choice_rib_winter_calibration"]
+  );
+
+  const missingEvidence = structuredClone(contract);
+  const missingEvidenceCalibration = missingEvidence.questInteractions.find(
+    (interaction) => interaction.id === "f1_interaction_calibrate_rib_spring"
+  );
+  missingEvidenceCalibration.prerequisiteObjectiveIds.pop();
+  assert.throws(
+    () => validateF1SliceContract(missingEvidence, catalog),
+    /two stable choices after all workbench evidence/
   );
 });
 

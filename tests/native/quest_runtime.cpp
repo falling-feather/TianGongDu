@@ -493,11 +493,25 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
         "active hostile groups do not complete combat objectives"
     );
 
-    const auto& route = definition().quest_interactions.back();
+    const auto route = std::find_if(
+        definition().quest_interactions.begin(),
+        definition().quest_interactions.end(),
+        [](const tgd::contracts::QuestInteractionDefinition& interaction) {
+            return interaction.objective_id.key ==
+                   tgd::contracts::stable_content_key("f1_objective_choose_lane_route");
+        }
+    );
+    ok &= expect(
+        route != definition().quest_interactions.end(),
+        "the authored lane choice exists"
+    );
+    if (route == definition().quest_interactions.end()) {
+        return false;
+    }
     ok &= expect(
         !interactions
              .resolve(
-                 {definition().player.actor, route.cell_id.key, route.pose},
+                 {definition().player.actor, route->cell_id.key, route->pose},
                  quest
              )
              .found,
@@ -554,12 +568,12 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
               sink
           ).error == QuestError::none;
     const auto unlocked_route = interactions.resolve(
-        {definition().player.actor, route.cell_id.key, route.pose},
+        {definition().player.actor, route->cell_id.key, route->pose},
         quest
     );
     ok &= expect(
-        unlocked_route.found && unlocked_route.objective == route.objective_id.key &&
-            unlocked_route.selection == route.selection_id.key,
+        unlocked_route.found && unlocked_route.objective == route->objective_id.key &&
+            unlocked_route.selection == route->selection_id.key,
         "completed hostile groups unlock the authored lane choice and stable option"
     );
     const auto checksum_before_missing_selection = quest.snapshot().checksum;
@@ -610,6 +624,67 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
         duplicate_choice.error == QuestError::none && !duplicate_choice.accepted &&
             quest.snapshot().selection_count == 1,
         "repeating the same stable choice is idempotent"
+    );
+
+    const auto& workbench = definition().beats[3];
+    for (std::size_t index = 0; index < 3; ++index) {
+        const auto evidence = quest.apply(
+            {
+                tick++,
+                definition().player.actor,
+                sequence++,
+                {},
+                workbench.objectives[index].key,
+            },
+            sink
+        );
+        ok &= expect(
+            evidence.error == QuestError::none && evidence.accepted &&
+                !evidence.stage_advanced,
+            "each workbench evidence trace commits without bypassing calibration"
+        );
+    }
+    const auto spring_choice = tgd::contracts::stable_content_key(
+        "f1_choice_rib_spring_calibration"
+    );
+    const auto winter_choice = tgd::contracts::stable_content_key(
+        "f1_choice_rib_winter_calibration"
+    );
+    const auto calibration_objective = workbench.objectives[3].key;
+    const auto calibrated = quest.apply(
+        {
+            tick++,
+            definition().player.actor,
+            sequence++,
+            {},
+            calibration_objective,
+            spring_choice,
+        },
+        sink
+    );
+    ok &= expect(
+        calibrated.error == QuestError::none && calibrated.accepted &&
+            calibrated.stage_advanced && quest.snapshot().selection_count == 2 &&
+            quest.selected_option(calibration_objective) == spring_choice,
+        "workbench calibration persists a second stable choice"
+    );
+    const auto checksum_before_conflict = quest.snapshot().checksum;
+    const auto conflict = quest.apply(
+        {
+            tick++,
+            definition().player.actor,
+            sequence++,
+            {},
+            calibration_objective,
+            winter_choice,
+        },
+        sink
+    );
+    ok &= expect(
+        conflict.error == QuestError::selection_conflict &&
+            quest.snapshot().checksum == checksum_before_conflict &&
+            quest.selected_option(calibration_objective) == spring_choice,
+        "a later conflicting choice fails closed without rewriting history"
     );
 
     auto invalid_actors = actors;

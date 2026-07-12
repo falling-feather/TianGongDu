@@ -203,6 +203,41 @@ export function validateF1SliceContract(contract, catalog) {
   ) {
     fail("the umbrella-lane route choice must require both combat objectives");
   }
+  const workbenchBeat = contract.beats[3];
+  const workbenchEvidence = workbenchBeat.objectiveIds.slice(0, 3);
+  const workbenchChoice = workbenchBeat.objectiveIds[3];
+  const evidenceInteractions = interactions.filter((interaction) =>
+    workbenchEvidence.includes(interaction.objectiveId)
+  );
+  const calibrationInteractions = interactions.filter(
+    (interaction) => interaction.objectiveId === workbenchChoice
+  );
+  if (
+    evidenceInteractions.length !== 3 ||
+    evidenceInteractions.some(
+      (interaction) =>
+        interaction.kind !== "inspect" ||
+        interaction.cellId !== workbenchBeat.cellId ||
+        interaction.prerequisiteObjectiveIds.length !== 0
+    )
+  ) {
+    fail("the workbench investigation must expose three independent evidence inspections");
+  }
+  if (
+    calibrationInteractions.length !== 2 ||
+    calibrationInteractions.some(
+      (interaction) =>
+        interaction.kind !== "choose" ||
+        interaction.cellId !== workbenchBeat.cellId ||
+        !sameValues(interaction.prerequisiteObjectiveIds, workbenchEvidence)
+    ) ||
+    !sameValues(
+      calibrationInteractions.map((interaction) => interaction.selectionId),
+      ["f1_choice_rib_spring_calibration", "f1_choice_rib_winter_calibration"]
+    )
+  ) {
+    fail("rib calibration must offer two stable choices after all workbench evidence");
+  }
   const combatTriggers = contract.questCombatTriggers;
   if (!Array.isArray(combatTriggers) || combatTriggers.length < 2 || combatTriggers.length > 64) {
     fail("quest combat triggers must contain 2..64 definitions");

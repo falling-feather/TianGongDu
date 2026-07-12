@@ -1,6 +1,7 @@
 #include <tgd/content/content_definition_provider.hpp>
 #include <tgd/contracts/content_definition.hpp>
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
@@ -59,7 +60,7 @@ int main() {
         "the first route, cells, and enemy families are explicit"
     );
     ok &= expect(
-        definition->quest_interactions.size() == 4 &&
+        definition->quest_interactions.size() == 9 &&
             definition->quest_interactions.front().objective_id.key ==
                 tgd::contracts::stable_content_key("f1_objective_inspect_travel_writ"),
         "the opening scene interactions are generated content, not presentation rules"
@@ -70,15 +71,35 @@ int main() {
                 tgd::contracts::stable_content_key("stance_eavesguard"),
         "training counters are generated combat-to-quest bindings"
     );
-    const auto& route_interaction = definition->quest_interactions.back();
+    const auto route_interaction = std::find_if(
+        definition->quest_interactions.begin(),
+        definition->quest_interactions.end(),
+        [](const tgd::contracts::QuestInteractionDefinition& interaction) {
+            return interaction.objective_id.key ==
+                   tgd::contracts::stable_content_key("f1_objective_choose_lane_route");
+        }
+    );
     ok &= expect(
-        route_interaction.objective_id.key ==
-                tgd::contracts::stable_content_key("f1_objective_choose_lane_route") &&
-            route_interaction.selection_id.key ==
+        route_interaction != definition->quest_interactions.end() &&
+            route_interaction->selection_id.key ==
                 tgd::contracts::stable_content_key("f1_choice_lane_canopy") &&
-            route_interaction.prerequisite_objectives.size() == 2 &&
+            route_interaction->prerequisite_objectives.size() == 2 &&
             definition->quest_combat_outcomes.size() == 2,
         "the lane choice waits for two generated hostile-group outcomes"
+    );
+    const auto calibration_count = std::count_if(
+        definition->quest_interactions.begin(),
+        definition->quest_interactions.end(),
+        [](const tgd::contracts::QuestInteractionDefinition& interaction) {
+            return interaction.objective_id.key ==
+                   tgd::contracts::stable_content_key(
+                       "f1_objective_choose_rib_calibration"
+                   );
+        }
+    );
+    ok &= expect(
+        calibration_count == 2,
+        "the shared workbench exposes two generated calibration choices"
     );
 
     std::uint32_t minutes = 0;

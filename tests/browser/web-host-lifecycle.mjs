@@ -1246,6 +1246,11 @@ async function runBrowser(target, origin) {
     const bossSpringPath = resolve(reportDirectory, `${target}-boss-spring-phase.png`);
     const bossWinterPath = resolve(reportDirectory, `${target}-boss-winter-phase.png`);
     const bossCompletePath = resolve(reportDirectory, `${target}-four-seasons-wraith-complete.png`);
+    const resolutionChoicePath = resolve(reportDirectory, `${target}-resolution-choice.png`);
+    const resolutionCompletePath = resolve(
+      reportDirectory,
+      `${target}-resolution-return-complete.png`
+    );
     await captureRenderedFrame(
       page,
       canvas,
@@ -1319,6 +1324,47 @@ async function runBrowser(target, origin) {
       canvas,
       bossCompletePath,
       `${target} four-seasons wraith complete`
+    );
+    await moveF1PlayerTo(page, 4_200, 2_300);
+    await captureRenderedFrame(
+      page,
+      canvas,
+      resolutionChoicePath,
+      `${target} restore-shared-mark resolution choice`
+    );
+    await page.keyboard.press("f");
+    await page.waitForFunction(
+      () => {
+        const state = window.__tgdTest?.getF1State();
+        return state?.questBeatIndex === 6 && state.questCompletedObjectives === 1 &&
+          state.questSelectedChoices === 3;
+      },
+      undefined,
+      { timeout: 5_000 }
+    );
+    await moveF1PlayerTo(page, -10_500, -600);
+    await page.keyboard.press("f");
+    await page.waitForFunction(
+      () => {
+        const state = window.__tgdTest?.getF1State();
+        return state?.questResolved === true && state.resolutionRewardReady === true;
+      },
+      undefined,
+      { timeout: 5_000 }
+    );
+    const resolutionState = await page.evaluate(() => window.__tgdTest.getF1State());
+    assert.equal(resolutionState.questBeatIndex, 6);
+    assert.equal(resolutionState.questCompletedObjectives, 2);
+    assert.equal(resolutionState.questRequiredObjectives, 2);
+    assert.equal(resolutionState.questSelectedChoices, 3);
+    assert.equal(resolutionState.activeHostiles, 0);
+    assert.equal(resolutionState.questResolved, true);
+    assert.equal(resolutionState.resolutionRewardReady, true);
+    await captureRenderedFrame(
+      page,
+      canvas,
+      resolutionCompletePath,
+      `${target} resolution returned to Shen Yan`
     );
     await page.reload({ waitUntil: "domcontentloaded", timeout: 45_000 });
     await waitForText(page, status, "宿主已就绪", 45_000);
@@ -1447,6 +1493,7 @@ async function runBrowser(target, origin) {
       workbenchState,
       returnState,
       bossState,
+      resolutionState,
       bossMaxCompletedObjectives,
       retryFrameComparison,
       frameComparison,
@@ -1462,6 +1509,8 @@ async function runBrowser(target, origin) {
         projectPath(bossSpringPath),
         projectPath(bossWinterPath),
         projectPath(bossCompletePath),
+        projectPath(resolutionChoicePath),
+        projectPath(resolutionCompletePath),
         projectPath(combatReadyPath),
         projectPath(combatActionPath),
         projectPath(combatHitPath),

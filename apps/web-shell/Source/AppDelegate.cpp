@@ -319,6 +319,14 @@ std::uint32_t AppDelegate::webF1QaQuestSelectedChoices() const noexcept {
     return grayboxLayer_ == nullptr ? 0U : grayboxLayer_->qaQuestSelectedChoices();
 }
 
+int AppDelegate::webF1QaQuestResolved() const noexcept {
+    return grayboxLayer_ != nullptr && grayboxLayer_->qaQuestResolved() ? 1 : 0;
+}
+
+int AppDelegate::webF1QaResolutionRewardReady() const noexcept {
+    return grayboxLayer_ != nullptr && grayboxLayer_->qaResolutionRewardReady() ? 1 : 0;
+}
+
 std::int32_t AppDelegate::webF1QaPlayerPoseX() const noexcept {
     return grayboxLayer_ == nullptr ? 0 : grayboxLayer_->qaPlayerPoseX();
 }
@@ -686,6 +694,20 @@ EMSCRIPTEN_KEEPALIVE std::uint32_t tgd_web_f1_qa_quest_required_objectives() {
 EMSCRIPTEN_KEEPALIVE std::uint32_t tgd_web_f1_qa_quest_selected_choices() {
     if (const auto* app = AppDelegate::active(); app != nullptr) {
         return app->webF1QaQuestSelectedChoices();
+    }
+    return 0;
+}
+
+EMSCRIPTEN_KEEPALIVE int tgd_web_f1_qa_quest_resolved() {
+    if (const auto* app = AppDelegate::active(); app != nullptr) {
+        return app->webF1QaQuestResolved();
+    }
+    return 0;
+}
+
+EMSCRIPTEN_KEEPALIVE int tgd_web_f1_qa_resolution_reward_ready() {
+    if (const auto* app = AppDelegate::active(); app != nullptr) {
+        return app->webF1QaResolutionRewardReady();
     }
     return 0;
 }

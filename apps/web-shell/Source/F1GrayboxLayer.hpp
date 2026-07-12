@@ -36,6 +36,8 @@ class F1GrayboxLayer final :
     [[nodiscard]] std::uint32_t qaQuestCompletedObjectives() const noexcept;
     [[nodiscard]] std::uint32_t qaQuestRequiredObjectives() const noexcept;
     [[nodiscard]] std::uint32_t qaQuestSelectedChoices() const noexcept;
+    [[nodiscard]] bool qaQuestResolved() const noexcept;
+    [[nodiscard]] bool qaResolutionRewardReady() const noexcept;
     [[nodiscard]] std::int32_t qaPlayerPoseX() const noexcept;
     [[nodiscard]] std::int32_t qaPlayerPoseY() const noexcept;
     [[nodiscard]] std::uint32_t qaIncomingAttackTicks() const noexcept;
@@ -104,6 +106,7 @@ class F1GrayboxLayer final :
     tgd::gameplay::DeterministicQuestCombatTriggerResolver quest_combat_triggers_{};
     tgd::gameplay::DeterministicQuestCombatOutcomeResolver quest_combat_outcomes_{};
     tgd::gameplay::DeterministicQuestBossPhaseResolver quest_boss_phases_{};
+    tgd::gameplay::DeterministicQuestResolutionRewardResolver quest_resolution_rewards_{};
     tgd::gameplay::SessionInputState input_{};
     tgd::contracts::PlatformSequence platform_sequence_{};
     tgd::contracts::CommandSequence command_sequence_{1};
@@ -124,6 +127,8 @@ class F1GrayboxLayer final :
     tgd::contracts::TickIndex incoming_attack_tick_{};
     tgd::contracts::StableActorKey incoming_attack_source_{};
     tgd::contracts::StableContentKey pending_boss_stance_{};
+    tgd::contracts::StableContentKey resolution_reward_{};
+    tgd::contracts::StableContentKey resolution_reward_dedup_key_{};
     float tick_accumulator_{};
 
     ax::Node* world_layer_{};

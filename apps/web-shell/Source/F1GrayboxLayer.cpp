@@ -412,6 +412,19 @@ void solidPolygon(
     if (interaction == tgd::contracts::stable_content_key("f1_interaction_open_return_shortcut")) {
         return "F / OPEN CANOPY RETURN SHORTCUT";
     }
+    if (interaction == tgd::contracts::stable_content_key("f1_interaction_resolution_subdue")) {
+        return "F / RESOLUTION: DIRECT SUBDUE";
+    }
+    if (interaction == tgd::contracts::stable_content_key(
+                           "f1_interaction_resolution_restore_shared_mark"
+                       )) {
+        return "F / RESOLUTION: RESTORE SHARED MARK";
+    }
+    if (interaction == tgd::contracts::stable_content_key(
+                           "f1_interaction_return_to_shen_yan"
+                       )) {
+        return "F / RETURN FINDINGS TO SHEN YAN";
+    }
     switch (kind) {
         case tgd::contracts::QuestInteractionKind::inspect:
             return "F / INSPECT";
@@ -475,6 +488,8 @@ bool F1GrayboxLayer::init() {
             tgd::gameplay::QuestCombatOutcomeError::none ||
         quest_boss_phases_.initialize(definition_->quest_boss_phases) !=
             tgd::gameplay::QuestBossPhaseError::none ||
+        quest_resolution_rewards_.initialize(definition_->quest_resolution_rewards) !=
+            tgd::gameplay::QuestResolutionRewardError::none ||
         combat_.initialize(combat_definition_->actors, combat_definition_->abilities) !=
             tgd::gameplay::CombatError::none ||
         combat_.start() != tgd::gameplay::CombatError::none ||
@@ -726,7 +741,7 @@ void F1GrayboxLayer::createHud() {
     addChild(controls, 1001);
 
     auto* state = label(
-        "BEATS 1-6: LIVE | RESOLUTION / FINAL ASSETS: RESERVED",
+        "BEATS 1-7: LIVE | PERSISTENT REWARD / FINAL ASSETS: RESERVED",
         12.0F,
         ax::Color4B(151, 159, 151, 255)
     );
@@ -1158,6 +1173,14 @@ void F1GrayboxLayer::publish(
     std::span<const tgd::contracts::QuestEvent> events
 ) noexcept {
     for (const auto& event : events) {
+        if (event.type == tgd::contracts::QuestEventType::quest_resolved) {
+            const auto receipt = quest_resolution_rewards_.resolve(session_.quest_runtime());
+            if (receipt.error == tgd::gameplay::QuestResolutionRewardError::none &&
+                receipt.found) {
+                resolution_reward_ = receipt.reward;
+                resolution_reward_dedup_key_ = receipt.reward_dedup_key;
+            }
+        }
         if (combat_event_label_ == nullptr) {
             continue;
         }
@@ -1225,7 +1248,11 @@ void F1GrayboxLayer::publish(
                 }
                 break;
             case tgd::contracts::QuestEventType::quest_resolved:
-                combat_event_label_->setString("VERTICAL SLICE RESOLVED");
+                combat_event_label_->setString(
+                    resolution_reward_ != 0 && resolution_reward_dedup_key_ != 0
+                        ? "RESOLUTION COMMITTED / REWARD RECEIPT READY / SAVE RESERVED"
+                        : "RESOLUTION REWARD REJECTED / CONTRACT DRIFT"
+                );
                 break;
             case tgd::contracts::QuestEventType::objective_already_completed:
                 combat_event_label_->setString("OBJECTIVE ALREADY COMPLETE");
@@ -1395,6 +1422,14 @@ std::uint32_t F1GrayboxLayer::qaQuestRequiredObjectives() const noexcept {
 
 std::uint32_t F1GrayboxLayer::qaQuestSelectedChoices() const noexcept {
     return session_.current_snapshot().selected_choices;
+}
+
+bool F1GrayboxLayer::qaQuestResolved() const noexcept {
+    return session_.quest_snapshot().resolved;
+}
+
+bool F1GrayboxLayer::qaResolutionRewardReady() const noexcept {
+    return resolution_reward_ != 0 && resolution_reward_dedup_key_ != 0;
 }
 
 std::int32_t F1GrayboxLayer::qaPlayerPoseX() const noexcept {

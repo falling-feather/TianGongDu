@@ -66,6 +66,7 @@ target_sources(
   tgd_contracts
   PRIVATE
     src/contracts/src/build_identity.cpp
+    src/contracts/src/profile_progress.cpp
     src/contracts/src/save_envelope.cpp
     src/contracts/src/sha256.cpp
 )

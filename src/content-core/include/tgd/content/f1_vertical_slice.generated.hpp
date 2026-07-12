@@ -91,7 +91,7 @@ inline constexpr std::array<contracts::QuestInteractionDefinition, 4> f1_quest_i
     {contracts::content_id("f1_interaction_travel_writ"), contracts::QuestInteractionKind::inspect, contracts::content_id("f1_cell_rain_ferry"), contracts::content_id("f1_objective_inspect_travel_writ"), {-12000, -1600, 0, 0}, 800, std::span<const contracts::ContentId>{}},
     {contracts::content_id("f1_interaction_ferry_gate"), contracts::QuestInteractionKind::operate, contracts::content_id("f1_cell_rain_ferry"), contracts::content_id("f1_objective_reach_ferry_gate"), {-10450, -100, 0, 0}, 900, std::span<const contracts::ContentId>{}},
     {contracts::content_id("f1_interaction_meet_shen_yan"), contracts::QuestInteractionKind::talk, contracts::content_id("f1_cell_rain_ferry"), contracts::content_id("f1_objective_meet_shen_yan"), {-10500, -600, 0, 0}, 800, std::span<const contracts::ContentId>{}},
-    {contracts::content_id("f1_interaction_choose_lane_route"), contracts::QuestInteractionKind::choose, contracts::content_id("f1_cell_umbrella_lane_a"), contracts::content_id("f1_objective_choose_lane_route"), {-500, 1800, 0, 0}, 1000, std::span<const contracts::ContentId>{interaction_3_prerequisites}},
+    {contracts::content_id("f1_interaction_choose_lane_route"), contracts::QuestInteractionKind::choose, contracts::content_id("f1_cell_umbrella_lane_a"), contracts::content_id("f1_objective_choose_lane_route"), {-3900, -100, 0, 0}, 1200, std::span<const contracts::ContentId>{interaction_3_prerequisites}},
 }};
 
 inline constexpr std::array<contracts::QuestCombatTriggerDefinition, 2> f1_quest_combat_triggers{{
@@ -114,7 +114,7 @@ inline constexpr std::array<contracts::CombatActorConfig, 4> f1_combat_actors{{
 inline constexpr std::array<contracts::AbilityDefinition, 9> f1_combat_abilities{{
     {contracts::content_id("ability_eavesguard_light"), contracts::CombatCommandType::light_attack, contracts::stable_content_key("stance_eavesguard"), 8, 12, 3, 12, 1800, 700, 18, 18, contracts::feedback_light},
     {contracts::content_id("ability_eavesguard_heavy"), contracts::CombatCommandType::heavy_attack, contracts::stable_content_key("stance_eavesguard"), 18, 18, 4, 24, 2050, 800, 30, 46, contracts::feedback_heavy},
-    {contracts::content_id("ability_flower_light"), contracts::CombatCommandType::light_attack, contracts::stable_content_key("stance_flower_turn"), 10, 6, 4, 14, 2100, 900, 20, 14, contracts::feedback_light},
+    {contracts::content_id("ability_flower_light"), contracts::CombatCommandType::light_attack, contracts::stable_content_key("stance_flower_turn"), 10, 6, 4, 8, 2100, 900, 30, 14, contracts::feedback_light},
     {contracts::content_id("ability_flower_heavy"), contracts::CombatCommandType::heavy_attack, contracts::stable_content_key("stance_flower_turn"), 22, 14, 6, 28, 2350, 1000, 38, 34, contracts::feedback_heavy},
     {contracts::content_id("ability_umbrella_rust_light"), contracts::CombatCommandType::light_attack, contracts::stable_content_key("stance_umbrella_rust"), 6, 18, 4, 24, 1650, 700, 12, 16, contracts::feedback_light},
     {contracts::content_id("ability_umbrella_rust_heavy"), contracts::CombatCommandType::heavy_attack, contracts::stable_content_key("stance_umbrella_rust"), 16, 32, 6, 40, 1900, 800, 24, 36, contracts::feedback_heavy},

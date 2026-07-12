@@ -31,6 +31,14 @@ test("F1 one-hour contract and generated C++ stay synchronized", async () => {
   assert.equal(contract.combatBootstrap.abilities.length, 9);
   assert.equal(contract.combatBootstrap.director.maxSimultaneousAttackers, 1);
   assert.equal(contract.combatBootstrap.director.formationRadiusMm, 1500);
+  const flowerLight = contract.combatBootstrap.abilities.find(
+    (ability) => ability.id === "ability_flower_light"
+  );
+  assert.equal(flowerLight.healthDamage, 30);
+  assert.equal(
+    flowerLight.windupTicks + flowerLight.activeTicks + flowerLight.recoveryTicks,
+    18
+  );
   assert.equal(contract.questInteractions.length, 4);
   assert.deepEqual(
     new Set(

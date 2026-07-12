@@ -208,10 +208,10 @@
         "staminaCost": 10,
         "windupTicks": 6,
         "activeTicks": 4,
-        "recoveryTicks": 14,
+        "recoveryTicks": 8,
         "rangeMm": 2100,
         "heightToleranceMm": 900,
-        "healthDamage": 20,
+        "healthDamage": 30,
         "poiseDamage": 14,
         "feedbackTags": ["light"]
       },
@@ -425,8 +425,8 @@
       "kind": "choose",
       "cellId": "f1_cell_umbrella_lane_a",
       "objectiveId": "f1_objective_choose_lane_route",
-      "poseMm": { "x": -500, "y": 1800, "height": 0, "floorLayer": 0 },
-      "radiusMm": 1000,
+      "poseMm": { "x": -3900, "y": -100, "height": 0, "floorLayer": 0 },
+      "radiusMm": 1200,
       "prerequisiteObjectiveIds": [
         "f1_objective_defeat_leaking_dolls",
         "f1_objective_answer_paper_egret"

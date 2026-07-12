@@ -17,7 +17,7 @@
 - 完成 F1 固定 60 Hz `GameSession`、斜向世界输入与版本化命令回放；同一 C++ 黄金夹具已通过 Native 双编译器双配置和 Web Single 三浏览器验证。
 - 已实现 Web ABI 1.0、`SaveEnvelopeV1`、Profile 原子提交协调器和 256 KiB 分块存储桥；Guest IndexedDB v1 首次保存与刷新恢复已通过三浏览器阶段门，配额/CAS/损坏导出/离线实现等待下一个阶段门聚合复验，迁移/导入仍保留为缺项。
 - 已将 F1 的 5 个 Cell、7 个目标驱动玩法段、斜向相机基和 60/70 分钟口径固化为 JSON→C++ 机器合同，并用 `VerticalSliceSession` 组合既有移动核心。
-- 已实现数据驱动的首个战斗遭遇合同与确定性 `ICombatResolver` / `ICombatEventSink` / `IEncounterDirector` 启动边界：当前 Web 灰盒可移动接敌，使用檐守/翻花、轻重击、守势和闪身；两个专用训练构件、两伞偶、纸鹭与 Boss 全部默认休眠，由 6 项 Beat/Objective 激活定义按内容启用，训练和伞巷都可在同 Beat Objective 完成后切换下一波；`CombatActorSnapshot.defeated` 明确区分休眠与真实击败。Active 敌人会按量化地面坐标追击/归位、占据稳定接敌位并由单一进攻令牌轮流出招，资源恢复与失败重试已进入同一权威 Tick 边界。
+- 已实现数据驱动的首个战斗遭遇合同与确定性 `ICombatResolver` / `ICombatEventSink` / `IEncounterDirector` 启动边界：当前 Web 灰盒可移动接敌，使用檐守/翻花、轻重击、守势和闪身；两个专用训练构件、两伞偶、纸鹭与 Boss 全部默认休眠，由 6 项 Beat/Objective 激活定义按内容启用，训练和伞巷都可在同 Beat Objective 完成后切换下一波；每次激活还携带逐 Actor Home Pose/Formation Slot，已形成单体教学、伞巷对向夹击与返程三角包围三类落位。`CombatActorSnapshot.defeated` 明确区分休眠与真实击败。Active 敌人会按量化地面坐标追击/归位、占据内容指定的接敌槽位并由单一进攻令牌轮流出招，资源恢复与失败重试已进入同一权威 Tick 边界。
 - 已实现确定性 `IQuestRuntime`、目标图快照/事件/校验和、内容驱动的场景交互、战斗信号、敌群结果、稳定选择、Boss 阶段与结算奖励收据解析；玩家可连续完成全部 7 Beat：雨渡、沈砚五步实操训练（檐守重击→格挡反制→切换翻花→翻花轻击→闪避反制）、伞巷清场/路线、工灯调查/调校、回程战/捷径、四时伞祟春夏秋冬四阶段，再选择直接制伏或恢复共同工印并返回沈砚。奖励收据带稳定 `rewardDedupKey`，但写入 Profile/Persistent Operation 的事务提交仍保留在 `ISnapshotContributor` 边界，不冒充已经持久发奖。
 - 已设计 Service Worker/CDN 内容缓存，以及可选的跨设备云同步协议；设计不等于运行时已落地。
 - 旧版 Web 原型完整保存在 [`codex/archive-legacy-web-v1`](https://github.com/falling-feather/TianGongDu/tree/codex/archive-legacy-web-v1)，含 V1.1.0 可玩闭环和 52 项自动化测试。
@@ -49,7 +49,7 @@
 | 产品/世界/1.0 范围 | Scope Approved | 三地区、战斗/武器、14 Boss、24 NPC、内容预算 | 全量任务/POI 实例和最终平衡 |
 | 技术架构 | In Progress（`F1-GAME-01`，并行收口 `F1-DEV-03` 证据） | 精确工具链与分层；60 Hz Session、量化回放；Web ABI/Profile；F1 Definition Provider、组合纵切会话、确定性任务/交互/战斗解析、事件与权威位姿批次 | IndexedDB 异常/离线聚合复验、迁移/导入、完整玩法纵切和真实设备性能证据 |
 | 可玩纵切 | In Progress（7/7 Beat 功能闭环 + 可操作战斗/调查/Boss/结算灰盒） | F1 唯一流程、5 Cell/7 Beat 机器合同；代码绘制的 2.5D 斜向全景雨夜场景；雨渡交互、沈砚五步有序双架势训练、失败重试、伞巷 2→1 两轮读招清场、路线选择、三证据工灯调查、双调校、回程战/捷径、四季 Boss 四阶段、双结算和返沈砚；7 个内容驱动移动安全点；合格/闲置/失败重试与逐 Beat 预算审计；资源恢复、任务选择和已提交进度保持 | 真实 60 分钟非重复内容密度/盲测、奖励 Profile 事务、复杂 AI/掉落、真实 5 Cell、跨域事务快照和正式资产 |
-| 内容工具 | In Progress（Bootstrap） | 9 类模板注册表、工作台范围、F1 纵切、17 项场景交互、7 项安全点、5 项带 Objective 前置的战斗任务触发器、3 项敌群结果、6 项 Beat/Objective 敌群激活、4 项 Boss 阶段、2 项结算奖励映射及 7 实体/17 能力战斗包的 JSON/Schema/确定性 C++ 生成 | 可用 Workbench、复合波次/叠加组、通用 ContentCore/baker、迁移、资源预览与错误定位 UI |
+| 内容工具 | In Progress（Bootstrap） | 9 类模板注册表、工作台范围、F1 纵切、17 项场景交互、7 项安全点、5 项带 Objective 前置的战斗任务触发器、3 项敌群结果、6 项含 Home Pose/Formation Slot 的 Beat/Objective 敌群激活、4 项 Boss 阶段、2 项结算奖励映射及 7 实体/17 能力战斗包的 JSON/Schema/确定性 C++ 生成 | 可用 Workbench、复合波次/叠加组、动态队形/多令牌协同、通用 ContentCore/baker、迁移、资源预览与错误定位 UI |
 | 本地存档/云同步 | In Progress（`F1-DEV-03`） | IndexedDB v1 六 store、`SaveEnvelopeV1`、Profile Head CAS/C++ 异步桥、Guest 首存与刷新恢复 | 配额/冲突/损坏/离线证据、迁移/导入、多标签主动接管、云 API/DDL/OIDC |
 | 发布运维 | Accepted Baseline | 渠道、缓存、回滚、证据与灾备门；F1 Windows 2022 干净 CI 已落地 | CD、正式 origin/CDN/监控与演练 |
 

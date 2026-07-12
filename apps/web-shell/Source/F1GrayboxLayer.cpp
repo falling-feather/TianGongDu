@@ -1839,7 +1839,7 @@ bool F1GrayboxLayer::activateEncounterForBeat(
     incoming_attack_source_ = 0;
     if (combat_event_label_ != nullptr) {
         if (trigger_objective == tgd::contracts::stable_content_key(
-                                     "f1_objective_defeat_leaking_dolls"
+                                     "f1_objective_raise_paper_egret_lure"
                                  )) {
             combat_event_label_->setString(
                 "LANE WAVE 2 / PAPER EGRET DEPLOYED"

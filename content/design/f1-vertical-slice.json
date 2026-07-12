@@ -551,6 +551,9 @@
       "cellId": "f1_cell_umbrella_lane_a",
       "objectiveIds": [
         "f1_objective_defeat_leaking_dolls",
+        "f1_objective_inspect_torn_canopy_seam",
+        "f1_objective_release_flooded_gutter",
+        "f1_objective_raise_paper_egret_lure",
         "f1_objective_answer_paper_egret",
         "f1_objective_choose_lane_route"
       ],
@@ -724,6 +727,42 @@
       "prerequisiteObjectiveIds": []
     },
     {
+      "id": "f1_interaction_inspect_torn_canopy_seam",
+      "kind": "inspect",
+      "cellId": "f1_cell_umbrella_lane_a",
+      "objectiveId": "f1_objective_inspect_torn_canopy_seam",
+      "selectionId": null,
+      "poseMm": { "x": -3600, "y": -1700, "height": 0, "floorLayer": 0 },
+      "radiusMm": 650,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_defeat_leaking_dolls"
+      ]
+    },
+    {
+      "id": "f1_interaction_release_flooded_gutter",
+      "kind": "operate",
+      "cellId": "f1_cell_umbrella_lane_a",
+      "objectiveId": "f1_objective_release_flooded_gutter",
+      "selectionId": null,
+      "poseMm": { "x": -2700, "y": -700, "height": 0, "floorLayer": 0 },
+      "radiusMm": 650,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_inspect_torn_canopy_seam"
+      ]
+    },
+    {
+      "id": "f1_interaction_raise_paper_egret_lure",
+      "kind": "operate",
+      "cellId": "f1_cell_umbrella_lane_a",
+      "objectiveId": "f1_objective_raise_paper_egret_lure",
+      "selectionId": null,
+      "poseMm": { "x": -1800, "y": 500, "height": 0, "floorLayer": 0 },
+      "radiusMm": 700,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_release_flooded_gutter"
+      ]
+    },
+    {
       "id": "f1_interaction_choose_lane_route",
       "kind": "choose",
       "cellId": "f1_cell_umbrella_lane_a",
@@ -733,6 +772,9 @@
       "radiusMm": 1200,
       "prerequisiteObjectiveIds": [
         "f1_objective_defeat_leaking_dolls",
+        "f1_objective_inspect_torn_canopy_seam",
+        "f1_objective_release_flooded_gutter",
+        "f1_objective_raise_paper_egret_lure",
         "f1_objective_answer_paper_egret"
       ]
     },
@@ -890,7 +932,7 @@
     {
       "id": "f1_activation_umbrella_lane_paper_egret",
       "beatId": "f1_beat_umbrella_lane_first_encounter",
-      "triggerObjectiveId": "f1_objective_defeat_leaking_dolls",
+      "triggerObjectiveId": "f1_objective_raise_paper_egret_lure",
       "encounterId": "f1_encounter_umbrella_lane_bootstrap",
       "actorKeys": [103],
       "actorPlacements": [

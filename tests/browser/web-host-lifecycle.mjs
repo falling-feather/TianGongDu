@@ -1158,7 +1158,6 @@ async function runBrowser(target, origin) {
     let victoryState = await page.evaluate(() => window.__tgdTest.getF1State());
     let readyToAttack = false;
     let sawTelegraph = false;
-    let sawPaperEgretWave = false;
     const victoryDeadline = Date.now() + 45_000;
     while (victoryState.activeHostiles > 0 && Date.now() < victoryDeadline) {
       assert.equal(
@@ -1176,28 +1175,93 @@ async function runBrowser(target, origin) {
         await page.keyboard.press("j");
         readyToAttack = false;
       }
-      if (
-        victoryState.questCompletedObjectives >= 1 &&
-        victoryState.activeHostiles === 1 &&
-        !sawPaperEgretWave
-      ) {
-        sawPaperEgretWave = true;
-        await captureRenderedFrame(
-          page,
-          canvas,
-          resolve(reportDirectory, `${target}-umbrella-lane-paper-egret-wave.png`),
-          `${target} umbrella-lane paper-egret wave`
-        );
-      }
       await page.waitForTimeout(40);
       victoryState = await page.evaluate(() => window.__tgdTest.getF1State());
     }
     assert.equal(sawTelegraph, true, `${target} never exposed a hostile telegraph.`);
-    assert.equal(sawPaperEgretWave, true, `${target} never activated the paper-egret wave.`);
-    assert.equal(victoryState.activeHostiles, 0, `${target} did not clear the authored hostile groups.`);
+    assert.equal(victoryState.activeHostiles, 0, `${target} did not clear the leaking-doll wave.`);
     assert.equal(victoryState.questBeatIndex, 2);
-    assert.equal(victoryState.questCompletedObjectives, 2);
-    assert.equal(victoryState.questRequiredObjectives, 3);
+    assert.equal(victoryState.questCompletedObjectives, 1);
+    assert.equal(victoryState.questRequiredObjectives, 6);
+
+    const rainworksSteps = [
+      { x: -3_600, y: -1_700, completed: 2 },
+      { x: -2_700, y: -700, completed: 3 },
+      { x: -1_800, y: 500, completed: 4 }
+    ];
+    for (const step of rainworksSteps) {
+      await moveF1PlayerTo(page, step.x, step.y);
+      await page.keyboard.press("f");
+      await page.waitForFunction(
+        (completed) => window.__tgdTest?.getF1State()?.questCompletedObjectives === completed,
+        step.completed,
+        { timeout: 5_000 }
+      );
+      victoryState = await page.evaluate(() => window.__tgdTest.getF1State());
+      assert.equal(victoryState.questBeatIndex, 2);
+      assert.equal(victoryState.questRequiredObjectives, 6);
+      if (step.completed < 4) {
+        assert.equal(victoryState.activeHostiles, 0);
+      }
+      if (step.completed === 3) {
+        await captureRenderedFrame(
+          page,
+          canvas,
+          resolve(reportDirectory, `${target}-umbrella-lane-rainworks.png`),
+          `${target} umbrella-lane rainworks interlude`
+        );
+      }
+    }
+    await page.waitForFunction(
+      () => window.__tgdTest?.getF1State()?.activeHostiles === 1,
+      undefined,
+      { timeout: 5_000 }
+    );
+    victoryState = await page.evaluate(() => window.__tgdTest.getF1State());
+    assert.equal(victoryState.questCompletedObjectives, 4);
+    await captureRenderedFrame(
+      page,
+      canvas,
+      resolve(reportDirectory, `${target}-umbrella-lane-paper-egret-wave.png`),
+      `${target} umbrella-lane paper-egret wave`
+    );
+
+    await page.keyboard.press("2");
+    await page.waitForTimeout(100);
+    readyToAttack = false;
+    let sawPaperEgretTelegraph = false;
+    const paperEgretDeadline = Date.now() + 30_000;
+    while (victoryState.activeHostiles > 0 && Date.now() < paperEgretDeadline) {
+      assert.equal(
+        victoryState.playerActive,
+        true,
+        `${target} player fell during the paper-egret wave: ${JSON.stringify(victoryState)}`
+      );
+      if (victoryState.incomingAttackTicks > 0) {
+        sawPaperEgretTelegraph = true;
+        if (victoryState.incomingAttackTicks <= 10 && !victoryState.playerBusy) {
+          await page.keyboard.press("c");
+          readyToAttack = true;
+        } else if (readyToAttack && !victoryState.playerBusy) {
+          await page.keyboard.press("j");
+          readyToAttack = false;
+        }
+      } else if (sawPaperEgretTelegraph && !victoryState.playerBusy) {
+        await page.keyboard.press("j");
+        readyToAttack = false;
+      }
+      await page.waitForTimeout(40);
+      victoryState = await page.evaluate(() => window.__tgdTest.getF1State());
+    }
+    assert.equal(
+      sawPaperEgretTelegraph,
+      true,
+      `${target} paper-egret wave exposed no hostile telegraph.`
+    );
+    assert.equal(victoryState.activeHostiles, 0, `${target} did not clear the paper-egret wave.`);
+    assert.equal(victoryState.questBeatIndex, 2);
+    assert.equal(victoryState.questCompletedObjectives, 5);
+    assert.equal(victoryState.questRequiredObjectives, 6);
 
     await moveF1PlayerTo(page, -3_900, -100);
     await page.keyboard.press("f");
@@ -1607,6 +1671,7 @@ async function runBrowser(target, origin) {
         projectPath(resolve(reportDirectory, `${target}-quest-interaction-ready.png`)),
         projectPath(resolve(reportDirectory, `${target}-quest-stage-advanced.png`)),
         projectPath(resolve(reportDirectory, `${target}-training-complete.png`)),
+        projectPath(resolve(reportDirectory, `${target}-umbrella-lane-rainworks.png`)),
         projectPath(
           resolve(reportDirectory, `${target}-umbrella-lane-paper-egret-wave.png`)
         ),

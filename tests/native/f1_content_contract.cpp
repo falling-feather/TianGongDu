@@ -74,7 +74,7 @@ int main() {
         "every beat owns an ordered content-driven movement safe point"
     );
     ok &= expect(
-        definition->quest_interactions.size() == 17 &&
+        definition->quest_interactions.size() == 20 &&
             definition->quest_interactions.front().objective_id.key ==
                 tgd::contracts::stable_content_key("f1_objective_inspect_travel_writ"),
         "the expanded opening scene interactions are generated content, not presentation rules"
@@ -102,9 +102,10 @@ int main() {
         route_interaction != definition->quest_interactions.end() &&
             route_interaction->selection_id.key ==
                 tgd::contracts::stable_content_key("f1_choice_lane_canopy") &&
-            route_interaction->prerequisite_objectives.size() == 2 &&
+            definition->quest_interactions.size() == 20 &&
+            route_interaction->prerequisite_objectives.size() == 5 &&
             definition->quest_combat_outcomes.size() == 3,
-        "the lane choice waits for two generated hostile-group outcomes"
+        "the lane choice waits for combat and the ordered rainworks chain"
     );
     const auto calibration_count = std::count_if(
         definition->quest_interactions.begin(),
@@ -192,7 +193,7 @@ int main() {
             definition->quest_encounter_activations[2].actor_placements[1].formation_slot == 5 &&
             definition->quest_encounter_activations[3].trigger_objective_id.key ==
                 tgd::contracts::stable_content_key(
-                    "f1_objective_defeat_leaking_dolls"
+                    "f1_objective_raise_paper_egret_lure"
                 ) &&
             definition->quest_encounter_activations[3].actor_keys.size() == 1 &&
             definition->quest_encounter_activations[3].actor_keys.front() == 103 &&

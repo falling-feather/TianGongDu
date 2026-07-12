@@ -27,8 +27,11 @@ inline constexpr std::array<contracts::ContentId, 6> beat_1_objectives{{
     contracts::content_id("f1_objective_flower_turn_counter"),
 }};
 
-inline constexpr std::array<contracts::ContentId, 3> beat_2_objectives{{
+inline constexpr std::array<contracts::ContentId, 6> beat_2_objectives{{
     contracts::content_id("f1_objective_defeat_leaking_dolls"),
+    contracts::content_id("f1_objective_inspect_torn_canopy_seam"),
+    contracts::content_id("f1_objective_release_flooded_gutter"),
+    contracts::content_id("f1_objective_raise_paper_egret_lure"),
     contracts::content_id("f1_objective_answer_paper_egret"),
     contracts::content_id("f1_objective_choose_lane_route"),
 }};
@@ -77,28 +80,43 @@ inline constexpr std::array<contracts::ContentId, 1> interaction_5_prerequisites
     contracts::content_id("f1_objective_sound_workshop_bell"),
 }};
 
-inline constexpr std::array<contracts::ContentId, 2> interaction_7_prerequisites{{
+inline constexpr std::array<contracts::ContentId, 1> interaction_7_prerequisites{{
     contracts::content_id("f1_objective_defeat_leaking_dolls"),
+}};
+
+inline constexpr std::array<contracts::ContentId, 1> interaction_8_prerequisites{{
+    contracts::content_id("f1_objective_inspect_torn_canopy_seam"),
+}};
+
+inline constexpr std::array<contracts::ContentId, 1> interaction_9_prerequisites{{
+    contracts::content_id("f1_objective_release_flooded_gutter"),
+}};
+
+inline constexpr std::array<contracts::ContentId, 5> interaction_10_prerequisites{{
+    contracts::content_id("f1_objective_defeat_leaking_dolls"),
+    contracts::content_id("f1_objective_inspect_torn_canopy_seam"),
+    contracts::content_id("f1_objective_release_flooded_gutter"),
+    contracts::content_id("f1_objective_raise_paper_egret_lure"),
     contracts::content_id("f1_objective_answer_paper_egret"),
 }};
 
-inline constexpr std::array<contracts::ContentId, 3> interaction_11_prerequisites{{
+inline constexpr std::array<contracts::ContentId, 3> interaction_14_prerequisites{{
     contracts::content_id("f1_objective_reveal_spring_trace"),
     contracts::content_id("f1_objective_reveal_winter_trace"),
     contracts::content_id("f1_objective_review_shared_ledger"),
 }};
 
-inline constexpr std::array<contracts::ContentId, 3> interaction_12_prerequisites{{
+inline constexpr std::array<contracts::ContentId, 3> interaction_15_prerequisites{{
     contracts::content_id("f1_objective_reveal_spring_trace"),
     contracts::content_id("f1_objective_reveal_winter_trace"),
     contracts::content_id("f1_objective_review_shared_ledger"),
-}};
-
-inline constexpr std::array<contracts::ContentId, 1> interaction_13_prerequisites{{
-    contracts::content_id("f1_objective_validate_calibration"),
 }};
 
 inline constexpr std::array<contracts::ContentId, 1> interaction_16_prerequisites{{
+    contracts::content_id("f1_objective_validate_calibration"),
+}};
+
+inline constexpr std::array<contracts::ContentId, 1> interaction_19_prerequisites{{
     contracts::content_id("f1_objective_choose_resolution"),
 }};
 
@@ -218,7 +236,7 @@ inline constexpr std::array<contracts::ContentId, 5> f1_cells{{
     contracts::content_id("f1_cell_return_safe_point"),
 }};
 
-inline constexpr std::array<contracts::QuestInteractionDefinition, 17> f1_quest_interactions{{
+inline constexpr std::array<contracts::QuestInteractionDefinition, 20> f1_quest_interactions{{
     {contracts::content_id("f1_interaction_travel_writ"), contracts::QuestInteractionKind::inspect, contracts::content_id("f1_cell_rain_ferry"), contracts::content_id("f1_objective_inspect_travel_writ"), contracts::ContentId{}, {-12000, -1600, 0, 0}, 800, std::span<const contracts::ContentId>{}},
     {contracts::content_id("f1_interaction_read_flood_marks"), contracts::QuestInteractionKind::inspect, contracts::content_id("f1_cell_rain_ferry"), contracts::content_id("f1_objective_read_flood_marks"), contracts::ContentId{}, {-11700, -1300, 0, 0}, 650, std::span<const contracts::ContentId>{interaction_1_prerequisites}},
     {contracts::content_id("f1_interaction_secure_ferry_mooring"), contracts::QuestInteractionKind::operate, contracts::content_id("f1_cell_rain_ferry"), contracts::content_id("f1_objective_secure_ferry_mooring"), contracts::ContentId{}, {-11400, -1000, 0, 0}, 650, std::span<const contracts::ContentId>{interaction_2_prerequisites}},
@@ -226,16 +244,19 @@ inline constexpr std::array<contracts::QuestInteractionDefinition, 17> f1_quest_
     {contracts::content_id("f1_interaction_sound_workshop_bell"), contracts::QuestInteractionKind::operate, contracts::content_id("f1_cell_rain_ferry"), contracts::content_id("f1_objective_sound_workshop_bell"), contracts::ContentId{}, {-10800, -400, 0, 0}, 650, std::span<const contracts::ContentId>{interaction_4_prerequisites}},
     {contracts::content_id("f1_interaction_ferry_gate"), contracts::QuestInteractionKind::operate, contracts::content_id("f1_cell_rain_ferry"), contracts::content_id("f1_objective_reach_ferry_gate"), contracts::ContentId{}, {-10450, -100, 0, 0}, 900, std::span<const contracts::ContentId>{interaction_5_prerequisites}},
     {contracts::content_id("f1_interaction_meet_shen_yan"), contracts::QuestInteractionKind::talk, contracts::content_id("f1_cell_rain_ferry"), contracts::content_id("f1_objective_meet_shen_yan"), contracts::ContentId{}, {-10500, -600, 0, 0}, 800, std::span<const contracts::ContentId>{}},
-    {contracts::content_id("f1_interaction_choose_lane_route"), contracts::QuestInteractionKind::choose, contracts::content_id("f1_cell_umbrella_lane_a"), contracts::content_id("f1_objective_choose_lane_route"), contracts::content_id("f1_choice_lane_canopy"), {-3900, -100, 0, 0}, 1200, std::span<const contracts::ContentId>{interaction_7_prerequisites}},
+    {contracts::content_id("f1_interaction_inspect_torn_canopy_seam"), contracts::QuestInteractionKind::inspect, contracts::content_id("f1_cell_umbrella_lane_a"), contracts::content_id("f1_objective_inspect_torn_canopy_seam"), contracts::ContentId{}, {-3600, -1700, 0, 0}, 650, std::span<const contracts::ContentId>{interaction_7_prerequisites}},
+    {contracts::content_id("f1_interaction_release_flooded_gutter"), contracts::QuestInteractionKind::operate, contracts::content_id("f1_cell_umbrella_lane_a"), contracts::content_id("f1_objective_release_flooded_gutter"), contracts::ContentId{}, {-2700, -700, 0, 0}, 650, std::span<const contracts::ContentId>{interaction_8_prerequisites}},
+    {contracts::content_id("f1_interaction_raise_paper_egret_lure"), contracts::QuestInteractionKind::operate, contracts::content_id("f1_cell_umbrella_lane_a"), contracts::content_id("f1_objective_raise_paper_egret_lure"), contracts::ContentId{}, {-1800, 500, 0, 0}, 700, std::span<const contracts::ContentId>{interaction_9_prerequisites}},
+    {contracts::content_id("f1_interaction_choose_lane_route"), contracts::QuestInteractionKind::choose, contracts::content_id("f1_cell_umbrella_lane_a"), contracts::content_id("f1_objective_choose_lane_route"), contracts::content_id("f1_choice_lane_canopy"), {-3900, -100, 0, 0}, 1200, std::span<const contracts::ContentId>{interaction_10_prerequisites}},
     {contracts::content_id("f1_interaction_reveal_spring_trace"), contracts::QuestInteractionKind::inspect, contracts::content_id("f1_cell_canopy_workstation"), contracts::content_id("f1_objective_reveal_spring_trace"), contracts::ContentId{}, {-3900, -100, 0, 0}, 650, std::span<const contracts::ContentId>{}},
     {contracts::content_id("f1_interaction_reveal_winter_trace"), contracts::QuestInteractionKind::inspect, contracts::content_id("f1_cell_canopy_workstation"), contracts::content_id("f1_objective_reveal_winter_trace"), contracts::ContentId{}, {-3100, -100, 0, 0}, 650, std::span<const contracts::ContentId>{}},
     {contracts::content_id("f1_interaction_review_shared_ledger"), contracts::QuestInteractionKind::inspect, contracts::content_id("f1_cell_canopy_workstation"), contracts::content_id("f1_objective_review_shared_ledger"), contracts::ContentId{}, {-2300, -100, 0, 0}, 650, std::span<const contracts::ContentId>{}},
-    {contracts::content_id("f1_interaction_calibrate_rib_spring"), contracts::QuestInteractionKind::choose, contracts::content_id("f1_cell_canopy_workstation"), contracts::content_id("f1_objective_choose_rib_calibration"), contracts::content_id("f1_choice_rib_spring_calibration"), {-1500, 400, 0, 0}, 500, std::span<const contracts::ContentId>{interaction_11_prerequisites}},
-    {contracts::content_id("f1_interaction_calibrate_rib_winter"), contracts::QuestInteractionKind::choose, contracts::content_id("f1_cell_canopy_workstation"), contracts::content_id("f1_objective_choose_rib_calibration"), contracts::content_id("f1_choice_rib_winter_calibration"), {-1500, -600, 0, 0}, 500, std::span<const contracts::ContentId>{interaction_12_prerequisites}},
-    {contracts::content_id("f1_interaction_open_return_shortcut"), contracts::QuestInteractionKind::operate, contracts::content_id("f1_cell_canopy_workstation"), contracts::content_id("f1_objective_open_return_shortcut"), contracts::ContentId{}, {-800, 400, 0, 0}, 1400, std::span<const contracts::ContentId>{interaction_13_prerequisites}},
+    {contracts::content_id("f1_interaction_calibrate_rib_spring"), contracts::QuestInteractionKind::choose, contracts::content_id("f1_cell_canopy_workstation"), contracts::content_id("f1_objective_choose_rib_calibration"), contracts::content_id("f1_choice_rib_spring_calibration"), {-1500, 400, 0, 0}, 500, std::span<const contracts::ContentId>{interaction_14_prerequisites}},
+    {contracts::content_id("f1_interaction_calibrate_rib_winter"), contracts::QuestInteractionKind::choose, contracts::content_id("f1_cell_canopy_workstation"), contracts::content_id("f1_objective_choose_rib_calibration"), contracts::content_id("f1_choice_rib_winter_calibration"), {-1500, -600, 0, 0}, 500, std::span<const contracts::ContentId>{interaction_15_prerequisites}},
+    {contracts::content_id("f1_interaction_open_return_shortcut"), contracts::QuestInteractionKind::operate, contracts::content_id("f1_cell_canopy_workstation"), contracts::content_id("f1_objective_open_return_shortcut"), contracts::ContentId{}, {-800, 400, 0, 0}, 1400, std::span<const contracts::ContentId>{interaction_16_prerequisites}},
     {contracts::content_id("f1_interaction_resolution_subdue"), contracts::QuestInteractionKind::choose, contracts::content_id("f1_cell_return_safe_point"), contracts::content_id("f1_objective_choose_resolution"), contracts::content_id("f1_choice_resolution_subdue"), {3300, 1200, 0, 0}, 500, std::span<const contracts::ContentId>{}},
     {contracts::content_id("f1_interaction_resolution_restore_shared_mark"), contracts::QuestInteractionKind::choose, contracts::content_id("f1_cell_return_safe_point"), contracts::content_id("f1_objective_choose_resolution"), contracts::content_id("f1_choice_resolution_restore_shared_mark"), {4200, 2300, 0, 0}, 500, std::span<const contracts::ContentId>{}},
-    {contracts::content_id("f1_interaction_return_to_shen_yan"), contracts::QuestInteractionKind::talk, contracts::content_id("f1_cell_return_safe_point"), contracts::content_id("f1_objective_return_to_shen_yan"), contracts::ContentId{}, {-10500, -600, 0, 0}, 1000, std::span<const contracts::ContentId>{interaction_16_prerequisites}},
+    {contracts::content_id("f1_interaction_return_to_shen_yan"), contracts::QuestInteractionKind::talk, contracts::content_id("f1_cell_return_safe_point"), contracts::content_id("f1_objective_return_to_shen_yan"), contracts::ContentId{}, {-10500, -600, 0, 0}, 1000, std::span<const contracts::ContentId>{interaction_19_prerequisites}},
 }};
 
 inline constexpr std::array<contracts::QuestCombatTriggerDefinition, 5> f1_quest_combat_triggers{{
@@ -256,7 +277,7 @@ inline constexpr std::array<contracts::QuestEncounterActivationDefinition, 6> f1
     {contracts::content_id("f1_activation_shen_yan_training_rigs"), contracts::content_id("f1_beat_shen_yan_training"), contracts::ContentId{}, contracts::content_id("f1_encounter_umbrella_lane_bootstrap"), std::span<const contracts::StableActorKey>{encounter_activation_0_actors}, std::span<const contracts::EncounterActorPlacementDefinition>{encounter_activation_0_placements}},
     {contracts::content_id("f1_activation_shen_yan_flower_turn_rig"), contracts::content_id("f1_beat_shen_yan_training"), contracts::content_id("f1_objective_eavesguard_counter"), contracts::content_id("f1_encounter_umbrella_lane_bootstrap"), std::span<const contracts::StableActorKey>{encounter_activation_1_actors}, std::span<const contracts::EncounterActorPlacementDefinition>{encounter_activation_1_placements}},
     {contracts::content_id("f1_activation_umbrella_lane_first_encounter"), contracts::content_id("f1_beat_umbrella_lane_first_encounter"), contracts::ContentId{}, contracts::content_id("f1_encounter_umbrella_lane_bootstrap"), std::span<const contracts::StableActorKey>{encounter_activation_2_actors}, std::span<const contracts::EncounterActorPlacementDefinition>{encounter_activation_2_placements}},
-    {contracts::content_id("f1_activation_umbrella_lane_paper_egret"), contracts::content_id("f1_beat_umbrella_lane_first_encounter"), contracts::content_id("f1_objective_defeat_leaking_dolls"), contracts::content_id("f1_encounter_umbrella_lane_bootstrap"), std::span<const contracts::StableActorKey>{encounter_activation_3_actors}, std::span<const contracts::EncounterActorPlacementDefinition>{encounter_activation_3_placements}},
+    {contracts::content_id("f1_activation_umbrella_lane_paper_egret"), contracts::content_id("f1_beat_umbrella_lane_first_encounter"), contracts::content_id("f1_objective_raise_paper_egret_lure"), contracts::content_id("f1_encounter_umbrella_lane_bootstrap"), std::span<const contracts::StableActorKey>{encounter_activation_3_actors}, std::span<const contracts::EncounterActorPlacementDefinition>{encounter_activation_3_placements}},
     {contracts::content_id("f1_activation_canopy_return_encounter"), contracts::content_id("f1_beat_canopy_return_encounter"), contracts::ContentId{}, contracts::content_id("f1_encounter_umbrella_lane_bootstrap"), std::span<const contracts::StableActorKey>{encounter_activation_4_actors}, std::span<const contracts::EncounterActorPlacementDefinition>{encounter_activation_4_placements}},
     {contracts::content_id("f1_activation_four_seasons_wraith"), contracts::content_id("f1_beat_four_seasons_wraith"), contracts::ContentId{}, contracts::content_id("f1_encounter_umbrella_lane_bootstrap"), std::span<const contracts::StableActorKey>{encounter_activation_5_actors}, std::span<const contracts::EncounterActorPlacementDefinition>{encounter_activation_5_placements}},
 }};

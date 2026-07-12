@@ -705,6 +705,63 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
         !outcomes.resolve(actors, quest).found,
         "a dormant paper egret is not misclassified as defeated"
     );
+    for (std::size_t objective_index = 1; objective_index <= 3; ++objective_index) {
+        const auto objective = definition().beats[2].objectives[objective_index].key;
+        const auto rainworks_interaction = std::find_if(
+            definition().quest_interactions.begin(),
+            definition().quest_interactions.end(),
+            [objective](const tgd::contracts::QuestInteractionDefinition& interaction) {
+                return interaction.objective_id.key == objective;
+            }
+        );
+        ok &= expect(
+            rainworks_interaction != definition().quest_interactions.end(),
+            "each umbrella-lane rainworks objective owns an authored interaction"
+        );
+        if (rainworks_interaction == definition().quest_interactions.end()) {
+            return false;
+        }
+        ok &= expect(
+            !interactions
+                 .resolve(
+                     {definition().player.actor, route->cell_id.key, route->pose},
+                     quest
+                 )
+                 .found,
+            "the lane choice stays hidden until every rainworks step and combat outcome completes"
+        );
+        const auto resolved_rainworks = interactions.resolve(
+            {
+                definition().player.actor,
+                rainworks_interaction->cell_id.key,
+                rainworks_interaction->pose,
+            },
+            quest
+        );
+        ok &= expect(
+            resolved_rainworks.found && resolved_rainworks.objective == objective,
+            "umbrella-lane rainworks interactions resolve in authored prerequisite order"
+        );
+        ok &= quest.apply(
+                      {
+                          tick++,
+                          definition().player.actor,
+                          sequence++,
+                          {},
+                          resolved_rainworks.objective,
+                      },
+                      sink
+                  ).error == QuestError::none;
+    }
+    ok &= expect(
+        !interactions
+             .resolve(
+                 {definition().player.actor, route->cell_id.key, route->pose},
+                 quest
+             )
+             .found,
+        "the completed rainworks chain still waits for the paper-egret answer"
+    );
     for (const auto& placement :
          definition().quest_encounter_activations[3].actor_placements) {
         const auto actor = std::find_if(
@@ -755,7 +812,7 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
     ok &= expect(
         unlocked_route.found && unlocked_route.objective == route->objective_id.key &&
             unlocked_route.selection == route->selection_id.key,
-        "completed hostile groups unlock the authored lane choice and stable option"
+        "completed hostile groups and rainworks unlock the authored lane choice and stable option"
     );
     const auto checksum_before_missing_selection = quest.snapshot().checksum;
     ok &= expect(

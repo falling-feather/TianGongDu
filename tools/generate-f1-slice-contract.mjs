@@ -254,18 +254,69 @@ export function validateF1SliceContract(contract, catalog) {
   ) {
     fail("the Rain Ferry readiness chain drifted");
   }
+  const umbrellaLaneBeat = contract.beats[2];
+  const expectedUmbrellaLaneRainworks = [
+    [
+      "f1_interaction_inspect_torn_canopy_seam",
+      "inspect",
+      "f1_objective_inspect_torn_canopy_seam",
+      -3600,
+      -1700,
+      650,
+      ["f1_objective_defeat_leaking_dolls"]
+    ],
+    [
+      "f1_interaction_release_flooded_gutter",
+      "operate",
+      "f1_objective_release_flooded_gutter",
+      -2700,
+      -700,
+      650,
+      ["f1_objective_inspect_torn_canopy_seam"]
+    ],
+    [
+      "f1_interaction_raise_paper_egret_lure",
+      "operate",
+      "f1_objective_raise_paper_egret_lure",
+      -1800,
+      500,
+      700,
+      ["f1_objective_release_flooded_gutter"]
+    ]
+  ].map(([id, kind, objectiveId, x, y, radiusMm, prerequisiteObjectiveIds]) => ({
+    id,
+    kind,
+    cellId: umbrellaLaneBeat.cellId,
+    objectiveId,
+    selectionId: null,
+    poseMm: {x, y, height: 0, floorLayer: 0},
+    radiusMm,
+    prerequisiteObjectiveIds
+  }));
+  const umbrellaLaneRainworks = interactions.filter((interaction) =>
+    umbrellaLaneBeat.objectiveIds.slice(1, 4).includes(interaction.objectiveId)
+  );
+  if (
+    !sameValues(
+      umbrellaLaneBeat.objectiveIds.slice(1, 4),
+      expectedUmbrellaLaneRainworks.map((interaction) => interaction.objectiveId)
+    ) ||
+    !sameValues(umbrellaLaneRainworks, expectedUmbrellaLaneRainworks)
+  ) {
+    fail("the umbrella-lane rainworks chain drifted");
+  }
   const laneRouteInteraction = interactions.find(
-    (interaction) => interaction.objectiveId === contract.beats[2].objectiveIds[2]
+    (interaction) => interaction.objectiveId === umbrellaLaneBeat.objectiveIds[5]
   );
   if (
     laneRouteInteraction?.kind !== "choose" ||
     laneRouteInteraction.selectionId !== "f1_choice_lane_canopy" ||
     !sameValues(
       laneRouteInteraction.prerequisiteObjectiveIds,
-      contract.beats[2].objectiveIds.slice(0, 2)
+      umbrellaLaneBeat.objectiveIds.slice(0, 5)
     )
   ) {
-    fail("the umbrella-lane route choice must require both combat objectives");
+    fail("the umbrella-lane route choice must require combat and rainworks objectives");
   }
   const workbenchBeat = contract.beats[3];
   const workbenchEvidence = workbenchBeat.objectiveIds.slice(0, 3);
@@ -384,7 +435,7 @@ export function validateF1SliceContract(contract, catalog) {
       !sameValues(encounterActivations[2].actorKeys, [101, 102]) ||
       !sameValues(encounterActivations[2].actorPlacements.map((value) => value.formationSlot), [1, 5]) ||
       encounterActivations[3].beatId !== laneBeat.id ||
-      encounterActivations[3].triggerObjectiveId !== laneBeat.objectiveIds[0] ||
+      encounterActivations[3].triggerObjectiveId !== laneBeat.objectiveIds[3] ||
       !sameValues(encounterActivations[3].actorKeys, [103]) ||
       !sameValues(encounterActivations[3].actorPlacements.map((value) => value.formationSlot), [2]) ||
       encounterActivations[4].beatId !== returnBeat.id ||
@@ -652,7 +703,10 @@ export function validateF1SliceContract(contract, catalog) {
     combatOutcomes.map((outcome) => outcome.objectiveId),
     "quest combat outcome objective"
   );
-  const laneCombatObjectives = new Set(contract.beats[2].objectiveIds.slice(0, 2));
+  const laneCombatObjectives = new Set([
+    contract.beats[2].objectiveIds[0],
+    contract.beats[2].objectiveIds[4]
+  ]);
   const coveredLaneCombatObjectives = combatOutcomes
     .filter((outcome) => laneCombatObjectives.has(outcome.objectiveId))
     .map((outcome) => outcome.objectiveId);

@@ -41,7 +41,7 @@ test("F1 one-hour contract and generated C++ stay synchronized", async () => {
     flowerLight.windupTicks + flowerLight.activeTicks + flowerLight.recoveryTicks,
     18
   );
-  assert.equal(contract.questInteractions.length, 17);
+  assert.equal(contract.questInteractions.length, 20);
   assert.deepEqual(
     contract.beats[0].objectiveIds,
     [
@@ -80,13 +80,13 @@ test("F1 one-hour contract and generated C++ stay synchronized", async () => {
         .filter((outcome) => contract.beats[2].objectiveIds.includes(outcome.objectiveId))
         .map((outcome) => outcome.objectiveId)
     ),
-    new Set(contract.beats[2].objectiveIds.slice(0, 2))
+    new Set([contract.beats[2].objectiveIds[0], contract.beats[2].objectiveIds[4]])
   );
   assert.deepEqual(
     contract.questInteractions.find(
       (interaction) => interaction.objectiveId === "f1_objective_choose_lane_route"
     ).prerequisiteObjectiveIds,
-    contract.beats[2].objectiveIds.slice(0, 2)
+    contract.beats[2].objectiveIds.slice(0, 5)
   );
   assert.equal(
     contract.questInteractions.find(
@@ -334,7 +334,7 @@ test("F1 encounters activate authored groups at beat and objective boundaries", 
     {
       id: "f1_activation_umbrella_lane_paper_egret",
       beatId: contract.beats[2].id,
-      triggerObjectiveId: contract.beats[2].objectiveIds[0],
+      triggerObjectiveId: contract.beats[2].objectiveIds[3],
       encounterId: contract.combatBootstrap.id,
       actorKeys: [103],
       actorPlacements: [

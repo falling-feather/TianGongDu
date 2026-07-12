@@ -306,6 +306,6 @@ F1 命令回放使用版本化、显式小端的 `CommandReplay` 二进制格式
 
 ## 26. Beat 边界的敌群激活
 
-F1 的敌对 Actor Definition 全部以 `initially_active=false` 烘焙；`QuestEncounterActivationDefinition` 为训练、伞巷首战、调校回程和 Boss Beat 指定稳定 Actor Key 组。进入 Beat 时，宿主用同一 Tick、单调命令序列和 `SafePointRetryReason::quest_stage_advanced` 请求 `ICombatResolver::activate_group`；失败重试先恢复 Definition 初态，再重新应用当前 Beat 的同一激活组。休眠不等于已击败，训练构件因此使用独立 Archetype，不能进入正式伞偶/纸鹭击败计数。
+F1 的敌对 Actor Definition 全部以 `initially_active=false` 烘焙；`QuestEncounterActivationDefinition` 通过可空 `trigger_objective_id` 为训练、伞巷首战、调校回程和 Boss 指定稳定 Actor Key 组：空值表示进入 Beat 时触发，非空值必须属于同一 Beat，并在该 Objective 完成后触发完整替换。宿主用同一 Tick、单调命令序列和 `SafePointRetryReason::quest_stage_advanced` 请求 `ICombatResolver::activate_group`；失败重试先恢复 Definition 初态，再重新应用当前 Beat 的入场组。休眠不等于已击败，训练构件因此使用独立 Archetype，不能进入正式伞偶/纸鹭击败计数。
 
-Stage Advance 既可能由场景交互产生，也可能由 `CombatEvent` 中的最终训练动作产生。Web Shell 只能先记录待激活 Beat，再在交互解析后或战斗事件发布完成后的 Tick 安全点应用，禁止在 `ICombatEventSink::publish` 回调栈中重入修改 Combat Resolver。当前合同只支持每个 Beat 一个完整替换组；Objective 条件波次、组叠加、刷出/退场演出、复杂编队和通用 Workbench 预览仍为 Missing/Reserved。
+Stage Advance 和 Objective Complete 都可能由场景交互或 `CombatEvent` 产生。Web Shell 只能先记录待激活 Beat/Objective，再在交互解析后或战斗事件发布完成后的 Tick 安全点应用，禁止在 `ICombatEventSink::publish` 回调栈中重入修改 Combat Resolver。沈砚训练现用入场伞偶组与格挡 Objective 触发的纸鹭组证明该边界；当前仍只支持“Beat 入场或单一 Objective 完成后完整替换一组”，多个 Objective 会合、复合条件、组叠加/增援、刷出/退场演出、复杂编队和通用 Workbench 时间线仍为 Missing/Reserved。

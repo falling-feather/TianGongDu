@@ -1142,7 +1142,7 @@ async function runBrowser(target, origin) {
     assert.equal(victoryState.questCompletedObjectives, 2);
     assert.equal(victoryState.questRequiredObjectives, 3);
 
-    await page.waitForTimeout(100);
+    await moveF1PlayerTo(page, -3_900, -100);
     await page.keyboard.press("f");
     await page.waitForFunction(
       () => window.__tgdTest?.getF1State()?.questBeatIndex === 3,

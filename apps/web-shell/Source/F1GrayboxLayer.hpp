@@ -80,6 +80,9 @@ class F1GrayboxLayer final :
         tgd::contracts::StableContentKey stance = 0
     ) noexcept;
     [[nodiscard]] bool submitCombatTick(tgd::contracts::TickIndex tick) noexcept;
+    [[nodiscard]] bool activateEncounterForBeat(
+        tgd::contracts::StableContentKey beat
+    ) noexcept;
     [[nodiscard]] bool retryEncounter() noexcept;
     void refreshCombatHud() noexcept;
 

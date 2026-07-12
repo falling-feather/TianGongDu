@@ -225,6 +225,9 @@ void solidPolygon(
         tgd::contracts::stable_content_key("f1_interaction_review_shared_ledger");
     const auto spring_rib =
         tgd::contracts::stable_content_key("f1_interaction_calibrate_rib_spring");
+    const bool is_shortcut = interaction == tgd::contracts::stable_content_key(
+                                               "f1_interaction_open_return_shortcut"
+                                           );
     const bool is_ledger = interaction == ledger;
     const bool is_calibration = interaction == spring_rib ||
                                 interaction == tgd::contracts::stable_content_key(
@@ -239,6 +242,29 @@ void solidPolygon(
 
     auto* node = ax::Node::create();
     auto* draw = ax::DrawNode::create();
+    if (is_shortcut) {
+        draw->drawSolidCircle(
+            {0.0F, -6.0F},
+            34.0F,
+            0.0F,
+            28,
+            1.65F,
+            0.38F,
+            color(2, 8, 11, 115)
+        );
+        draw->drawLine({-26.0F, -12.0F}, {-26.0F, 58.0F}, color(119, 88, 56), 7.0F);
+        draw->drawLine({26.0F, -12.0F}, {26.0F, 58.0F}, color(119, 88, 56), 7.0F);
+        solidPolygon(
+            draw,
+            {{-39.0F, 58.0F}, {0.0F, 76.0F}, {39.0F, 58.0F}, {0.0F, 49.0F}},
+            color(83, 62, 49),
+            color(211, 162, 91),
+            1.5F
+        );
+        draw->drawLine({-16.0F, 5.0F}, {16.0F, 40.0F}, color(113, 211, 185), 3.0F);
+        node->addChild(draw);
+        return node;
+    }
     draw->drawSolidCircle({0.0F, -4.0F}, 30.0F, 0.0F, 28, 1.65F, 0.38F, color(2, 8, 11, 110));
     solidPolygon(
         draw,
@@ -308,6 +334,9 @@ void solidPolygon(
     if (interaction == tgd::contracts::stable_content_key("f1_interaction_calibrate_rib_winter")) {
         return "F / LOCK WINTER RIB CALIBRATION";
     }
+    if (interaction == tgd::contracts::stable_content_key("f1_interaction_open_return_shortcut")) {
+        return "F / OPEN CANOPY RETURN SHORTCUT";
+    }
     switch (kind) {
         case tgd::contracts::QuestInteractionKind::inspect:
             return "F / INSPECT";
@@ -335,6 +364,15 @@ bool F1GrayboxLayer::init() {
         tgd::contracts::stable_content_key("f1_encounter_umbrella_lane_bootstrap")
     );
     if (definition_ == nullptr || combat_definition_ == nullptr) {
+        return false;
+    }
+    if (std::any_of(
+            definition_->quest_encounter_activations.begin(),
+            definition_->quest_encounter_activations.end(),
+            [this](const tgd::contracts::QuestEncounterActivationDefinition& activation) {
+                return activation.encounter_id.key != combat_definition_->id.key;
+            }
+        )) {
         return false;
     }
 
@@ -1041,7 +1079,11 @@ void F1GrayboxLayer::publish(
                 }
                 break;
             case tgd::contracts::QuestEventType::stage_advanced:
-                if (event.selection == tgd::contracts::stable_content_key(
+                if (!activateEncounterForBeat(event.stage)) {
+                    combat_event_label_->setString(
+                        "BEAT ENCOUNTER ACTIVATION REJECTED / CONTRACT DRIFT"
+                    );
+                } else if (event.selection == tgd::contracts::stable_content_key(
                                            "f1_choice_rib_spring_calibration"
                                        )) {
                     combat_event_label_->setString(
@@ -1325,6 +1367,46 @@ bool F1GrayboxLayer::retryEncounter() noexcept {
     }
     ++retry_command_sequence_;
     ++retry_count_;
+    player_action_ticks_ = 0;
+    player_hit_ticks_ = 0;
+    attack_fx_ticks_ = 0;
+    hostile_flash_ticks_.fill(0);
+    incoming_attack_tick_ = 0;
+    incoming_attack_source_ = 0;
+    return true;
+}
+
+bool F1GrayboxLayer::activateEncounterForBeat(
+    tgd::contracts::StableContentKey beat
+) noexcept {
+    const auto activation = std::find_if(
+        definition_->quest_encounter_activations.begin(),
+        definition_->quest_encounter_activations.end(),
+        [beat](const tgd::contracts::QuestEncounterActivationDefinition& candidate) {
+            return candidate.beat_id.key == beat;
+        }
+    );
+    if (activation == definition_->quest_encounter_activations.end()) {
+        return true;
+    }
+    if (activation->encounter_id.key != combat_definition_->id.key ||
+        combat_.current_tick() != encounter_.current_tick()) {
+        return false;
+    }
+    const tgd::contracts::SafePointRetryCommand command{
+        combat_.current_tick(),
+        definition_->player.actor,
+        retry_command_sequence_,
+        tgd::contracts::SafePointRetryReason::quest_stage_advanced,
+    };
+    clearHeldInput(tgd::contracts::InputClearReason::safe_point_retry, false);
+    if (encounter_.retry_from_initial(command) !=
+            tgd::gameplay::EncounterDirectorError::none ||
+        combat_.retry_from_initial(command, *this) !=
+            tgd::gameplay::CombatError::none) {
+        return false;
+    }
+    ++retry_command_sequence_;
     player_action_ticks_ = 0;
     player_hit_ticks_ = 0;
     attack_fx_ticks_ = 0;

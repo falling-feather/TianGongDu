@@ -1193,11 +1193,61 @@ async function runBrowser(target, origin) {
     workbenchState = await page.evaluate(() => window.__tgdTest.getF1State());
     assert.equal(workbenchState.questCompletedObjectives, 0);
     assert.equal(workbenchState.questRequiredObjectives, 2);
+    assert.equal(workbenchState.activeHostiles, 3);
+    assert.equal(workbenchState.playerHealth, 120);
     await captureRenderedFrame(
       page,
       canvas,
       resolve(reportDirectory, `${target}-workbench-investigation-complete.png`),
       `${target} workbench investigation complete`
+    );
+
+    let returnState = workbenchState;
+    let returnReadyToAttack = false;
+    let returnSawTelegraph = false;
+    const returnDeadline = Date.now() + 45_000;
+    while (returnState.activeHostiles > 0 && Date.now() < returnDeadline) {
+      assert.equal(
+        returnState.playerActive,
+        true,
+        `${target} player fell during calibration return encounter: ${JSON.stringify(returnState)}`
+      );
+      if (returnState.incomingAttackTicks > 0) {
+        returnSawTelegraph = true;
+        if (returnState.incomingAttackTicks <= 10 && !returnState.playerBusy) {
+          await page.keyboard.press("c");
+          returnReadyToAttack = true;
+        }
+      } else if (returnReadyToAttack && !returnState.playerBusy) {
+        await page.keyboard.press("j");
+        returnReadyToAttack = false;
+      }
+      await page.waitForTimeout(40);
+      returnState = await page.evaluate(() => window.__tgdTest.getF1State());
+    }
+    assert.equal(returnSawTelegraph, true, `${target} return encounter exposed no telegraph.`);
+    assert.equal(returnState.activeHostiles, 0, `${target} did not clear the return encounter.`);
+    assert.equal(returnState.questBeatIndex, 4);
+    assert.equal(returnState.questCompletedObjectives, 1);
+    assert.equal(returnState.questRequiredObjectives, 2);
+    assert.equal(returnState.questSelectedChoices, 2);
+
+    await moveF1PlayerTo(page, -800, 400, 300);
+    await page.keyboard.press("f");
+    await page.waitForFunction(
+      () => window.__tgdTest?.getF1State()?.questBeatIndex === 5,
+      undefined,
+      { timeout: 5_000 }
+    );
+    returnState = await page.evaluate(() => window.__tgdTest.getF1State());
+    assert.equal(returnState.questCompletedObjectives, 0);
+    assert.equal(returnState.questRequiredObjectives, 4);
+    assert.equal(returnState.activeHostiles, 0);
+    await captureRenderedFrame(
+      page,
+      canvas,
+      resolve(reportDirectory, `${target}-canopy-return-complete.png`),
+      `${target} canopy return beat complete`
     );
     await page.reload({ waitUntil: "domcontentloaded", timeout: 45_000 });
     await waitForText(page, status, "宿主已就绪", 45_000);
@@ -1324,6 +1374,7 @@ async function runBrowser(target, origin) {
       combatHitComparison,
       retryState,
       workbenchState,
+      returnState,
       retryFrameComparison,
       frameComparison,
       screenshots: [
@@ -1334,6 +1385,7 @@ async function runBrowser(target, origin) {
         projectPath(
           resolve(reportDirectory, `${target}-workbench-investigation-complete.png`)
         ),
+        projectPath(resolve(reportDirectory, `${target}-canopy-return-complete.png`)),
         projectPath(combatReadyPath),
         projectPath(combatActionPath),
         projectPath(combatHitPath),

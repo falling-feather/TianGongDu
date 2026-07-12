@@ -46,7 +46,7 @@ function sameValues(left, right) {
 }
 
 export function validateF1SliceContract(contract, catalog) {
-  if (contract.schemaVersion !== "1.0.0") fail("unsupported schemaVersion");
+  if (contract.schemaVersion !== "1.1.0") fail("unsupported schemaVersion");
   const catalogSlice = catalog.f1VerticalSlice;
   if (contract.id !== catalogSlice.id) fail("slice id drifted from the 1.0 catalog");
   const expectedView = {
@@ -354,13 +354,25 @@ export function validateF1SliceContract(contract, catalog) {
     fail("rib calibration must offer two stable choices after all workbench evidence");
   }
   const returnBeat = contract.beats[4];
+  const returnPrimer = interactions.find(
+    (interaction) => interaction.objectiveId === returnBeat.objectiveIds[0]
+  );
+  if (
+    returnPrimer?.id !== "f1_interaction_prime_return_calibration" ||
+    returnPrimer.kind !== "operate" ||
+    returnPrimer.cellId !== returnBeat.cellId ||
+    !sameValues(returnPrimer.poseMm, {x: -3500, y: -900, height: 0, floorLayer: 0}) ||
+    !sameValues(returnPrimer.prerequisiteObjectiveIds, [])
+  ) {
+    fail("the return calibration primer must be an authored combat-space operation");
+  }
   const returnShortcut = interactions.find(
-    (interaction) => interaction.objectiveId === returnBeat.objectiveIds[1]
+    (interaction) => interaction.objectiveId === returnBeat.objectiveIds[2]
   );
   if (
     returnShortcut?.kind !== "operate" ||
     returnShortcut.cellId !== returnBeat.cellId ||
-    !sameValues(returnShortcut.prerequisiteObjectiveIds, [returnBeat.objectiveIds[0]])
+    !sameValues(returnShortcut.prerequisiteObjectiveIds, [returnBeat.objectiveIds[1]])
   ) {
     fail("the return shortcut must wait for calibration combat validation");
   }
@@ -377,6 +389,10 @@ export function validateF1SliceContract(contract, catalog) {
     if (activation.triggerObjectiveId !== null &&
         !activationBeat.objectiveIds.includes(activation.triggerObjectiveId)) {
       fail(`${activation.id} references an objective outside its beat`);
+    }
+    if (!["replace", "reinforce"].includes(activation.mode) ||
+        (activation.mode === "reinforce" && activation.triggerObjectiveId === null)) {
+      fail(`${activation.id} has an invalid activation mode or stage-entry reinforcement`);
     }
     if (activation.encounterId !== contract.combatBootstrap?.id) {
       fail(`${activation.id} references an unknown encounter`);
@@ -421,32 +437,56 @@ export function validateF1SliceContract(contract, catalog) {
   const trainingBeat = contract.beats[1];
   const laneBeat = contract.beats[2];
   const bossBeat = contract.beats[5];
-  if (encounterActivations.length !== 6 ||
+  if (encounterActivations.length !== 7 ||
       encounterActivations[0].beatId !== trainingBeat.id ||
       encounterActivations[0].triggerObjectiveId !== null ||
+      encounterActivations[0].mode !== "replace" ||
       !sameValues(encounterActivations[0].actorKeys, [104]) ||
       !sameValues(encounterActivations[0].actorPlacements.map((value) => value.formationSlot), [0]) ||
       encounterActivations[1].beatId !== trainingBeat.id ||
       encounterActivations[1].triggerObjectiveId !== trainingBeat.objectiveIds[2] ||
+      encounterActivations[1].mode !== "replace" ||
       !sameValues(encounterActivations[1].actorKeys, [105]) ||
       !sameValues(encounterActivations[1].actorPlacements.map((value) => value.formationSlot), [2]) ||
       encounterActivations[2].beatId !== laneBeat.id ||
       encounterActivations[2].triggerObjectiveId !== null ||
+      encounterActivations[2].mode !== "replace" ||
       !sameValues(encounterActivations[2].actorKeys, [101, 102]) ||
       !sameValues(encounterActivations[2].actorPlacements.map((value) => value.formationSlot), [1, 5]) ||
       encounterActivations[3].beatId !== laneBeat.id ||
       encounterActivations[3].triggerObjectiveId !== laneBeat.objectiveIds[3] ||
+      encounterActivations[3].mode !== "replace" ||
       !sameValues(encounterActivations[3].actorKeys, [103]) ||
       !sameValues(encounterActivations[3].actorPlacements.map((value) => value.formationSlot), [2]) ||
       encounterActivations[4].beatId !== returnBeat.id ||
       encounterActivations[4].triggerObjectiveId !== null ||
+      encounterActivations[4].mode !== "replace" ||
       !sameValues(encounterActivations[4].actorKeys, [101, 102, 103]) ||
       !sameValues(encounterActivations[4].actorPlacements.map((value) => value.formationSlot), [0, 3, 6]) ||
-      encounterActivations[5].beatId !== bossBeat.id ||
-      encounterActivations[5].triggerObjectiveId !== null ||
-      !sameValues(encounterActivations[5].actorKeys, [201]) ||
-      !sameValues(encounterActivations[5].actorPlacements.map((value) => value.formationSlot), [4])) {
-    fail("training waves, lane waves, return, and boss beats must own authored activations");
+      encounterActivations[5].beatId !== returnBeat.id ||
+      encounterActivations[5].triggerObjectiveId !== returnBeat.objectiveIds[0] ||
+      encounterActivations[5].mode !== "reinforce" ||
+      !sameValues(encounterActivations[5].actorKeys, [105]) ||
+      !sameValues(encounterActivations[5].actorPlacements.map((value) => value.formationSlot), [5]) ||
+      encounterActivations[6].beatId !== bossBeat.id ||
+      encounterActivations[6].triggerObjectiveId !== null ||
+      encounterActivations[6].mode !== "replace" ||
+      !sameValues(encounterActivations[6].actorKeys, [201]) ||
+      !sameValues(encounterActivations[6].actorPlacements.map((value) => value.formationSlot), [4])) {
+    fail("training waves, lane waves, return reinforcement, and boss beats must own authored activations");
+  }
+  const returnSafePoint = safePoints[4].poseMm;
+  const returnAggroRangeMm = contract.combatBootstrap?.director?.aggroRangeMm;
+  const returnPlacements = [
+    ...encounterActivations[4].actorPlacements,
+    ...encounterActivations[5].actorPlacements
+  ];
+  if (!Number.isInteger(returnAggroRangeMm) || returnPlacements.some((placement) => {
+    const deltaX = placement.poseMm.x - returnSafePoint.x;
+    const deltaY = placement.poseMm.y - returnSafePoint.y;
+    return deltaX * deltaX + deltaY * deltaY > returnAggroRangeMm * returnAggroRangeMm;
+  })) {
+    fail("return encounter placements must engage from the authored safe point");
   }
   const bossPhases = contract.questBossPhases;
   if (!Array.isArray(bossPhases) || bossPhases.length !== 4) {
@@ -717,7 +757,7 @@ export function validateF1SliceContract(contract, catalog) {
     fail("the umbrella-lane combat objectives must be fully covered by combat outcomes");
   }
   const returnCombatOutcome = combatOutcomes.find(
-    (outcome) => outcome.objectiveId === returnBeat.objectiveIds[0]
+    (outcome) => outcome.objectiveId === returnBeat.objectiveIds[1]
   );
   if (returnCombatOutcome?.kind !== "all_hostiles_defeated") {
     fail("the canopy return validation must require all active hostiles defeated");
@@ -1089,7 +1129,7 @@ function questEncounterActivationRow(activation, index) {
   const triggerObjective = activation.triggerObjectiveId === null
     ? "contracts::ContentId{}"
     : contentId(activation.triggerObjectiveId);
-  return `    {${contentId(activation.id)}, ${contentId(activation.beatId)}, ${triggerObjective}, ${contentId(activation.encounterId)}, std::span<const contracts::StableActorKey>{encounter_activation_${index}_actors}, std::span<const contracts::EncounterActorPlacementDefinition>{encounter_activation_${index}_placements}},`;
+  return `    {${contentId(activation.id)}, ${contentId(activation.beatId)}, ${triggerObjective}, contracts::EncounterActivationMode::${activation.mode}, ${contentId(activation.encounterId)}, std::span<const contracts::StableActorKey>{encounter_activation_${index}_actors}, std::span<const contracts::EncounterActorPlacementDefinition>{encounter_activation_${index}_placements}},`;
 }
 
 function questBossPhaseRow(phase) {

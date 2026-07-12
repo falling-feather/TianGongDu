@@ -122,6 +122,7 @@ struct QuestEncounterActivationDefinition final {
     ContentId id{};
     ContentId beat_id{};
     ContentId trigger_objective_id{};
+    EncounterActivationMode mode{EncounterActivationMode::replace};
     ContentId encounter_id{};
     std::span<const StableActorKey> actor_keys{};
     std::span<const EncounterActorPlacementDefinition> actor_placements{};

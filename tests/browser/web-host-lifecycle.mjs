@@ -1317,7 +1317,7 @@ async function runBrowser(target, origin) {
     );
     workbenchState = await page.evaluate(() => window.__tgdTest.getF1State());
     assert.equal(workbenchState.questCompletedObjectives, 0);
-    assert.equal(workbenchState.questRequiredObjectives, 2);
+    assert.equal(workbenchState.questRequiredObjectives, 3);
     assert.equal(workbenchState.activeHostiles, 3);
     assert.equal(workbenchState.playerHealth, 120);
     assert.equal(workbenchState.safePointPoseX, -4_300);
@@ -1328,14 +1328,33 @@ async function runBrowser(target, origin) {
       resolve(reportDirectory, `${target}-return-formation-ready.png`),
       `${target} authored return formation ready`
     );
+    await moveF1PlayerTo(page, -3_500, -900);
+    await page.keyboard.press("f");
+    await page.waitForFunction(
+      () => {
+        const state = window.__tgdTest?.getF1State();
+        return state?.questCompletedObjectives === 1 && state.activeHostiles === 4;
+      },
+      undefined,
+      { timeout: 5_000 }
+    );
+    const reinforcementState = await page.evaluate(() => window.__tgdTest.getF1State());
+    assert.equal(reinforcementState.questBeatIndex, 4);
+    assert.equal(reinforcementState.questRequiredObjectives, 3);
+    await captureRenderedFrame(
+      page,
+      canvas,
+      resolve(reportDirectory, `${target}-return-reinforcement-ready.png`),
+      `${target} additive return reinforcement ready`
+    );
     await page.keyboard.press("2");
     await page.waitForTimeout(100);
 
-    let returnState = workbenchState;
+    let returnState = reinforcementState;
     let returnReadyToAttack = false;
     let returnSawTelegraph = false;
     let returnRetryAttempts = 0;
-    let returnDeadline = Date.now() + 45_000;
+    let returnDeadline = Date.now() + 60_000;
     while (returnState.activeHostiles > 0 && Date.now() < returnDeadline) {
       if (!returnState.playerActive) {
         assert.equal(
@@ -1355,13 +1374,13 @@ async function runBrowser(target, origin) {
         );
         returnState = await page.evaluate(() => window.__tgdTest.getF1State());
         assert.equal(returnState.questBeatIndex, 4);
-        assert.equal(returnState.questCompletedObjectives, 0);
-        assert.equal(returnState.activeHostiles, 3);
+        assert.equal(returnState.questCompletedObjectives, 1);
+        assert.equal(returnState.activeHostiles, 4);
         await page.keyboard.press("2");
         await page.waitForTimeout(100);
         returnReadyToAttack = false;
         returnRetryAttempts += 1;
-        returnDeadline = Date.now() + 45_000;
+        returnDeadline = Date.now() + 60_000;
         continue;
       }
       if (returnState.incomingAttackTicks > 0) {
@@ -1369,11 +1388,8 @@ async function runBrowser(target, origin) {
         if (returnState.incomingAttackTicks <= 10 && !returnState.playerBusy) {
           await page.keyboard.press("c");
           returnReadyToAttack = true;
-        } else if (returnReadyToAttack && !returnState.playerBusy) {
-          await page.keyboard.press("j");
-          returnReadyToAttack = false;
         }
-      } else if (returnSawTelegraph && !returnState.playerBusy) {
+      } else if (returnReadyToAttack && !returnState.playerBusy) {
         await page.keyboard.press("j");
         returnReadyToAttack = false;
       }
@@ -1381,10 +1397,14 @@ async function runBrowser(target, origin) {
       returnState = await page.evaluate(() => window.__tgdTest.getF1State());
     }
     assert.equal(returnSawTelegraph, true, `${target} return encounter exposed no telegraph.`);
-    assert.equal(returnState.activeHostiles, 0, `${target} did not clear the return encounter.`);
+    assert.equal(
+      returnState.activeHostiles,
+      0,
+      `${target} did not clear the return encounter: ${JSON.stringify(returnState)}`
+    );
     assert.equal(returnState.questBeatIndex, 4);
-    assert.equal(returnState.questCompletedObjectives, 1);
-    assert.equal(returnState.questRequiredObjectives, 2);
+    assert.equal(returnState.questCompletedObjectives, 2);
+    assert.equal(returnState.questRequiredObjectives, 3);
     assert.equal(returnState.questSelectedChoices, 2);
 
     await moveF1PlayerTo(page, -800, 400, 300);
@@ -1660,6 +1680,7 @@ async function runBrowser(target, origin) {
       combatHitComparison,
       retryState,
       workbenchState,
+      reinforcementState,
       returnState,
       returnRetryAttempts,
       bossState,
@@ -1678,6 +1699,9 @@ async function runBrowser(target, origin) {
         projectPath(resolve(reportDirectory, `${target}-umbrella-lane-complete.png`)),
         projectPath(
           resolve(reportDirectory, `${target}-return-formation-ready.png`)
+        ),
+        projectPath(
+          resolve(reportDirectory, `${target}-return-reinforcement-ready.png`)
         ),
         projectPath(resolve(reportDirectory, `${target}-canopy-return-complete.png`)),
         projectPath(bossSpringPath),

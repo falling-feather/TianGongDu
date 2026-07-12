@@ -95,6 +95,9 @@ class F1GrayboxLayer final :
         tgd::contracts::StableContentKey beat,
         tgd::contracts::StableContentKey trigger_objective
     ) noexcept;
+    [[nodiscard]] bool restoreEncounterForBeat(
+        tgd::contracts::StableContentKey beat
+    ) noexcept;
     [[nodiscard]] bool applyPendingEncounterActivation() noexcept;
     [[nodiscard]] bool retryEncounter() noexcept;
     void refreshCombatHud() noexcept;

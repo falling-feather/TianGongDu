@@ -74,7 +74,7 @@ int main() {
         "every beat owns an ordered content-driven movement safe point"
     );
     ok &= expect(
-        definition->quest_interactions.size() == 20 &&
+        definition->quest_interactions.size() == 21 &&
             definition->quest_interactions.front().objective_id.key ==
                 tgd::contracts::stable_content_key("f1_objective_inspect_travel_writ"),
         "the expanded opening scene interactions are generated content, not presentation rules"
@@ -102,7 +102,7 @@ int main() {
         route_interaction != definition->quest_interactions.end() &&
             route_interaction->selection_id.key ==
                 tgd::contracts::stable_content_key("f1_choice_lane_canopy") &&
-            definition->quest_interactions.size() == 20 &&
+            definition->quest_interactions.size() == 21 &&
             route_interaction->prerequisite_objectives.size() == 5 &&
             definition->quest_combat_outcomes.size() == 3,
         "the lane choice waits for combat and the ordered rainworks chain"
@@ -157,7 +157,7 @@ int main() {
         "two resolutions gate the authored return and map to stable reward receipts"
     );
     ok &= expect(
-        combat != nullptr && definition->quest_encounter_activations.size() == 6 &&
+        combat != nullptr && definition->quest_encounter_activations.size() == 7 &&
             definition->quest_encounter_activations.front().beat_id.key ==
                 tgd::contracts::stable_content_key(
                     "f1_beat_shen_yan_training"
@@ -165,6 +165,8 @@ int main() {
             definition->quest_encounter_activations.front().encounter_id.key ==
                 combat->id.key &&
             definition->quest_encounter_activations.front().trigger_objective_id.key == 0 &&
+            definition->quest_encounter_activations.front().mode ==
+                tgd::contracts::EncounterActivationMode::replace &&
             definition->quest_encounter_activations.front().actor_keys.size() == 1 &&
             definition->quest_encounter_activations.front().actor_keys.front() == 104 &&
             definition->quest_encounter_activations.front().actor_placements.size() == 1 &&
@@ -179,6 +181,8 @@ int main() {
                 tgd::contracts::stable_content_key(
                     "f1_objective_eavesguard_counter"
                 ) &&
+            definition->quest_encounter_activations[1].mode ==
+                tgd::contracts::EncounterActivationMode::replace &&
             definition->quest_encounter_activations[1].actor_keys.size() == 1 &&
             definition->quest_encounter_activations[1].actor_keys.front() == 105 &&
             definition->quest_encounter_activations[1]
@@ -195,6 +199,8 @@ int main() {
                 tgd::contracts::stable_content_key(
                     "f1_objective_raise_paper_egret_lure"
                 ) &&
+            definition->quest_encounter_activations[3].mode ==
+                tgd::contracts::EncounterActivationMode::replace &&
             definition->quest_encounter_activations[3].actor_keys.size() == 1 &&
             definition->quest_encounter_activations[3].actor_keys.front() == 103 &&
             definition->quest_encounter_activations[3]
@@ -208,8 +214,19 @@ int main() {
             definition->quest_encounter_activations[4].actor_placements[0].pose ==
                 tgd::contracts::GroundPoseMm{-2500, -1800, 0, 0} &&
             definition->quest_encounter_activations[4].actor_placements[1].formation_slot == 3 &&
-            definition->quest_encounter_activations[4].actor_placements[2].formation_slot == 6,
-        "objective-driven training, lane waves, and return activations are generated content"
+            definition->quest_encounter_activations[4].actor_placements[2].formation_slot == 6 &&
+            definition->quest_encounter_activations[5].trigger_objective_id.key ==
+                tgd::contracts::stable_content_key(
+                    "f1_objective_prime_return_calibration"
+                ) &&
+            definition->quest_encounter_activations[5].mode ==
+                tgd::contracts::EncounterActivationMode::reinforce &&
+            definition->quest_encounter_activations[5].actor_keys.size() == 1 &&
+            definition->quest_encounter_activations[5].actor_keys[0] == 105 &&
+            definition->quest_encounter_activations[5]
+                    .actor_placements[0]
+                    .formation_slot == 5,
+        "objective-driven training, lane waves, and return reinforcement are generated content"
     );
     ok &= expect(
         definition->quest_encounter_activations.back().beat_id.key ==

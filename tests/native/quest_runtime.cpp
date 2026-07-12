@@ -948,16 +948,84 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
     }
     ok &= expect(
         !outcomes.resolve(return_actors, quest).found,
-        "reactivated return hostiles block calibration validation"
+        "return hostiles do not bypass the authored calibration primer"
     );
+    const auto primer = std::find_if(
+        definition().quest_interactions.begin(),
+        definition().quest_interactions.end(),
+        [](const tgd::contracts::QuestInteractionDefinition& interaction) {
+            return interaction.objective_id.key ==
+                   tgd::contracts::stable_content_key(
+                       "f1_objective_prime_return_calibration"
+                   );
+        }
+    );
+    ok &= expect(
+        primer != definition().quest_interactions.end(),
+        "the return calibration primer interaction exists"
+    );
+    if (primer == definition().quest_interactions.end()) {
+        return false;
+    }
+    const auto resolved_primer = interactions.resolve(
+        {definition().player.actor, primer->cell_id.key, primer->pose},
+        quest
+    );
+    ok &= expect(
+        resolved_primer.found && resolved_primer.objective == primer->objective_id.key,
+        "the calibration primer resolves while the entry group remains active"
+    );
+    ok &= quest.apply(
+                  {
+                      tick++,
+                      definition().player.actor,
+                      sequence++,
+                      {},
+                      resolved_primer.objective,
+                  },
+                  sink
+              ).error == QuestError::none;
     for (const auto& placement :
-         definition().quest_encounter_activations[4].actor_placements) {
+         definition().quest_encounter_activations[5].actor_placements) {
+        for (auto& actor : return_actors) {
+            if (actor.actor == placement.actor) {
+                const auto config = std::find_if(
+                    combat_definition().actors.begin(),
+                    combat_definition().actors.end(),
+                    [&placement](const tgd::contracts::CombatActorConfig& candidate) {
+                        return candidate.actor == placement.actor;
+                    }
+                );
+                if (config != combat_definition().actors.end()) {
+                    actor.resources = config->initial_resources;
+                }
+                actor.pose = placement.pose;
+                actor.active = true;
+                actor.defeated = false;
+            }
+        }
+    }
+    ok &= expect(
+        std::count_if(
+            return_actors.begin(),
+            return_actors.end(),
+            [](const tgd::contracts::CombatActorSnapshot& actor) {
+                return actor.faction == tgd::contracts::CombatFaction::hostile &&
+                       actor.active;
+            }
+        ) == 4,
+        "the calibration primer reinforces the three-actor return group to four"
+    );
+    for (const auto activation_index : std::array<std::size_t, 2>{4, 5}) {
+        for (const auto& placement :
+             definition().quest_encounter_activations[activation_index].actor_placements) {
         for (auto& actor : return_actors) {
             if (actor.actor == placement.actor) {
                 actor.resources.health = 0;
                 actor.active = false;
                 actor.defeated = true;
             }
+        }
         }
     }
     const auto return_clear = outcomes.resolve(return_actors, quest);
@@ -966,7 +1034,7 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
                                   tgd::contracts::stable_content_key(
                                       "f1_objective_validate_calibration"
                                   ),
-        "defeating every reactivated hostile validates the selected calibration"
+        "defeating the entry group and additive reinforcement validates calibration"
     );
     ok &= quest.apply(
               {

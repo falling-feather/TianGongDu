@@ -354,6 +354,25 @@ bool test_objective_driven_encounter_activations_fail_closed() {
         "one beat cannot declare two stage-entry encounter activations"
     );
 
+    auto stage_entry_reinforcement = definition();
+    std::vector<tgd::contracts::QuestEncounterActivationDefinition>
+        stage_entry_reinforcement_activations(
+            definition().quest_encounter_activations.begin(),
+            definition().quest_encounter_activations.end()
+        );
+    stage_entry_reinforcement_activations[4].mode =
+        tgd::contracts::EncounterActivationMode::reinforce;
+    stage_entry_reinforcement.quest_encounter_activations =
+        stage_entry_reinforcement_activations;
+    VerticalSliceSession stage_entry_reinforcement_session;
+    ok &= expect(
+        stage_entry_reinforcement_session.initialize(
+            stage_entry_reinforcement,
+            empty_world()
+        ) == VerticalSliceError::invalid_definition,
+        "a reinforcement must be gated by an objective rather than stage entry"
+    );
+
     auto mismatched_placement = definition();
     std::vector<tgd::contracts::QuestEncounterActivationDefinition>
         mismatched_activations(

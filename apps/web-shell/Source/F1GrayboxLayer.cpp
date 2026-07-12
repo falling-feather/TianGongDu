@@ -438,6 +438,10 @@ void solidPolygon(
     if (interaction == tgd::contracts::stable_content_key("f1_interaction_calibrate_rib_winter")) {
         return "F / LOCK WINTER RIB CALIBRATION";
     }
+    if (interaction ==
+        tgd::contracts::stable_content_key("f1_interaction_prime_return_calibration")) {
+        return "F / PRIME RETURN CALIBRATION FRAME";
+    }
     if (interaction == tgd::contracts::stable_content_key("f1_interaction_open_return_shortcut")) {
         return "F / OPEN CANOPY RETURN SHORTCUT";
     }
@@ -1220,6 +1224,12 @@ void F1GrayboxLayer::publish(
             case tgd::contracts::CombatEventType::encounter_restarted:
                 combat_event_label_->setString("ENCOUNTER RETRIED / SAFE POINT RESTORED");
                 break;
+            case tgd::contracts::CombatEventType::encounter_replaced:
+                combat_event_label_->setString("ENCOUNTER GROUP REPLACED");
+                break;
+            case tgd::contracts::CombatEventType::encounter_reinforced:
+                combat_event_label_->setString("ENCOUNTER REINFORCEMENT DEPLOYED");
+                break;
             case tgd::contracts::CombatEventType::command_ignored:
                 if (event.source == definition_->player.actor) {
                     combat_event_label_->setString("ACTION UNAVAILABLE / RECOVERY OR RESOURCE LOCK");
@@ -1745,7 +1755,7 @@ bool F1GrayboxLayer::retryEncounter() noexcept {
         return false;
     }
     ++retry_command_sequence_;
-    if (!activateEncounterForBeat(session_.current_snapshot().beat_id.key, 0)) {
+    if (!restoreEncounterForBeat(session_.current_snapshot().beat_id.key)) {
         return false;
     }
     ++retry_count_;
@@ -1757,6 +1767,25 @@ bool F1GrayboxLayer::retryEncounter() noexcept {
     incoming_attack_source_ = 0;
     if (combat_event_label_ != nullptr) {
         combat_event_label_->setString("ENCOUNTER RETRIED / SAFE POINT RESTORED");
+    }
+    return true;
+}
+
+bool F1GrayboxLayer::restoreEncounterForBeat(
+    tgd::contracts::StableContentKey beat
+) noexcept {
+    if (!activateEncounterForBeat(beat, 0)) {
+        return false;
+    }
+    for (const auto& activation : definition_->quest_encounter_activations) {
+        if (activation.beat_id.key != beat || activation.trigger_objective_id.key == 0 ||
+            session_.quest_runtime().objective_state(activation.trigger_objective_id.key) !=
+                tgd::gameplay::QuestObjectiveState::completed) {
+            continue;
+        }
+        if (!activateEncounterForBeat(beat, activation.trigger_objective_id.key)) {
+            return false;
+        }
     }
     return true;
 }
@@ -1805,14 +1834,14 @@ bool F1GrayboxLayer::activateEncounterForBeat(
         combat_.current_tick() != encounter_.current_tick()) {
         return false;
     }
-    const tgd::contracts::SafePointRetryCommand command{
+    const tgd::contracts::EncounterActivationCommand command{
         combat_.current_tick(),
         definition_->player.actor,
         retry_command_sequence_,
-        tgd::contracts::SafePointRetryReason::quest_stage_advanced,
+        activation->mode,
     };
     clearHeldInput(tgd::contracts::InputClearReason::safe_point_retry, false);
-    if (encounter_.activate_group(command, activation->actor_placements) !=
+    if (encounter_.activate_group(command, activation->actor_placements, combat_.actors()) !=
             tgd::gameplay::EncounterDirectorError::none ||
         combat_.activate_group(command, activation->actor_placements, *this) !=
             tgd::gameplay::CombatError::none) {
@@ -1839,6 +1868,12 @@ bool F1GrayboxLayer::activateEncounterForBeat(
     incoming_attack_source_ = 0;
     if (combat_event_label_ != nullptr) {
         if (trigger_objective == tgd::contracts::stable_content_key(
+                                     "f1_objective_prime_return_calibration"
+                                 )) {
+            combat_event_label_->setString(
+                "RETURN REINFORCEMENT / MIXED GROUP DEPLOYED"
+            );
+        } else if (trigger_objective == tgd::contracts::stable_content_key(
                                      "f1_objective_raise_paper_egret_lure"
                                  )) {
             combat_event_label_->setString(

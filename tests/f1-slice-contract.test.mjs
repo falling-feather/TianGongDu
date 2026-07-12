@@ -41,7 +41,7 @@ test("F1 one-hour contract and generated C++ stay synchronized", async () => {
     flowerLight.windupTicks + flowerLight.activeTicks + flowerLight.recoveryTicks,
     18
   );
-  assert.equal(contract.questInteractions.length, 20);
+  assert.equal(contract.questInteractions.length, 21);
   assert.deepEqual(
     contract.beats[0].objectiveIds,
     [
@@ -288,6 +288,7 @@ test("F1 encounters activate authored groups at beat and objective boundaries", 
       id: "f1_activation_shen_yan_training_rigs",
       beatId: contract.beats[1].id,
       triggerObjectiveId: null,
+      mode: "replace",
       encounterId: contract.combatBootstrap.id,
       actorKeys: [104],
       actorPlacements: [
@@ -302,6 +303,7 @@ test("F1 encounters activate authored groups at beat and objective boundaries", 
       id: "f1_activation_shen_yan_flower_turn_rig",
       beatId: contract.beats[1].id,
       triggerObjectiveId: contract.beats[1].objectiveIds[2],
+      mode: "replace",
       encounterId: contract.combatBootstrap.id,
       actorKeys: [105],
       actorPlacements: [
@@ -316,6 +318,7 @@ test("F1 encounters activate authored groups at beat and objective boundaries", 
       id: "f1_activation_umbrella_lane_first_encounter",
       beatId: contract.beats[2].id,
       triggerObjectiveId: null,
+      mode: "replace",
       encounterId: contract.combatBootstrap.id,
       actorKeys: [101, 102],
       actorPlacements: [
@@ -335,6 +338,7 @@ test("F1 encounters activate authored groups at beat and objective boundaries", 
       id: "f1_activation_umbrella_lane_paper_egret",
       beatId: contract.beats[2].id,
       triggerObjectiveId: contract.beats[2].objectiveIds[3],
+      mode: "replace",
       encounterId: contract.combatBootstrap.id,
       actorKeys: [103],
       actorPlacements: [
@@ -349,6 +353,7 @@ test("F1 encounters activate authored groups at beat and objective boundaries", 
       id: "f1_activation_canopy_return_encounter",
       beatId: contract.beats[4].id,
       triggerObjectiveId: null,
+      mode: "replace",
       encounterId: contract.combatBootstrap.id,
       actorKeys: [101, 102, 103],
       actorPlacements: [
@@ -370,9 +375,25 @@ test("F1 encounters activate authored groups at beat and objective boundaries", 
       ]
     },
     {
+      id: "f1_activation_canopy_return_reinforcement",
+      beatId: contract.beats[4].id,
+      triggerObjectiveId: contract.beats[4].objectiveIds[0],
+      mode: "reinforce",
+      encounterId: contract.combatBootstrap.id,
+      actorKeys: [105],
+      actorPlacements: [
+        {
+          actorKey: 105,
+          poseMm: { x: 500, y: 1400, height: 700, floorLayer: 0 },
+          formationSlot: 5
+        }
+      ]
+    },
+    {
       id: "f1_activation_four_seasons_wraith",
       beatId: contract.beats[5].id,
       triggerObjectiveId: null,
+      mode: "replace",
       encounterId: contract.combatBootstrap.id,
       actorKeys: [201],
       actorPlacements: [
@@ -386,7 +407,7 @@ test("F1 encounters activate authored groups at beat and objective boundaries", 
   ]);
   assert.equal(
     contract.questCombatOutcomes.find(
-      (outcome) => outcome.objectiveId === contract.beats[4].objectiveIds[0]
+      (outcome) => outcome.objectiveId === contract.beats[4].objectiveIds[1]
     ).kind,
     "all_hostiles_defeated"
   );
@@ -395,7 +416,14 @@ test("F1 encounters activate authored groups at beat and objective boundaries", 
   wrongBeat.questEncounterActivations[0].beatId = contract.beats[3].id;
   assert.throws(
     () => validateF1SliceContract(wrongBeat, catalog),
-    /training waves, lane waves, return, and boss beats must own/
+    /training waves, lane waves, return reinforcement, and boss beats must own/
+  );
+
+  const stageEntryReinforcement = structuredClone(contract);
+  stageEntryReinforcement.questEncounterActivations[4].mode = "reinforce";
+  assert.throws(
+    () => validateF1SliceContract(stageEntryReinforcement, catalog),
+    /invalid activation mode or stage-entry reinforcement/
   );
 
   const crossBeatTrigger = structuredClone(contract);
@@ -419,6 +447,18 @@ test("F1 encounters activate authored groups at beat and objective boundaries", 
   assert.throws(
     () => validateF1SliceContract(duplicateFormationSlot, catalog),
     /duplicate .* formation slot/
+  );
+
+  const unreachableReturnReinforcement = structuredClone(contract);
+  unreachableReturnReinforcement.questEncounterActivations[5].actorPlacements[0].poseMm = {
+    x: 900,
+    y: 2100,
+    height: 700,
+    floorLayer: 0
+  };
+  assert.throws(
+    () => validateF1SliceContract(unreachableReturnReinforcement, catalog),
+    /return encounter placements must engage from the authored safe point/
   );
 
   const leakedHostile = structuredClone(contract);

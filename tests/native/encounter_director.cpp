@@ -251,31 +251,20 @@ bool test_retry_resets_director_boundary() {
             EncounterDirectorError::stale_retry_sequence,
         "director rejects a duplicate retry sequence"
     );
-    ok &= expect(
-        director.retry_from_initial(
-            {
-                1,
-                1,
-                2,
-                tgd::contracts::SafePointRetryReason::quest_stage_advanced,
-            }
-        ) == EncounterDirectorError::retry_not_allowed,
-        "player retry remains distinct from authored group activation"
-    );
     const std::array<tgd::contracts::EncounterActorPlacementDefinition, 2>
         duplicate_slots{{
             {2, {2'000, 0, 0, 0}, 2},
             {3, {-2'000, 0, 0, 0}, 2},
         }};
-    const tgd::contracts::SafePointRetryCommand stage_activation{
+    const tgd::contracts::EncounterActivationCommand stage_activation{
         1,
         1,
         2,
-        tgd::contracts::SafePointRetryReason::quest_stage_advanced,
+        tgd::contracts::EncounterActivationMode::replace,
     };
     ok &= expect(
-        director.activate_group(stage_activation, duplicate_slots) ==
-            EncounterDirectorError::retry_not_allowed,
+        director.activate_group(stage_activation, duplicate_slots, snapshots) ==
+            EncounterDirectorError::activation_not_allowed,
         "one authored group cannot overlap formation slots"
     );
     const std::array<tgd::contracts::EncounterActorPlacementDefinition, 2> placements{{
@@ -283,7 +272,8 @@ bool test_retry_resets_director_boundary() {
         {3, {-2'000, 0, 0, 0}, 6},
     }};
     ok &= expect(
-        director.activate_group(stage_activation, placements) == EncounterDirectorError::none,
+        director.activate_group(stage_activation, placements, snapshots) ==
+            EncounterDirectorError::none,
         "director accepts authored home poses and formation slots"
     );
     snapshots[1].pose = placements[0].pose;
@@ -307,6 +297,40 @@ bool test_retry_resets_director_boundary() {
         upper != formation_plan.batch.poses().end() && upper->pose.y > 0 &&
             lower != formation_plan.batch.poses().end() && lower->pose.y < 0,
         "authored formation slots drive distinct approach vectors"
+    );
+    snapshots[2].resources.health = 0;
+    snapshots[2].active = false;
+    snapshots[2].defeated = false;
+    const std::array<tgd::contracts::EncounterActorPlacementDefinition, 1>
+        overlapping_reinforcement{{
+            {3, {-1'000, -1'500, 0, 0}, 2},
+        }};
+    const tgd::contracts::EncounterActivationCommand reinforce{
+        2,
+        1,
+        3,
+        tgd::contracts::EncounterActivationMode::reinforce,
+    };
+    ok &= expect(
+        director.activate_group(reinforce, overlapping_reinforcement, snapshots) ==
+            EncounterDirectorError::activation_not_allowed,
+        "reinforcement cannot overlap an active formation slot"
+    );
+    const std::array<tgd::contracts::EncounterActorPlacementDefinition, 1>
+        reinforcement{{
+            {3, {-1'000, -1'500, 0, 0}, 6},
+        }};
+    ok &= expect(
+        director.activate_group(reinforce, reinforcement, snapshots) ==
+            EncounterDirectorError::none,
+        "director adds a dormant reinforcement without replacing active runtimes"
+    );
+    snapshots[2].resources = actor_configs[2].initial_resources;
+    snapshots[2].pose = reinforcement[0].pose;
+    snapshots[2].active = true;
+    ok &= expect(
+        director.plan_tick(3, snapshots, 20).error == EncounterDirectorError::none,
+        "reinforced formations continue on the next deterministic tick"
     );
     return ok;
 }

@@ -38,6 +38,9 @@ enum class CombatError : std::uint8_t {
     retry_targets_wrong_tick,
     retry_not_allowed,
     stale_retry_sequence,
+    activation_targets_wrong_tick,
+    activation_not_allowed,
+    stale_activation_sequence,
 };
 
 class ICombatEventSink {
@@ -69,7 +72,7 @@ class ICombatResolver {
         ICombatEventSink& sink
     ) noexcept = 0;
     [[nodiscard]] virtual CombatError activate_group(
-        const contracts::SafePointRetryCommand& command,
+        const contracts::EncounterActivationCommand& command,
         std::span<const contracts::EncounterActorPlacementDefinition> actor_placements,
         ICombatEventSink& sink
     ) noexcept = 0;
@@ -106,7 +109,7 @@ class DeterministicCombatResolver final : public ICombatResolver {
         ICombatEventSink& sink
     ) noexcept override;
     [[nodiscard]] CombatError activate_group(
-        const contracts::SafePointRetryCommand& command,
+        const contracts::EncounterActivationCommand& command,
         std::span<const contracts::EncounterActorPlacementDefinition> actor_placements,
         ICombatEventSink& sink
     ) noexcept override;
@@ -186,7 +189,7 @@ class DeterministicCombatResolver final : public ICombatResolver {
     std::size_t pose_update_count_{};
     std::array<contracts::CombatEvent, event_capacity> events_{};
     std::size_t event_count_{};
-    contracts::CommandSequence last_retry_sequence_{};
+    contracts::CommandSequence last_boundary_sequence_{};
     std::uint64_t checksum_{};
 };
 

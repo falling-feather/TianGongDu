@@ -1,6 +1,6 @@
 {
   "$schema": "../schemas/f1-vertical-slice.schema.json",
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "1.1.0",
   "id": "f1_rainy_umbrella_trial",
   "view": {
     "model": "2.5d-oblique-panoramic",
@@ -210,8 +210,8 @@
         "faction": "hostile",
         "poseMm": { "x": -5200, "y": -1600, "height": 700, "floorLayer": 0 },
         "resources": {
-          "health": 140,
-          "healthMax": 140,
+          "health": 70,
+          "healthMax": 70,
           "stamina": 120,
           "staminaMax": 120,
           "poise": 60,
@@ -578,6 +578,7 @@
       "targetMinutes": 7,
       "cellId": "f1_cell_canopy_workstation",
       "objectiveIds": [
+        "f1_objective_prime_return_calibration",
         "f1_objective_validate_calibration",
         "f1_objective_open_return_shortcut"
       ],
@@ -837,6 +838,16 @@
       ]
     },
     {
+      "id": "f1_interaction_prime_return_calibration",
+      "kind": "operate",
+      "cellId": "f1_cell_canopy_workstation",
+      "objectiveId": "f1_objective_prime_return_calibration",
+      "selectionId": null,
+      "poseMm": { "x": -3500, "y": -900, "height": 0, "floorLayer": 0 },
+      "radiusMm": 650,
+      "prerequisiteObjectiveIds": []
+    },
+    {
       "id": "f1_interaction_open_return_shortcut",
       "kind": "operate",
       "cellId": "f1_cell_canopy_workstation",
@@ -886,6 +897,7 @@
       "id": "f1_activation_shen_yan_training_rigs",
       "beatId": "f1_beat_shen_yan_training",
       "triggerObjectiveId": null,
+      "mode": "replace",
       "encounterId": "f1_encounter_umbrella_lane_bootstrap",
       "actorKeys": [104],
       "actorPlacements": [
@@ -900,6 +912,7 @@
       "id": "f1_activation_shen_yan_flower_turn_rig",
       "beatId": "f1_beat_shen_yan_training",
       "triggerObjectiveId": "f1_objective_eavesguard_counter",
+      "mode": "replace",
       "encounterId": "f1_encounter_umbrella_lane_bootstrap",
       "actorKeys": [105],
       "actorPlacements": [
@@ -914,6 +927,7 @@
       "id": "f1_activation_umbrella_lane_first_encounter",
       "beatId": "f1_beat_umbrella_lane_first_encounter",
       "triggerObjectiveId": null,
+      "mode": "replace",
       "encounterId": "f1_encounter_umbrella_lane_bootstrap",
       "actorKeys": [101, 102],
       "actorPlacements": [
@@ -933,6 +947,7 @@
       "id": "f1_activation_umbrella_lane_paper_egret",
       "beatId": "f1_beat_umbrella_lane_first_encounter",
       "triggerObjectiveId": "f1_objective_raise_paper_egret_lure",
+      "mode": "replace",
       "encounterId": "f1_encounter_umbrella_lane_bootstrap",
       "actorKeys": [103],
       "actorPlacements": [
@@ -947,6 +962,7 @@
       "id": "f1_activation_canopy_return_encounter",
       "beatId": "f1_beat_canopy_return_encounter",
       "triggerObjectiveId": null,
+      "mode": "replace",
       "encounterId": "f1_encounter_umbrella_lane_bootstrap",
       "actorKeys": [101, 102, 103],
       "actorPlacements": [
@@ -968,9 +984,25 @@
       ]
     },
     {
+      "id": "f1_activation_canopy_return_reinforcement",
+      "beatId": "f1_beat_canopy_return_encounter",
+      "triggerObjectiveId": "f1_objective_prime_return_calibration",
+      "mode": "reinforce",
+      "encounterId": "f1_encounter_umbrella_lane_bootstrap",
+      "actorKeys": [105],
+      "actorPlacements": [
+        {
+          "actorKey": 105,
+          "poseMm": { "x": 500, "y": 1400, "height": 700, "floorLayer": 0 },
+          "formationSlot": 5
+        }
+      ]
+    },
+    {
       "id": "f1_activation_four_seasons_wraith",
       "beatId": "f1_beat_four_seasons_wraith",
       "triggerObjectiveId": null,
+      "mode": "replace",
       "encounterId": "f1_encounter_umbrella_lane_bootstrap",
       "actorKeys": [201],
       "actorPlacements": [

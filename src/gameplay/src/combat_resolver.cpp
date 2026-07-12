@@ -221,7 +221,7 @@ CombatError DeterministicCombatResolver::retry_from_initial(
         !actor_snapshots_[player_index].defeated) {
         return CombatError::retry_not_allowed;
     }
-    if (command.sequence == 0 || command.sequence <= last_retry_sequence_) {
+    if (command.sequence == 0 || command.sequence <= last_boundary_sequence_) {
         return CombatError::stale_retry_sequence;
     }
 
@@ -231,7 +231,7 @@ CombatError DeterministicCombatResolver::retry_from_initial(
     command_count_ = 0;
     pose_update_count_ = 0;
     event_count_ = 0;
-    last_retry_sequence_ = command.sequence;
+    last_boundary_sequence_ = command.sequence;
     static_cast<void>(emit({
         current_tick_,
         contracts::CombatEventType::encounter_restarted,
@@ -244,7 +244,7 @@ CombatError DeterministicCombatResolver::retry_from_initial(
 }
 
 CombatError DeterministicCombatResolver::activate_group(
-    const contracts::SafePointRetryCommand& command,
+    const contracts::EncounterActivationCommand& command,
     std::span<const contracts::EncounterActorPlacementDefinition> actor_placements,
     ICombatEventSink& sink
 ) noexcept {
@@ -252,70 +252,90 @@ CombatError DeterministicCombatResolver::activate_group(
         return CombatError::invalid_lifecycle;
     }
     if (command.completed_tick != current_tick_) {
-        return CombatError::retry_targets_wrong_tick;
+        return CombatError::activation_targets_wrong_tick;
     }
     const auto player_index = actor_index(command.actor);
+    const bool replace = command.mode == contracts::EncounterActivationMode::replace;
+    const bool reinforce = command.mode == contracts::EncounterActivationMode::reinforce;
     if (player_index == actor_capacity ||
         actor_snapshots_[player_index].faction != contracts::CombatFaction::player ||
         !actor_snapshots_[player_index].active ||
-        command.reason != contracts::SafePointRetryReason::quest_stage_advanced ||
+        (!replace && !reinforce) ||
         actor_placements.empty() || actor_placements.size() >= actor_count_) {
-        return CombatError::retry_not_allowed;
+        return CombatError::activation_not_allowed;
     }
-    if (command.sequence == 0 || command.sequence <= last_retry_sequence_) {
-        return CombatError::stale_retry_sequence;
+    if (command.sequence == 0 || command.sequence <= last_boundary_sequence_) {
+        return CombatError::stale_activation_sequence;
+    }
+    if (command_count_ != 0 || pose_update_count_ != 0) {
+        return CombatError::activation_not_allowed;
     }
     std::array<std::size_t, actor_capacity> activation_indices{};
     for (std::size_t index = 0; index < actor_placements.size(); ++index) {
         const auto actor = actor_index(actor_placements[index].actor);
         if (actor == actor_capacity ||
             actor_snapshots_[actor].faction != contracts::CombatFaction::hostile ||
+            (reinforce &&
+             (actor_snapshots_[actor].active || actor_snapshots_[actor].defeated)) ||
             actor_placements[index].formation_slot >=
                 contracts::encounter_formation_slot_capacity) {
-            return CombatError::retry_not_allowed;
+            return CombatError::activation_not_allowed;
         }
         for (std::size_t prior = 0; prior < index; ++prior) {
-            if (activation_indices[prior] == actor) {
-                return CombatError::retry_not_allowed;
+            if (activation_indices[prior] == actor ||
+                actor_placements[prior].formation_slot ==
+                    actor_placements[index].formation_slot) {
+                return CombatError::activation_not_allowed;
             }
         }
         activation_indices[index] = actor;
     }
 
-    restore_actor(player_index);
-    for (std::size_t actor = 0; actor < actor_count_; ++actor) {
-        if (actor_snapshots_[actor].faction != contracts::CombatFaction::hostile) {
-            continue;
-        }
-        restore_actor(actor);
-        const auto placement = std::find_if(
-            actor_placements.begin(),
-            actor_placements.end(),
-            [this, actor](const contracts::EncounterActorPlacementDefinition& candidate) {
-                return actor_index(candidate.actor) == actor;
+    if (replace) {
+        restore_actor(player_index);
+        for (std::size_t actor = 0; actor < actor_count_; ++actor) {
+            if (actor_snapshots_[actor].faction != contracts::CombatFaction::hostile) {
+                continue;
             }
-        );
-        if (placement != actor_placements.end()) {
-            actor_snapshots_[actor].pose = placement->pose;
+            restore_actor(actor);
+            const auto placement = std::find_if(
+                actor_placements.begin(),
+                actor_placements.end(),
+                [this, actor](const contracts::EncounterActorPlacementDefinition& candidate) {
+                    return actor_index(candidate.actor) == actor;
+                }
+            );
+            if (placement != actor_placements.end()) {
+                actor_snapshots_[actor].pose = placement->pose;
+                actor_snapshots_[actor].active = actor_snapshots_[actor].resources.health > 0;
+                actor_snapshots_[actor].defeated = false;
+            } else {
+                actor_snapshots_[actor].resources.health = 0;
+                actor_snapshots_[actor].active_ability = 0;
+                actor_snapshots_[actor].guarding = false;
+                actor_snapshots_[actor].active = false;
+                actor_snapshots_[actor].defeated = false;
+            }
+        }
+    } else {
+        for (std::size_t index = 0; index < actor_placements.size(); ++index) {
+            const auto actor = activation_indices[index];
+            restore_actor(actor);
+            actor_snapshots_[actor].pose = actor_placements[index].pose;
             actor_snapshots_[actor].active = actor_snapshots_[actor].resources.health > 0;
-            actor_snapshots_[actor].defeated = false;
-        } else {
-            actor_snapshots_[actor].resources.health = 0;
-            actor_snapshots_[actor].active_ability = 0;
-            actor_snapshots_[actor].guarding = false;
-            actor_snapshots_[actor].active = false;
             actor_snapshots_[actor].defeated = false;
         }
     }
     command_count_ = 0;
     pose_update_count_ = 0;
     event_count_ = 0;
-    last_retry_sequence_ = command.sequence;
+    last_boundary_sequence_ = command.sequence;
     static_cast<void>(emit({
         current_tick_,
-        contracts::CombatEventType::encounter_restarted,
+        replace ? contracts::CombatEventType::encounter_replaced
+                : contracts::CombatEventType::encounter_reinforced,
         command.actor,
-        command.actor,
+        actor_placements.front().actor,
     }));
     update_checksum();
     sink.publish(std::span{events_}.first(event_count_));
@@ -885,8 +905,8 @@ bool DeterministicCombatResolver::resolve_hit(
 void DeterministicCombatResolver::update_checksum() noexcept {
     auto hash = fnv_offset;
     hash_integer(hash, current_tick_);
-    if (last_retry_sequence_ != 0) {
-        hash_integer(hash, last_retry_sequence_);
+    if (last_boundary_sequence_ != 0) {
+        hash_integer(hash, last_boundary_sequence_);
     }
     for (std::size_t index = 0; index < actor_count_; ++index) {
         const auto& actor = actor_snapshots_[index];

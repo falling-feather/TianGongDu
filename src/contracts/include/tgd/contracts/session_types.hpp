@@ -64,7 +64,6 @@ struct SessionCommand final {
 
 enum class SafePointRetryReason : std::uint8_t {
     player_defeated,
-    quest_stage_advanced,
 };
 
 struct SafePointRetryCommand final {
@@ -72,6 +71,18 @@ struct SafePointRetryCommand final {
     StableActorKey actor{};
     CommandSequence sequence{};
     SafePointRetryReason reason{SafePointRetryReason::player_defeated};
+};
+
+enum class EncounterActivationMode : std::uint8_t {
+    replace,
+    reinforce,
+};
+
+struct EncounterActivationCommand final {
+    TickIndex completed_tick{};
+    StableActorKey actor{};
+    CommandSequence sequence{};
+    EncounterActivationMode mode{EncounterActivationMode::replace};
 };
 
 struct SafePointCommitCommand final {

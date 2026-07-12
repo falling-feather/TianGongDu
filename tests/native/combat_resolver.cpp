@@ -437,21 +437,17 @@ bool test_defeat_retry_restores_initial_encounter() {
         resolver.retry_from_initial({5, 1, 2}, sink) == CombatError::retry_not_allowed,
         "active player cannot restart repeatedly"
     );
-    const tgd::contracts::SafePointRetryCommand stage_restart{
+    const tgd::contracts::EncounterActivationCommand stage_activation{
         5,
         1,
         2,
-        tgd::contracts::SafePointRetryReason::quest_stage_advanced,
+        tgd::contracts::EncounterActivationMode::replace,
     };
-    ok &= expect(
-        resolver.retry_from_initial(stage_restart, sink) == CombatError::retry_not_allowed,
-        "safe-point retry remains exclusive to defeated players"
-    );
     const std::array<tgd::contracts::EncounterActorPlacementDefinition, 1> return_group{{
         {2, actor_configs[1].initial_pose, 0},
     }};
     ok &= expect(
-        resolver.activate_group(stage_restart, return_group, sink) == CombatError::none,
+        resolver.activate_group(stage_activation, return_group, sink) == CombatError::none,
         "an active player can activate an authored hostile group"
     );
     for (int tick = 5; tick < 10; ++tick) {
@@ -483,7 +479,7 @@ bool test_authored_group_activation_isolates_hostiles() {
     }};
     ok &= expect(
         resolver.activate_group(
-            {0, 1, 1, tgd::contracts::SafePointRetryReason::quest_stage_advanced},
+            {0, 1, 1, tgd::contracts::EncounterActivationMode::replace},
             boss_group,
             sink
         ) == CombatError::none,
@@ -498,16 +494,59 @@ bool test_authored_group_activation_isolates_hostiles() {
             resolver.actors()[2].resources == actor_configs[2].initial_resources,
         "activating a group distinguishes dormant actors from defeated actors"
     );
-    const std::array<tgd::contracts::EncounterActorPlacementDefinition, 1> lane_group{{
+    const auto player_before_reinforcement = resolver.actors()[0];
+    const auto boss_before_reinforcement = resolver.actors()[2];
+    const std::array<tgd::contracts::EncounterActorPlacementDefinition, 1>
+        reinforcement_group{{
         {2, {-7'000, -1'200, 0, 0}, 6},
     }};
     ok &= expect(
         resolver.activate_group(
-            {0, 1, 2, tgd::contracts::SafePointRetryReason::quest_stage_advanced},
+            {0, 1, 2, tgd::contracts::EncounterActivationMode::reinforce},
+            reinforcement_group,
+            sink
+        ) == CombatError::none,
+        "a dormant authored group can reinforce the current encounter"
+    );
+    ok &= expect(
+        resolver.actors()[0].pose == player_before_reinforcement.pose &&
+            resolver.actors()[0].resources == player_before_reinforcement.resources &&
+            resolver.actors()[0].stance == player_before_reinforcement.stance &&
+            resolver.actors()[0].active_ability ==
+                player_before_reinforcement.active_ability &&
+            resolver.actors()[0].guarding == player_before_reinforcement.guarding &&
+            resolver.actors()[0].active == player_before_reinforcement.active &&
+            resolver.actors()[0].defeated == player_before_reinforcement.defeated &&
+            resolver.actors()[1].active && !resolver.actors()[1].defeated &&
+            resolver.actors()[1].pose == reinforcement_group[0].pose &&
+            resolver.actors()[2].pose == boss_before_reinforcement.pose &&
+            resolver.actors()[2].resources == boss_before_reinforcement.resources &&
+            resolver.actors()[2].stance == boss_before_reinforcement.stance &&
+            resolver.actors()[2].active_ability == boss_before_reinforcement.active_ability &&
+            resolver.actors()[2].guarding == boss_before_reinforcement.guarding &&
+            resolver.actors()[2].active == boss_before_reinforcement.active &&
+            resolver.actors()[2].defeated == boss_before_reinforcement.defeated &&
+            sink.contains(CombatEventType::encounter_reinforced),
+        "reinforcement preserves the player and active hostile runtime while adding actors"
+    );
+    ok &= expect(
+        resolver.activate_group(
+            {0, 1, 3, tgd::contracts::EncounterActivationMode::reinforce},
+            reinforcement_group,
+            sink
+        ) == CombatError::activation_not_allowed,
+        "reinforcement cannot reactivate an already active hostile"
+    );
+    const std::array<tgd::contracts::EncounterActorPlacementDefinition, 1> lane_group{{
+        {2, {-6'000, -800, 0, 0}, 2},
+    }};
+    ok &= expect(
+        resolver.activate_group(
+            {0, 1, 3, tgd::contracts::EncounterActivationMode::replace},
             lane_group,
             sink
         ) == CombatError::none,
-        "a later authored group can replace the current encounter"
+        "a later authored replacement can isolate a new encounter"
     );
     ok &= expect(
         resolver.actors()[1].active && !resolver.actors()[1].defeated &&
@@ -515,6 +554,10 @@ bool test_authored_group_activation_isolates_hostiles() {
             !resolver.actors()[2].active && !resolver.actors()[2].defeated &&
             resolver.actors()[2].resources.health == 0,
         "replaced hostile groups remain inactive across stage and retry boundaries"
+    );
+    ok &= expect(
+        sink.contains(CombatEventType::encounter_replaced),
+        "replacement emits a presentation-safe group event"
     );
     return ok;
 }

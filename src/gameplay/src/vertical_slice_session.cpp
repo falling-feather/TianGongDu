@@ -501,6 +501,9 @@ bool VerticalSliceSession::valid_definition(
             }
         );
         const bool has_trigger_objective = activation.trigger_objective_id.key != 0;
+        const bool valid_activation_mode =
+            activation.mode == contracts::EncounterActivationMode::replace ||
+            activation.mode == contracts::EncounterActivationMode::reinforce;
         const bool trigger_objective_exists =
             activation_beat != definition.beats.end() &&
             has_trigger_objective &&
@@ -515,6 +518,9 @@ bool VerticalSliceSession::valid_definition(
             activation.beat_id.key == 0 || activation.beat_id.name.empty() ||
             has_trigger_objective == activation.trigger_objective_id.name.empty() ||
             (has_trigger_objective && !trigger_objective_exists) ||
+            !valid_activation_mode ||
+            (activation.mode == contracts::EncounterActivationMode::reinforce &&
+             !has_trigger_objective) ||
             activation.encounter_id.key == 0 ||
             activation.encounter_id.name.empty() || activation.actor_keys.empty() ||
             activation.actor_placements.size() != activation.actor_keys.size() ||

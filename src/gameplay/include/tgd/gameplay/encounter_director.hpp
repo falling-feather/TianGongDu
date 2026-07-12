@@ -23,6 +23,9 @@ enum class EncounterDirectorError : std::uint8_t {
     retry_targets_wrong_tick,
     retry_not_allowed,
     stale_retry_sequence,
+    activation_targets_wrong_tick,
+    activation_not_allowed,
+    stale_activation_sequence,
 };
 
 struct EncounterPlanBatch final {
@@ -65,8 +68,9 @@ class IEncounterDirector {
         const contracts::SafePointRetryCommand& command
     ) noexcept = 0;
     [[nodiscard]] virtual EncounterDirectorError activate_group(
-        const contracts::SafePointRetryCommand& command,
-        std::span<const contracts::EncounterActorPlacementDefinition> actor_placements
+        const contracts::EncounterActivationCommand& command,
+        std::span<const contracts::EncounterActorPlacementDefinition> actor_placements,
+        std::span<const contracts::CombatActorSnapshot> actors
     ) noexcept = 0;
     [[nodiscard]] virtual contracts::TickIndex current_tick() const noexcept = 0;
     [[nodiscard]] virtual std::uint64_t checksum() const noexcept = 0;
@@ -92,8 +96,9 @@ class DeterministicEncounterDirector final : public IEncounterDirector {
         const contracts::SafePointRetryCommand& command
     ) noexcept override;
     [[nodiscard]] EncounterDirectorError activate_group(
-        const contracts::SafePointRetryCommand& command,
-        std::span<const contracts::EncounterActorPlacementDefinition> actor_placements
+        const contracts::EncounterActivationCommand& command,
+        std::span<const contracts::EncounterActorPlacementDefinition> actor_placements,
+        std::span<const contracts::CombatActorSnapshot> actors
     ) noexcept override;
     [[nodiscard]] contracts::TickIndex current_tick() const noexcept override;
     [[nodiscard]] std::uint64_t checksum() const noexcept override;
@@ -137,7 +142,7 @@ class DeterministicEncounterDirector final : public IEncounterDirector {
     std::array<contracts::AbilityDefinition, ability_capacity> abilities_{};
     std::size_t ability_count_{};
     contracts::TickIndex current_tick_{};
-    contracts::CommandSequence last_retry_sequence_{};
+    contracts::CommandSequence last_boundary_sequence_{};
     std::uint64_t checksum_{};
 };
 

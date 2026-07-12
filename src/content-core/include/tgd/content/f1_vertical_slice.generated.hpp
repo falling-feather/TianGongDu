@@ -43,8 +43,9 @@ inline constexpr std::array<contracts::ContentId, 4> beat_3_objectives{{
     contracts::content_id("f1_objective_choose_rib_calibration"),
 }};
 
-inline constexpr std::array<contracts::ContentId, 3> beat_4_objectives{{
+inline constexpr std::array<contracts::ContentId, 4> beat_4_objectives{{
     contracts::content_id("f1_objective_prime_return_calibration"),
+    contracts::content_id("f1_objective_demonstrate_rib_calibration"),
     contracts::content_id("f1_objective_validate_calibration"),
     contracts::content_id("f1_objective_open_return_shortcut"),
 }};
@@ -139,6 +140,14 @@ inline constexpr std::array<contracts::ContentId, 1> combat_trigger_3_prerequisi
 
 inline constexpr std::array<contracts::ContentId, 1> combat_trigger_4_prerequisites{{
     contracts::content_id("f1_objective_commit_flower_turn_light"),
+}};
+
+inline constexpr std::array<contracts::ContentId, 1> combat_trigger_5_prerequisites{{
+    contracts::content_id("f1_objective_prime_return_calibration"),
+}};
+
+inline constexpr std::array<contracts::ContentId, 1> combat_trigger_6_prerequisites{{
+    contracts::content_id("f1_objective_prime_return_calibration"),
 }};
 
 inline constexpr std::array<contracts::StableActorKey, 1> encounter_activation_0_actors{{
@@ -277,12 +286,14 @@ inline constexpr std::array<contracts::QuestInteractionDefinition, 21> f1_quest_
     {contracts::content_id("f1_interaction_return_to_shen_yan"), contracts::QuestInteractionKind::talk, contracts::content_id("f1_cell_return_safe_point"), contracts::content_id("f1_objective_return_to_shen_yan"), contracts::ContentId{}, {-10500, -600, 0, 0}, 1000, std::span<const contracts::ContentId>{interaction_20_prerequisites}},
 }};
 
-inline constexpr std::array<contracts::QuestCombatTriggerDefinition, 5> f1_quest_combat_triggers{{
-    {contracts::content_id("f1_trigger_eavesguard_heavy"), contracts::QuestCombatTriggerKind::player_ability_started, contracts::content_id("f1_objective_commit_eavesguard_heavy"), contracts::stable_content_key("stance_eavesguard"), contracts::stable_content_key("ability_eavesguard_heavy"), std::span<const contracts::ContentId>{combat_trigger_0_prerequisites}},
-    {contracts::content_id("f1_trigger_eavesguard_counter"), contracts::QuestCombatTriggerKind::player_hit_guarded, contracts::content_id("f1_objective_eavesguard_counter"), contracts::stable_content_key("stance_eavesguard"), 0, std::span<const contracts::ContentId>{combat_trigger_1_prerequisites}},
-    {contracts::content_id("f1_trigger_enter_flower_turn"), contracts::QuestCombatTriggerKind::player_stance_changed, contracts::content_id("f1_objective_enter_flower_turn"), contracts::stable_content_key("stance_flower_turn"), 0, std::span<const contracts::ContentId>{combat_trigger_2_prerequisites}},
-    {contracts::content_id("f1_trigger_flower_turn_light"), contracts::QuestCombatTriggerKind::player_ability_started, contracts::content_id("f1_objective_commit_flower_turn_light"), contracts::stable_content_key("stance_flower_turn"), contracts::stable_content_key("ability_flower_light"), std::span<const contracts::ContentId>{combat_trigger_3_prerequisites}},
-    {contracts::content_id("f1_trigger_flower_turn_counter"), contracts::QuestCombatTriggerKind::player_hit_evaded, contracts::content_id("f1_objective_flower_turn_counter"), contracts::stable_content_key("stance_flower_turn"), 0, std::span<const contracts::ContentId>{combat_trigger_4_prerequisites}},
+inline constexpr std::array<contracts::QuestCombatTriggerDefinition, 7> f1_quest_combat_triggers{{
+    {contracts::content_id("f1_trigger_eavesguard_heavy"), contracts::QuestCombatTriggerKind::player_ability_started, contracts::content_id("f1_objective_commit_eavesguard_heavy"), contracts::stable_content_key("stance_eavesguard"), contracts::stable_content_key("ability_eavesguard_heavy"), contracts::ContentId{}, contracts::ContentId{}, std::span<const contracts::ContentId>{combat_trigger_0_prerequisites}},
+    {contracts::content_id("f1_trigger_eavesguard_counter"), contracts::QuestCombatTriggerKind::player_hit_guarded, contracts::content_id("f1_objective_eavesguard_counter"), contracts::stable_content_key("stance_eavesguard"), 0, contracts::ContentId{}, contracts::ContentId{}, std::span<const contracts::ContentId>{combat_trigger_1_prerequisites}},
+    {contracts::content_id("f1_trigger_enter_flower_turn"), contracts::QuestCombatTriggerKind::player_stance_changed, contracts::content_id("f1_objective_enter_flower_turn"), contracts::stable_content_key("stance_flower_turn"), 0, contracts::ContentId{}, contracts::ContentId{}, std::span<const contracts::ContentId>{combat_trigger_2_prerequisites}},
+    {contracts::content_id("f1_trigger_flower_turn_light"), contracts::QuestCombatTriggerKind::player_ability_started, contracts::content_id("f1_objective_commit_flower_turn_light"), contracts::stable_content_key("stance_flower_turn"), contracts::stable_content_key("ability_flower_light"), contracts::ContentId{}, contracts::ContentId{}, std::span<const contracts::ContentId>{combat_trigger_3_prerequisites}},
+    {contracts::content_id("f1_trigger_flower_turn_counter"), contracts::QuestCombatTriggerKind::player_hit_evaded, contracts::content_id("f1_objective_flower_turn_counter"), contracts::stable_content_key("stance_flower_turn"), 0, contracts::ContentId{}, contracts::ContentId{}, std::span<const contracts::ContentId>{combat_trigger_4_prerequisites}},
+    {contracts::content_id("f1_trigger_return_spring_calibration_heavy"), contracts::QuestCombatTriggerKind::player_ability_started, contracts::content_id("f1_objective_demonstrate_rib_calibration"), contracts::stable_content_key("stance_eavesguard"), contracts::stable_content_key("ability_eavesguard_heavy"), contracts::content_id("f1_objective_choose_rib_calibration"), contracts::content_id("f1_choice_rib_spring_calibration"), std::span<const contracts::ContentId>{combat_trigger_5_prerequisites}},
+    {contracts::content_id("f1_trigger_return_winter_calibration_light"), contracts::QuestCombatTriggerKind::player_ability_started, contracts::content_id("f1_objective_demonstrate_rib_calibration"), contracts::stable_content_key("stance_flower_turn"), contracts::stable_content_key("ability_flower_light"), contracts::content_id("f1_objective_choose_rib_calibration"), contracts::content_id("f1_choice_rib_winter_calibration"), std::span<const contracts::ContentId>{combat_trigger_6_prerequisites}},
 }};
 
 inline constexpr std::array<contracts::QuestCombatOutcomeDefinition, 3> f1_quest_combat_outcomes{{

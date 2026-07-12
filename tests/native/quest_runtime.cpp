@@ -564,23 +564,48 @@ bool test_combat_signals_resolve_training_objectives() {
         "invalid combat signals fail closed"
     );
 
-    std::array<tgd::contracts::QuestCombatTriggerDefinition, 5> invalid{};
-    std::copy(
+    std::vector<tgd::contracts::QuestCombatTriggerDefinition> invalid(
         definition().quest_combat_triggers.begin(),
-        definition().quest_combat_triggers.end(),
-        invalid.begin()
+        definition().quest_combat_triggers.end()
     );
-    invalid[1].objective_id = invalid[0].objective_id;
+    invalid[1] = invalid[0];
+    invalid[1].id = tgd::contracts::content_id(
+        "f1_trigger_duplicate_eavesguard_heavy"
+    );
     DeterministicQuestCombatTriggerResolver invalid_triggers;
     ok &= expect(
         invalid_triggers.initialize(invalid) == QuestCombatTriggerError::invalid_definition,
         "duplicate combat trigger objectives fail definition validation"
+    );
+    std::vector<tgd::contracts::QuestCombatTriggerDefinition> half_selection(
+        definition().quest_combat_triggers.begin(),
+        definition().quest_combat_triggers.end()
+    );
+    half_selection[5].required_selection_id = {};
+    DeterministicQuestCombatTriggerResolver half_selection_triggers;
+    ok &= expect(
+        half_selection_triggers.initialize(half_selection) ==
+            QuestCombatTriggerError::invalid_definition,
+        "combat trigger selection gates require both objective and option"
+    );
+    std::vector<tgd::contracts::QuestCombatTriggerDefinition> duplicate_selection(
+        definition().quest_combat_triggers.begin(),
+        definition().quest_combat_triggers.end()
+    );
+    duplicate_selection[6].required_selection_id =
+        duplicate_selection[5].required_selection_id;
+    DeterministicQuestCombatTriggerResolver duplicate_selection_triggers;
+    ok &= expect(
+        duplicate_selection_triggers.initialize(duplicate_selection) ==
+            QuestCombatTriggerError::invalid_definition,
+        "combat trigger variants cannot duplicate one selection option"
     );
     return ok;
 }
 
 bool test_hostile_group_outcomes_unlock_lane_choice() {
     DeterministicQuestRuntime quest;
+    DeterministicQuestCombatTriggerResolver triggers;
     DeterministicQuestCombatOutcomeResolver outcomes;
     DeterministicQuestInteractionResolver interactions;
     CollectingSink sink;
@@ -602,6 +627,8 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
     );
     ok &= outcomes.initialize(definition().quest_combat_outcomes) ==
           QuestCombatOutcomeError::none;
+    ok &= triggers.initialize(definition().quest_combat_triggers) ==
+          QuestCombatTriggerError::none;
     ok &= interactions.initialize(definition().quest_interactions) ==
           QuestInteractionError::none;
 
@@ -1016,6 +1043,49 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
         ) == 4,
         "the calibration primer reinforces the three-actor return group to four"
     );
+    ok &= expect(
+        !outcomes.resolve(return_actors, quest).found,
+        "the return clear outcome remains locked until the selected calibration action"
+    );
+    const auto wrong_calibration_action = triggers.resolve(
+        {
+            definition().player.actor,
+            tgd::contracts::QuestCombatTriggerKind::player_ability_started,
+            tgd::contracts::stable_content_key("stance_flower_turn"),
+            tgd::contracts::stable_content_key("ability_flower_light"),
+        },
+        quest
+    );
+    ok &= expect(
+        !wrong_calibration_action.found,
+        "a winter calibration action cannot satisfy the selected spring-rib branch"
+    );
+    const auto calibration_action = triggers.resolve(
+        {
+            definition().player.actor,
+            tgd::contracts::QuestCombatTriggerKind::player_ability_started,
+            tgd::contracts::stable_content_key("stance_eavesguard"),
+            tgd::contracts::stable_content_key("ability_eavesguard_heavy"),
+        },
+        quest
+    );
+    ok &= expect(
+        calibration_action.found && calibration_action.objective ==
+            tgd::contracts::stable_content_key(
+                "f1_objective_demonstrate_rib_calibration"
+            ),
+        "the selected spring-rib branch requires an eavesguard heavy demonstration"
+    );
+    ok &= quest.apply(
+              {
+                  tick++,
+                  definition().player.actor,
+                  sequence++,
+                  {},
+                  calibration_action.objective,
+              },
+              sink
+          ).error == QuestError::none;
     for (const auto activation_index : std::array<std::size_t, 2>{4, 5}) {
         for (const auto& placement :
              definition().quest_encounter_activations[activation_index].actor_placements) {
@@ -1103,6 +1173,121 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
         "an actor cannot be active and defeated at the same time"
     );
     return ok;
+}
+
+bool test_return_calibration_combat_trigger_follows_choice() {
+    const auto exercise_branch = [](
+                                     tgd::contracts::StableContentKey choice,
+                                     tgd::contracts::StableContentKey expected_stance,
+                                     tgd::contracts::StableContentKey expected_ability,
+                                     tgd::contracts::StableContentKey rejected_stance,
+                                     tgd::contracts::StableContentKey rejected_ability
+                                 ) {
+        DeterministicQuestRuntime quest;
+        DeterministicQuestCombatTriggerResolver triggers;
+        CollectingSink sink;
+        bool ok = quest.initialize(definition(), definition().player.actor) == QuestError::none;
+        ok &= quest.start() == QuestError::none;
+        ok &= triggers.initialize(definition().quest_combat_triggers) ==
+              QuestCombatTriggerError::none;
+        tgd::contracts::TickIndex tick = 1;
+        tgd::contracts::CommandSequence sequence = 1;
+        for (std::size_t stage = 0; stage < 3; ++stage) {
+            for (const auto& objective : definition().beats[stage].objectives) {
+                ok &= quest.apply(
+                              {
+                                  tick++,
+                                  definition().player.actor,
+                                  sequence++,
+                                  {},
+                                  objective.key,
+                                  selection_for_objective(objective.key),
+                              },
+                              sink
+                          ).error == QuestError::none;
+            }
+        }
+        const auto& workbench = definition().beats[3];
+        for (std::size_t index = 0; index < 3; ++index) {
+            ok &= quest.apply(
+                          {
+                              tick++,
+                              definition().player.actor,
+                              sequence++,
+                              {},
+                              workbench.objectives[index].key,
+                          },
+                          sink
+                      ).error == QuestError::none;
+        }
+        ok &= quest.apply(
+                      {
+                          tick++,
+                          definition().player.actor,
+                          sequence++,
+                          {},
+                          workbench.objectives[3].key,
+                          choice,
+                      },
+                      sink
+                  ).error == QuestError::none;
+        const auto& return_beat = definition().beats[4];
+        ok &= quest.apply(
+                      {
+                          tick++,
+                          definition().player.actor,
+                          sequence++,
+                          {},
+                          return_beat.objectives[0].key,
+                      },
+                      sink
+                  ).error == QuestError::none;
+        const auto rejected = triggers.resolve(
+            {
+                definition().player.actor,
+                tgd::contracts::QuestCombatTriggerKind::player_ability_started,
+                rejected_stance,
+                rejected_ability,
+            },
+            quest
+        );
+        const auto accepted = triggers.resolve(
+            {
+                definition().player.actor,
+                tgd::contracts::QuestCombatTriggerKind::player_ability_started,
+                expected_stance,
+                expected_ability,
+            },
+            quest
+        );
+        ok &= expect(
+            !rejected.found && accepted.found && accepted.objective ==
+                tgd::contracts::stable_content_key(
+                    "f1_objective_demonstrate_rib_calibration"
+                ),
+            "only the combat action mapped to the committed rib choice can progress"
+        );
+        return ok;
+    };
+
+    return exercise_branch(
+               tgd::contracts::stable_content_key(
+                   "f1_choice_rib_spring_calibration"
+               ),
+               tgd::contracts::stable_content_key("stance_eavesguard"),
+               tgd::contracts::stable_content_key("ability_eavesguard_heavy"),
+               tgd::contracts::stable_content_key("stance_flower_turn"),
+               tgd::contracts::stable_content_key("ability_flower_light")
+           ) &&
+           exercise_branch(
+               tgd::contracts::stable_content_key(
+                   "f1_choice_rib_winter_calibration"
+               ),
+               tgd::contracts::stable_content_key("stance_flower_turn"),
+               tgd::contracts::stable_content_key("ability_flower_light"),
+               tgd::contracts::stable_content_key("stance_eavesguard"),
+               tgd::contracts::stable_content_key("ability_eavesguard_heavy")
+           );
 }
 
 bool test_four_seasons_boss_phases_are_ordered() {
@@ -1324,6 +1509,7 @@ int main() {
     ok &= test_scene_interaction_ties_are_stable();
     ok &= test_combat_signals_resolve_training_objectives();
     ok &= test_hostile_group_outcomes_unlock_lane_choice();
+    ok &= test_return_calibration_combat_trigger_follows_choice();
     ok &= test_four_seasons_boss_phases_are_ordered();
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

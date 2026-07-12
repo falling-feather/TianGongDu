@@ -185,8 +185,15 @@ QuestCombatTriggerError DeterministicQuestCombatTriggerResolver::initialize(
         }
         const bool ability_started =
             definition.kind == contracts::QuestCombatTriggerKind::player_ability_started;
+        const bool has_selection_objective =
+            definition.required_selection_objective_id.key != 0;
+        const bool has_selection = definition.required_selection_id.key != 0;
         if ((ability_started && definition.required_ability == 0) ||
-            (!ability_started && definition.required_ability != 0)) {
+            (!ability_started && definition.required_ability != 0) ||
+            has_selection_objective ==
+                definition.required_selection_objective_id.name.empty() ||
+            has_selection == definition.required_selection_id.name.empty() ||
+            has_selection_objective != has_selection) {
             return QuestCombatTriggerError::invalid_definition;
         }
         if (definition.prerequisite_objectives.empty() ||
@@ -208,8 +215,16 @@ QuestCombatTriggerError DeterministicQuestCombatTriggerResolver::initialize(
             }
         }
         for (std::size_t prior = 0; prior < index; ++prior) {
-            if (definitions[prior].id.key == definition.id.key ||
-                definitions[prior].objective_id.key == definition.objective_id.key) {
+            const auto& previous = definitions[prior];
+            const bool same_objective =
+                previous.objective_id.key == definition.objective_id.key;
+            if (previous.id.key == definition.id.key ||
+                (same_objective &&
+                 (!has_selection ||
+                  previous.required_selection_objective_id.key !=
+                      definition.required_selection_objective_id.key ||
+                  previous.required_selection_id.key ==
+                      definition.required_selection_id.key))) {
                 return QuestCombatTriggerError::invalid_definition;
             }
         }
@@ -252,6 +267,9 @@ QuestCombatTriggerResult DeterministicQuestCombatTriggerResolver::resolve(
         );
         if (definition.kind != signal.kind || definition.required_stance != signal.stance ||
             definition.required_ability != signal.ability ||
+            (definition.required_selection_id.key != 0 &&
+             quest.selected_option(definition.required_selection_objective_id.key) !=
+                 definition.required_selection_id.key) ||
             !prerequisites_complete ||
             quest.objective_state(definition.objective_id.key) != QuestObjectiveState::active) {
             continue;

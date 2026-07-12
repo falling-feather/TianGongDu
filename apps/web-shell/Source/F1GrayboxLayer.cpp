@@ -1330,6 +1330,12 @@ void F1GrayboxLayer::publish(
                                               )) {
                     combat_event_label_->setString("SHARED LEDGER REVIEWED / CALIBRATION UNLOCKED");
                 } else if (event.objective == tgd::contracts::stable_content_key(
+                                                  "f1_objective_demonstrate_rib_calibration"
+                                              )) {
+                    combat_event_label_->setString(
+                        "RIB CALIBRATION ACTION VERIFIED / CLEAR THE RETURN GROUP"
+                    );
+                } else if (event.objective == tgd::contracts::stable_content_key(
                                                   "f1_objective_survive_spring_phase"
                                               )) {
                     combat_event_label_->setString("SPRING SEAL BROKEN / SUMMER PHASE RISING");
@@ -1443,7 +1449,7 @@ void F1GrayboxLayer::submitQuestCombatSignal(
         const auto completed = session_.complete_objective(resolved.objective, *this);
         if (completed.error != tgd::gameplay::VerticalSliceError::none &&
             combat_event_label_ != nullptr) {
-            combat_event_label_->setString("TRAINING OBJECTIVE REJECTED / QUEST STATE DRIFT");
+            combat_event_label_->setString("COMBAT OBJECTIVE REJECTED / QUEST STATE DRIFT");
         }
     }
 }
@@ -1451,8 +1457,17 @@ void F1GrayboxLayer::submitQuestCombatSignal(
 void F1GrayboxLayer::submitQuestCombatOutcome(
     const tgd::contracts::CombatEvent& event
 ) noexcept {
-    if (event.type != tgd::contracts::CombatEventType::actor_defeated ||
-        event.target == definition_->player.actor) {
+    const bool hostile_defeated =
+        event.type == tgd::contracts::CombatEventType::actor_defeated &&
+        event.target != definition_->player.actor;
+    const bool quest_signal_may_have_unlocked_outcome =
+        (event.source == definition_->player.actor &&
+         (event.type == tgd::contracts::CombatEventType::ability_started ||
+          event.type == tgd::contracts::CombatEventType::stance_changed)) ||
+        (event.target == definition_->player.actor &&
+         (event.type == tgd::contracts::CombatEventType::hit_guarded ||
+          event.type == tgd::contracts::CombatEventType::hit_evaded));
+    if (!hostile_defeated && !quest_signal_may_have_unlocked_outcome) {
         return;
     }
     const auto resolved = quest_combat_outcomes_.resolve(

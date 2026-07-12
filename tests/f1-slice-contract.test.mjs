@@ -68,10 +68,14 @@ test("F1 one-hour contract and generated C++ stay synchronized", async () => {
     new Set(contract.beats[0].objectiveIds)
   );
   assert.deepEqual(
-    new Set(contract.questCombatTriggers.map((trigger) => trigger.objectiveId)),
+    new Set(
+      contract.questCombatTriggers
+        .filter((trigger) => contract.beats[1].objectiveIds.includes(trigger.objectiveId))
+        .map((trigger) => trigger.objectiveId)
+    ),
     new Set(contract.beats[1].objectiveIds.slice(1))
   );
-  assert.equal(contract.questCombatTriggers.length, 5);
+  assert.equal(contract.questCombatTriggers.length, 7);
   assert.equal(
     contract.questCombatTriggers[0].requiredAbilityId,
     "ability_eavesguard_heavy"
@@ -79,6 +83,25 @@ test("F1 one-hour contract and generated C++ stay synchronized", async () => {
   assert.equal(
     contract.questCombatTriggers[3].requiredAbilityId,
     "ability_flower_light"
+  );
+  assert.deepEqual(
+    contract.questCombatTriggers.slice(5).map((trigger) => ({
+      objectiveId: trigger.objectiveId,
+      requiredAbilityId: trigger.requiredAbilityId,
+      requiredSelectionId: trigger.requiredSelectionId
+    })),
+    [
+      {
+        objectiveId: contract.beats[4].objectiveIds[1],
+        requiredAbilityId: "ability_eavesguard_heavy",
+        requiredSelectionId: "f1_choice_rib_spring_calibration"
+      },
+      {
+        objectiveId: contract.beats[4].objectiveIds[1],
+        requiredAbilityId: "ability_flower_light",
+        requiredSelectionId: "f1_choice_rib_winter_calibration"
+      }
+    ]
   );
   assert.deepEqual(
     new Set(
@@ -239,7 +262,7 @@ test("F1 workbench investigation gates two stable calibration choices", async ()
   );
 });
 
-test("F1 training counters require valid content-driven combat triggers", async () => {
+test("F1 combat actions require valid content-driven and selection-gated triggers", async () => {
   const unknownStance = structuredClone(await loadF1SliceContract());
   unknownStance.questCombatTriggers[0].requiredStanceId = "stance_missing";
   assert.throws(
@@ -248,11 +271,13 @@ test("F1 training counters require valid content-driven combat triggers", async 
   );
 
   const duplicateObjective = structuredClone(await loadF1SliceContract());
-  duplicateObjective.questCombatTriggers.at(-1).objectiveId =
-    duplicateObjective.questCombatTriggers[0].objectiveId;
+  duplicateObjective.questCombatTriggers[1] = {
+    ...duplicateObjective.questCombatTriggers[0],
+    id: "f1_trigger_duplicate_eavesguard_heavy"
+  };
   assert.throws(
     () => validateF1SliceContract(duplicateObjective, catalog),
-    /duplicate quest combat trigger objective/
+    /duplicate unconditional combat triggers/
   );
 
   const incompatibleAbility = structuredClone(await loadF1SliceContract());
@@ -267,6 +292,38 @@ test("F1 training counters require valid content-driven combat triggers", async 
   assert.throws(
     () => validateF1SliceContract(missingPrerequisite, catalog),
     /invalid prerequisite objectives/
+  );
+
+  const halfSelectionGate = structuredClone(await loadF1SliceContract());
+  halfSelectionGate.questCombatTriggers[5].requiredSelectionId = null;
+  assert.throws(
+    () => validateF1SliceContract(halfSelectionGate, catalog),
+    /invalid combat trigger selection gate/
+  );
+
+  const futureSelectionGate = structuredClone(await loadF1SliceContract());
+  futureSelectionGate.questCombatTriggers[5].requiredSelectionObjectiveId =
+    futureSelectionGate.beats[6].objectiveIds[0];
+  futureSelectionGate.questCombatTriggers[5].requiredSelectionId =
+    "f1_choice_resolution_subdue";
+  assert.throws(
+    () => validateF1SliceContract(futureSelectionGate, catalog),
+    /missing or future combat trigger selection gate/
+  );
+
+  const duplicateSelectionGate = structuredClone(await loadF1SliceContract());
+  duplicateSelectionGate.questCombatTriggers[6].requiredSelectionId =
+    "f1_choice_rib_spring_calibration";
+  assert.throws(
+    () => validateF1SliceContract(duplicateSelectionGate, catalog),
+    /duplicate .* combat trigger selection gate/
+  );
+
+  const incompleteSelectionCoverage = structuredClone(await loadF1SliceContract());
+  incompleteSelectionCoverage.questCombatTriggers.splice(6, 1);
+  assert.throws(
+    () => validateF1SliceContract(incompleteSelectionCoverage, catalog),
+    /do not cover every authored selection option/
   );
 });
 
@@ -444,7 +501,7 @@ test("F1 encounters activate authored groups at beat and objective boundaries", 
   ]);
   assert.equal(
     contract.questCombatOutcomes.find(
-      (outcome) => outcome.objectiveId === contract.beats[4].objectiveIds[1]
+      (outcome) => outcome.objectiveId === contract.beats[4].objectiveIds[2]
     ).kind,
     "all_hostiles_defeated"
   );

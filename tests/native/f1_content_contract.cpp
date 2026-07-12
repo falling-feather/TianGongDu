@@ -80,7 +80,7 @@ int main() {
         "the expanded opening scene interactions are generated content, not presentation rules"
     );
     ok &= expect(
-        definition->quest_combat_triggers.size() == 5 &&
+        definition->quest_combat_triggers.size() == 7 &&
             definition->quest_combat_triggers.front().required_stance ==
                 tgd::contracts::stable_content_key("stance_eavesguard") &&
             definition->quest_combat_triggers.front().required_ability ==
@@ -89,6 +89,27 @@ int main() {
             definition->quest_combat_triggers.front().prerequisite_objectives.front().key ==
                 tgd::contracts::stable_content_key("f1_objective_meet_shen_yan"),
         "training actions and counters are generated combat-to-quest bindings"
+    );
+    ok &= expect(
+        definition->quest_combat_triggers[5].objective_id.key ==
+                tgd::contracts::stable_content_key(
+                    "f1_objective_demonstrate_rib_calibration"
+                ) &&
+            definition->quest_combat_triggers[5].required_ability ==
+                tgd::contracts::stable_content_key("ability_eavesguard_heavy") &&
+            definition->quest_combat_triggers[5].required_selection_id.key ==
+                tgd::contracts::stable_content_key(
+                    "f1_choice_rib_spring_calibration"
+                ) &&
+            definition->quest_combat_triggers[6].objective_id.key ==
+                definition->quest_combat_triggers[5].objective_id.key &&
+            definition->quest_combat_triggers[6].required_ability ==
+                tgd::contracts::stable_content_key("ability_flower_light") &&
+            definition->quest_combat_triggers[6].required_selection_id.key ==
+                tgd::contracts::stable_content_key(
+                    "f1_choice_rib_winter_calibration"
+                ),
+        "return calibration actions are generated as mutually exclusive choice variants"
     );
     const auto route_interaction = std::find_if(
         definition->quest_interactions.begin(),

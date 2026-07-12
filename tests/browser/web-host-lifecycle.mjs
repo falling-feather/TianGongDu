@@ -1322,7 +1322,7 @@ async function runBrowser(target, origin) {
     );
     workbenchState = await page.evaluate(() => window.__tgdTest.getF1State());
     assert.equal(workbenchState.questCompletedObjectives, 0);
-    assert.equal(workbenchState.questRequiredObjectives, 3);
+    assert.equal(workbenchState.questRequiredObjectives, 4);
     assert.equal(workbenchState.activeHostiles, 3);
     assert.equal(workbenchState.playerHealth, 120);
     assert.equal(workbenchState.safePointPoseX, -4_300);
@@ -1345,17 +1345,51 @@ async function runBrowser(target, origin) {
     );
     const reinforcementState = await page.evaluate(() => window.__tgdTest.getF1State());
     assert.equal(reinforcementState.questBeatIndex, 4);
-    assert.equal(reinforcementState.questRequiredObjectives, 3);
+    assert.equal(reinforcementState.questRequiredObjectives, 4);
     await captureRenderedFrame(
       page,
       canvas,
       resolve(reportDirectory, `${target}-return-reinforcement-ready.png`),
       `${target} additive return reinforcement ready`
     );
+    await page.waitForFunction(
+      () => {
+        const state = window.__tgdTest?.getF1State();
+        return state?.playerActive === true && state.playerBusy === false;
+      },
+      undefined,
+      { timeout: 5_000 }
+    );
+    await page.keyboard.press(ribCalibration === "spring" ? "1" : "2");
+    await page.waitForTimeout(100);
+    await page.waitForFunction(
+      () => {
+        const state = window.__tgdTest?.getF1State();
+        return state?.playerActive === true && state.playerBusy === false;
+      },
+      undefined,
+      { timeout: 5_000 }
+    );
+    await page.keyboard.press(ribCalibration === "spring" ? "k" : "j");
+    await page.waitForFunction(
+      () => window.__tgdTest?.getF1State()?.questCompletedObjectives === 2,
+      undefined,
+      { timeout: 5_000 }
+    );
+    const calibrationActionState = await page.evaluate(() => window.__tgdTest.getF1State());
+    assert.equal(calibrationActionState.questBeatIndex, 4);
+    assert.equal(calibrationActionState.questRequiredObjectives, 4);
+    assert.equal(calibrationActionState.activeHostiles, 4);
+    await captureRenderedFrame(
+      page,
+      canvas,
+      resolve(reportDirectory, `${target}-return-calibration-action.png`),
+      `${target} selected return calibration action`
+    );
     await page.keyboard.press("2");
     await page.waitForTimeout(100);
 
-    let returnState = reinforcementState;
+    let returnState = calibrationActionState;
     let returnReadyToAttack = false;
     let returnSawTelegraph = false;
     let returnRetryAttempts = 0;
@@ -1379,7 +1413,7 @@ async function runBrowser(target, origin) {
         );
         returnState = await page.evaluate(() => window.__tgdTest.getF1State());
         assert.equal(returnState.questBeatIndex, 4);
-        assert.equal(returnState.questCompletedObjectives, 1);
+        assert.equal(returnState.questCompletedObjectives, 2);
         assert.equal(returnState.activeHostiles, 4);
         await page.keyboard.press("2");
         await page.waitForTimeout(100);
@@ -1408,8 +1442,8 @@ async function runBrowser(target, origin) {
       `${target} did not clear the return encounter: ${JSON.stringify(returnState)}`
     );
     assert.equal(returnState.questBeatIndex, 4);
-    assert.equal(returnState.questCompletedObjectives, 2);
-    assert.equal(returnState.questRequiredObjectives, 3);
+    assert.equal(returnState.questCompletedObjectives, 3);
+    assert.equal(returnState.questRequiredObjectives, 4);
     assert.equal(returnState.questSelectedChoices, 2);
 
     await moveF1PlayerTo(page, -800, 400, 300);
@@ -1687,6 +1721,7 @@ async function runBrowser(target, origin) {
       retryState,
       workbenchState,
       reinforcementState,
+      calibrationActionState,
       returnState,
       returnRetryAttempts,
       bossState,
@@ -1708,6 +1743,9 @@ async function runBrowser(target, origin) {
         ),
         projectPath(
           resolve(reportDirectory, `${target}-return-reinforcement-ready.png`)
+        ),
+        projectPath(
+          resolve(reportDirectory, `${target}-return-calibration-action.png`)
         ),
         projectPath(resolve(reportDirectory, `${target}-canopy-return-complete.png`)),
         projectPath(bossSpringPath),

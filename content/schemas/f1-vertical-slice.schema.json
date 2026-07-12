@@ -26,7 +26,7 @@
   ],
   "properties": {
     "$schema": { "type": "string" },
-    "schemaVersion": { "const": "1.2.0" },
+    "schemaVersion": { "const": "1.3.0" },
     "id": { "const": "f1_rainy_umbrella_trial" },
     "view": {
       "type": "object",
@@ -443,6 +443,8 @@
         "objectiveId",
         "requiredStanceId",
         "requiredAbilityId",
+        "requiredSelectionObjectiveId",
+        "requiredSelectionId",
         "prerequisiteObjectiveIds"
       ],
       "properties": {
@@ -459,6 +461,18 @@
         "requiredStanceId": { "$ref": "#/$defs/id" },
         "requiredAbilityId": {
           "oneOf": [
+            { "$ref": "#/$defs/id" },
+            { "type": "null" }
+          ]
+        },
+        "requiredSelectionObjectiveId": {
+          "anyOf": [
+            { "$ref": "#/$defs/id" },
+            { "type": "null" }
+          ]
+        },
+        "requiredSelectionId": {
+          "anyOf": [
             { "$ref": "#/$defs/id" },
             { "type": "null" }
           ]

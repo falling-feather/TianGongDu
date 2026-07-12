@@ -1,6 +1,6 @@
 {
   "$schema": "../schemas/f1-vertical-slice.schema.json",
-  "schemaVersion": "1.2.0",
+  "schemaVersion": "1.3.0",
   "id": "f1_rainy_umbrella_trial",
   "view": {
     "model": "2.5d-oblique-panoramic",
@@ -607,6 +607,7 @@
       "cellId": "f1_cell_canopy_workstation",
       "objectiveIds": [
         "f1_objective_prime_return_calibration",
+        "f1_objective_demonstrate_rib_calibration",
         "f1_objective_validate_calibration",
         "f1_objective_open_return_shortcut"
       ],
@@ -1126,6 +1127,8 @@
       "objectiveId": "f1_objective_commit_eavesguard_heavy",
       "requiredStanceId": "stance_eavesguard",
       "requiredAbilityId": "ability_eavesguard_heavy",
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
       "prerequisiteObjectiveIds": [
         "f1_objective_meet_shen_yan"
       ]
@@ -1136,6 +1139,8 @@
       "objectiveId": "f1_objective_eavesguard_counter",
       "requiredStanceId": "stance_eavesguard",
       "requiredAbilityId": null,
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
       "prerequisiteObjectiveIds": [
         "f1_objective_commit_eavesguard_heavy"
       ]
@@ -1146,6 +1151,8 @@
       "objectiveId": "f1_objective_enter_flower_turn",
       "requiredStanceId": "stance_flower_turn",
       "requiredAbilityId": null,
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
       "prerequisiteObjectiveIds": [
         "f1_objective_eavesguard_counter"
       ]
@@ -1156,6 +1163,8 @@
       "objectiveId": "f1_objective_commit_flower_turn_light",
       "requiredStanceId": "stance_flower_turn",
       "requiredAbilityId": "ability_flower_light",
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
       "prerequisiteObjectiveIds": [
         "f1_objective_enter_flower_turn"
       ]
@@ -1166,8 +1175,34 @@
       "objectiveId": "f1_objective_flower_turn_counter",
       "requiredStanceId": "stance_flower_turn",
       "requiredAbilityId": null,
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
       "prerequisiteObjectiveIds": [
         "f1_objective_commit_flower_turn_light"
+      ]
+    },
+    {
+      "id": "f1_trigger_return_spring_calibration_heavy",
+      "kind": "player_ability_started",
+      "objectiveId": "f1_objective_demonstrate_rib_calibration",
+      "requiredStanceId": "stance_eavesguard",
+      "requiredAbilityId": "ability_eavesguard_heavy",
+      "requiredSelectionObjectiveId": "f1_objective_choose_rib_calibration",
+      "requiredSelectionId": "f1_choice_rib_spring_calibration",
+      "prerequisiteObjectiveIds": [
+        "f1_objective_prime_return_calibration"
+      ]
+    },
+    {
+      "id": "f1_trigger_return_winter_calibration_light",
+      "kind": "player_ability_started",
+      "objectiveId": "f1_objective_demonstrate_rib_calibration",
+      "requiredStanceId": "stance_flower_turn",
+      "requiredAbilityId": "ability_flower_light",
+      "requiredSelectionObjectiveId": "f1_objective_choose_rib_calibration",
+      "requiredSelectionId": "f1_choice_rib_winter_calibration",
+      "prerequisiteObjectiveIds": [
+        "f1_objective_prime_return_calibration"
       ]
     }
   ],

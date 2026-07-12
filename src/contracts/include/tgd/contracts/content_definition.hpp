@@ -94,6 +94,8 @@ struct QuestCombatTriggerDefinition final {
     ContentId objective_id{};
     StableContentKey required_stance{};
     StableContentKey required_ability{};
+    ContentId required_selection_objective_id{};
+    ContentId required_selection_id{};
     std::span<const ContentId> prerequisite_objectives{};
 };
 

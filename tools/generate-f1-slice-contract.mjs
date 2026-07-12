@@ -46,7 +46,7 @@ function sameValues(left, right) {
 }
 
 export function validateF1SliceContract(contract, catalog) {
-  if (contract.schemaVersion !== "1.2.0") fail("unsupported schemaVersion");
+  if (contract.schemaVersion !== "1.3.0") fail("unsupported schemaVersion");
   const catalogSlice = catalog.f1VerticalSlice;
   if (contract.id !== catalogSlice.id) fail("slice id drifted from the 1.0 catalog");
   const expectedView = {
@@ -367,12 +367,12 @@ export function validateF1SliceContract(contract, catalog) {
     fail("the return calibration primer must be an authored combat-space operation");
   }
   const returnShortcut = interactions.find(
-    (interaction) => interaction.objectiveId === returnBeat.objectiveIds[2]
+    (interaction) => interaction.objectiveId === returnBeat.objectiveIds[3]
   );
   if (
     returnShortcut?.kind !== "operate" ||
     returnShortcut.cellId !== returnBeat.cellId ||
-    !sameValues(returnShortcut.prerequisiteObjectiveIds, [returnBeat.objectiveIds[1]])
+    !sameValues(returnShortcut.prerequisiteObjectiveIds, [returnBeat.objectiveIds[2]])
   ) {
     fail("the return shortcut must wait for calibration combat validation");
   }
@@ -723,6 +723,35 @@ export function validateF1SliceContract(contract, catalog) {
         fail(`${trigger.id} references an incompatible required ability`);
       }
     }
+    const hasSelectionObjective = trigger.requiredSelectionObjectiveId !== null;
+    const hasSelection = trigger.requiredSelectionId !== null;
+    if (hasSelectionObjective !== hasSelection) {
+      fail(`${trigger.id} has an invalid combat trigger selection gate`);
+    }
+    if (hasSelection) {
+      const selectionInteraction = interactions.find(
+        (interaction) =>
+          interaction.kind === "choose" &&
+          interaction.objectiveId === trigger.requiredSelectionObjectiveId &&
+          interaction.selectionId === trigger.requiredSelectionId
+      );
+      const selectionBeatIndex = objectiveStages.get(trigger.requiredSelectionObjectiveId);
+      const triggerBeatIndex = objectiveStages.get(trigger.objectiveId);
+      const selectionObjectiveIndex = selectionBeatIndex === undefined
+        ? -1
+        : contract.beats[selectionBeatIndex].objectiveIds.indexOf(
+            trigger.requiredSelectionObjectiveId
+          );
+      const triggerObjectiveIndex = triggerBeatIndex === undefined
+        ? -1
+        : contract.beats[triggerBeatIndex].objectiveIds.indexOf(trigger.objectiveId);
+      if (!selectionInteraction || selectionBeatIndex === undefined ||
+          triggerBeatIndex === undefined || selectionBeatIndex > triggerBeatIndex ||
+          (selectionBeatIndex === triggerBeatIndex &&
+           selectionObjectiveIndex >= triggerObjectiveIndex)) {
+        fail(`${trigger.id} references a missing or future combat trigger selection gate`);
+      }
+    }
     if (!Array.isArray(trigger.prerequisiteObjectiveIds) ||
         trigger.prerequisiteObjectiveIds.length === 0 ||
         trigger.prerequisiteObjectiveIds.length > 8) {
@@ -740,10 +769,49 @@ export function validateF1SliceContract(contract, catalog) {
     }
   }
   assertUnique(combatTriggers.map((trigger) => trigger.id), "quest combat trigger id");
-  assertUnique(
-    combatTriggers.map((trigger) => trigger.objectiveId),
-    "quest combat trigger objective"
-  );
+  const visitedCombatTriggerObjectives = new Set();
+  for (const trigger of combatTriggers) {
+    if (visitedCombatTriggerObjectives.has(trigger.objectiveId)) continue;
+    visitedCombatTriggerObjectives.add(trigger.objectiveId);
+    const variants = combatTriggers.filter(
+      (candidate) => candidate.objectiveId === trigger.objectiveId
+    );
+    const gatedVariants = variants.filter(
+      (candidate) => candidate.requiredSelectionId !== null
+    );
+    if (gatedVariants.length === 0) {
+      if (variants.length !== 1) {
+        fail(`${trigger.objectiveId} has duplicate unconditional combat triggers`);
+      }
+      continue;
+    }
+    const selectionObjectiveId = gatedVariants[0].requiredSelectionObjectiveId;
+    if (gatedVariants.length !== variants.length ||
+        gatedVariants.some(
+          (candidate) => candidate.requiredSelectionObjectiveId !== selectionObjectiveId
+        )) {
+      fail(`${trigger.objectiveId} mixes incompatible combat trigger selection gates`);
+    }
+    assertUnique(
+      gatedVariants.map((candidate) => candidate.requiredSelectionId),
+      `${trigger.objectiveId} combat trigger selection gate`
+    );
+    const selectionOptions = interactions
+      .filter(
+        (interaction) => interaction.kind === "choose" &&
+          interaction.objectiveId === selectionObjectiveId &&
+          interaction.selectionId !== null
+      )
+      .map((interaction) => interaction.selectionId);
+    if (selectionOptions.length !== gatedVariants.length ||
+        selectionOptions.some(
+          (selection) => !gatedVariants.some(
+            (candidate) => candidate.requiredSelectionId === selection
+          )
+        )) {
+      fail(`${trigger.objectiveId} combat triggers do not cover every authored selection option`);
+    }
+  }
   const trainingCombatObjectives = new Set(contract.beats[1].objectiveIds.slice(1));
   const coveredTrainingObjectives = combatTriggers
     .filter((trigger) => trainingCombatObjectives.has(trigger.objectiveId))
@@ -761,6 +829,8 @@ export function validateF1SliceContract(contract, catalog) {
       objectiveId: "f1_objective_commit_eavesguard_heavy",
       requiredStanceId: "stance_eavesguard",
       requiredAbilityId: "ability_eavesguard_heavy",
+      requiredSelectionObjectiveId: null,
+      requiredSelectionId: null,
       prerequisiteObjectiveIds: ["f1_objective_meet_shen_yan"]
     },
     {
@@ -769,6 +839,8 @@ export function validateF1SliceContract(contract, catalog) {
       objectiveId: "f1_objective_eavesguard_counter",
       requiredStanceId: "stance_eavesguard",
       requiredAbilityId: null,
+      requiredSelectionObjectiveId: null,
+      requiredSelectionId: null,
       prerequisiteObjectiveIds: ["f1_objective_commit_eavesguard_heavy"]
     },
     {
@@ -777,6 +849,8 @@ export function validateF1SliceContract(contract, catalog) {
       objectiveId: "f1_objective_enter_flower_turn",
       requiredStanceId: "stance_flower_turn",
       requiredAbilityId: null,
+      requiredSelectionObjectiveId: null,
+      requiredSelectionId: null,
       prerequisiteObjectiveIds: ["f1_objective_eavesguard_counter"]
     },
     {
@@ -785,6 +859,8 @@ export function validateF1SliceContract(contract, catalog) {
       objectiveId: "f1_objective_commit_flower_turn_light",
       requiredStanceId: "stance_flower_turn",
       requiredAbilityId: "ability_flower_light",
+      requiredSelectionObjectiveId: null,
+      requiredSelectionId: null,
       prerequisiteObjectiveIds: ["f1_objective_enter_flower_turn"]
     },
     {
@@ -793,11 +869,44 @@ export function validateF1SliceContract(contract, catalog) {
       objectiveId: "f1_objective_flower_turn_counter",
       requiredStanceId: "stance_flower_turn",
       requiredAbilityId: null,
+      requiredSelectionObjectiveId: null,
+      requiredSelectionId: null,
       prerequisiteObjectiveIds: ["f1_objective_commit_flower_turn_light"]
     }
   ];
-  if (!sameValues(combatTriggers, expectedTrainingTriggers)) {
+  const authoredTrainingTriggers = combatTriggers.filter(
+    (trigger) => trainingCombatObjectives.has(trigger.objectiveId)
+  );
+  if (!sameValues(authoredTrainingTriggers, expectedTrainingTriggers)) {
     fail("the authored Shen Yan training sequence drifted");
+  }
+  const expectedReturnCalibrationTriggers = [
+    {
+      id: "f1_trigger_return_spring_calibration_heavy",
+      kind: "player_ability_started",
+      objectiveId: returnBeat.objectiveIds[1],
+      requiredStanceId: "stance_eavesguard",
+      requiredAbilityId: "ability_eavesguard_heavy",
+      requiredSelectionObjectiveId: workbenchChoice,
+      requiredSelectionId: "f1_choice_rib_spring_calibration",
+      prerequisiteObjectiveIds: [returnBeat.objectiveIds[0]]
+    },
+    {
+      id: "f1_trigger_return_winter_calibration_light",
+      kind: "player_ability_started",
+      objectiveId: returnBeat.objectiveIds[1],
+      requiredStanceId: "stance_flower_turn",
+      requiredAbilityId: "ability_flower_light",
+      requiredSelectionObjectiveId: workbenchChoice,
+      requiredSelectionId: "f1_choice_rib_winter_calibration",
+      prerequisiteObjectiveIds: [returnBeat.objectiveIds[0]]
+    }
+  ];
+  const authoredReturnCalibrationTriggers = combatTriggers.filter(
+    (trigger) => trigger.objectiveId === returnBeat.objectiveIds[1]
+  );
+  if (!sameValues(authoredReturnCalibrationTriggers, expectedReturnCalibrationTriggers)) {
+    fail("the return calibration must require the combat action selected at the workbench");
   }
   const combatOutcomes = contract.questCombatOutcomes;
   if (!Array.isArray(combatOutcomes) || combatOutcomes.length < 2 || combatOutcomes.length > 64) {
@@ -843,7 +952,7 @@ export function validateF1SliceContract(contract, catalog) {
     fail("the umbrella-lane combat objectives must be fully covered by combat outcomes");
   }
   const returnCombatOutcome = combatOutcomes.find(
-    (outcome) => outcome.objectiveId === returnBeat.objectiveIds[1]
+    (outcome) => outcome.objectiveId === returnBeat.objectiveIds[2]
   );
   if (returnCombatOutcome?.kind !== "all_hostiles_defeated") {
     fail("the canopy return validation must require all active hostiles defeated");
@@ -1223,7 +1332,13 @@ function questInteractionRow(interaction, index) {
 }
 
 function questCombatTriggerRow(trigger, index) {
-  return `    {${contentId(trigger.id)}, contracts::QuestCombatTriggerKind::${trigger.kind}, ${contentId(trigger.objectiveId)}, ${stableKey(trigger.requiredStanceId)}, ${stableKey(trigger.requiredAbilityId)}, std::span<const contracts::ContentId>{combat_trigger_${index}_prerequisites}},`;
+  const requiredSelectionObjective = trigger.requiredSelectionObjectiveId === null
+    ? "contracts::ContentId{}"
+    : contentId(trigger.requiredSelectionObjectiveId);
+  const requiredSelection = trigger.requiredSelectionId === null
+    ? "contracts::ContentId{}"
+    : contentId(trigger.requiredSelectionId);
+  return `    {${contentId(trigger.id)}, contracts::QuestCombatTriggerKind::${trigger.kind}, ${contentId(trigger.objectiveId)}, ${stableKey(trigger.requiredStanceId)}, ${stableKey(trigger.requiredAbilityId)}, ${requiredSelectionObjective}, ${requiredSelection}, std::span<const contracts::ContentId>{combat_trigger_${index}_prerequisites}},`;
 }
 
 function questCombatOutcomeRow(outcome) {

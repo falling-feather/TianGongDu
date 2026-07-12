@@ -398,6 +398,7 @@
       "kind": "inspect",
       "cellId": "f1_cell_rain_ferry",
       "objectiveId": "f1_objective_inspect_travel_writ",
+      "selectionId": null,
       "poseMm": { "x": -12000, "y": -1600, "height": 0, "floorLayer": 0 },
       "radiusMm": 800,
       "prerequisiteObjectiveIds": []
@@ -407,6 +408,7 @@
       "kind": "operate",
       "cellId": "f1_cell_rain_ferry",
       "objectiveId": "f1_objective_reach_ferry_gate",
+      "selectionId": null,
       "poseMm": { "x": -10450, "y": -100, "height": 0, "floorLayer": 0 },
       "radiusMm": 900,
       "prerequisiteObjectiveIds": []
@@ -416,6 +418,7 @@
       "kind": "talk",
       "cellId": "f1_cell_rain_ferry",
       "objectiveId": "f1_objective_meet_shen_yan",
+      "selectionId": null,
       "poseMm": { "x": -10500, "y": -600, "height": 0, "floorLayer": 0 },
       "radiusMm": 800,
       "prerequisiteObjectiveIds": []
@@ -425,6 +428,7 @@
       "kind": "choose",
       "cellId": "f1_cell_umbrella_lane_a",
       "objectiveId": "f1_objective_choose_lane_route",
+      "selectionId": "f1_choice_lane_canopy",
       "poseMm": { "x": -3900, "y": -100, "height": 0, "floorLayer": 0 },
       "radiusMm": 1200,
       "prerequisiteObjectiveIds": [

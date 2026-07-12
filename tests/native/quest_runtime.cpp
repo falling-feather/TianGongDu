@@ -71,6 +71,20 @@ bool expect(bool condition, std::string_view message) {
     return *value;
 }
 
+[[nodiscard]] tgd::contracts::StableContentKey selection_for_objective(
+    tgd::contracts::StableContentKey objective
+) {
+    const auto match = std::find_if(
+        definition().quest_interactions.begin(),
+        definition().quest_interactions.end(),
+        [objective](const tgd::contracts::QuestInteractionDefinition& interaction) {
+            return interaction.objective_id.key == objective &&
+                   interaction.kind == tgd::contracts::QuestInteractionKind::choose;
+        }
+    );
+    return match == definition().quest_interactions.end() ? 0 : match->selection_id.key;
+}
+
 bool test_ordering_idempotency_and_lifecycle() {
     DeterministicQuestRuntime quest;
     CollectingSink sink;
@@ -159,6 +173,7 @@ bool test_full_resolution_is_deterministic() {
                 sequence++,
                 tgd::contracts::QuestCommandType::complete_objective,
                 objective->key,
+                selection_for_objective(objective->key),
             };
             last_objective = objective->key;
             const auto left_result = left.apply(command, left_sink);
@@ -293,6 +308,7 @@ bool test_scene_interaction_ties_are_stable() {
             tgd::contracts::QuestInteractionKind::inspect,
             first.cell_id,
             first.objectives.front(),
+            {},
             shared_pose,
             1000,
         },
@@ -301,6 +317,7 @@ bool test_scene_interaction_ties_are_stable() {
             tgd::contracts::QuestInteractionKind::operate,
             first.cell_id,
             first.objectives.back(),
+            {},
             shared_pose,
             1000,
         },
@@ -541,8 +558,58 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
         quest
     );
     ok &= expect(
-        unlocked_route.found && unlocked_route.objective == route.objective_id.key,
-        "completed hostile groups unlock the authored lane choice"
+        unlocked_route.found && unlocked_route.objective == route.objective_id.key &&
+            unlocked_route.selection == route.selection_id.key,
+        "completed hostile groups unlock the authored lane choice and stable option"
+    );
+    const auto checksum_before_missing_selection = quest.snapshot().checksum;
+    ok &= expect(
+        quest.apply(
+                 {
+                     tick++,
+                     definition().player.actor,
+                     sequence++,
+                     {},
+                     unlocked_route.objective,
+                 },
+                 sink
+             )
+                .error == QuestError::invalid_selection &&
+            quest.snapshot().checksum == checksum_before_missing_selection,
+        "choice objectives reject missing selections without mutating state"
+    );
+    const auto selected = quest.apply(
+        {
+            tick++,
+            definition().player.actor,
+            sequence++,
+            {},
+            unlocked_route.objective,
+            unlocked_route.selection,
+        },
+        sink
+    );
+    ok &= expect(
+        selected.error == QuestError::none && selected.accepted && selected.stage_advanced &&
+            quest.snapshot().selection_count == 1 &&
+            quest.selected_option(unlocked_route.objective) == unlocked_route.selection,
+        "accepted choices persist one stable option and advance the beat"
+    );
+    const auto duplicate_choice = quest.apply(
+        {
+            tick++,
+            definition().player.actor,
+            sequence++,
+            {},
+            unlocked_route.objective,
+            unlocked_route.selection,
+        },
+        sink
+    );
+    ok &= expect(
+        duplicate_choice.error == QuestError::none && !duplicate_choice.accepted &&
+            quest.snapshot().selection_count == 1,
+        "repeating the same stable choice is idempotent"
     );
 
     auto invalid_actors = actors;

@@ -88,10 +88,10 @@ inline constexpr std::array<contracts::ContentId, 5> f1_cells{{
 }};
 
 inline constexpr std::array<contracts::QuestInteractionDefinition, 4> f1_quest_interactions{{
-    {contracts::content_id("f1_interaction_travel_writ"), contracts::QuestInteractionKind::inspect, contracts::content_id("f1_cell_rain_ferry"), contracts::content_id("f1_objective_inspect_travel_writ"), {-12000, -1600, 0, 0}, 800, std::span<const contracts::ContentId>{}},
-    {contracts::content_id("f1_interaction_ferry_gate"), contracts::QuestInteractionKind::operate, contracts::content_id("f1_cell_rain_ferry"), contracts::content_id("f1_objective_reach_ferry_gate"), {-10450, -100, 0, 0}, 900, std::span<const contracts::ContentId>{}},
-    {contracts::content_id("f1_interaction_meet_shen_yan"), contracts::QuestInteractionKind::talk, contracts::content_id("f1_cell_rain_ferry"), contracts::content_id("f1_objective_meet_shen_yan"), {-10500, -600, 0, 0}, 800, std::span<const contracts::ContentId>{}},
-    {contracts::content_id("f1_interaction_choose_lane_route"), contracts::QuestInteractionKind::choose, contracts::content_id("f1_cell_umbrella_lane_a"), contracts::content_id("f1_objective_choose_lane_route"), {-3900, -100, 0, 0}, 1200, std::span<const contracts::ContentId>{interaction_3_prerequisites}},
+    {contracts::content_id("f1_interaction_travel_writ"), contracts::QuestInteractionKind::inspect, contracts::content_id("f1_cell_rain_ferry"), contracts::content_id("f1_objective_inspect_travel_writ"), contracts::ContentId{}, {-12000, -1600, 0, 0}, 800, std::span<const contracts::ContentId>{}},
+    {contracts::content_id("f1_interaction_ferry_gate"), contracts::QuestInteractionKind::operate, contracts::content_id("f1_cell_rain_ferry"), contracts::content_id("f1_objective_reach_ferry_gate"), contracts::ContentId{}, {-10450, -100, 0, 0}, 900, std::span<const contracts::ContentId>{}},
+    {contracts::content_id("f1_interaction_meet_shen_yan"), contracts::QuestInteractionKind::talk, contracts::content_id("f1_cell_rain_ferry"), contracts::content_id("f1_objective_meet_shen_yan"), contracts::ContentId{}, {-10500, -600, 0, 0}, 800, std::span<const contracts::ContentId>{}},
+    {contracts::content_id("f1_interaction_choose_lane_route"), contracts::QuestInteractionKind::choose, contracts::content_id("f1_cell_umbrella_lane_a"), contracts::content_id("f1_objective_choose_lane_route"), contracts::content_id("f1_choice_lane_canopy"), {-3900, -100, 0, 0}, 1200, std::span<const contracts::ContentId>{interaction_3_prerequisites}},
 }};
 
 inline constexpr std::array<contracts::QuestCombatTriggerDefinition, 2> f1_quest_combat_triggers{{

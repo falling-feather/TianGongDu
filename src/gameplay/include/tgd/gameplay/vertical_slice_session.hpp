@@ -31,6 +31,8 @@ enum class VerticalSliceError : std::uint8_t {
     quest_runtime_error,
     unknown_objective,
     objective_not_active,
+    invalid_selection,
+    selection_conflict,
 };
 
 struct VerticalSliceSnapshot final {
@@ -43,6 +45,7 @@ struct VerticalSliceSnapshot final {
     std::uint16_t beat_count{};
     std::uint16_t completed_objectives{};
     std::uint16_t required_objectives{};
+    std::uint16_t selected_choices{};
     std::uint64_t simulation_ticks{};
     bool resolved{};
     std::uint64_t checksum{};
@@ -88,6 +91,15 @@ class VerticalSliceSession final {
         contracts::StableContentKey objective,
         IQuestEventSink& sink
     ) noexcept;
+    [[nodiscard]] CompleteObjectiveResult complete_objective(
+        contracts::StableContentKey objective,
+        contracts::StableContentKey selection
+    ) noexcept;
+    [[nodiscard]] CompleteObjectiveResult complete_objective(
+        contracts::StableContentKey objective,
+        contracts::StableContentKey selection,
+        IQuestEventSink& sink
+    ) noexcept;
 
     [[nodiscard]] VerticalSliceLifecycle lifecycle() const noexcept;
     [[nodiscard]] std::uint32_t generation() const noexcept;
@@ -98,6 +110,9 @@ class VerticalSliceSession final {
     [[nodiscard]] const contracts::QuestSnapshot& quest_snapshot() const noexcept;
     [[nodiscard]] const IQuestRuntime& quest_runtime() const noexcept;
     [[nodiscard]] QuestObjectiveState objective_state(
+        contracts::StableContentKey objective
+    ) const noexcept;
+    [[nodiscard]] contracts::StableContentKey selected_option(
         contracts::StableContentKey objective
     ) const noexcept;
 

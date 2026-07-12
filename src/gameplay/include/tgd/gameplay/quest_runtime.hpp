@@ -31,6 +31,8 @@ enum class QuestError : std::uint8_t {
     stale_command_sequence,
     unknown_objective,
     objective_not_active,
+    invalid_selection,
+    selection_conflict,
 };
 
 enum class QuestObjectiveState : std::uint8_t {
@@ -72,6 +74,9 @@ class IQuestRuntime {
     [[nodiscard]] virtual QuestObjectiveState objective_state(
         contracts::StableContentKey objective
     ) const noexcept = 0;
+    [[nodiscard]] virtual contracts::StableContentKey selected_option(
+        contracts::StableContentKey objective
+    ) const noexcept = 0;
     [[nodiscard]] virtual const contracts::QuestSnapshot& snapshot() const noexcept = 0;
 };
 
@@ -93,6 +98,7 @@ struct QuestInteractionResult final {
     bool found{};
     contracts::StableContentKey interaction{};
     contracts::StableContentKey objective{};
+    contracts::StableContentKey selection{};
     contracts::QuestInteractionKind kind{contracts::QuestInteractionKind::inspect};
 };
 
@@ -204,6 +210,9 @@ class DeterministicQuestRuntime final : public IQuestRuntime {
     [[nodiscard]] QuestObjectiveState objective_state(
         contracts::StableContentKey objective
     ) const noexcept override;
+    [[nodiscard]] contracts::StableContentKey selected_option(
+        contracts::StableContentKey objective
+    ) const noexcept override;
     [[nodiscard]] const contracts::QuestSnapshot& snapshot() const noexcept override;
 
     [[nodiscard]] QuestLifecycle lifecycle() const noexcept;
@@ -218,6 +227,13 @@ class DeterministicQuestRuntime final : public IQuestRuntime {
     [[nodiscard]] bool is_completed(contracts::StableContentKey objective) const noexcept;
     [[nodiscard]] std::size_t completed_in_stage(std::size_t stage_index) const noexcept;
     [[nodiscard]] bool active_stage_complete() const noexcept;
+    [[nodiscard]] bool objective_requires_selection(
+        contracts::StableContentKey objective
+    ) const noexcept;
+    [[nodiscard]] bool valid_selection(
+        contracts::StableContentKey objective,
+        contracts::StableContentKey selection
+    ) const noexcept;
     void refresh_snapshot() noexcept;
     void update_checksum() noexcept;
 
@@ -227,6 +243,9 @@ class DeterministicQuestRuntime final : public IQuestRuntime {
     std::size_t stage_index_{};
     std::array<contracts::StableContentKey, objective_capacity> completed_objectives_{};
     std::size_t completed_objective_count_{};
+    std::array<contracts::StableContentKey, objective_capacity> selected_objectives_{};
+    std::array<contracts::StableContentKey, objective_capacity> selected_options_{};
+    std::size_t selection_count_{};
     contracts::CommandSequence last_command_sequence_{};
     contracts::QuestSnapshot snapshot_{};
     std::array<contracts::QuestEvent, event_capacity> events_{};

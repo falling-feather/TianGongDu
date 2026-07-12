@@ -218,11 +218,27 @@ CompleteObjectiveResult VerticalSliceSession::complete_objective(
     contracts::StableContentKey objective
 ) noexcept {
     DiscardingQuestEventSink sink;
-    return complete_objective(objective, sink);
+    return complete_objective(objective, 0, sink);
 }
 
 CompleteObjectiveResult VerticalSliceSession::complete_objective(
     contracts::StableContentKey objective,
+    IQuestEventSink& sink
+) noexcept {
+    return complete_objective(objective, 0, sink);
+}
+
+CompleteObjectiveResult VerticalSliceSession::complete_objective(
+    contracts::StableContentKey objective,
+    contracts::StableContentKey selection
+) noexcept {
+    DiscardingQuestEventSink sink;
+    return complete_objective(objective, selection, sink);
+}
+
+CompleteObjectiveResult VerticalSliceSession::complete_objective(
+    contracts::StableContentKey objective,
+    contracts::StableContentKey selection,
     IQuestEventSink& sink
 ) noexcept {
     if (lifecycle_ != VerticalSliceLifecycle::running &&
@@ -242,6 +258,7 @@ CompleteObjectiveResult VerticalSliceSession::complete_objective(
         quest_command_sequence_,
         contracts::QuestCommandType::complete_objective,
         objective,
+        selection,
     };
     const auto result = quest_.apply(command, sink);
     if (result.error == QuestError::unknown_objective) {
@@ -249,6 +266,12 @@ CompleteObjectiveResult VerticalSliceSession::complete_objective(
     }
     if (result.error == QuestError::objective_not_active) {
         return {VerticalSliceError::objective_not_active};
+    }
+    if (result.error == QuestError::invalid_selection) {
+        return {VerticalSliceError::invalid_selection};
+    }
+    if (result.error == QuestError::selection_conflict) {
+        return {VerticalSliceError::selection_conflict};
     }
     if (result.error != QuestError::none) {
         return {VerticalSliceError::quest_runtime_error};
@@ -307,6 +330,12 @@ QuestObjectiveState VerticalSliceSession::objective_state(
     contracts::StableContentKey objective
 ) const noexcept {
     return quest_.objective_state(objective);
+}
+
+contracts::StableContentKey VerticalSliceSession::selected_option(
+    contracts::StableContentKey objective
+) const noexcept {
+    return quest_.selected_option(objective);
 }
 
 bool VerticalSliceSession::valid_definition(
@@ -370,6 +399,7 @@ void VerticalSliceSession::refresh_snapshot() noexcept {
     current_snapshot_.beat_count = quest_snapshot.stage_count;
     current_snapshot_.completed_objectives = quest_snapshot.completed_in_stage;
     current_snapshot_.required_objectives = quest_snapshot.required_in_stage;
+    current_snapshot_.selected_choices = quest_snapshot.selection_count;
     current_snapshot_.simulation_ticks = simulation_ticks_;
     current_snapshot_.resolved = quest_snapshot.resolved;
     update_checksum();
@@ -388,6 +418,7 @@ void VerticalSliceSession::update_checksum() noexcept {
     hash_integer(hash, current_snapshot_.beat_index);
     hash_integer(hash, current_snapshot_.completed_objectives);
     hash_integer(hash, current_snapshot_.required_objectives);
+    hash_integer(hash, current_snapshot_.selected_choices);
     hash_integer(hash, current_snapshot_.simulation_ticks);
     hash_byte(hash, current_snapshot_.resolved ? 1U : 0U);
     hash_integer(hash, quest_.snapshot().checksum);

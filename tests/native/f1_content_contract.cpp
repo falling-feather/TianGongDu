@@ -74,6 +74,8 @@ int main() {
     ok &= expect(
         route_interaction.objective_id.key ==
                 tgd::contracts::stable_content_key("f1_objective_choose_lane_route") &&
+            route_interaction.selection_id.key ==
+                tgd::contracts::stable_content_key("f1_choice_lane_canopy") &&
             route_interaction.prerequisite_objectives.size() == 2 &&
             definition->quest_combat_outcomes.size() == 2,
         "the lane choice waits for two generated hostile-group outcomes"

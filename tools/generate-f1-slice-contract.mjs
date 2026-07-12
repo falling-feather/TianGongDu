@@ -128,6 +128,7 @@ export function validateF1SliceContract(contract, catalog) {
     fail("quest interactions must contain 2..64 definitions");
   }
   const interactionKinds = new Set(["inspect", "operate", "talk", "choose"]);
+  const interactionsByObjective = new Map();
   for (const interaction of interactions) {
     if (!interactionKinds.has(interaction.kind)) {
       fail(`${interaction.id} has an unsupported interaction kind`);
@@ -138,6 +139,16 @@ export function validateF1SliceContract(contract, catalog) {
     if (!objectiveIds.includes(interaction.objectiveId)) {
       fail(`${interaction.id} references an unknown objective`);
     }
+    if (interaction.kind === "choose") {
+      if (typeof interaction.selectionId !== "string" || interaction.selectionId.length === 0) {
+        fail(`${interaction.id} choice interaction requires a selection id`);
+      }
+    } else if (interaction.selectionId !== null) {
+      fail(`${interaction.id} non-choice interaction cannot declare a selection id`);
+    }
+    const objectiveInteractions = interactionsByObjective.get(interaction.objectiveId) ?? [];
+    objectiveInteractions.push(interaction);
+    interactionsByObjective.set(interaction.objectiveId, objectiveInteractions);
     if (!Array.isArray(interaction.prerequisiteObjectiveIds) ||
         interaction.prerequisiteObjectiveIds.length > 8) {
       fail(`${interaction.id} has invalid prerequisite objectives`);
@@ -159,10 +170,16 @@ export function validateF1SliceContract(contract, catalog) {
     }
   }
   assertUnique(interactions.map((interaction) => interaction.id), "quest interaction id");
-  assertUnique(
-    interactions.map((interaction) => interaction.objectiveId),
-    "quest interaction objective"
-  );
+  for (const [objective, objectiveInteractions] of interactionsByObjective) {
+    if (objectiveInteractions.length === 1) continue;
+    if (objectiveInteractions.some((interaction) => interaction.kind !== "choose")) {
+      fail(`duplicate non-choice quest interaction objective: ${objective}`);
+    }
+    assertUnique(
+      objectiveInteractions.map((interaction) => interaction.selectionId),
+      `${objective} quest choice selection`
+    );
+  }
   const firstBeatObjectives = new Set(contract.beats[0].objectiveIds);
   const firstBeatInteractionObjectives = interactions
     .filter((interaction) => firstBeatObjectives.has(interaction.objectiveId))
@@ -178,6 +195,7 @@ export function validateF1SliceContract(contract, catalog) {
   );
   if (
     laneRouteInteraction?.kind !== "choose" ||
+    laneRouteInteraction.selectionId !== "f1_choice_lane_canopy" ||
     !sameValues(
       laneRouteInteraction.prerequisiteObjectiveIds,
       contract.beats[2].objectiveIds.slice(0, 2)
@@ -494,6 +512,7 @@ export function validateF1SliceContract(contract, catalog) {
     ...beatIds,
     ...objectiveIds,
     ...interactions.map((interaction) => interaction.id),
+    ...interactions.map((interaction) => interaction.selectionId).filter(Boolean),
     ...combatTriggers.map((trigger) => trigger.id),
     ...combatOutcomes.map((outcome) => outcome.id),
     combat.id,
@@ -541,7 +560,8 @@ function questInteractionRow(interaction, index) {
   const prerequisites = interaction.prerequisiteObjectiveIds.length === 0
     ? "std::span<const contracts::ContentId>{}"
     : `std::span<const contracts::ContentId>{interaction_${index}_prerequisites}`;
-  return `    {${contentId(interaction.id)}, contracts::QuestInteractionKind::${interaction.kind}, ${contentId(interaction.cellId)}, ${contentId(interaction.objectiveId)}, {${pose.x}, ${pose.y}, ${pose.height}, ${pose.floorLayer}}, ${interaction.radiusMm}, ${prerequisites}},`;
+  const selection = interaction.selectionId === null ? "contracts::ContentId{}" : contentId(interaction.selectionId);
+  return `    {${contentId(interaction.id)}, contracts::QuestInteractionKind::${interaction.kind}, ${contentId(interaction.cellId)}, ${contentId(interaction.objectiveId)}, ${selection}, {${pose.x}, ${pose.y}, ${pose.height}, ${pose.floorLayer}}, ${interaction.radiusMm}, ${prerequisites}},`;
 }
 
 function questCombatTriggerRow(trigger) {

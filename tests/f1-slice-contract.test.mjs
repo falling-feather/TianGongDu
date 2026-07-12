@@ -62,6 +62,12 @@ test("F1 one-hour contract and generated C++ stay synchronized", async () => {
     ).prerequisiteObjectiveIds,
     contract.beats[2].objectiveIds.slice(0, 2)
   );
+  assert.equal(
+    contract.questInteractions.find(
+      (interaction) => interaction.objectiveId === "f1_objective_choose_lane_route"
+    ).selectionId,
+    "f1_choice_lane_canopy"
+  );
   assert(
     contract.combatBootstrap.actors.every((actor) =>
       Object.values(actor.recovery).every((value) => Number.isInteger(value) && value > 0)
@@ -79,7 +85,8 @@ test("F1 stable content IDs have unique 64-bit keys", async () => {
     ...contract.beats.flatMap((beat) => [beat.id, ...beat.objectiveIds]),
     ...contract.questInteractions.map((interaction) => interaction.id),
     ...contract.questCombatTriggers.map((trigger) => trigger.id),
-    ...contract.questCombatOutcomes.map((outcome) => outcome.id)
+    ...contract.questCombatOutcomes.map((outcome) => outcome.id),
+    ...contract.questInteractions.map((interaction) => interaction.selectionId).filter(Boolean)
   ];
   assert.equal(new Set(ids.map((id) => fnv1a64(id))).size, ids.length);
 });
@@ -97,7 +104,7 @@ test("F1 opening objectives require valid content-driven scene interactions", as
     duplicateObjective.questInteractions[0].objectiveId;
   assert.throws(
     () => validateF1SliceContract(duplicateObjective, catalog),
-    /duplicate quest interaction objective/
+    /duplicate non-choice quest interaction objective/
   );
 
   const futurePrerequisite = structuredClone(await loadF1SliceContract());
@@ -107,6 +114,13 @@ test("F1 opening objectives require valid content-driven scene interactions", as
   assert.throws(
     () => validateF1SliceContract(futurePrerequisite, catalog),
     /invalid prerequisite objective/
+  );
+
+  const missingSelection = structuredClone(await loadF1SliceContract());
+  missingSelection.questInteractions.at(-1).selectionId = null;
+  assert.throws(
+    () => validateF1SliceContract(missingSelection, catalog),
+    /requires a selection id/
   );
 });
 

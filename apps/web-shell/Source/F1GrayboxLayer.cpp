@@ -651,7 +651,11 @@ void F1GrayboxLayer::simulateTick() noexcept {
                 combat_event_label_->setString("NO ACTIVE QUEST INTERACTION IN RANGE");
             }
         } else {
-            const auto completed = session_.complete_objective(interaction.objective, *this);
+            const auto completed = session_.complete_objective(
+                interaction.objective,
+                interaction.selection,
+                *this
+            );
             if (completed.error != tgd::gameplay::VerticalSliceError::none) {
                 if (combat_event_label_ != nullptr) {
                     combat_event_label_->setString("OBJECTIVE REJECTED / QUEST STATE DRIFT");

@@ -60,6 +60,20 @@ class CollectingQuestSink final : public tgd::gameplay::IQuestEventSink {
     return *value;
 }
 
+[[nodiscard]] tgd::contracts::StableContentKey selection_for_objective(
+    tgd::contracts::StableContentKey objective
+) {
+    const auto match = std::find_if(
+        definition().quest_interactions.begin(),
+        definition().quest_interactions.end(),
+        [objective](const tgd::contracts::QuestInteractionDefinition& interaction) {
+            return interaction.objective_id.key == objective &&
+                   interaction.kind == tgd::contracts::QuestInteractionKind::choose;
+        }
+    );
+    return match == definition().quest_interactions.end() ? 0 : match->selection_id.key;
+}
+
 bool test_objective_driven_progression_and_lifecycle() {
     VerticalSliceSession session;
     bool ok = session.initialize(definition(), empty_world()) == VerticalSliceError::none;
@@ -111,9 +125,14 @@ bool test_objective_driven_progression_and_lifecycle() {
         const auto& beat = definition().beats[beat_index];
         for (auto objective = beat.objectives.rbegin(); objective != beat.objectives.rend();
              ++objective) {
-            const auto result = session.complete_objective(objective->key, quest_sink);
+            const auto selection = selection_for_objective(objective->key);
+            const auto result = session.complete_objective(
+                objective->key,
+                selection,
+                quest_sink
+            );
             ok &= expect(result.error == VerticalSliceError::none && result.accepted, "objective is accepted");
-            const auto duplicate = session.complete_objective(objective->key);
+            const auto duplicate = session.complete_objective(objective->key, selection);
             ok &= expect(
                 duplicate.error == VerticalSliceError::none && !duplicate.accepted,
                 "objective completion is idempotent"

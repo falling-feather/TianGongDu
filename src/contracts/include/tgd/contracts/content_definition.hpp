@@ -71,6 +71,7 @@ struct QuestInteractionDefinition final {
     QuestInteractionKind kind{QuestInteractionKind::inspect};
     ContentId cell_id{};
     ContentId objective_id{};
+    ContentId selection_id{};
     GroundPoseMm pose{};
     std::int32_t radius_mm{};
     std::span<const ContentId> prerequisite_objectives{};

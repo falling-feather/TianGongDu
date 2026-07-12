@@ -23,6 +23,7 @@ struct QuestCommand final {
     CommandSequence sequence{};
     QuestCommandType type{QuestCommandType::complete_objective};
     StableContentKey objective{};
+    StableContentKey selection{};
 };
 
 struct QuestEvent final {
@@ -32,6 +33,7 @@ struct QuestEvent final {
     StableContentKey quest{};
     StableContentKey stage{};
     StableContentKey objective{};
+    StableContentKey selection{};
 };
 
 struct QuestSnapshot final {
@@ -43,6 +45,7 @@ struct QuestSnapshot final {
     std::uint16_t completed_in_stage{};
     std::uint16_t required_in_stage{};
     std::uint16_t completed_total{};
+    std::uint16_t selection_count{};
     bool resolved{};
     std::uint64_t checksum{};
 };

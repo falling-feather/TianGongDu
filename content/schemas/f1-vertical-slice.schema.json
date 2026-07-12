@@ -366,6 +366,7 @@
         "kind",
         "cellId",
         "objectiveId",
+        "selectionId",
         "poseMm",
         "radiusMm",
         "prerequisiteObjectiveIds"
@@ -375,6 +376,12 @@
         "kind": { "enum": ["inspect", "operate", "talk", "choose"] },
         "cellId": { "$ref": "#/$defs/id" },
         "objectiveId": { "$ref": "#/$defs/id" },
+        "selectionId": {
+          "anyOf": [
+            { "$ref": "#/$defs/id" },
+            { "type": "null" }
+          ]
+        },
         "poseMm": { "$ref": "#/$defs/pose" },
         "radiusMm": { "type": "integer", "minimum": 1, "maximum": 10000 },
         "prerequisiteObjectiveIds": {

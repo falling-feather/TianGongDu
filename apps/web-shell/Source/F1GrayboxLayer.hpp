@@ -47,7 +47,7 @@ class F1GrayboxLayer final :
         tgd::contracts::StableContentKey stance{};
     };
 
-    static constexpr std::size_t hostile_capacity = 3;
+    static constexpr std::size_t hostile_capacity = 4;
     static constexpr std::size_t combat_intent_capacity = 8;
     static constexpr std::size_t quest_marker_capacity =
         tgd::gameplay::DeterministicQuestInteractionResolver::interaction_capacity;
@@ -70,6 +70,8 @@ class F1GrayboxLayer final :
     void updateInteractKey(bool pressed) noexcept;
     void submitQuestCombatSignal(const tgd::contracts::CombatEvent& event) noexcept;
     void submitQuestCombatOutcome(const tgd::contracts::CombatEvent& event) noexcept;
+    void submitQuestBossPhase() noexcept;
+    void syncBossStanceForQuest() noexcept;
     void submitAxisState() noexcept;
     void clearHeldInput(
         tgd::contracts::InputClearReason reason,
@@ -101,6 +103,7 @@ class F1GrayboxLayer final :
     tgd::gameplay::DeterministicQuestInteractionResolver quest_interactions_{};
     tgd::gameplay::DeterministicQuestCombatTriggerResolver quest_combat_triggers_{};
     tgd::gameplay::DeterministicQuestCombatOutcomeResolver quest_combat_outcomes_{};
+    tgd::gameplay::DeterministicQuestBossPhaseResolver quest_boss_phases_{};
     tgd::gameplay::SessionInputState input_{};
     tgd::contracts::PlatformSequence platform_sequence_{};
     tgd::contracts::CommandSequence command_sequence_{1};
@@ -120,10 +123,12 @@ class F1GrayboxLayer final :
     std::uint32_t retry_count_{};
     tgd::contracts::TickIndex incoming_attack_tick_{};
     tgd::contracts::StableActorKey incoming_attack_source_{};
+    tgd::contracts::StableContentKey pending_boss_stance_{};
     float tick_accumulator_{};
 
     ax::Node* world_layer_{};
     ax::Node* player_node_{};
+    ax::DrawNode* boss_phase_aura_{};
     std::array<ax::Node*, hostile_capacity> hostile_nodes_{};
     std::array<tgd::contracts::StableActorKey, hostile_capacity> hostile_actor_keys_{};
     std::array<ax::Node*, quest_marker_capacity> quest_marker_nodes_{};

@@ -1242,12 +1242,83 @@ async function runBrowser(target, origin) {
     returnState = await page.evaluate(() => window.__tgdTest.getF1State());
     assert.equal(returnState.questCompletedObjectives, 0);
     assert.equal(returnState.questRequiredObjectives, 4);
-    assert.equal(returnState.activeHostiles, 0);
+    assert.equal(returnState.activeHostiles, 1);
+    const bossSpringPath = resolve(reportDirectory, `${target}-boss-spring-phase.png`);
+    const bossWinterPath = resolve(reportDirectory, `${target}-boss-winter-phase.png`);
+    const bossCompletePath = resolve(reportDirectory, `${target}-four-seasons-wraith-complete.png`);
     await captureRenderedFrame(
       page,
       canvas,
       resolve(reportDirectory, `${target}-canopy-return-complete.png`),
       `${target} canopy return beat complete`
+    );
+    await captureRenderedFrame(
+      page,
+      canvas,
+      bossSpringPath,
+      `${target} four-seasons wraith spring phase`
+    );
+    await page.keyboard.press("2");
+    await page.waitForTimeout(100);
+
+    let bossState = returnState;
+    let bossReadyToAttack = false;
+    let bossSawTelegraph = false;
+    let bossWinterCaptured = false;
+    let bossMaxCompletedObjectives = 0;
+    const bossDeadline = Date.now() + 90_000;
+    while (bossState.questBeatIndex === 5 && Date.now() < bossDeadline) {
+      assert.equal(
+        bossState.playerActive,
+        true,
+        `${target} player fell during the four-seasons wraith: ${JSON.stringify(bossState)}`
+      );
+      bossMaxCompletedObjectives = Math.max(
+        bossMaxCompletedObjectives,
+        bossState.questCompletedObjectives
+      );
+      if (bossState.questCompletedObjectives >= 3 && !bossWinterCaptured) {
+        await captureRenderedFrame(
+          page,
+          canvas,
+          bossWinterPath,
+          `${target} four-seasons wraith winter phase`
+        );
+        bossWinterCaptured = true;
+      }
+      if (bossState.incomingAttackTicks > 0) {
+        bossSawTelegraph = true;
+        if (bossState.incomingAttackTicks <= 10 && !bossState.playerBusy) {
+          await page.keyboard.press("c");
+          bossReadyToAttack = true;
+        }
+      } else if (bossReadyToAttack && !bossState.playerBusy) {
+        await page.keyboard.press("j");
+        bossReadyToAttack = false;
+      }
+      await page.waitForTimeout(40);
+      bossState = await page.evaluate(() => window.__tgdTest.getF1State());
+    }
+    assert.equal(bossSawTelegraph, true, `${target} boss exposed no readable telegraph.`);
+    assert.equal(
+      bossWinterCaptured,
+      true,
+      `${target} boss never exposed the authored winter phase.`
+    );
+    assert.equal(
+      bossMaxCompletedObjectives,
+      3,
+      `${target} boss did not progress through spring, summer, and autumn in order.`
+    );
+    assert.equal(bossState.questBeatIndex, 6, `${target} boss did not unlock resolution.`);
+    assert.equal(bossState.questCompletedObjectives, 0);
+    assert.equal(bossState.questRequiredObjectives, 2);
+    assert.equal(bossState.activeHostiles, 0);
+    await captureRenderedFrame(
+      page,
+      canvas,
+      bossCompletePath,
+      `${target} four-seasons wraith complete`
     );
     await page.reload({ waitUntil: "domcontentloaded", timeout: 45_000 });
     await waitForText(page, status, "宿主已就绪", 45_000);
@@ -1375,6 +1446,8 @@ async function runBrowser(target, origin) {
       retryState,
       workbenchState,
       returnState,
+      bossState,
+      bossMaxCompletedObjectives,
       retryFrameComparison,
       frameComparison,
       screenshots: [
@@ -1386,6 +1459,9 @@ async function runBrowser(target, origin) {
           resolve(reportDirectory, `${target}-workbench-investigation-complete.png`)
         ),
         projectPath(resolve(reportDirectory, `${target}-canopy-return-complete.png`)),
+        projectPath(bossSpringPath),
+        projectPath(bossWinterPath),
+        projectPath(bossCompletePath),
         projectPath(combatReadyPath),
         projectPath(combatActionPath),
         projectPath(combatHitPath),

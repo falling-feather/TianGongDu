@@ -46,6 +46,76 @@ inline constexpr std::array<std::string_view, 7> quest_beat_labels{
     };
 }
 
+[[nodiscard]] ax::Color4F bossPhaseColor(
+    tgd::contracts::StableContentKey stance,
+    std::uint8_t alpha
+) noexcept {
+    if (stance == tgd::contracts::stable_content_key("stance_wraith_summer")) {
+        return color(231, 111, 58, alpha);
+    }
+    if (stance == tgd::contracts::stable_content_key("stance_wraith_autumn")) {
+        return color(220, 169, 72, alpha);
+    }
+    if (stance == tgd::contracts::stable_content_key("stance_wraith_winter")) {
+        return color(112, 191, 218, alpha);
+    }
+    return color(111, 199, 143, alpha);
+}
+
+[[nodiscard]] std::string_view bossPhaseName(
+    tgd::contracts::StableContentKey stance
+) noexcept {
+    if (stance == tgd::contracts::stable_content_key("stance_wraith_summer")) {
+        return "SUMMER";
+    }
+    if (stance == tgd::contracts::stable_content_key("stance_wraith_autumn")) {
+        return "AUTUMN";
+    }
+    if (stance == tgd::contracts::stable_content_key("stance_wraith_winter")) {
+        return "WINTER";
+    }
+    return "SPRING";
+}
+
+void drawBossPhaseAura(
+    ax::DrawNode* aura,
+    tgd::contracts::StableContentKey stance,
+    std::int32_t health,
+    std::int32_t health_max
+) {
+    if (aura == nullptr) {
+        return;
+    }
+    aura->clear();
+    const auto ratio = health_max > 0
+                           ? static_cast<float>(health) / static_cast<float>(health_max)
+                           : 0.0F;
+    const auto radius = 84.0F + 18.0F * std::clamp(ratio, 0.0F, 1.0F);
+    aura->drawSolidCircle({0.0F, 72.0F}, radius, 0.0F, 40, bossPhaseColor(stance, 28));
+    aura->drawCircle(
+        {0.0F, 72.0F},
+        radius,
+        0.0F,
+        40,
+        false,
+        1.0F,
+        1.0F,
+        bossPhaseColor(stance, 205),
+        3.0F
+    );
+    aura->drawCircle(
+        {0.0F, 72.0F},
+        radius - 12.0F,
+        0.0F,
+        40,
+        false,
+        1.0F,
+        1.0F,
+        bossPhaseColor(stance, 92),
+        2.0F
+    );
+}
+
 void solidPolygon(
     ax::DrawNode* draw,
     std::initializer_list<ax::Vec2> points,
@@ -162,8 +232,13 @@ void solidPolygon(
     return node;
 }
 
-[[nodiscard]] ax::Node* bossVisual() {
+[[nodiscard]] ax::Node* bossVisual(ax::DrawNode** aura_out) {
     auto* node = ax::Node::create();
+    auto* aura = ax::DrawNode::create();
+    node->addChild(aura, -1);
+    if (aura_out != nullptr) {
+        *aura_out = aura;
+    }
     auto* draw = ax::DrawNode::create();
     draw->drawSolidCircle({0.0F, -5.0F}, 38.0F, 0.0F, 24, 1.6F, 0.35F, color(2, 7, 10, 130));
     solidPolygon(
@@ -398,6 +473,8 @@ bool F1GrayboxLayer::init() {
             tgd::gameplay::QuestCombatTriggerError::none ||
         quest_combat_outcomes_.initialize(definition_->quest_combat_outcomes) !=
             tgd::gameplay::QuestCombatOutcomeError::none ||
+        quest_boss_phases_.initialize(definition_->quest_boss_phases) !=
+            tgd::gameplay::QuestBossPhaseError::none ||
         combat_.initialize(combat_definition_->actors, combat_definition_->abilities) !=
             tgd::gameplay::CombatError::none ||
         combat_.start() != tgd::gameplay::CombatError::none ||
@@ -596,7 +673,9 @@ void F1GrayboxLayer::createActors() {
             continue;
         }
         ax::Node* visual = nullptr;
-        if (actor.archetype_id.key ==
+        if (actor.archetype_id.key == definition_->boss_id.key) {
+            visual = bossVisual(&boss_phase_aura_);
+        } else if (actor.archetype_id.key ==
             tgd::contracts::stable_content_key("jn_enemy_faded_paper_egret")) {
             visual = paperEgretVisual();
         } else {
@@ -607,7 +686,6 @@ void F1GrayboxLayer::createActors() {
         hostile_actor_keys_[hostile_index] = actor.actor;
         ++hostile_index;
     }
-    place(bossVisual(), {start.x + 16'000, start.y + 3'500, 0, 0});
 
     auto* evidence = ax::DrawNode::create();
     evidence->drawSolidCircle({0.0F, 0.0F}, 11.0F, 0.0F, 24, color(101, 214, 191, 210));
@@ -648,7 +726,7 @@ void F1GrayboxLayer::createHud() {
     addChild(controls, 1001);
 
     auto* state = label(
-        "MOVE / COMBAT / QUEST INTERACTION: LIVE | LATER BEATS / FINAL ASSETS: RESERVED",
+        "BEATS 1-6: LIVE | RESOLUTION / FINAL ASSETS: RESERVED",
         12.0F,
         ax::Color4B(151, 159, 151, 255)
     );
@@ -879,7 +957,19 @@ void F1GrayboxLayer::updateCombatPresentation() noexcept {
         node->setVisible(snapshot->active);
         node->setPosition(project(snapshot->pose));
         node->setLocalZOrder(depthOrder(node->getPositionY()));
-        node->setScale(1.0F + static_cast<float>(hostile_flash_ticks_[node_index]) * 0.018F);
+        const bool boss = snapshot->actor == 201;
+        node->setScale(
+            (boss ? 1.18F : 1.0F) +
+            static_cast<float>(hostile_flash_ticks_[node_index]) * 0.018F
+        );
+        if (boss && snapshot->active) {
+            drawBossPhaseAura(
+                boss_phase_aura_,
+                snapshot->stance,
+                snapshot->resources.health,
+                snapshot->resources.health_max
+            );
+        }
     }
 }
 
@@ -995,16 +1085,26 @@ void F1GrayboxLayer::publish(
             player_defeated_ = false;
             retry_requested_ = false;
         }
+        if (event.type == tgd::contracts::CombatEventType::stance_changed &&
+            event.source == 201) {
+            pending_boss_stance_ = 0;
+        }
         if (combat_event_label_ == nullptr) {
             continue;
         }
         switch (event.type) {
             case tgd::contracts::CombatEventType::stance_changed:
-                combat_event_label_->setString(
-                    event.ability == tgd::contracts::stable_content_key("stance_flower_turn")
-                        ? "STANCE: FLOWER TURN"
-                        : "STANCE: EAVESGUARD"
-                );
+                if (event.source == 201) {
+                    combat_event_label_->setString(
+                        "WRAITH PHASE: " + std::string{bossPhaseName(event.ability)}
+                    );
+                } else {
+                    combat_event_label_->setString(
+                        event.ability == tgd::contracts::stable_content_key("stance_flower_turn")
+                            ? "STANCE: FLOWER TURN"
+                            : "STANCE: EAVESGUARD"
+                    );
+                }
                 break;
             case tgd::contracts::CombatEventType::guard_changed:
                 combat_event_label_->setString(event.value != 0 ? "GUARD HELD" : "GUARD RELEASED");
@@ -1051,6 +1151,7 @@ void F1GrayboxLayer::publish(
                 break;
         }
     }
+    submitQuestBossPhase();
 }
 
 void F1GrayboxLayer::publish(
@@ -1074,6 +1175,22 @@ void F1GrayboxLayer::publish(
                                                   "f1_objective_review_shared_ledger"
                                               )) {
                     combat_event_label_->setString("SHARED LEDGER REVIEWED / CALIBRATION UNLOCKED");
+                } else if (event.objective == tgd::contracts::stable_content_key(
+                                                  "f1_objective_survive_spring_phase"
+                                              )) {
+                    combat_event_label_->setString("SPRING SEAL BROKEN / SUMMER PHASE RISING");
+                } else if (event.objective == tgd::contracts::stable_content_key(
+                                                  "f1_objective_survive_summer_phase"
+                                              )) {
+                    combat_event_label_->setString("SUMMER SEAL BROKEN / AUTUMN PHASE RISING");
+                } else if (event.objective == tgd::contracts::stable_content_key(
+                                                  "f1_objective_survive_autumn_phase"
+                                              )) {
+                    combat_event_label_->setString("AUTUMN SEAL BROKEN / WINTER PHASE RISING");
+                } else if (event.objective == tgd::contracts::stable_content_key(
+                                                  "f1_objective_survive_winter_phase"
+                                              )) {
+                    combat_event_label_->setString("WINTER SEAL BROKEN / WRAITH DEFEATED");
                 } else {
                     combat_event_label_->setString("OBJECTIVE COMPLETE / QUEST STATE COMMITTED");
                 }
@@ -1182,6 +1299,46 @@ void F1GrayboxLayer::submitQuestCombatOutcome(
             combat_event_label_ != nullptr) {
             combat_event_label_->setString("COMBAT OUTCOME REJECTED / QUEST STATE DRIFT");
         }
+    }
+}
+
+void F1GrayboxLayer::submitQuestBossPhase() noexcept {
+    const auto resolved = quest_boss_phases_.resolve(
+        combat_.actors(),
+        session_.quest_runtime()
+    );
+    if (resolved.error != tgd::gameplay::QuestBossPhaseError::none) {
+        if (combat_event_label_ != nullptr) {
+            combat_event_label_->setString("BOSS PHASE REJECTED / SNAPSHOT CONTRACT DRIFT");
+        }
+        return;
+    }
+    if (!resolved.found) {
+        return;
+    }
+    const auto completed = session_.complete_objective(resolved.objective, *this);
+    if (completed.error != tgd::gameplay::VerticalSliceError::none) {
+        if (combat_event_label_ != nullptr) {
+            combat_event_label_->setString("BOSS OBJECTIVE REJECTED / QUEST STATE DRIFT");
+        }
+        return;
+    }
+    if (completed.accepted) {
+        pending_boss_stance_ = resolved.next_stance;
+    }
+}
+
+void F1GrayboxLayer::syncBossStanceForQuest() noexcept {
+    pending_boss_stance_ = 0;
+    for (std::size_t index = 0; index < definition_->quest_boss_phases.size(); ++index) {
+        if (session_.objective_state(definition_->quest_boss_phases[index].objective_id.key) !=
+            tgd::gameplay::QuestObjectiveState::active) {
+            continue;
+        }
+        if (index != 0) {
+            pending_boss_stance_ = definition_->quest_boss_phases[index - 1].next_stance;
+        }
+        return;
     }
 }
 
@@ -1301,7 +1458,7 @@ bool F1GrayboxLayer::submitCombatTick(tgd::contracts::TickIndex tick) noexcept {
 
     std::array<
         tgd::contracts::CombatCommand,
-        combat_intent_capacity + tgd::gameplay::EncounterPlanBatch::capacity>
+        combat_intent_capacity + tgd::gameplay::EncounterPlanBatch::capacity + 1>
         commands{};
     std::size_t command_count = 0;
     for (std::size_t index = 0; index < combat_intent_count_; ++index) {
@@ -1328,6 +1485,28 @@ bool F1GrayboxLayer::submitCombatTick(tgd::contracts::TickIndex tick) noexcept {
     }
     for (const auto& command : encounter_plan.batch.command_view()) {
         commands[command_count++] = command;
+    }
+    if (pending_boss_stance_ != 0 && !definition_->quest_boss_phases.empty()) {
+        const auto boss_actor = definition_->quest_boss_phases.front().actor;
+        const auto boss = std::find_if(
+            combat_.actors().begin(),
+            combat_.actors().end(),
+            [boss_actor](const tgd::contracts::CombatActorSnapshot& actor) {
+                return actor.actor == boss_actor;
+            }
+        );
+        if (boss != combat_.actors().end() && boss->stance == pending_boss_stance_) {
+            pending_boss_stance_ = 0;
+        } else if (boss != combat_.actors().end() && boss->active) {
+            commands[command_count++] = {
+                tick,
+                boss_actor,
+                encounter_command_sequence_++,
+                tgd::contracts::CombatCommandType::switch_stance,
+                0,
+                pending_boss_stance_,
+            };
+        }
     }
     if (command_count != 0 &&
         combat_.submit(std::span{commands}.first(command_count)) !=
@@ -1366,6 +1545,9 @@ bool F1GrayboxLayer::retryEncounter() noexcept {
         return false;
     }
     ++retry_command_sequence_;
+    if (!activateEncounterForBeat(session_.current_snapshot().beat_id.key)) {
+        return false;
+    }
     ++retry_count_;
     player_action_ticks_ = 0;
     player_hit_ticks_ = 0;
@@ -1387,6 +1569,7 @@ bool F1GrayboxLayer::activateEncounterForBeat(
         }
     );
     if (activation == definition_->quest_encounter_activations.end()) {
+        pending_boss_stance_ = 0;
         return true;
     }
     if (activation->encounter_id.key != combat_definition_->id.key ||
@@ -1407,6 +1590,16 @@ bool F1GrayboxLayer::activateEncounterForBeat(
         return false;
     }
     ++retry_command_sequence_;
+    if (!definition_->quest_boss_phases.empty() &&
+        std::find(
+            activation->actor_keys.begin(),
+            activation->actor_keys.end(),
+            definition_->quest_boss_phases.front().actor
+        ) != activation->actor_keys.end()) {
+        syncBossStanceForQuest();
+    } else {
+        pending_boss_stance_ = 0;
+    }
     player_action_ticks_ = 0;
     player_hit_ticks_ = 0;
     attack_fx_ticks_ = 0;
@@ -1450,6 +1643,22 @@ void F1GrayboxLayer::refreshCombatHud() noexcept {
                        std::to_string(player->resources.poise_max) + " | STANCE " + stance +
                        " | HOSTILES " + std::to_string(active_hostiles) +
                        (player->active ? "" : " | DOWN: PRESS R");
+    if (!definition_->quest_boss_phases.empty()) {
+        const auto boss_actor = definition_->quest_boss_phases.front().actor;
+        const auto boss = std::find_if(
+            actors.begin(),
+            actors.end(),
+            [boss_actor](const tgd::contracts::CombatActorSnapshot& actor) {
+                return actor.actor == boss_actor;
+            }
+        );
+        if (boss != actors.end() &&
+            (boss->active || session_.current_snapshot().beat_index == 5)) {
+            text += " | WRAITH " + std::to_string(boss->resources.health) + "/" +
+                    std::to_string(boss->resources.health_max) + " " +
+                    std::string{bossPhaseName(boss->stance)};
+        }
+    }
     combat_resources_label_->setString(text);
 }
 

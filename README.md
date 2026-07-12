@@ -18,11 +18,11 @@
 - 已实现 Web ABI 1.0、`SaveEnvelopeV1`、Profile 原子提交协调器和 256 KiB 分块存储桥；Guest IndexedDB v1 首次保存与刷新恢复已通过三浏览器阶段门，配额/CAS/损坏导出/离线实现等待下一个阶段门聚合复验，迁移/导入仍保留为缺项。
 - 已将 F1 的 5 个 Cell、7 个目标驱动玩法段、斜向相机基和 60/70 分钟口径固化为 JSON→C++ 机器合同，并用 `VerticalSliceSession` 组合既有移动核心。
 - 已实现数据驱动的首个战斗遭遇合同与确定性 `ICombatResolver` / `ICombatEventSink` / `IEncounterDirector` 启动边界：当前 Web 灰盒可移动接敌，使用檐守/翻花、轻重击、守势和闪身；两伞偶与纸鹭会按量化地面坐标追击/归位、占据稳定接敌位并由单一进攻令牌轮流出招，资源恢复与失败重试已进入同一权威 Tick 边界。
-- 已实现确定性 `IQuestRuntime`、目标图快照/事件/校验和、内容驱动的场景交互与战斗信号解析器；玩家现在可按 `F` 完成“验看路引 / 抵达渡口门 / 会见沈砚”，再以檐守真实格挡敌击、以翻花真实闪过命中，从而完成前两 Beat 并进入伞巷遭遇。后续工灯调查、路线选择、Boss 四阶段、双结算与奖励仍缺失，但均保留在既有 7 Beat 合同和 Reserved 接口边界内。
+- 已实现确定性 `IQuestRuntime`、目标图快照/事件/校验和、内容驱动的场景交互、战斗信号与敌群结果解析器；玩家可完成雨渡三项交互与沈砚双架势训练，失败重试后再以读招/闪避/反击清除两伞偶和纸鹭，解锁并选择雨棚路线，从而完成前 3 Beat。后续工灯调查、回程战、Boss 四阶段、双结算与奖励仍缺失，但均保留在既有 7 Beat 合同和 Reserved 接口边界内。
 - 已设计 Service Worker/CDN 内容缓存，以及可选的跨设备云同步协议；设计不等于运行时已落地。
 - 旧版 Web 原型完整保存在 [`codex/archive-legacy-web-v1`](https://github.com/falling-feather/TianGongDu/tree/codex/archive-legacy-web-v1)，含 V1.1.0 可玩闭环和 52 项自动化测试。
 
-当前 Web 灰盒控制为：`WASD/方向键` 移动、`F` 交互、`Space` 纵跃、`J` 轻击、`K` 重击、`Shift` 守势、`C` 闪身、`1/2` 切换檐守/翻花，倒地后按 `R` 从当前 Bootstrap 安全点重试。它已经能直观看到《斗战神》第一指导的斜向纵深、深度排序与遮挡层次，以及前两 Beat 任务推进、姿态资源、命中/破势、资源恢复和失败重试反馈，但还不是可连续游玩 1 小时的 Demo；后 5 Beat、正式鼠标/手柄动作适配与多安全点快照仍是缺项。
+当前 Web 灰盒控制为：`WASD/方向键` 移动、`F` 交互、`Space` 纵跃、`J` 轻击、`K` 重击、`Shift` 守势、`C` 闪身、`1/2` 切换檐守/翻花，倒地后按 `R` 从当前 Bootstrap 安全点重试。它已经能直观看到《斗战神》第一指导的斜向纵深、深度排序与遮挡层次，以及前 3 Beat 任务推进、姿态资源、命中/破势、读招闪避、资源恢复和失败重试反馈，但还不是可连续游玩 1 小时的 Demo；后 4 Beat、正式鼠标/手柄动作适配与多安全点快照仍是缺项。
 
 ## 从哪里开始
 
@@ -48,8 +48,8 @@
 | --- | --- | --- | --- |
 | 产品/世界/1.0 范围 | Scope Approved | 三地区、战斗/武器、14 Boss、24 NPC、内容预算 | 全量任务/POI 实例和最终平衡 |
 | 技术架构 | In Progress（`F1-GAME-01`，并行收口 `F1-DEV-03` 证据） | 精确工具链与分层；60 Hz Session、量化回放；Web ABI/Profile；F1 Definition Provider、组合纵切会话、确定性任务/交互/战斗解析、事件与权威位姿批次 | IndexedDB 异常/离线聚合复验、迁移/导入、完整玩法纵切和真实设备性能证据 |
-| 可玩纵切 | In Progress（前两 Beat + 可操作战斗灰盒） | F1 唯一流程、5 Cell/7 Beat 机器合同；代码绘制的 2.5D 斜向全景雨夜场景；雨渡三项场景交互、檐守格挡反制、翻花闪避反制；双姿态战斗、三敌追击/归位、资源恢复与失败重试 | 后 5 Beat 的伞巷完成条件/工灯调查/选择与转场、复杂 AI/掉落、真实 5 Cell、Boss 四阶段、双结算和 60 分钟盲测 |
-| 内容工具 | In Progress（Bootstrap） | 9 类模板注册表、工作台范围、F1 纵切、3 项场景交互、2 项战斗任务触发器及 4 实体/9 能力战斗包的 JSON/Schema/确定性 C++ 生成 | 可用 Workbench、通用 ContentCore/baker、迁移、资源预览与错误定位 UI |
+| 可玩纵切 | In Progress（前 3 Beat + 可操作战斗灰盒） | F1 唯一流程、5 Cell/7 Beat 机器合同；代码绘制的 2.5D 斜向全景雨夜场景；雨渡交互、沈砚双架势训练、失败重试、三敌读招清场与前置解锁路线；资源恢复和任务进度保持 | 后 4 Beat 的工灯调查/回程战/转场、复杂 AI/掉落、真实 5 Cell、Boss 四阶段、双结算和 60 分钟盲测 |
+| 内容工具 | In Progress（Bootstrap） | 9 类模板注册表、工作台范围、F1 纵切、4 项场景交互、2 项战斗任务触发器、2 项敌群结果及 4 实体/9 能力战斗包的 JSON/Schema/确定性 C++ 生成 | 可用 Workbench、通用 ContentCore/baker、迁移、资源预览与错误定位 UI |
 | 本地存档/云同步 | In Progress（`F1-DEV-03`） | IndexedDB v1 六 store、`SaveEnvelopeV1`、Profile Head CAS/C++ 异步桥、Guest 首存与刷新恢复 | 配额/冲突/损坏/离线证据、迁移/导入、多标签主动接管、云 API/DDL/OIDC |
 | 发布运维 | Accepted Baseline | 渠道、缓存、回滚、证据与灾备门；F1 Windows 2022 干净 CI 已落地 | CD、正式 origin/CDN/监控与演练 |
 

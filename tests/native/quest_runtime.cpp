@@ -18,10 +18,12 @@ using tgd::gameplay::DeterministicQuestInteractionResolver;
 using tgd::gameplay::DeterministicQuestCombatTriggerResolver;
 using tgd::gameplay::DeterministicQuestCombatOutcomeResolver;
 using tgd::gameplay::DeterministicQuestBossPhaseResolver;
+using tgd::gameplay::DeterministicQuestResolutionRewardResolver;
 using tgd::gameplay::QuestError;
 using tgd::gameplay::QuestCombatOutcomeError;
 using tgd::gameplay::QuestCombatTriggerError;
 using tgd::gameplay::QuestBossPhaseError;
+using tgd::gameplay::QuestResolutionRewardError;
 using tgd::gameplay::QuestInteractionError;
 using tgd::gameplay::QuestLifecycle;
 using tgd::gameplay::QuestObjectiveState;
@@ -167,6 +169,7 @@ bool test_full_resolution_is_deterministic() {
     tgd::contracts::CommandSequence sequence = 1;
     tgd::contracts::TickIndex tick = 1;
     tgd::contracts::StableContentKey last_objective = 0;
+    tgd::contracts::StableContentKey last_selection = 0;
     for (const auto& stage : definition().beats) {
         for (auto objective = stage.objectives.rbegin(); objective != stage.objectives.rend(); ++objective) {
             const tgd::contracts::QuestCommand command{
@@ -178,6 +181,7 @@ bool test_full_resolution_is_deterministic() {
                 selection_for_objective(objective->key),
             };
             last_objective = objective->key;
+            last_selection = command.selection;
             const auto left_result = left.apply(command, left_sink);
             const auto right_result = right.apply(command, right_sink);
             ok &= left_result.error == QuestError::none && right_result.error == QuestError::none;
@@ -194,7 +198,7 @@ bool test_full_resolution_is_deterministic() {
         "the final stage resolves the quest graph"
     );
     const auto duplicate = left.apply(
-        {tick, definition().player.actor, sequence, {}, last_objective},
+        {tick, definition().player.actor, sequence, {}, last_objective, last_selection},
         left_sink
     );
     ok &= expect(
@@ -780,6 +784,7 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
 bool test_four_seasons_boss_phases_are_ordered() {
     DeterministicQuestRuntime quest;
     DeterministicQuestBossPhaseResolver phases;
+    DeterministicQuestResolutionRewardResolver rewards;
     CollectingSink sink;
     bool ok = quest.initialize(definition(), definition().player.actor) == QuestError::none;
     ok &= quest.start() == QuestError::none;
@@ -880,6 +885,77 @@ bool test_four_seasons_boss_phases_are_ordered() {
         quest.snapshot().stage_index == 6,
         "defeating the winter phase advances into resolution"
     );
+    ok &= expect(
+        rewards.resolve(quest).error == QuestResolutionRewardError::invalid_lifecycle,
+        "resolution rewards fail closed before initialization"
+    );
+    ok &= expect(
+        rewards.initialize(definition().quest_resolution_rewards) ==
+            QuestResolutionRewardError::none,
+        "generated resolution reward receipts initialize once"
+    );
+    ok &= expect(
+        !rewards.resolve(quest).found,
+        "a reward receipt cannot resolve before the quest is fully returned"
+    );
+
+    const auto& resolution = definition().beats[6];
+    const auto restore_shared_mark = tgd::contracts::stable_content_key(
+        "f1_choice_resolution_restore_shared_mark"
+    );
+    const auto selected_resolution = quest.apply(
+        {
+            tick++,
+            definition().player.actor,
+            sequence++,
+            {},
+            resolution.objectives[0].key,
+            restore_shared_mark,
+        },
+        sink
+    );
+    ok &= expect(
+        selected_resolution.error == QuestError::none &&
+            selected_resolution.accepted && !selected_resolution.quest_resolved &&
+            quest.selected_option(resolution.objectives[0].key) == restore_shared_mark &&
+            !rewards.resolve(quest).found,
+        "the chosen resolution is stable but does not grant before returning to Shen Yan"
+    );
+    const auto returned = quest.apply(
+        {
+            tick++,
+            definition().player.actor,
+            sequence++,
+            {},
+            resolution.objectives[1].key,
+        },
+        sink
+    );
+    ok &= expect(
+        returned.error == QuestError::none && returned.accepted &&
+            returned.stage_advanced && returned.quest_resolved && quest.snapshot().resolved,
+        "returning to Shen Yan resolves the full seven-beat quest"
+    );
+    const auto receipt = rewards.resolve(quest);
+    const auto repeated_receipt = rewards.resolve(quest);
+    ok &= expect(
+        receipt.error == QuestResolutionRewardError::none && receipt.found &&
+            receipt.resolution == tgd::contracts::stable_content_key(
+                                      "f1_resolution_reward_restore_shared_mark"
+                                  ) &&
+            receipt.objective == resolution.objectives[0].key &&
+            receipt.selection == restore_shared_mark &&
+            receipt.reward == tgd::contracts::stable_content_key(
+                                  "f1_reward_joint_workshop_formula"
+                              ) &&
+            receipt.reward_dedup_key == tgd::contracts::stable_content_key(
+                                             "f1_claim_resolution_restore_shared_mark"
+                                         ) &&
+            repeated_receipt.resolution == receipt.resolution &&
+            repeated_receipt.reward == receipt.reward &&
+            repeated_receipt.reward_dedup_key == receipt.reward_dedup_key,
+        "resolved choices produce the same idempotent reward receipt on every read"
+    );
 
     auto invalid = std::array<tgd::contracts::QuestBossPhaseDefinition, 4>{};
     std::copy(
@@ -892,6 +968,19 @@ bool test_four_seasons_boss_phases_are_ordered() {
     ok &= expect(
         invalid_phases.initialize(invalid) == QuestBossPhaseError::invalid_definition,
         "out-of-order boss thresholds fail definition validation"
+    );
+    auto invalid_rewards = std::array<tgd::contracts::QuestResolutionRewardDefinition, 2>{};
+    std::copy(
+        definition().quest_resolution_rewards.begin(),
+        definition().quest_resolution_rewards.end(),
+        invalid_rewards.begin()
+    );
+    invalid_rewards[1].reward_dedup_key = invalid_rewards[0].reward_dedup_key;
+    DeterministicQuestResolutionRewardResolver invalid_reward_resolver;
+    ok &= expect(
+        invalid_reward_resolver.initialize(invalid_rewards) ==
+            QuestResolutionRewardError::invalid_definition,
+        "duplicate reward deduplication keys fail definition validation"
     );
     return ok;
 }

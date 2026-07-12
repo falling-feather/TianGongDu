@@ -71,6 +71,10 @@ inline constexpr std::array<contracts::ContentId, 1> interaction_9_prerequisites
     contracts::content_id("f1_objective_validate_calibration"),
 }};
 
+inline constexpr std::array<contracts::ContentId, 1> interaction_12_prerequisites{{
+    contracts::content_id("f1_objective_choose_resolution"),
+}};
+
 inline constexpr std::array<contracts::StableActorKey, 3> encounter_activation_0_actors{{
     101ULL,
     102ULL,
@@ -113,7 +117,7 @@ inline constexpr std::array<contracts::ContentId, 5> f1_cells{{
     contracts::content_id("f1_cell_return_safe_point"),
 }};
 
-inline constexpr std::array<contracts::QuestInteractionDefinition, 10> f1_quest_interactions{{
+inline constexpr std::array<contracts::QuestInteractionDefinition, 13> f1_quest_interactions{{
     {contracts::content_id("f1_interaction_travel_writ"), contracts::QuestInteractionKind::inspect, contracts::content_id("f1_cell_rain_ferry"), contracts::content_id("f1_objective_inspect_travel_writ"), contracts::ContentId{}, {-12000, -1600, 0, 0}, 800, std::span<const contracts::ContentId>{}},
     {contracts::content_id("f1_interaction_ferry_gate"), contracts::QuestInteractionKind::operate, contracts::content_id("f1_cell_rain_ferry"), contracts::content_id("f1_objective_reach_ferry_gate"), contracts::ContentId{}, {-10450, -100, 0, 0}, 900, std::span<const contracts::ContentId>{}},
     {contracts::content_id("f1_interaction_meet_shen_yan"), contracts::QuestInteractionKind::talk, contracts::content_id("f1_cell_rain_ferry"), contracts::content_id("f1_objective_meet_shen_yan"), contracts::ContentId{}, {-10500, -600, 0, 0}, 800, std::span<const contracts::ContentId>{}},
@@ -124,6 +128,9 @@ inline constexpr std::array<contracts::QuestInteractionDefinition, 10> f1_quest_
     {contracts::content_id("f1_interaction_calibrate_rib_spring"), contracts::QuestInteractionKind::choose, contracts::content_id("f1_cell_canopy_workstation"), contracts::content_id("f1_objective_choose_rib_calibration"), contracts::content_id("f1_choice_rib_spring_calibration"), {-1500, 400, 0, 0}, 500, std::span<const contracts::ContentId>{interaction_7_prerequisites}},
     {contracts::content_id("f1_interaction_calibrate_rib_winter"), contracts::QuestInteractionKind::choose, contracts::content_id("f1_cell_canopy_workstation"), contracts::content_id("f1_objective_choose_rib_calibration"), contracts::content_id("f1_choice_rib_winter_calibration"), {-1500, -600, 0, 0}, 500, std::span<const contracts::ContentId>{interaction_8_prerequisites}},
     {contracts::content_id("f1_interaction_open_return_shortcut"), contracts::QuestInteractionKind::operate, contracts::content_id("f1_cell_canopy_workstation"), contracts::content_id("f1_objective_open_return_shortcut"), contracts::ContentId{}, {-800, 400, 0, 0}, 1400, std::span<const contracts::ContentId>{interaction_9_prerequisites}},
+    {contracts::content_id("f1_interaction_resolution_subdue"), contracts::QuestInteractionKind::choose, contracts::content_id("f1_cell_return_safe_point"), contracts::content_id("f1_objective_choose_resolution"), contracts::content_id("f1_choice_resolution_subdue"), {3300, 1200, 0, 0}, 500, std::span<const contracts::ContentId>{}},
+    {contracts::content_id("f1_interaction_resolution_restore_shared_mark"), contracts::QuestInteractionKind::choose, contracts::content_id("f1_cell_return_safe_point"), contracts::content_id("f1_objective_choose_resolution"), contracts::content_id("f1_choice_resolution_restore_shared_mark"), {4200, 2300, 0, 0}, 500, std::span<const contracts::ContentId>{}},
+    {contracts::content_id("f1_interaction_return_to_shen_yan"), contracts::QuestInteractionKind::talk, contracts::content_id("f1_cell_return_safe_point"), contracts::content_id("f1_objective_return_to_shen_yan"), contracts::ContentId{}, {-10500, -600, 0, 0}, 1000, std::span<const contracts::ContentId>{interaction_12_prerequisites}},
 }};
 
 inline constexpr std::array<contracts::QuestCombatTriggerDefinition, 2> f1_quest_combat_triggers{{
@@ -147,6 +154,11 @@ inline constexpr std::array<contracts::QuestBossPhaseDefinition, 4> f1_quest_bos
     {contracts::content_id("f1_boss_phase_summer"), contracts::content_id("f1_objective_survive_summer_phase"), 201ULL, 50U, contracts::stable_content_key("stance_wraith_autumn")},
     {contracts::content_id("f1_boss_phase_autumn"), contracts::content_id("f1_objective_survive_autumn_phase"), 201ULL, 25U, contracts::stable_content_key("stance_wraith_winter")},
     {contracts::content_id("f1_boss_phase_winter"), contracts::content_id("f1_objective_survive_winter_phase"), 201ULL, 0U, 0},
+}};
+
+inline constexpr std::array<contracts::QuestResolutionRewardDefinition, 2> f1_quest_resolution_rewards{{
+    {contracts::content_id("f1_resolution_reward_subdue"), contracts::content_id("f1_objective_choose_resolution"), contracts::content_id("f1_choice_resolution_subdue"), contracts::content_id("f1_reward_sealed_mixed_umbrella"), contracts::content_id("f1_claim_resolution_subdue")},
+    {contracts::content_id("f1_resolution_reward_restore_shared_mark"), contracts::content_id("f1_objective_choose_resolution"), contracts::content_id("f1_choice_resolution_restore_shared_mark"), contracts::content_id("f1_reward_joint_workshop_formula"), contracts::content_id("f1_claim_resolution_restore_shared_mark")},
 }};
 
 inline constexpr std::array<contracts::CombatActorConfig, 5> f1_combat_actors{{
@@ -219,6 +231,7 @@ inline constexpr contracts::VerticalSliceDefinition f1_vertical_slice_definition
     std::span<const contracts::QuestCombatOutcomeDefinition>{f1_quest_combat_outcomes},
     std::span<const contracts::QuestEncounterActivationDefinition>{f1_quest_encounter_activations},
     std::span<const contracts::QuestBossPhaseDefinition>{f1_quest_boss_phases},
+    std::span<const contracts::QuestResolutionRewardDefinition>{f1_quest_resolution_rewards},
 };
 
 }  // namespace tgd::content::generated

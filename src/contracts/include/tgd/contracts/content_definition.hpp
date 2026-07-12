@@ -117,6 +117,14 @@ struct QuestBossPhaseDefinition final {
     StableContentKey next_stance{};
 };
 
+struct QuestResolutionRewardDefinition final {
+    ContentId id{};
+    ContentId objective_id{};
+    ContentId selection_id{};
+    ContentId reward_id{};
+    ContentId reward_dedup_key{};
+};
+
 struct VerticalSliceDefinition final {
     ContentId id{};
     std::string_view view_model{};
@@ -139,6 +147,7 @@ struct VerticalSliceDefinition final {
     std::span<const QuestCombatOutcomeDefinition> quest_combat_outcomes{};
     std::span<const QuestEncounterActivationDefinition> quest_encounter_activations{};
     std::span<const QuestBossPhaseDefinition> quest_boss_phases{};
+    std::span<const QuestResolutionRewardDefinition> quest_resolution_rewards{};
 };
 
 }  // namespace tgd::contracts

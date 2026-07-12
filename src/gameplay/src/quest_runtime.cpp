@@ -416,6 +416,68 @@ QuestBossPhaseResult DeterministicQuestBossPhaseResolver::resolve(
     return result;
 }
 
+QuestResolutionRewardError DeterministicQuestResolutionRewardResolver::initialize(
+    std::span<const contracts::QuestResolutionRewardDefinition> definitions
+) noexcept {
+    if (initialized_) {
+        return QuestResolutionRewardError::invalid_lifecycle;
+    }
+    if (definitions.empty() || definitions.size() > reward_capacity) {
+        return QuestResolutionRewardError::invalid_definition;
+    }
+    for (std::size_t index = 0; index < definitions.size(); ++index) {
+        const auto& definition = definitions[index];
+        if (definition.id.key == 0 || definition.id.name.empty() ||
+            definition.objective_id.key == 0 || definition.objective_id.name.empty() ||
+            definition.selection_id.key == 0 || definition.selection_id.name.empty() ||
+            definition.reward_id.key == 0 || definition.reward_id.name.empty() ||
+            definition.reward_dedup_key.key == 0 ||
+            definition.reward_dedup_key.name.empty()) {
+            return QuestResolutionRewardError::invalid_definition;
+        }
+        for (std::size_t prior = 0; prior < index; ++prior) {
+            const auto& previous = definitions[prior];
+            if (previous.id.key == definition.id.key ||
+                previous.selection_id.key == definition.selection_id.key ||
+                previous.reward_id.key == definition.reward_id.key ||
+                previous.reward_dedup_key.key == definition.reward_dedup_key.key) {
+                return QuestResolutionRewardError::invalid_definition;
+            }
+        }
+    }
+    definitions_ = definitions;
+    initialized_ = true;
+    return QuestResolutionRewardError::none;
+}
+
+QuestResolutionRewardResult DeterministicQuestResolutionRewardResolver::resolve(
+    const IQuestRuntime& quest
+) const noexcept {
+    QuestResolutionRewardResult result{};
+    if (!initialized_) {
+        result.error = QuestResolutionRewardError::invalid_lifecycle;
+        return result;
+    }
+    if (!quest.snapshot().resolved) {
+        return result;
+    }
+    for (const auto& definition : definitions_) {
+        if (quest.objective_state(definition.objective_id.key) !=
+                QuestObjectiveState::completed ||
+            quest.selected_option(definition.objective_id.key) != definition.selection_id.key) {
+            continue;
+        }
+        result.found = true;
+        result.resolution = definition.id.key;
+        result.objective = definition.objective_id.key;
+        result.selection = definition.selection_id.key;
+        result.reward = definition.reward_id.key;
+        result.reward_dedup_key = definition.reward_dedup_key.key;
+        return result;
+    }
+    return result;
+}
+
 QuestError DeterministicQuestRuntime::initialize(
     const contracts::VerticalSliceDefinition& definition,
     contracts::StableActorKey player_actor

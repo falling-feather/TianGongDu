@@ -308,8 +308,88 @@ export function validateF1SliceContract(contract, catalog) {
         "stance_wraith_autumn",
         "stance_wraith_winter",
         null
-      ])) {
+  ])) {
     fail("the four-seasons boss phase order or thresholds drifted");
+  }
+  const resolutionBeat = contract.beats[6];
+  const resolutionChoiceObjective = resolutionBeat.objectiveIds[0];
+  const resolutionReturnObjective = resolutionBeat.objectiveIds[1];
+  const resolutionChoices = interactions.filter(
+    (interaction) => interaction.objectiveId === resolutionChoiceObjective
+  );
+  const resolutionReturn = interactions.filter(
+    (interaction) => interaction.objectiveId === resolutionReturnObjective
+  );
+  const expectedResolutionSelections = [
+    "f1_choice_resolution_subdue",
+    "f1_choice_resolution_restore_shared_mark"
+  ];
+  if (
+    resolutionChoices.length !== 2 ||
+    resolutionChoices.some(
+      (interaction) =>
+        interaction.kind !== "choose" ||
+        interaction.cellId !== resolutionBeat.cellId ||
+        interaction.prerequisiteObjectiveIds.length !== 0
+    ) ||
+    !sameValues(
+      resolutionChoices.map((interaction) => interaction.selectionId),
+      expectedResolutionSelections
+    )
+  ) {
+    fail("the resolution beat must expose two stable authored choices");
+  }
+  if (
+    resolutionReturn.length !== 1 ||
+    resolutionReturn[0].kind !== "talk" ||
+    resolutionReturn[0].cellId !== resolutionBeat.cellId ||
+    !sameValues(resolutionReturn[0].prerequisiteObjectiveIds, [resolutionChoiceObjective])
+  ) {
+    fail("returning to Shen Yan must wait for one committed resolution choice");
+  }
+  const resolutionRewards = contract.questResolutionRewards;
+  if (!Array.isArray(resolutionRewards) || resolutionRewards.length !== 2) {
+    fail("the resolution beat must contain exactly two reward receipts");
+  }
+  for (const reward of resolutionRewards) {
+    if (
+      [
+        reward.id,
+        reward.objectiveId,
+        reward.selectionId,
+        reward.rewardId,
+        reward.rewardDedupKey
+      ].some((value) => typeof value !== "string" || value.length === 0) ||
+      reward.objectiveId !== resolutionChoiceObjective ||
+      !expectedResolutionSelections.includes(reward.selectionId)
+    ) {
+      fail(`${reward.id ?? "resolution reward"} is not a valid resolution reward receipt`);
+    }
+  }
+  for (const field of ["id", "selectionId", "rewardId", "rewardDedupKey"]) {
+    assertUnique(
+      resolutionRewards.map((reward) => reward[field]),
+      `resolution reward ${field}`
+    );
+  }
+  const expectedResolutionRewards = [
+    {
+      id: "f1_resolution_reward_subdue",
+      objectiveId: resolutionChoiceObjective,
+      selectionId: expectedResolutionSelections[0],
+      rewardId: "f1_reward_sealed_mixed_umbrella",
+      rewardDedupKey: "f1_claim_resolution_subdue"
+    },
+    {
+      id: "f1_resolution_reward_restore_shared_mark",
+      objectiveId: resolutionChoiceObjective,
+      selectionId: expectedResolutionSelections[1],
+      rewardId: "f1_reward_joint_workshop_formula",
+      rewardDedupKey: "f1_claim_resolution_restore_shared_mark"
+    }
+  ];
+  if (!sameValues(resolutionRewards, expectedResolutionRewards)) {
+    fail("resolution reward receipt mappings drifted");
   }
   const combatTriggers = contract.questCombatTriggers;
   if (!Array.isArray(combatTriggers) || combatTriggers.length < 2 || combatTriggers.length > 64) {
@@ -655,6 +735,11 @@ export function validateF1SliceContract(contract, catalog) {
     ...interactions.map((interaction) => interaction.selectionId).filter(Boolean),
     ...encounterActivations.map((activation) => activation.id),
     ...bossPhases.map((phase) => phase.id),
+    ...resolutionRewards.flatMap((reward) => [
+      reward.id,
+      reward.rewardId,
+      reward.rewardDedupKey
+    ]),
     ...combatTriggers.map((trigger) => trigger.id),
     ...combatOutcomes.map((outcome) => outcome.id),
     combat.id,
@@ -725,6 +810,10 @@ function questBossPhaseRow(phase) {
   return `    {${contentId(phase.id)}, ${contentId(phase.objectiveId)}, ${phase.actorKey}ULL, ${phase.healthPercent}U, ${stableKey(phase.nextStanceId)}},`;
 }
 
+function questResolutionRewardRow(reward) {
+  return `    {${contentId(reward.id)}, ${contentId(reward.objectiveId)}, ${contentId(reward.selectionId)}, ${contentId(reward.rewardId)}, ${contentId(reward.rewardDedupKey)}},`;
+}
+
 export function renderF1SliceContract(contract) {
   const refs = contract.catalogReferences;
   const seed = contract.playerSeed;
@@ -772,6 +861,9 @@ ${arrayRows(interaction.prerequisiteObjectiveIds)}
     )
     .join("\n\n");
   const questBossPhaseRows = contract.questBossPhases.map(questBossPhaseRow).join("\n");
+  const questResolutionRewardRows = contract.questResolutionRewards
+    .map(questResolutionRewardRow)
+    .join("\n");
 
   return `// Generated from content/design/f1-vertical-slice.json. Do not edit by hand.
 #pragma once
@@ -830,6 +922,10 @@ inline constexpr std::array<contracts::QuestBossPhaseDefinition, ${contract.ques
 ${questBossPhaseRows}
 }};
 
+inline constexpr std::array<contracts::QuestResolutionRewardDefinition, ${contract.questResolutionRewards.length}> f1_quest_resolution_rewards{{
+${questResolutionRewardRows}
+}};
+
 inline constexpr std::array<contracts::CombatActorConfig, ${combat.actors.length}> f1_combat_actors{{
 ${combatActorRows}
 }};
@@ -880,6 +976,7 @@ inline constexpr contracts::VerticalSliceDefinition f1_vertical_slice_definition
     std::span<const contracts::QuestCombatOutcomeDefinition>{f1_quest_combat_outcomes},
     std::span<const contracts::QuestEncounterActivationDefinition>{f1_quest_encounter_activations},
     std::span<const contracts::QuestBossPhaseDefinition>{f1_quest_boss_phases},
+    std::span<const contracts::QuestResolutionRewardDefinition>{f1_quest_resolution_rewards},
 };
 
 }  // namespace tgd::content::generated

@@ -222,6 +222,38 @@ class DeterministicQuestBossPhaseResolver final {
     bool initialized_{};
 };
 
+enum class QuestResolutionRewardError : std::uint8_t {
+    none,
+    invalid_lifecycle,
+    invalid_definition,
+};
+
+struct QuestResolutionRewardResult final {
+    QuestResolutionRewardError error{QuestResolutionRewardError::none};
+    bool found{};
+    contracts::StableContentKey resolution{};
+    contracts::StableContentKey objective{};
+    contracts::StableContentKey selection{};
+    contracts::StableContentKey reward{};
+    contracts::StableContentKey reward_dedup_key{};
+};
+
+class DeterministicQuestResolutionRewardResolver final {
+  public:
+    static constexpr std::size_t reward_capacity = 16;
+
+    [[nodiscard]] QuestResolutionRewardError initialize(
+        std::span<const contracts::QuestResolutionRewardDefinition> definitions
+    ) noexcept;
+    [[nodiscard]] QuestResolutionRewardResult resolve(
+        const IQuestRuntime& quest
+    ) const noexcept;
+
+  private:
+    std::span<const contracts::QuestResolutionRewardDefinition> definitions_{};
+    bool initialized_{};
+};
+
 class DeterministicQuestRuntime final : public IQuestRuntime {
   public:
     static constexpr std::size_t stage_capacity = 16;

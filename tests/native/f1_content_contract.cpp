@@ -60,7 +60,7 @@ int main() {
         "the first route, cells, and enemy families are explicit"
     );
     ok &= expect(
-        definition->quest_interactions.size() == 10 &&
+        definition->quest_interactions.size() == 13 &&
             definition->quest_interactions.front().objective_id.key ==
                 tgd::contracts::stable_content_key("f1_objective_inspect_travel_writ"),
         "the opening scene interactions are generated content, not presentation rules"
@@ -100,6 +100,41 @@ int main() {
     ok &= expect(
         calibration_count == 2,
         "the shared workbench exposes two generated calibration choices"
+    );
+    const auto resolution_choice_count = std::count_if(
+        definition->quest_interactions.begin(),
+        definition->quest_interactions.end(),
+        [](const tgd::contracts::QuestInteractionDefinition& interaction) {
+            return interaction.objective_id.key ==
+                       tgd::contracts::stable_content_key(
+                           "f1_objective_choose_resolution"
+                       ) &&
+                   interaction.kind == tgd::contracts::QuestInteractionKind::choose;
+        }
+    );
+    const auto return_to_shen_yan = std::find_if(
+        definition->quest_interactions.begin(),
+        definition->quest_interactions.end(),
+        [](const tgd::contracts::QuestInteractionDefinition& interaction) {
+            return interaction.objective_id.key ==
+                   tgd::contracts::stable_content_key(
+                       "f1_objective_return_to_shen_yan"
+                   );
+        }
+    );
+    ok &= expect(
+        resolution_choice_count == 2 &&
+            return_to_shen_yan != definition->quest_interactions.end() &&
+            return_to_shen_yan->kind == tgd::contracts::QuestInteractionKind::talk &&
+            return_to_shen_yan->prerequisite_objectives.size() == 1 &&
+            definition->quest_resolution_rewards.size() == 2 &&
+            definition->quest_resolution_rewards.front().reward_dedup_key.key ==
+                tgd::contracts::stable_content_key("f1_claim_resolution_subdue") &&
+            definition->quest_resolution_rewards.back().reward_id.key ==
+                tgd::contracts::stable_content_key(
+                    "f1_reward_joint_workshop_formula"
+                ),
+        "two resolutions gate the authored return and map to stable reward receipts"
     );
     ok &= expect(
         combat != nullptr && definition->quest_encounter_activations.size() == 2 &&

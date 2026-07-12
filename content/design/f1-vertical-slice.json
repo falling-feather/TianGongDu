@@ -654,6 +654,38 @@
       "prerequisiteObjectiveIds": [
         "f1_objective_validate_calibration"
       ]
+    },
+    {
+      "id": "f1_interaction_resolution_subdue",
+      "kind": "choose",
+      "cellId": "f1_cell_return_safe_point",
+      "objectiveId": "f1_objective_choose_resolution",
+      "selectionId": "f1_choice_resolution_subdue",
+      "poseMm": { "x": 3300, "y": 1200, "height": 0, "floorLayer": 0 },
+      "radiusMm": 500,
+      "prerequisiteObjectiveIds": []
+    },
+    {
+      "id": "f1_interaction_resolution_restore_shared_mark",
+      "kind": "choose",
+      "cellId": "f1_cell_return_safe_point",
+      "objectiveId": "f1_objective_choose_resolution",
+      "selectionId": "f1_choice_resolution_restore_shared_mark",
+      "poseMm": { "x": 4200, "y": 2300, "height": 0, "floorLayer": 0 },
+      "radiusMm": 500,
+      "prerequisiteObjectiveIds": []
+    },
+    {
+      "id": "f1_interaction_return_to_shen_yan",
+      "kind": "talk",
+      "cellId": "f1_cell_return_safe_point",
+      "objectiveId": "f1_objective_return_to_shen_yan",
+      "selectionId": null,
+      "poseMm": { "x": -10500, "y": -600, "height": 0, "floorLayer": 0 },
+      "radiusMm": 1000,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_choose_resolution"
+      ]
     }
   ],
   "questEncounterActivations": [
@@ -698,6 +730,22 @@
       "actorKey": 201,
       "healthPercent": 0,
       "nextStanceId": null
+    }
+  ],
+  "questResolutionRewards": [
+    {
+      "id": "f1_resolution_reward_subdue",
+      "objectiveId": "f1_objective_choose_resolution",
+      "selectionId": "f1_choice_resolution_subdue",
+      "rewardId": "f1_reward_sealed_mixed_umbrella",
+      "rewardDedupKey": "f1_claim_resolution_subdue"
+    },
+    {
+      "id": "f1_resolution_reward_restore_shared_mark",
+      "objectiveId": "f1_objective_choose_resolution",
+      "selectionId": "f1_choice_resolution_restore_shared_mark",
+      "rewardId": "f1_reward_joint_workshop_formula",
+      "rewardDedupKey": "f1_claim_resolution_restore_shared_mark"
     }
   ],
   "questCombatTriggers": [

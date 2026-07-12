@@ -19,6 +19,7 @@
     "questCombatTriggers",
     "questCombatOutcomes",
     "questBossPhases",
+    "questResolutionRewards",
     "paddingPolicy",
     "ports"
   ],
@@ -140,6 +141,12 @@
       "minItems": 4,
       "maxItems": 16,
       "items": { "$ref": "#/$defs/questBossPhase" }
+    },
+    "questResolutionRewards": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 16,
+      "items": { "$ref": "#/$defs/questResolutionReward" }
     },
     "paddingPolicy": {
       "type": "object",
@@ -468,6 +475,18 @@
             { "type": "null" }
           ]
         }
+      }
+    },
+    "questResolutionReward": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "objectiveId", "selectionId", "rewardId", "rewardDedupKey"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "objectiveId": { "$ref": "#/$defs/id" },
+        "selectionId": { "$ref": "#/$defs/id" },
+        "rewardId": { "$ref": "#/$defs/id" },
+        "rewardDedupKey": { "$ref": "#/$defs/id" }
       }
     },
     "port": {

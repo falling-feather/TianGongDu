@@ -39,7 +39,7 @@ test("F1 one-hour contract and generated C++ stay synchronized", async () => {
     flowerLight.windupTicks + flowerLight.activeTicks + flowerLight.recoveryTicks,
     18
   );
-  assert.equal(contract.questInteractions.length, 10);
+  assert.equal(contract.questInteractions.length, 13);
   assert.deepEqual(
     new Set(
       contract.questInteractions
@@ -92,6 +92,11 @@ test("F1 stable content IDs have unique 64-bit keys", async () => {
     ...contract.questCombatOutcomes.map((outcome) => outcome.id),
     ...contract.questEncounterActivations.map((activation) => activation.id),
     ...contract.questBossPhases.map((phase) => phase.id),
+    ...contract.questResolutionRewards.flatMap((reward) => [
+      reward.id,
+      reward.rewardId,
+      reward.rewardDedupKey
+    ]),
     ...contract.questInteractions.map((interaction) => interaction.selectionId).filter(Boolean)
   ];
   assert.equal(new Set(ids.map((id) => fnv1a64(id))).size, ids.length);
@@ -255,6 +260,74 @@ test("F1 four-seasons wraith is an inactive actor with ordered health phases", a
   assert.throws(
     () => validateF1SliceContract(outOfOrder, catalog),
     /phase order or thresholds drifted/
+  );
+});
+
+test("F1 resolution offers two choices, a gated return, and idempotent reward receipts", async () => {
+  const contract = await loadF1SliceContract();
+  const resolution = contract.beats[6];
+  const choices = contract.questInteractions.filter(
+    (interaction) => interaction.objectiveId === resolution.objectiveIds[0]
+  );
+  const returnToShenYan = contract.questInteractions.filter(
+    (interaction) => interaction.objectiveId === resolution.objectiveIds[1]
+  );
+  assert.deepEqual(
+    choices.map((interaction) => ({
+      kind: interaction.kind,
+      cellId: interaction.cellId,
+      selectionId: interaction.selectionId,
+      prerequisiteObjectiveIds: interaction.prerequisiteObjectiveIds
+    })),
+    [
+      {
+        kind: "choose",
+        cellId: resolution.cellId,
+        selectionId: "f1_choice_resolution_subdue",
+        prerequisiteObjectiveIds: []
+      },
+      {
+        kind: "choose",
+        cellId: resolution.cellId,
+        selectionId: "f1_choice_resolution_restore_shared_mark",
+        prerequisiteObjectiveIds: []
+      }
+    ]
+  );
+  assert.equal(returnToShenYan.length, 1);
+  assert.equal(returnToShenYan[0].kind, "talk");
+  assert.equal(returnToShenYan[0].cellId, resolution.cellId);
+  assert.deepEqual(returnToShenYan[0].prerequisiteObjectiveIds, [resolution.objectiveIds[0]]);
+  assert.deepEqual(contract.questResolutionRewards, [
+    {
+      id: "f1_resolution_reward_subdue",
+      objectiveId: resolution.objectiveIds[0],
+      selectionId: "f1_choice_resolution_subdue",
+      rewardId: "f1_reward_sealed_mixed_umbrella",
+      rewardDedupKey: "f1_claim_resolution_subdue"
+    },
+    {
+      id: "f1_resolution_reward_restore_shared_mark",
+      objectiveId: resolution.objectiveIds[0],
+      selectionId: "f1_choice_resolution_restore_shared_mark",
+      rewardId: "f1_reward_joint_workshop_formula",
+      rewardDedupKey: "f1_claim_resolution_restore_shared_mark"
+    }
+  ]);
+
+  const duplicateDedup = structuredClone(contract);
+  duplicateDedup.questResolutionRewards[1].rewardDedupKey =
+    duplicateDedup.questResolutionRewards[0].rewardDedupKey;
+  assert.throws(
+    () => validateF1SliceContract(duplicateDedup, catalog),
+    /duplicate resolution reward rewardDedupKey/
+  );
+
+  const driftedMapping = structuredClone(contract);
+  driftedMapping.questResolutionRewards[0].rewardId = "f1_reward_wrong";
+  assert.throws(
+    () => validateF1SliceContract(driftedMapping, catalog),
+    /reward receipt mappings drifted/
   );
 });
 

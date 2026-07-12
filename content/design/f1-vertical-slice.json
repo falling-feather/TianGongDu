@@ -1,6 +1,6 @@
 {
   "$schema": "../schemas/f1-vertical-slice.schema.json",
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "id": "f1_rainy_umbrella_trial",
   "view": {
     "model": "2.5d-oblique-panoramic",
@@ -230,6 +230,34 @@
         },
         "stanceIds": ["stance_paper_egret"],
         "initialStanceId": "stance_paper_egret",
+        "initiallyActive": false
+      },
+      {
+        "actorKey": 106,
+        "archetypeId": "jn_enemy_leaking_umbrella_doll",
+        "faction": "hostile",
+        "poseMm": { "x": -4600, "y": 1600, "height": 0, "floorLayer": 0 },
+        "resources": {
+          "health": 70,
+          "healthMax": 70,
+          "stamina": 80,
+          "staminaMax": 80,
+          "poise": 40,
+          "poiseMax": 40,
+          "lantern": 0,
+          "lanternMax": 0,
+          "evidence": 0
+        },
+        "recovery": {
+          "staminaDelayTicks": 45,
+          "staminaIntervalTicks": 10,
+          "staminaPerInterval": 2,
+          "poiseDelayTicks": 150,
+          "poiseIntervalTicks": 15,
+          "poisePerInterval": 3
+        },
+        "stanceIds": ["stance_umbrella_rust"],
+        "initialStanceId": "stance_umbrella_rust",
         "initiallyActive": false
       },
       {
@@ -897,6 +925,8 @@
       "id": "f1_activation_shen_yan_training_rigs",
       "beatId": "f1_beat_shen_yan_training",
       "triggerObjectiveId": null,
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
       "mode": "replace",
       "encounterId": "f1_encounter_umbrella_lane_bootstrap",
       "actorKeys": [104],
@@ -912,6 +942,8 @@
       "id": "f1_activation_shen_yan_flower_turn_rig",
       "beatId": "f1_beat_shen_yan_training",
       "triggerObjectiveId": "f1_objective_eavesguard_counter",
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
       "mode": "replace",
       "encounterId": "f1_encounter_umbrella_lane_bootstrap",
       "actorKeys": [105],
@@ -927,6 +959,8 @@
       "id": "f1_activation_umbrella_lane_first_encounter",
       "beatId": "f1_beat_umbrella_lane_first_encounter",
       "triggerObjectiveId": null,
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
       "mode": "replace",
       "encounterId": "f1_encounter_umbrella_lane_bootstrap",
       "actorKeys": [101, 102],
@@ -947,6 +981,8 @@
       "id": "f1_activation_umbrella_lane_paper_egret",
       "beatId": "f1_beat_umbrella_lane_first_encounter",
       "triggerObjectiveId": "f1_objective_raise_paper_egret_lure",
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
       "mode": "replace",
       "encounterId": "f1_encounter_umbrella_lane_bootstrap",
       "actorKeys": [103],
@@ -962,6 +998,8 @@
       "id": "f1_activation_canopy_return_encounter",
       "beatId": "f1_beat_canopy_return_encounter",
       "triggerObjectiveId": null,
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
       "mode": "replace",
       "encounterId": "f1_encounter_umbrella_lane_bootstrap",
       "actorKeys": [101, 102, 103],
@@ -984,9 +1022,28 @@
       ]
     },
     {
-      "id": "f1_activation_canopy_return_reinforcement",
+      "id": "f1_activation_canopy_return_spring_reinforcement",
       "beatId": "f1_beat_canopy_return_encounter",
       "triggerObjectiveId": "f1_objective_prime_return_calibration",
+      "requiredSelectionObjectiveId": "f1_objective_choose_rib_calibration",
+      "requiredSelectionId": "f1_choice_rib_spring_calibration",
+      "mode": "reinforce",
+      "encounterId": "f1_encounter_umbrella_lane_bootstrap",
+      "actorKeys": [106],
+      "actorPlacements": [
+        {
+          "actorKey": 106,
+          "poseMm": { "x": 500, "y": 1400, "height": 0, "floorLayer": 0 },
+          "formationSlot": 5
+        }
+      ]
+    },
+    {
+      "id": "f1_activation_canopy_return_winter_reinforcement",
+      "beatId": "f1_beat_canopy_return_encounter",
+      "triggerObjectiveId": "f1_objective_prime_return_calibration",
+      "requiredSelectionObjectiveId": "f1_objective_choose_rib_calibration",
+      "requiredSelectionId": "f1_choice_rib_winter_calibration",
       "mode": "reinforce",
       "encounterId": "f1_encounter_umbrella_lane_bootstrap",
       "actorKeys": [105],
@@ -1002,6 +1059,8 @@
       "id": "f1_activation_four_seasons_wraith",
       "beatId": "f1_beat_four_seasons_wraith",
       "triggerObjectiveId": null,
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
       "mode": "replace",
       "encounterId": "f1_encounter_umbrella_lane_bootstrap",
       "actorKeys": [201],

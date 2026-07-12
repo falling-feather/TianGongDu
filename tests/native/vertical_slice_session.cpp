@@ -325,6 +325,83 @@ bool test_idle_simulation_is_visible_but_never_eligible() {
     );
 }
 
+bool test_selection_driven_encounter_activation_match() {
+    const auto progress_to_calibration = [](VerticalSliceSession& session) {
+        bool ok = session.initialize(definition(), empty_world()) == VerticalSliceError::none;
+        ok &= session.start() == VerticalSliceError::none;
+        for (std::size_t beat_index = 0; beat_index < 3; ++beat_index) {
+            for (const auto& objective : definition().beats[beat_index].objectives) {
+                ok &= session.complete_objective(
+                              objective.key,
+                              selection_for_objective(objective.key)
+                          ).error == VerticalSliceError::none;
+            }
+        }
+        const auto& workbench = definition().beats[3];
+        for (std::size_t index = 0; index < 3; ++index) {
+            ok &= session.complete_objective(workbench.objectives[index].key).error ==
+                  VerticalSliceError::none;
+        }
+        return ok;
+    };
+
+    const auto& return_beat = definition().beats[4];
+    const auto trigger = return_beat.objectives.front().key;
+    VerticalSliceSession winter;
+    bool ok = progress_to_calibration(winter);
+    const auto gated_before_choice = winter.encounter_activation(return_beat.id.key, trigger);
+    ok &= expect(
+        gated_before_choice.boundary_defined && gated_before_choice.activation == nullptr &&
+            !gated_before_choice.ambiguous,
+        "a conditional activation boundary remains closed before its authored choice"
+    );
+    ok &= winter.complete_objective(
+                    definition().beats[3].objectives[3].key,
+                    tgd::contracts::stable_content_key(
+                        "f1_choice_rib_winter_calibration"
+                    )
+                ).error == VerticalSliceError::none;
+    const auto winter_match = winter.encounter_activation(return_beat.id.key, trigger);
+    ok &= expect(
+        winter_match.boundary_defined && winter_match.activation != nullptr &&
+            !winter_match.ambiguous &&
+            winter_match.activation->required_selection_id.key ==
+                tgd::contracts::stable_content_key(
+                    "f1_choice_rib_winter_calibration"
+                ) &&
+            winter_match.activation->actor_keys.size() == 1 &&
+            winter_match.activation->actor_keys.front() == 105,
+        "winter calibration selects only the paper-egret reinforcement"
+    );
+
+    VerticalSliceSession spring;
+    ok &= progress_to_calibration(spring);
+    ok &= spring.complete_objective(
+                    definition().beats[3].objectives[3].key,
+                    tgd::contracts::stable_content_key(
+                        "f1_choice_rib_spring_calibration"
+                    )
+                ).error == VerticalSliceError::none;
+    const auto spring_match = spring.encounter_activation(return_beat.id.key, trigger);
+    ok &= expect(
+        spring_match.boundary_defined && spring_match.activation != nullptr &&
+            !spring_match.ambiguous &&
+            spring_match.activation->required_selection_id.key ==
+                tgd::contracts::stable_content_key(
+                    "f1_choice_rib_spring_calibration"
+                ) &&
+            spring_match.activation->actor_keys.size() == 1 &&
+            spring_match.activation->actor_keys.front() == 106,
+        "spring calibration selects only the umbrella-doll reinforcement"
+    );
+    const auto missing = spring.encounter_activation(return_beat.id.key, 0xfeedULL);
+    ok &= expect(
+        !missing.boundary_defined && missing.activation == nullptr && !missing.ambiguous,
+        "unknown encounter boundaries remain distinguishable from gated variants"
+    );
+    return ok;
+}
+
 bool test_objective_driven_encounter_activations_fail_closed() {
     auto cross_beat = definition();
     std::vector<tgd::contracts::QuestEncounterActivationDefinition> cross_beat_activations(
@@ -371,6 +448,58 @@ bool test_objective_driven_encounter_activations_fail_closed() {
             empty_world()
         ) == VerticalSliceError::invalid_definition,
         "a reinforcement must be gated by an objective rather than stage entry"
+    );
+
+    auto half_selection_gate = definition();
+    std::vector<tgd::contracts::QuestEncounterActivationDefinition>
+        half_selection_activations(
+            definition().quest_encounter_activations.begin(),
+            definition().quest_encounter_activations.end()
+        );
+    half_selection_activations[5].required_selection_id = {};
+    half_selection_gate.quest_encounter_activations = half_selection_activations;
+    VerticalSliceSession half_selection_session;
+    ok &= expect(
+        half_selection_session.initialize(half_selection_gate, empty_world()) ==
+            VerticalSliceError::invalid_definition,
+        "a selection gate must declare both objective and option"
+    );
+
+    auto duplicate_selection_gate = definition();
+    std::vector<tgd::contracts::QuestEncounterActivationDefinition>
+        duplicate_selection_activations(
+            definition().quest_encounter_activations.begin(),
+            definition().quest_encounter_activations.end()
+        );
+    duplicate_selection_activations[6].required_selection_id =
+        duplicate_selection_activations[5].required_selection_id;
+    duplicate_selection_gate.quest_encounter_activations =
+        duplicate_selection_activations;
+    VerticalSliceSession duplicate_selection_session;
+    ok &= expect(
+        duplicate_selection_session.initialize(
+            duplicate_selection_gate,
+            empty_world()
+        ) == VerticalSliceError::invalid_definition,
+        "one activation boundary cannot duplicate a selection variant"
+    );
+
+    auto incomplete_selection_gate = definition();
+    std::vector<tgd::contracts::QuestEncounterActivationDefinition>
+        incomplete_selection_activations(
+            definition().quest_encounter_activations.begin(),
+            definition().quest_encounter_activations.end()
+        );
+    incomplete_selection_activations.erase(incomplete_selection_activations.begin() + 6);
+    incomplete_selection_gate.quest_encounter_activations =
+        incomplete_selection_activations;
+    VerticalSliceSession incomplete_selection_session;
+    ok &= expect(
+        incomplete_selection_session.initialize(
+            incomplete_selection_gate,
+            empty_world()
+        ) == VerticalSliceError::invalid_definition,
+        "conditional activation variants must cover every authored selection"
     );
 
     auto mismatched_placement = definition();
@@ -423,6 +552,7 @@ int main() {
     ok &= test_retry_preserves_objective_progress();
     ok &= test_every_authored_safe_point_is_collision_checked_before_start();
     ok &= test_idle_simulation_is_visible_but_never_eligible();
+    ok &= test_selection_driven_encounter_activation_match();
     ok &= test_objective_driven_encounter_activations_fail_closed();
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

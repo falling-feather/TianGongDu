@@ -423,6 +423,36 @@ contracts::StableContentKey VerticalSliceSession::selected_option(
     return quest_.selected_option(objective);
 }
 
+EncounterActivationMatch VerticalSliceSession::encounter_activation(
+    contracts::StableContentKey beat,
+    contracts::StableContentKey trigger_objective
+) const noexcept {
+    EncounterActivationMatch match{};
+    if (definition_ == nullptr) {
+        return match;
+    }
+    for (const auto& activation : definition_->quest_encounter_activations) {
+        if (activation.beat_id.key != beat ||
+            activation.trigger_objective_id.key != trigger_objective) {
+            continue;
+        }
+        match.boundary_defined = true;
+        const bool selection_matches = activation.required_selection_id.key == 0 ||
+            quest_.selected_option(activation.required_selection_objective_id.key) ==
+                activation.required_selection_id.key;
+        if (!selection_matches) {
+            continue;
+        }
+        if (match.activation != nullptr) {
+            match.activation = nullptr;
+            match.ambiguous = true;
+            return match;
+        }
+        match.activation = &activation;
+    }
+    return match;
+}
+
 bool VerticalSliceSession::valid_definition(
     const contracts::VerticalSliceDefinition& definition
 ) const noexcept {
@@ -501,6 +531,9 @@ bool VerticalSliceSession::valid_definition(
             }
         );
         const bool has_trigger_objective = activation.trigger_objective_id.key != 0;
+        const bool has_selection_objective =
+            activation.required_selection_objective_id.key != 0;
+        const bool has_selection = activation.required_selection_id.key != 0;
         const bool valid_activation_mode =
             activation.mode == contracts::EncounterActivationMode::replace ||
             activation.mode == contracts::EncounterActivationMode::reinforce;
@@ -514,10 +547,69 @@ bool VerticalSliceSession::valid_definition(
                     return objective.key == activation.trigger_objective_id.key;
                 }
             );
+        const auto selection_interaction = std::find_if(
+            definition.quest_interactions.begin(),
+            definition.quest_interactions.end(),
+            [&activation](const contracts::QuestInteractionDefinition& interaction) {
+                return interaction.kind == contracts::QuestInteractionKind::choose &&
+                       interaction.objective_id.key ==
+                           activation.required_selection_objective_id.key &&
+                       interaction.selection_id.key == activation.required_selection_id.key;
+            }
+        );
+        const auto selection_beat = std::find_if(
+            definition.beats.begin(),
+            definition.beats.end(),
+            [&activation](const contracts::VerticalSliceBeatDefinition& beat) {
+                return std::any_of(
+                    beat.objectives.begin(),
+                    beat.objectives.end(),
+                    [&activation](const contracts::ContentId& objective) {
+                        return objective.key ==
+                               activation.required_selection_objective_id.key;
+                    }
+                );
+            }
+        );
+        bool selection_precedes_boundary = !has_selection;
+        if (has_selection && selection_beat != definition.beats.end() &&
+            activation_beat != definition.beats.end()) {
+            if (selection_beat < activation_beat) {
+                selection_precedes_boundary = true;
+            } else if (selection_beat == activation_beat) {
+                const auto selection_objective = std::find_if(
+                    activation_beat->objectives.begin(),
+                    activation_beat->objectives.end(),
+                    [&activation](const contracts::ContentId& objective) {
+                        return objective.key ==
+                               activation.required_selection_objective_id.key;
+                    }
+                );
+                const auto trigger_objective = std::find_if(
+                    activation_beat->objectives.begin(),
+                    activation_beat->objectives.end(),
+                    [&activation](const contracts::ContentId& objective) {
+                        return objective.key == activation.trigger_objective_id.key;
+                    }
+                );
+                selection_precedes_boundary =
+                    selection_objective != activation_beat->objectives.end() &&
+                    trigger_objective != activation_beat->objectives.end() &&
+                    selection_objective < trigger_objective;
+            }
+        }
         if (activation.id.key == 0 || activation.id.name.empty() ||
             activation.beat_id.key == 0 || activation.beat_id.name.empty() ||
             has_trigger_objective == activation.trigger_objective_id.name.empty() ||
             (has_trigger_objective && !trigger_objective_exists) ||
+            has_selection_objective ==
+                activation.required_selection_objective_id.name.empty() ||
+            has_selection == activation.required_selection_id.name.empty() ||
+            has_selection_objective != has_selection ||
+            (has_selection && !has_trigger_objective) ||
+            (has_selection &&
+             (selection_interaction == definition.quest_interactions.end() ||
+              !selection_precedes_boundary)) ||
             !valid_activation_mode ||
             (activation.mode == contracts::EncounterActivationMode::reinforce &&
              !has_trigger_objective) ||
@@ -552,12 +644,62 @@ bool VerticalSliceSession::valid_definition(
                 return false;
             }
         }
+        if (has_selection) {
+            std::size_t variant_count = 0;
+            for (const auto& candidate : definition.quest_encounter_activations) {
+                if (candidate.beat_id.key != activation.beat_id.key ||
+                    candidate.trigger_objective_id.key !=
+                        activation.trigger_objective_id.key) {
+                    continue;
+                }
+                if (candidate.required_selection_objective_id.key !=
+                        activation.required_selection_objective_id.key ||
+                    candidate.required_selection_id.key == 0) {
+                    return false;
+                }
+                ++variant_count;
+            }
+            std::size_t option_count = 0;
+            for (const auto& interaction : definition.quest_interactions) {
+                if (interaction.objective_id.key !=
+                        activation.required_selection_objective_id.key ||
+                    interaction.selection_id.key == 0) {
+                    continue;
+                }
+                ++option_count;
+                if (std::none_of(
+                        definition.quest_encounter_activations.begin(),
+                        definition.quest_encounter_activations.end(),
+                        [&activation, &interaction](
+                            const contracts::QuestEncounterActivationDefinition& candidate
+                        ) {
+                            return candidate.beat_id.key == activation.beat_id.key &&
+                                   candidate.trigger_objective_id.key ==
+                                       activation.trigger_objective_id.key &&
+                                   candidate.required_selection_id.key ==
+                                       interaction.selection_id.key;
+                        }
+                    )) {
+                    return false;
+                }
+            }
+            if (variant_count == 0 || variant_count != option_count) {
+                return false;
+            }
+        }
         for (std::size_t prior = 0; prior < index; ++prior) {
             const auto& previous = definition.quest_encounter_activations[prior];
+            const bool same_boundary =
+                previous.beat_id.key == activation.beat_id.key &&
+                previous.trigger_objective_id.key ==
+                    activation.trigger_objective_id.key;
             if (previous.id.key == activation.id.key ||
-                (previous.beat_id.key == activation.beat_id.key &&
-                 previous.trigger_objective_id.key ==
-                     activation.trigger_objective_id.key)) {
+                (same_boundary &&
+                 (!has_selection ||
+                  previous.required_selection_objective_id.key !=
+                      activation.required_selection_objective_id.key ||
+                  previous.required_selection_id.key ==
+                      activation.required_selection_id.key))) {
                 return false;
             }
         }

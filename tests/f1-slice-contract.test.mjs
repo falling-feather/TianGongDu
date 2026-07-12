@@ -29,7 +29,13 @@ test("F1 one-hour contract and generated C++ stay synchronized", async () => {
   assert.equal(contract.view.primaryGuidance, "douzhanshen");
   assert.equal(contract.beats.length, 7);
   assert.equal(contract.safePoints.length, 7);
-  assert.equal(contract.combatBootstrap.actors.length, 7);
+  assert.equal(contract.combatBootstrap.actors.length, 8);
+  const springReturnUmbrella = contract.combatBootstrap.actors.find(
+    (actor) => actor.actorKey === 106
+  );
+  assert.equal(springReturnUmbrella.archetypeId, "jn_enemy_leaking_umbrella_doll");
+  assert.equal(springReturnUmbrella.resources.health, 70);
+  assert.equal(springReturnUmbrella.initiallyActive, false);
   assert.equal(contract.combatBootstrap.abilities.length, 17);
   assert.equal(contract.combatBootstrap.director.maxSimultaneousAttackers, 1);
   assert.equal(contract.combatBootstrap.director.formationRadiusMm, 1500);
@@ -288,6 +294,8 @@ test("F1 encounters activate authored groups at beat and objective boundaries", 
       id: "f1_activation_shen_yan_training_rigs",
       beatId: contract.beats[1].id,
       triggerObjectiveId: null,
+      requiredSelectionObjectiveId: null,
+      requiredSelectionId: null,
       mode: "replace",
       encounterId: contract.combatBootstrap.id,
       actorKeys: [104],
@@ -303,6 +311,8 @@ test("F1 encounters activate authored groups at beat and objective boundaries", 
       id: "f1_activation_shen_yan_flower_turn_rig",
       beatId: contract.beats[1].id,
       triggerObjectiveId: contract.beats[1].objectiveIds[2],
+      requiredSelectionObjectiveId: null,
+      requiredSelectionId: null,
       mode: "replace",
       encounterId: contract.combatBootstrap.id,
       actorKeys: [105],
@@ -318,6 +328,8 @@ test("F1 encounters activate authored groups at beat and objective boundaries", 
       id: "f1_activation_umbrella_lane_first_encounter",
       beatId: contract.beats[2].id,
       triggerObjectiveId: null,
+      requiredSelectionObjectiveId: null,
+      requiredSelectionId: null,
       mode: "replace",
       encounterId: contract.combatBootstrap.id,
       actorKeys: [101, 102],
@@ -338,6 +350,8 @@ test("F1 encounters activate authored groups at beat and objective boundaries", 
       id: "f1_activation_umbrella_lane_paper_egret",
       beatId: contract.beats[2].id,
       triggerObjectiveId: contract.beats[2].objectiveIds[3],
+      requiredSelectionObjectiveId: null,
+      requiredSelectionId: null,
       mode: "replace",
       encounterId: contract.combatBootstrap.id,
       actorKeys: [103],
@@ -353,6 +367,8 @@ test("F1 encounters activate authored groups at beat and objective boundaries", 
       id: "f1_activation_canopy_return_encounter",
       beatId: contract.beats[4].id,
       triggerObjectiveId: null,
+      requiredSelectionObjectiveId: null,
+      requiredSelectionId: null,
       mode: "replace",
       encounterId: contract.combatBootstrap.id,
       actorKeys: [101, 102, 103],
@@ -375,9 +391,28 @@ test("F1 encounters activate authored groups at beat and objective boundaries", 
       ]
     },
     {
-      id: "f1_activation_canopy_return_reinforcement",
+      id: "f1_activation_canopy_return_spring_reinforcement",
       beatId: contract.beats[4].id,
       triggerObjectiveId: contract.beats[4].objectiveIds[0],
+      requiredSelectionObjectiveId: contract.beats[3].objectiveIds[3],
+      requiredSelectionId: "f1_choice_rib_spring_calibration",
+      mode: "reinforce",
+      encounterId: contract.combatBootstrap.id,
+      actorKeys: [106],
+      actorPlacements: [
+        {
+          actorKey: 106,
+          poseMm: { x: 500, y: 1400, height: 0, floorLayer: 0 },
+          formationSlot: 5
+        }
+      ]
+    },
+    {
+      id: "f1_activation_canopy_return_winter_reinforcement",
+      beatId: contract.beats[4].id,
+      triggerObjectiveId: contract.beats[4].objectiveIds[0],
+      requiredSelectionObjectiveId: contract.beats[3].objectiveIds[3],
+      requiredSelectionId: "f1_choice_rib_winter_calibration",
       mode: "reinforce",
       encounterId: contract.combatBootstrap.id,
       actorKeys: [105],
@@ -393,6 +428,8 @@ test("F1 encounters activate authored groups at beat and objective boundaries", 
       id: "f1_activation_four_seasons_wraith",
       beatId: contract.beats[5].id,
       triggerObjectiveId: null,
+      requiredSelectionObjectiveId: null,
+      requiredSelectionId: null,
       mode: "replace",
       encounterId: contract.combatBootstrap.id,
       actorKeys: [201],
@@ -416,7 +453,7 @@ test("F1 encounters activate authored groups at beat and objective boundaries", 
   wrongBeat.questEncounterActivations[0].beatId = contract.beats[3].id;
   assert.throws(
     () => validateF1SliceContract(wrongBeat, catalog),
-    /training waves, lane waves, return reinforcement, and boss beats must own/
+    /training waves, lane waves, choice-driven return reinforcements, and boss beats must own/
   );
 
   const stageEntryReinforcement = structuredClone(contract);
@@ -424,6 +461,38 @@ test("F1 encounters activate authored groups at beat and objective boundaries", 
   assert.throws(
     () => validateF1SliceContract(stageEntryReinforcement, catalog),
     /invalid activation mode or stage-entry reinforcement/
+  );
+
+  const halfSelectionGate = structuredClone(contract);
+  halfSelectionGate.questEncounterActivations[5].requiredSelectionId = null;
+  assert.throws(
+    () => validateF1SliceContract(halfSelectionGate, catalog),
+    /invalid selection gate/
+  );
+
+  const futureSelectionGate = structuredClone(contract);
+  futureSelectionGate.questEncounterActivations[5].requiredSelectionObjectiveId =
+    contract.beats[6].objectiveIds[0];
+  futureSelectionGate.questEncounterActivations[5].requiredSelectionId =
+    "f1_choice_resolution_subdue";
+  assert.throws(
+    () => validateF1SliceContract(futureSelectionGate, catalog),
+    /missing or future selection gate/
+  );
+
+  const duplicateSelectionGate = structuredClone(contract);
+  duplicateSelectionGate.questEncounterActivations[6].requiredSelectionId =
+    "f1_choice_rib_spring_calibration";
+  assert.throws(
+    () => validateF1SliceContract(duplicateSelectionGate, catalog),
+    /duplicate .* selection gate/
+  );
+
+  const incompleteSelectionCoverage = structuredClone(contract);
+  incompleteSelectionCoverage.questEncounterActivations.splice(6, 1);
+  assert.throws(
+    () => validateF1SliceContract(incompleteSelectionCoverage, catalog),
+    /does not cover every authored selection option/
   );
 
   const crossBeatTrigger = structuredClone(contract);

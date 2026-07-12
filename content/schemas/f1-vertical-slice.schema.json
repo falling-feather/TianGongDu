@@ -26,7 +26,7 @@
   ],
   "properties": {
     "$schema": { "type": "string" },
-    "schemaVersion": { "const": "1.1.0" },
+    "schemaVersion": { "const": "1.2.0" },
     "id": { "const": "f1_rainy_umbrella_trial" },
     "view": {
       "type": "object",
@@ -496,6 +496,8 @@
         "id",
         "beatId",
         "triggerObjectiveId",
+        "requiredSelectionObjectiveId",
+        "requiredSelectionId",
         "mode",
         "encounterId",
         "actorKeys",
@@ -505,6 +507,18 @@
         "id": { "$ref": "#/$defs/id" },
         "beatId": { "$ref": "#/$defs/id" },
         "triggerObjectiveId": {
+          "anyOf": [
+            { "$ref": "#/$defs/id" },
+            { "type": "null" }
+          ]
+        },
+        "requiredSelectionObjectiveId": {
+          "anyOf": [
+            { "$ref": "#/$defs/id" },
+            { "type": "null" }
+          ]
+        },
+        "requiredSelectionId": {
           "anyOf": [
             { "$ref": "#/$defs/id" },
             { "type": "null" }

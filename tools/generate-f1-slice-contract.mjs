@@ -46,7 +46,7 @@ function sameValues(left, right) {
 }
 
 export function validateF1SliceContract(contract, catalog) {
-  if (contract.schemaVersion !== "1.1.0") fail("unsupported schemaVersion");
+  if (contract.schemaVersion !== "1.2.0") fail("unsupported schemaVersion");
   const catalogSlice = catalog.f1VerticalSlice;
   if (contract.id !== catalogSlice.id) fail("slice id drifted from the 1.0 catalog");
   const expectedView = {
@@ -394,6 +394,40 @@ export function validateF1SliceContract(contract, catalog) {
         (activation.mode === "reinforce" && activation.triggerObjectiveId === null)) {
       fail(`${activation.id} has an invalid activation mode or stage-entry reinforcement`);
     }
+    const hasSelectionObjective = activation.requiredSelectionObjectiveId !== null;
+    const hasSelection = activation.requiredSelectionId !== null;
+    if (hasSelectionObjective !== hasSelection ||
+        (hasSelection && activation.triggerObjectiveId === null)) {
+      fail(`${activation.id} has an invalid selection gate`);
+    }
+    if (hasSelection) {
+      const selectionInteraction = interactions.find(
+        (interaction) =>
+          interaction.kind === "choose" &&
+          interaction.objectiveId === activation.requiredSelectionObjectiveId &&
+          interaction.selectionId === activation.requiredSelectionId
+      );
+      const selectionBeatIndex = contract.beats.findIndex(
+        (beat) => beat.objectiveIds.includes(activation.requiredSelectionObjectiveId)
+      );
+      const activationBeatIndex = contract.beats.findIndex(
+        (beat) => beat.id === activation.beatId
+      );
+      const selectionObjectiveIndex = selectionBeatIndex < 0
+        ? -1
+        : contract.beats[selectionBeatIndex].objectiveIds.indexOf(
+            activation.requiredSelectionObjectiveId
+          );
+      const triggerObjectiveIndex = activationBeat.objectiveIds.indexOf(
+        activation.triggerObjectiveId
+      );
+      if (!selectionInteraction || selectionBeatIndex < 0 ||
+          selectionBeatIndex > activationBeatIndex ||
+          (selectionBeatIndex === activationBeatIndex &&
+           selectionObjectiveIndex >= triggerObjectiveIndex)) {
+        fail(`${activation.id} references a missing or future selection gate`);
+      }
+    }
     if (activation.encounterId !== contract.combatBootstrap?.id) {
       fail(`${activation.id} references an unknown encounter`);
     }
@@ -428,58 +462,110 @@ export function validateF1SliceContract(contract, catalog) {
     );
   }
   assertUnique(encounterActivations.map((activation) => activation.id), "encounter activation id");
-  assertUnique(
-    encounterActivations.map(
-      (activation) => `${activation.beatId}:${activation.triggerObjectiveId ?? "stage_entered"}`
-    ),
-    "encounter activation trigger"
-  );
+  const visitedActivationBoundaries = new Set();
+  for (const activation of encounterActivations) {
+    const boundary = `${activation.beatId}:${activation.triggerObjectiveId ?? "stage_entered"}`;
+    if (visitedActivationBoundaries.has(boundary)) continue;
+    visitedActivationBoundaries.add(boundary);
+    const variants = encounterActivations.filter(
+      (candidate) => candidate.beatId === activation.beatId &&
+        candidate.triggerObjectiveId === activation.triggerObjectiveId
+    );
+    const gatedVariants = variants.filter(
+      (candidate) => candidate.requiredSelectionId !== null
+    );
+    if (gatedVariants.length === 0) {
+      if (variants.length !== 1) fail(`${boundary} has duplicate unconditional activations`);
+      continue;
+    }
+    const selectionObjectiveId = gatedVariants[0].requiredSelectionObjectiveId;
+    if (gatedVariants.length !== variants.length ||
+        gatedVariants.some(
+          (candidate) => candidate.requiredSelectionObjectiveId !== selectionObjectiveId
+        )) {
+      fail(`${boundary} mixes incompatible selection gates`);
+    }
+    assertUnique(
+      gatedVariants.map((candidate) => candidate.requiredSelectionId),
+      `${boundary} selection gate`
+    );
+    const selectionOptions = interactions
+      .filter(
+        (interaction) => interaction.objectiveId === selectionObjectiveId &&
+          interaction.selectionId !== null
+      )
+      .map((interaction) => interaction.selectionId);
+    if (selectionOptions.length !== gatedVariants.length ||
+        selectionOptions.some(
+          (selection) => !gatedVariants.some(
+            (candidate) => candidate.requiredSelectionId === selection
+          )
+        )) {
+      fail(`${boundary} does not cover every authored selection option`);
+    }
+  }
   const trainingBeat = contract.beats[1];
   const laneBeat = contract.beats[2];
   const bossBeat = contract.beats[5];
-  if (encounterActivations.length !== 7 ||
+  if (encounterActivations.length !== 8 ||
       encounterActivations[0].beatId !== trainingBeat.id ||
       encounterActivations[0].triggerObjectiveId !== null ||
+      encounterActivations[0].requiredSelectionId !== null ||
       encounterActivations[0].mode !== "replace" ||
       !sameValues(encounterActivations[0].actorKeys, [104]) ||
       !sameValues(encounterActivations[0].actorPlacements.map((value) => value.formationSlot), [0]) ||
       encounterActivations[1].beatId !== trainingBeat.id ||
       encounterActivations[1].triggerObjectiveId !== trainingBeat.objectiveIds[2] ||
+      encounterActivations[1].requiredSelectionId !== null ||
       encounterActivations[1].mode !== "replace" ||
       !sameValues(encounterActivations[1].actorKeys, [105]) ||
       !sameValues(encounterActivations[1].actorPlacements.map((value) => value.formationSlot), [2]) ||
       encounterActivations[2].beatId !== laneBeat.id ||
       encounterActivations[2].triggerObjectiveId !== null ||
+      encounterActivations[2].requiredSelectionId !== null ||
       encounterActivations[2].mode !== "replace" ||
       !sameValues(encounterActivations[2].actorKeys, [101, 102]) ||
       !sameValues(encounterActivations[2].actorPlacements.map((value) => value.formationSlot), [1, 5]) ||
       encounterActivations[3].beatId !== laneBeat.id ||
       encounterActivations[3].triggerObjectiveId !== laneBeat.objectiveIds[3] ||
+      encounterActivations[3].requiredSelectionId !== null ||
       encounterActivations[3].mode !== "replace" ||
       !sameValues(encounterActivations[3].actorKeys, [103]) ||
       !sameValues(encounterActivations[3].actorPlacements.map((value) => value.formationSlot), [2]) ||
       encounterActivations[4].beatId !== returnBeat.id ||
       encounterActivations[4].triggerObjectiveId !== null ||
+      encounterActivations[4].requiredSelectionId !== null ||
       encounterActivations[4].mode !== "replace" ||
       !sameValues(encounterActivations[4].actorKeys, [101, 102, 103]) ||
       !sameValues(encounterActivations[4].actorPlacements.map((value) => value.formationSlot), [0, 3, 6]) ||
       encounterActivations[5].beatId !== returnBeat.id ||
       encounterActivations[5].triggerObjectiveId !== returnBeat.objectiveIds[0] ||
+      encounterActivations[5].requiredSelectionObjectiveId !== workbenchBeat.objectiveIds[3] ||
+      encounterActivations[5].requiredSelectionId !== "f1_choice_rib_spring_calibration" ||
       encounterActivations[5].mode !== "reinforce" ||
-      !sameValues(encounterActivations[5].actorKeys, [105]) ||
+      !sameValues(encounterActivations[5].actorKeys, [106]) ||
       !sameValues(encounterActivations[5].actorPlacements.map((value) => value.formationSlot), [5]) ||
-      encounterActivations[6].beatId !== bossBeat.id ||
-      encounterActivations[6].triggerObjectiveId !== null ||
-      encounterActivations[6].mode !== "replace" ||
-      !sameValues(encounterActivations[6].actorKeys, [201]) ||
-      !sameValues(encounterActivations[6].actorPlacements.map((value) => value.formationSlot), [4])) {
-    fail("training waves, lane waves, return reinforcement, and boss beats must own authored activations");
+      encounterActivations[6].beatId !== returnBeat.id ||
+      encounterActivations[6].triggerObjectiveId !== returnBeat.objectiveIds[0] ||
+      encounterActivations[6].requiredSelectionObjectiveId !== workbenchBeat.objectiveIds[3] ||
+      encounterActivations[6].requiredSelectionId !== "f1_choice_rib_winter_calibration" ||
+      encounterActivations[6].mode !== "reinforce" ||
+      !sameValues(encounterActivations[6].actorKeys, [105]) ||
+      !sameValues(encounterActivations[6].actorPlacements.map((value) => value.formationSlot), [5]) ||
+      encounterActivations[7].beatId !== bossBeat.id ||
+      encounterActivations[7].triggerObjectiveId !== null ||
+      encounterActivations[7].requiredSelectionId !== null ||
+      encounterActivations[7].mode !== "replace" ||
+      !sameValues(encounterActivations[7].actorKeys, [201]) ||
+      !sameValues(encounterActivations[7].actorPlacements.map((value) => value.formationSlot), [4])) {
+    fail("training waves, lane waves, choice-driven return reinforcements, and boss beats must own authored activations");
   }
   const returnSafePoint = safePoints[4].poseMm;
   const returnAggroRangeMm = contract.combatBootstrap?.director?.aggroRangeMm;
   const returnPlacements = [
     ...encounterActivations[4].actorPlacements,
-    ...encounterActivations[5].actorPlacements
+    ...encounterActivations[5].actorPlacements,
+    ...encounterActivations[6].actorPlacements
   ];
   if (!Number.isInteger(returnAggroRangeMm) || returnPlacements.some((placement) => {
     const deltaX = placement.poseMm.x - returnSafePoint.x;
@@ -938,8 +1024,18 @@ export function validateF1SliceContract(contract, catalog) {
     }
   }
   for (const outcome of combatOutcomes) {
+    const outcomeBeat = contract.beats.find(
+      (beat) => beat.objectiveIds.includes(outcome.objectiveId)
+    );
+    const reachableActorKeys = new Set(
+      encounterActivations
+        .filter((activation) => activation.beatId === outcomeBeat?.id)
+        .flatMap((activation) => activation.actorKeys)
+    );
     const matchingHostiles = combat.actors.filter(
-      (actor) => actor.faction === "hostile" && actor.archetypeId === outcome.archetypeId
+      (actor) => actor.faction === "hostile" &&
+        reachableActorKeys.has(actor.actorKey) &&
+        actor.archetypeId === outcome.archetypeId
     ).length;
     if (matchingHostiles < outcome.requiredCount) {
       fail(`${outcome.id} cannot reach its required hostile count`);
@@ -970,6 +1066,18 @@ export function validateF1SliceContract(contract, catalog) {
       trainingEgret.initiallyActive !== false ||
       !sameValues(trainingEgret.poseMm, { x: -5200, y: -1600, height: 700, floorLayer: 0 })) {
     fail("the Shen Yan training rigs drifted from their authored encounter roles");
+  }
+  const springReturnUmbrella = combat.actors.find((actor) => actor.actorKey === 106);
+  const referenceUmbrella = combat.actors.find((actor) => actor.actorKey === 101);
+  if (springReturnUmbrella?.archetypeId !== referenceUmbrella?.archetypeId ||
+      springReturnUmbrella.initialStanceId !== "stance_umbrella_rust" ||
+      springReturnUmbrella.initiallyActive !== false ||
+      springReturnUmbrella.resources.health !== 70 ||
+      !sameValues(
+        springReturnUmbrella.poseMm,
+        { x: -4600, y: 1600, height: 0, floorLayer: 0 }
+      )) {
+    fail("the spring return umbrella variant drifted from its authored role");
   }
   const bossActor = combat.actors.find((actor) => actor.actorKey === 201);
   if (bossActor?.archetypeId !== refs.bossId || bossActor.faction !== "hostile" ||
@@ -1129,7 +1237,13 @@ function questEncounterActivationRow(activation, index) {
   const triggerObjective = activation.triggerObjectiveId === null
     ? "contracts::ContentId{}"
     : contentId(activation.triggerObjectiveId);
-  return `    {${contentId(activation.id)}, ${contentId(activation.beatId)}, ${triggerObjective}, contracts::EncounterActivationMode::${activation.mode}, ${contentId(activation.encounterId)}, std::span<const contracts::StableActorKey>{encounter_activation_${index}_actors}, std::span<const contracts::EncounterActorPlacementDefinition>{encounter_activation_${index}_placements}},`;
+  const requiredSelectionObjective = activation.requiredSelectionObjectiveId === null
+    ? "contracts::ContentId{}"
+    : contentId(activation.requiredSelectionObjectiveId);
+  const requiredSelection = activation.requiredSelectionId === null
+    ? "contracts::ContentId{}"
+    : contentId(activation.requiredSelectionId);
+  return `    {${contentId(activation.id)}, ${contentId(activation.beatId)}, ${triggerObjective}, ${requiredSelectionObjective}, ${requiredSelection}, contracts::EncounterActivationMode::${activation.mode}, ${contentId(activation.encounterId)}, std::span<const contracts::StableActorKey>{encounter_activation_${index}_actors}, std::span<const contracts::EncounterActorPlacementDefinition>{encounter_activation_${index}_placements}},`;
 }
 
 function questBossPhaseRow(phase) {

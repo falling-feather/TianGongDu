@@ -157,7 +157,7 @@ int main() {
         "two resolutions gate the authored return and map to stable reward receipts"
     );
     ok &= expect(
-        combat != nullptr && definition->quest_encounter_activations.size() == 7 &&
+        combat != nullptr && definition->quest_encounter_activations.size() == 8 &&
             definition->quest_encounter_activations.front().beat_id.key ==
                 tgd::contracts::stable_content_key(
                     "f1_beat_shen_yan_training"
@@ -219,14 +219,34 @@ int main() {
                 tgd::contracts::stable_content_key(
                     "f1_objective_prime_return_calibration"
                 ) &&
+            definition->quest_encounter_activations[5]
+                    .required_selection_objective_id.key ==
+                tgd::contracts::stable_content_key(
+                    "f1_objective_choose_rib_calibration"
+                ) &&
+            definition->quest_encounter_activations[5].required_selection_id.key ==
+                tgd::contracts::stable_content_key(
+                    "f1_choice_rib_spring_calibration"
+                ) &&
             definition->quest_encounter_activations[5].mode ==
                 tgd::contracts::EncounterActivationMode::reinforce &&
             definition->quest_encounter_activations[5].actor_keys.size() == 1 &&
-            definition->quest_encounter_activations[5].actor_keys[0] == 105 &&
+            definition->quest_encounter_activations[5].actor_keys[0] == 106 &&
             definition->quest_encounter_activations[5]
                     .actor_placements[0]
+                    .formation_slot == 5 &&
+            definition->quest_encounter_activations[6].required_selection_id.key ==
+                tgd::contracts::stable_content_key(
+                    "f1_choice_rib_winter_calibration"
+                ) &&
+            definition->quest_encounter_activations[6].mode ==
+                tgd::contracts::EncounterActivationMode::reinforce &&
+            definition->quest_encounter_activations[6].actor_keys.size() == 1 &&
+            definition->quest_encounter_activations[6].actor_keys[0] == 105 &&
+            definition->quest_encounter_activations[6]
+                    .actor_placements[0]
                     .formation_slot == 5,
-        "objective-driven training, lane waves, and return reinforcement are generated content"
+        "training, lane waves, and both selection-driven return variants are generated content"
     );
     ok &= expect(
         definition->quest_encounter_activations.back().beat_id.key ==
@@ -261,7 +281,7 @@ int main() {
 
     if (combat != nullptr) {
         ok &= expect(
-            combat->actors.size() == 7 && combat->abilities.size() == 17,
+            combat->actors.size() == 8 && combat->abilities.size() == 17,
             "the player, enemy groups, and four-season boss combat set is explicit"
         );
         ok &= expect(

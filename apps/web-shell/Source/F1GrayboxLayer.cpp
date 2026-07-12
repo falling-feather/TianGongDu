@@ -1777,10 +1777,28 @@ bool F1GrayboxLayer::restoreEncounterForBeat(
     if (!activateEncounterForBeat(beat, 0)) {
         return false;
     }
-    for (const auto& activation : definition_->quest_encounter_activations) {
+    for (std::size_t index = 0;
+         index < definition_->quest_encounter_activations.size();
+         ++index) {
+        const auto& activation = definition_->quest_encounter_activations[index];
         if (activation.beat_id.key != beat || activation.trigger_objective_id.key == 0 ||
             session_.quest_runtime().objective_state(activation.trigger_objective_id.key) !=
                 tgd::gameplay::QuestObjectiveState::completed) {
+            continue;
+        }
+        const bool boundary_already_seen = std::any_of(
+            definition_->quest_encounter_activations.begin(),
+            definition_->quest_encounter_activations.begin() +
+                static_cast<std::ptrdiff_t>(index),
+            [&activation](
+                const tgd::contracts::QuestEncounterActivationDefinition& candidate
+            ) {
+                return candidate.beat_id.key == activation.beat_id.key &&
+                       candidate.trigger_objective_id.key ==
+                           activation.trigger_objective_id.key;
+            }
+        );
+        if (boundary_already_seen) {
             continue;
         }
         if (!activateEncounterForBeat(beat, activation.trigger_objective_id.key)) {
@@ -1813,17 +1831,12 @@ bool F1GrayboxLayer::activateEncounterForBeat(
     tgd::contracts::StableContentKey beat,
     tgd::contracts::StableContentKey trigger_objective
 ) noexcept {
-    const auto activation = std::find_if(
-        definition_->quest_encounter_activations.begin(),
-        definition_->quest_encounter_activations.end(),
-        [beat, trigger_objective](
-            const tgd::contracts::QuestEncounterActivationDefinition& candidate
-        ) {
-            return candidate.beat_id.key == beat &&
-                   candidate.trigger_objective_id.key == trigger_objective;
-        }
-    );
-    if (activation == definition_->quest_encounter_activations.end()) {
+    const auto match = session_.encounter_activation(beat, trigger_objective);
+    if (match.ambiguous || (match.boundary_defined && match.activation == nullptr)) {
+        return false;
+    }
+    const auto* activation = match.activation;
+    if (activation == nullptr) {
         if (trigger_objective != 0) {
             return false;
         }
@@ -1867,11 +1880,18 @@ bool F1GrayboxLayer::activateEncounterForBeat(
     incoming_attack_tick_ = 0;
     incoming_attack_source_ = 0;
     if (combat_event_label_ != nullptr) {
-        if (trigger_objective == tgd::contracts::stable_content_key(
-                                     "f1_objective_prime_return_calibration"
-                                 )) {
+        if (activation->required_selection_id.key == tgd::contracts::stable_content_key(
+                                                         "f1_choice_rib_spring_calibration"
+                                                     )) {
             combat_event_label_->setString(
-                "RETURN REINFORCEMENT / MIXED GROUP DEPLOYED"
+                "SPRING RIB / UMBRELLA DOLL REINFORCEMENT"
+            );
+        } else if (activation->required_selection_id.key ==
+                   tgd::contracts::stable_content_key(
+                       "f1_choice_rib_winter_calibration"
+                   )) {
+            combat_event_label_->setString(
+                "WINTER RIB / PAPER EGRET REINFORCEMENT"
             );
         } else if (trigger_objective == tgd::contracts::stable_content_key(
                                      "f1_objective_raise_paper_egret_lure"

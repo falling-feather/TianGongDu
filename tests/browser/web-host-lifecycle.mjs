@@ -38,6 +38,11 @@ const reportDirectory = resolve(
     "build/browser-qa"
 );
 const expectedCommit = process.env.TGD_EXPECT_COMMIT?.trim() || null;
+const ribCalibration =
+  argument("rib-calibration") ?? process.env.TGD_F1_RIB_CALIBRATION ?? "spring";
+if (!["spring", "winter"].includes(ribCalibration)) {
+  throw new Error(`Unsupported F1 rib calibration QA branch: ${ribCalibration}`);
+}
 const forceSoftwareGraphics =
   process.env.TGD_FORCE_SOFTWARE_WEBGL === "1" || process.env.CI === "true";
 
@@ -1305,7 +1310,7 @@ async function runBrowser(target, origin) {
     workbenchState = await page.evaluate(() => window.__tgdTest.getF1State());
     assert.equal(workbenchState.questSelectedChoices, 1);
 
-    await moveF1PlayerTo(page, -1_500, 400);
+    await moveF1PlayerTo(page, -1_500, ribCalibration === "spring" ? 400 : -600);
     await page.keyboard.press("f");
     await page.waitForFunction(
       () => {
@@ -1678,6 +1683,7 @@ async function runBrowser(target, origin) {
       movementComparison,
       combatActionComparison,
       combatHitComparison,
+      ribCalibration,
       retryState,
       workbenchState,
       reinforcementState,
@@ -1762,6 +1768,7 @@ const report = {
   graphicsMode: forceSoftwareGraphics ? "forced-software" : "browser-default",
   distDirectory: projectPath(distDirectory),
   expectedCommit,
+  ribCalibration,
   targets,
   results
 };

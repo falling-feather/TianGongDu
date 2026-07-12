@@ -68,6 +68,12 @@ struct VerticalSliceAdvanceResult final {
     std::uint32_t executed_ticks{};
 };
 
+struct EncounterActivationMatch final {
+    const contracts::QuestEncounterActivationDefinition* activation{};
+    bool boundary_defined{};
+    bool ambiguous{};
+};
+
 class VerticalSliceSession final {
   public:
     static constexpr std::size_t max_beats = 16;
@@ -123,6 +129,10 @@ class VerticalSliceSession final {
     ) const noexcept;
     [[nodiscard]] contracts::StableContentKey selected_option(
         contracts::StableContentKey objective
+    ) const noexcept;
+    [[nodiscard]] EncounterActivationMatch encounter_activation(
+        contracts::StableContentKey beat,
+        contracts::StableContentKey trigger_objective
     ) const noexcept;
 
   private:

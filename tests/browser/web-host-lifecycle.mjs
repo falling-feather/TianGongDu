@@ -934,7 +934,7 @@ async function runBrowser(target, origin) {
     );
     const advancedQuestState = await page.evaluate(() => window.__tgdTest.getF1State());
     assert.equal(advancedQuestState.questCompletedObjectives, 0);
-    assert.equal(advancedQuestState.questRequiredObjectives, 3);
+    assert.equal(advancedQuestState.questRequiredObjectives, 6);
     await captureRenderedFrame(
       page,
       canvas,
@@ -967,23 +967,6 @@ async function runBrowser(target, origin) {
       combatReadyPath,
       `${target} combat ready`
     );
-    await page.keyboard.down("Shift");
-    await page.waitForFunction(
-      () => {
-        const state = window.__tgdTest?.getF1State();
-        return state?.questBeatIndex === 1 && state.questCompletedObjectives >= 2;
-      },
-      undefined,
-      { timeout: 15_000 }
-    );
-    await captureRenderedFrame(
-      page,
-      canvas,
-      combatGuardPath,
-      `${target} guard held`
-    );
-    await page.keyboard.up("Shift");
-    await page.waitForTimeout(120);
     await page.keyboard.press("k");
     await page.waitForTimeout(50);
     const combatActionFrame = await captureRenderedFrame(
@@ -1022,8 +1005,34 @@ async function runBrowser(target, origin) {
     );
 
     await page.waitForTimeout(450);
+    await page.keyboard.down("Shift");
+    await page.waitForFunction(
+      () => {
+        const state = window.__tgdTest?.getF1State();
+        return state?.questBeatIndex === 1 && state.questCompletedObjectives >= 3;
+      },
+      undefined,
+      { timeout: 15_000 }
+    );
+    await captureRenderedFrame(
+      page,
+      canvas,
+      combatGuardPath,
+      `${target} guard held after heavy commitment`
+    );
+    await page.keyboard.up("Shift");
+    await page.waitForTimeout(120);
     await page.keyboard.press("2");
     await page.waitForTimeout(60);
+    await page.keyboard.press("j");
+    await page.waitForFunction(
+      () => {
+        const state = window.__tgdTest?.getF1State();
+        return state?.questBeatIndex === 1 && state.questCompletedObjectives >= 5;
+      },
+      undefined,
+      { timeout: 5_000 }
+    );
     let trainingState = await page.evaluate(() => window.__tgdTest.getF1State());
     const trainingDeadline = Date.now() + 20_000;
     while (trainingState.questBeatIndex === 1 && Date.now() < trainingDeadline) {

@@ -437,12 +437,39 @@
     "questCombatTrigger": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "kind", "objectiveId", "requiredStanceId"],
+      "required": [
+        "id",
+        "kind",
+        "objectiveId",
+        "requiredStanceId",
+        "requiredAbilityId",
+        "prerequisiteObjectiveIds"
+      ],
       "properties": {
         "id": { "$ref": "#/$defs/id" },
-        "kind": { "enum": ["player_hit_guarded", "player_hit_evaded"] },
+        "kind": {
+          "enum": [
+            "player_ability_started",
+            "player_stance_changed",
+            "player_hit_guarded",
+            "player_hit_evaded"
+          ]
+        },
         "objectiveId": { "$ref": "#/$defs/id" },
-        "requiredStanceId": { "$ref": "#/$defs/id" }
+        "requiredStanceId": { "$ref": "#/$defs/id" },
+        "requiredAbilityId": {
+          "oneOf": [
+            { "$ref": "#/$defs/id" },
+            { "type": "null" }
+          ]
+        },
+        "prerequisiteObjectiveIds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/id" }
+        }
       }
     },
     "questCombatOutcome": {

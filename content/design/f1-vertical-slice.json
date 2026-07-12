@@ -480,7 +480,10 @@
       "cellId": "f1_cell_rain_ferry",
       "objectiveIds": [
         "f1_objective_meet_shen_yan",
+        "f1_objective_commit_eavesguard_heavy",
         "f1_objective_eavesguard_counter",
+        "f1_objective_enter_flower_turn",
+        "f1_objective_commit_flower_turn_light",
         "f1_objective_flower_turn_counter"
       ],
       "autoAdvance": false
@@ -842,16 +845,54 @@
   ],
   "questCombatTriggers": [
     {
+      "id": "f1_trigger_eavesguard_heavy",
+      "kind": "player_ability_started",
+      "objectiveId": "f1_objective_commit_eavesguard_heavy",
+      "requiredStanceId": "stance_eavesguard",
+      "requiredAbilityId": "ability_eavesguard_heavy",
+      "prerequisiteObjectiveIds": [
+        "f1_objective_meet_shen_yan"
+      ]
+    },
+    {
       "id": "f1_trigger_eavesguard_counter",
       "kind": "player_hit_guarded",
       "objectiveId": "f1_objective_eavesguard_counter",
-      "requiredStanceId": "stance_eavesguard"
+      "requiredStanceId": "stance_eavesguard",
+      "requiredAbilityId": null,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_commit_eavesguard_heavy"
+      ]
+    },
+    {
+      "id": "f1_trigger_enter_flower_turn",
+      "kind": "player_stance_changed",
+      "objectiveId": "f1_objective_enter_flower_turn",
+      "requiredStanceId": "stance_flower_turn",
+      "requiredAbilityId": null,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_eavesguard_counter"
+      ]
+    },
+    {
+      "id": "f1_trigger_flower_turn_light",
+      "kind": "player_ability_started",
+      "objectiveId": "f1_objective_commit_flower_turn_light",
+      "requiredStanceId": "stance_flower_turn",
+      "requiredAbilityId": "ability_flower_light",
+      "prerequisiteObjectiveIds": [
+        "f1_objective_enter_flower_turn"
+      ]
     },
     {
       "id": "f1_trigger_flower_turn_counter",
       "kind": "player_hit_evaded",
       "objectiveId": "f1_objective_flower_turn_counter",
-      "requiredStanceId": "stance_flower_turn"
+      "requiredStanceId": "stance_flower_turn",
+      "requiredAbilityId": null,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_commit_flower_turn_light"
+      ]
     }
   ],
   "questCombatOutcomes": [

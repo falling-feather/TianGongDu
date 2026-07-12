@@ -385,11 +385,67 @@ bool test_combat_signals_resolve_training_objectives() {
         quest.snapshot().stage_index == 1,
         "combat trigger tests enter the authored training beat"
     );
+    ok &= quest.apply(
+              {
+                  sequence,
+                  definition().player.actor,
+                  sequence,
+                  {},
+                  definition().beats[1].objectives.front().key,
+              },
+              sink
+          ).error == QuestError::none;
+    ++sequence;
     ok &= expect(
         triggers.initialize(definition().quest_combat_triggers) ==
             QuestCombatTriggerError::none,
         "generated combat-to-quest bindings initialize once"
     );
+
+    const auto premature_guard = triggers.resolve(
+        {
+            definition().player.actor,
+            tgd::contracts::QuestCombatTriggerKind::player_hit_guarded,
+            tgd::contracts::stable_content_key("stance_eavesguard"),
+        },
+        quest
+    );
+    ok &= expect(
+        !premature_guard.found,
+        "the guard drill stays locked until the eavesguard heavy is committed"
+    );
+
+    const auto wrong_heavy = triggers.resolve(
+        {
+            definition().player.actor,
+            tgd::contracts::QuestCombatTriggerKind::player_ability_started,
+            tgd::contracts::stable_content_key("stance_eavesguard"),
+            tgd::contracts::stable_content_key("ability_flower_light"),
+        },
+        quest
+    );
+    ok &= expect(!wrong_heavy.found, "training abilities require the authored stable ID");
+    const auto heavy = triggers.resolve(
+        {
+            definition().player.actor,
+            tgd::contracts::QuestCombatTriggerKind::player_ability_started,
+            tgd::contracts::stable_content_key("stance_eavesguard"),
+            tgd::contracts::stable_content_key("ability_eavesguard_heavy"),
+        },
+        quest
+    );
+    ok &= expect(
+        heavy.found && heavy.objective ==
+                           tgd::contracts::stable_content_key(
+                               "f1_objective_commit_eavesguard_heavy"
+                           ),
+        "an accepted eavesguard heavy resolves its authored drill"
+    );
+    ok &= quest.apply(
+              {sequence, definition().player.actor, sequence, {}, heavy.objective},
+              sink
+          ).error == QuestError::none;
+    ++sequence;
 
     const auto wrong_stance = triggers.resolve(
         {
@@ -433,6 +489,50 @@ bool test_combat_signals_resolve_training_objectives() {
              .found,
         "completed counter objectives no longer consume combat signals"
     );
+
+    const auto flower_stance = triggers.resolve(
+        {
+            definition().player.actor,
+            tgd::contracts::QuestCombatTriggerKind::player_stance_changed,
+            tgd::contracts::stable_content_key("stance_flower_turn"),
+        },
+        quest
+    );
+    ok &= expect(
+        flower_stance.found && flower_stance.objective ==
+                                   tgd::contracts::stable_content_key(
+                                       "f1_objective_enter_flower_turn"
+                                   ),
+        "entering flower turn resolves the authored stance drill"
+    );
+    ok &= quest.apply(
+              {sequence, definition().player.actor, sequence, {}, flower_stance.objective},
+              sink
+          ).error == QuestError::none;
+    ++sequence;
+
+    const auto flower_light = triggers.resolve(
+        {
+            definition().player.actor,
+            tgd::contracts::QuestCombatTriggerKind::player_ability_started,
+            tgd::contracts::stable_content_key("stance_flower_turn"),
+            tgd::contracts::stable_content_key("ability_flower_light"),
+        },
+        quest
+    );
+    ok &= expect(
+        flower_light.found && flower_light.objective ==
+                                  tgd::contracts::stable_content_key(
+                                      "f1_objective_commit_flower_turn_light"
+                                  ),
+        "an accepted flower light resolves its authored tempo drill"
+    );
+    ok &= quest.apply(
+              {sequence, definition().player.actor, sequence, {}, flower_light.objective},
+              sink
+          ).error == QuestError::none;
+    ++sequence;
+
     const auto evaded = triggers.resolve(
         {
             definition().player.actor,
@@ -448,16 +548,28 @@ bool test_combat_signals_resolve_training_objectives() {
                             ),
         "an evaded player hit resolves the flower-turn training objective"
     );
+    const auto training_completed = quest.apply(
+        {sequence, definition().player.actor, sequence, {}, evaded.objective},
+        sink
+    );
+    ++sequence;
+    ok &= expect(
+        training_completed.error == QuestError::none &&
+            training_completed.stage_advanced && quest.snapshot().stage_index == 2,
+        "all five authored combat drills advance into the umbrella lane"
+    );
     ok &= expect(
         triggers.resolve({0, {}, 0}, quest).error ==
             QuestCombatTriggerError::invalid_signal,
         "invalid combat signals fail closed"
     );
 
-    std::array invalid{
-        definition().quest_combat_triggers[0],
-        definition().quest_combat_triggers[1],
-    };
+    std::array<tgd::contracts::QuestCombatTriggerDefinition, 5> invalid{};
+    std::copy(
+        definition().quest_combat_triggers.begin(),
+        definition().quest_combat_triggers.end(),
+        invalid.begin()
+    );
     invalid[1].objective_id = invalid[0].objective_id;
     DeterministicQuestCombatTriggerResolver invalid_triggers;
     ok &= expect(

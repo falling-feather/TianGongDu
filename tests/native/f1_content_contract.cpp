@@ -80,10 +80,15 @@ int main() {
         "the expanded opening scene interactions are generated content, not presentation rules"
     );
     ok &= expect(
-        definition->quest_combat_triggers.size() == 2 &&
+        definition->quest_combat_triggers.size() == 5 &&
             definition->quest_combat_triggers.front().required_stance ==
-                tgd::contracts::stable_content_key("stance_eavesguard"),
-        "training counters are generated combat-to-quest bindings"
+                tgd::contracts::stable_content_key("stance_eavesguard") &&
+            definition->quest_combat_triggers.front().required_ability ==
+                tgd::contracts::stable_content_key("ability_eavesguard_heavy") &&
+            definition->quest_combat_triggers.front().prerequisite_objectives.size() == 1 &&
+            definition->quest_combat_triggers.front().prerequisite_objectives.front().key ==
+                tgd::contracts::stable_content_key("f1_objective_meet_shen_yan"),
+        "training actions and counters are generated combat-to-quest bindings"
     );
     const auto route_interaction = std::find_if(
         definition->quest_interactions.begin(),

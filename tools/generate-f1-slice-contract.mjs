@@ -458,7 +458,16 @@ export function validateF1SliceContract(contract, catalog) {
   if (!Array.isArray(combatTriggers) || combatTriggers.length < 2 || combatTriggers.length > 64) {
     fail("quest combat triggers must contain 2..64 definitions");
   }
-  const combatTriggerKinds = new Set(["player_hit_guarded", "player_hit_evaded"]);
+  const combatTriggerKinds = new Set([
+    "player_ability_started",
+    "player_stance_changed",
+    "player_hit_guarded",
+    "player_hit_evaded"
+  ]);
+  const authoredCombatStances = new Set(
+    contract.combatBootstrap?.actors?.flatMap((actor) => actor.stanceIds ?? []) ?? []
+  );
+  const authoredCombatAbilities = contract.combatBootstrap?.abilities ?? [];
   for (const trigger of combatTriggers) {
     if (!combatTriggerKinds.has(trigger.kind)) {
       fail(`${trigger.id} has an unsupported quest combat trigger kind`);
@@ -468,6 +477,41 @@ export function validateF1SliceContract(contract, catalog) {
     }
     if (typeof trigger.requiredStanceId !== "string" || trigger.requiredStanceId.length === 0) {
       fail(`${trigger.id} has an invalid required stance`);
+    }
+    const abilityStarted = trigger.kind === "player_ability_started";
+    if (
+      (abilityStarted &&
+        (typeof trigger.requiredAbilityId !== "string" ||
+          trigger.requiredAbilityId.length === 0)) ||
+      (!abilityStarted && trigger.requiredAbilityId !== null)
+    ) {
+      fail(`${trigger.id} has an invalid required ability`);
+    }
+    if (!authoredCombatStances.has(trigger.requiredStanceId)) {
+      fail(`${trigger.id} references an unknown required stance`);
+    }
+    if (abilityStarted) {
+      const ability = authoredCombatAbilities.find(
+        (candidate) => candidate.id === trigger.requiredAbilityId
+      );
+      if (ability?.requiredStanceId !== trigger.requiredStanceId) {
+        fail(`${trigger.id} references an incompatible required ability`);
+      }
+    }
+    if (!Array.isArray(trigger.prerequisiteObjectiveIds) ||
+        trigger.prerequisiteObjectiveIds.length === 0 ||
+        trigger.prerequisiteObjectiveIds.length > 8) {
+      fail(`${trigger.id} has invalid prerequisite objectives`);
+    }
+    assertUnique(
+      trigger.prerequisiteObjectiveIds,
+      `${trigger.id} prerequisite objective`
+    );
+    for (const prerequisite of trigger.prerequisiteObjectiveIds) {
+      if (!objectiveIds.includes(prerequisite) || prerequisite === trigger.objectiveId ||
+          objectiveStages.get(prerequisite) > objectiveStages.get(trigger.objectiveId)) {
+        fail(`${trigger.id} has an invalid prerequisite objective: ${prerequisite}`);
+      }
     }
   }
   assertUnique(combatTriggers.map((trigger) => trigger.id), "quest combat trigger id");
@@ -484,6 +528,51 @@ export function validateF1SliceContract(contract, catalog) {
     coveredTrainingObjectives.some((objective) => !trainingCombatObjectives.has(objective))
   ) {
     fail("the training beat combat objectives must be fully covered by combat triggers");
+  }
+  const expectedTrainingTriggers = [
+    {
+      id: "f1_trigger_eavesguard_heavy",
+      kind: "player_ability_started",
+      objectiveId: "f1_objective_commit_eavesguard_heavy",
+      requiredStanceId: "stance_eavesguard",
+      requiredAbilityId: "ability_eavesguard_heavy",
+      prerequisiteObjectiveIds: ["f1_objective_meet_shen_yan"]
+    },
+    {
+      id: "f1_trigger_eavesguard_counter",
+      kind: "player_hit_guarded",
+      objectiveId: "f1_objective_eavesguard_counter",
+      requiredStanceId: "stance_eavesguard",
+      requiredAbilityId: null,
+      prerequisiteObjectiveIds: ["f1_objective_commit_eavesguard_heavy"]
+    },
+    {
+      id: "f1_trigger_enter_flower_turn",
+      kind: "player_stance_changed",
+      objectiveId: "f1_objective_enter_flower_turn",
+      requiredStanceId: "stance_flower_turn",
+      requiredAbilityId: null,
+      prerequisiteObjectiveIds: ["f1_objective_eavesguard_counter"]
+    },
+    {
+      id: "f1_trigger_flower_turn_light",
+      kind: "player_ability_started",
+      objectiveId: "f1_objective_commit_flower_turn_light",
+      requiredStanceId: "stance_flower_turn",
+      requiredAbilityId: "ability_flower_light",
+      prerequisiteObjectiveIds: ["f1_objective_enter_flower_turn"]
+    },
+    {
+      id: "f1_trigger_flower_turn_counter",
+      kind: "player_hit_evaded",
+      objectiveId: "f1_objective_flower_turn_counter",
+      requiredStanceId: "stance_flower_turn",
+      requiredAbilityId: null,
+      prerequisiteObjectiveIds: ["f1_objective_commit_flower_turn_light"]
+    }
+  ];
+  if (!sameValues(combatTriggers, expectedTrainingTriggers)) {
+    fail("the authored Shen Yan training sequence drifted");
   }
   const combatOutcomes = contract.questCombatOutcomes;
   if (!Array.isArray(combatOutcomes) || combatOutcomes.length < 2 || combatOutcomes.length > 64) {
@@ -697,6 +786,14 @@ export function validateF1SliceContract(contract, catalog) {
     if (!stanceIds.has(trigger.requiredStanceId)) {
       fail(`${trigger.id} references an unknown required stance`);
     }
+    if (trigger.kind === "player_ability_started") {
+      const ability = combat.abilities.find(
+        (candidate) => candidate.id === trigger.requiredAbilityId
+      );
+      if (ability?.requiredStanceId !== trigger.requiredStanceId) {
+        fail(`${trigger.id} references an incompatible required ability`);
+      }
+    }
   }
   for (const outcome of combatOutcomes) {
     const matchingHostiles = combat.actors.filter(
@@ -860,8 +957,8 @@ function questInteractionRow(interaction, index) {
   return `    {${contentId(interaction.id)}, contracts::QuestInteractionKind::${interaction.kind}, ${contentId(interaction.cellId)}, ${contentId(interaction.objectiveId)}, ${selection}, {${pose.x}, ${pose.y}, ${pose.height}, ${pose.floorLayer}}, ${interaction.radiusMm}, ${prerequisites}},`;
 }
 
-function questCombatTriggerRow(trigger) {
-  return `    {${contentId(trigger.id)}, contracts::QuestCombatTriggerKind::${trigger.kind}, ${contentId(trigger.objectiveId)}, ${stableKey(trigger.requiredStanceId)}},`;
+function questCombatTriggerRow(trigger, index) {
+  return `    {${contentId(trigger.id)}, contracts::QuestCombatTriggerKind::${trigger.kind}, ${contentId(trigger.objectiveId)}, ${stableKey(trigger.requiredStanceId)}, ${stableKey(trigger.requiredAbilityId)}, std::span<const contracts::ContentId>{combat_trigger_${index}_prerequisites}},`;
 }
 
 function questCombatOutcomeRow(outcome) {
@@ -915,6 +1012,13 @@ ${arrayRows(interaction.prerequisiteObjectiveIds)}
 }};`
     )
     .join("\n\n");
+  const combatTriggerPrerequisiteArrays = contract.questCombatTriggers
+    .map(
+      (trigger, index) => `inline constexpr std::array<contracts::ContentId, ${trigger.prerequisiteObjectiveIds.length}> combat_trigger_${index}_prerequisites{{
+${arrayRows(trigger.prerequisiteObjectiveIds)}
+}};`
+    )
+    .join("\n\n");
   const questInteractionRows = contract.questInteractions.map(questInteractionRow).join("\n");
   const questCombatTriggerRows = contract.questCombatTriggers
     .map(questCombatTriggerRow)
@@ -949,6 +1053,8 @@ namespace tgd::content::generated {
 ${objectiveArrays}
 
 ${interactionPrerequisiteArrays}
+
+${combatTriggerPrerequisiteArrays}
 
 ${questEncounterActivationActorArrays}
 

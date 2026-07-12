@@ -65,6 +65,15 @@ test("F1 one-hour contract and generated C++ stay synchronized", async () => {
     new Set(contract.questCombatTriggers.map((trigger) => trigger.objectiveId)),
     new Set(contract.beats[1].objectiveIds.slice(1))
   );
+  assert.equal(contract.questCombatTriggers.length, 5);
+  assert.equal(
+    contract.questCombatTriggers[0].requiredAbilityId,
+    "ability_eavesguard_heavy"
+  );
+  assert.equal(
+    contract.questCombatTriggers[3].requiredAbilityId,
+    "ability_flower_light"
+  );
   assert.deepEqual(
     new Set(
       contract.questCombatOutcomes
@@ -233,11 +242,25 @@ test("F1 training counters require valid content-driven combat triggers", async 
   );
 
   const duplicateObjective = structuredClone(await loadF1SliceContract());
-  duplicateObjective.questCombatTriggers[1].objectiveId =
+  duplicateObjective.questCombatTriggers.at(-1).objectiveId =
     duplicateObjective.questCombatTriggers[0].objectiveId;
   assert.throws(
     () => validateF1SliceContract(duplicateObjective, catalog),
     /duplicate quest combat trigger objective/
+  );
+
+  const incompatibleAbility = structuredClone(await loadF1SliceContract());
+  incompatibleAbility.questCombatTriggers[0].requiredAbilityId = "ability_flower_light";
+  assert.throws(
+    () => validateF1SliceContract(incompatibleAbility, catalog),
+    /incompatible required ability/
+  );
+
+  const missingPrerequisite = structuredClone(await loadF1SliceContract());
+  missingPrerequisite.questCombatTriggers[0].prerequisiteObjectiveIds = [];
+  assert.throws(
+    () => validateF1SliceContract(missingPrerequisite, catalog),
+    /invalid prerequisite objectives/
   );
 });
 

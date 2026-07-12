@@ -82,6 +82,8 @@ struct QuestInteractionDefinition final {
 };
 
 enum class QuestCombatTriggerKind : std::uint8_t {
+    player_ability_started,
+    player_stance_changed,
     player_hit_guarded,
     player_hit_evaded,
 };
@@ -91,6 +93,8 @@ struct QuestCombatTriggerDefinition final {
     QuestCombatTriggerKind kind{QuestCombatTriggerKind::player_hit_guarded};
     ContentId objective_id{};
     StableContentKey required_stance{};
+    StableContentKey required_ability{};
+    std::span<const ContentId> prerequisite_objectives{};
 };
 
 enum class QuestCombatOutcomeKind : std::uint8_t {

@@ -177,9 +177,35 @@ QuestCombatTriggerError DeterministicQuestCombatTriggerResolver::initialize(
             definition.required_stance == 0) {
             return QuestCombatTriggerError::invalid_definition;
         }
-        if (definition.kind != contracts::QuestCombatTriggerKind::player_hit_guarded &&
+        if (definition.kind != contracts::QuestCombatTriggerKind::player_ability_started &&
+            definition.kind != contracts::QuestCombatTriggerKind::player_stance_changed &&
+            definition.kind != contracts::QuestCombatTriggerKind::player_hit_guarded &&
             definition.kind != contracts::QuestCombatTriggerKind::player_hit_evaded) {
             return QuestCombatTriggerError::invalid_definition;
+        }
+        const bool ability_started =
+            definition.kind == contracts::QuestCombatTriggerKind::player_ability_started;
+        if ((ability_started && definition.required_ability == 0) ||
+            (!ability_started && definition.required_ability != 0)) {
+            return QuestCombatTriggerError::invalid_definition;
+        }
+        if (definition.prerequisite_objectives.empty() ||
+            definition.prerequisite_objectives.size() > 8) {
+            return QuestCombatTriggerError::invalid_definition;
+        }
+        for (std::size_t prerequisite = 0;
+             prerequisite < definition.prerequisite_objectives.size();
+             ++prerequisite) {
+            const auto& objective = definition.prerequisite_objectives[prerequisite];
+            if (objective.key == 0 || objective.name.empty() ||
+                objective.key == definition.objective_id.key) {
+                return QuestCombatTriggerError::invalid_definition;
+            }
+            for (std::size_t prior = 0; prior < prerequisite; ++prior) {
+                if (definition.prerequisite_objectives[prior].key == objective.key) {
+                    return QuestCombatTriggerError::invalid_definition;
+                }
+            }
         }
         for (std::size_t prior = 0; prior < index; ++prior) {
             if (definitions[prior].id.key == definition.id.key ||
@@ -202,12 +228,31 @@ QuestCombatTriggerResult DeterministicQuestCombatTriggerResolver::resolve(
         result.error = QuestCombatTriggerError::invalid_lifecycle;
         return result;
     }
-    if (signal.actor == 0 || signal.stance == 0) {
+    const bool valid_kind =
+        signal.kind == contracts::QuestCombatTriggerKind::player_ability_started ||
+        signal.kind == contracts::QuestCombatTriggerKind::player_stance_changed ||
+        signal.kind == contracts::QuestCombatTriggerKind::player_hit_guarded ||
+        signal.kind == contracts::QuestCombatTriggerKind::player_hit_evaded;
+    const bool ability_started =
+        signal.kind == contracts::QuestCombatTriggerKind::player_ability_started;
+    if (!valid_kind || signal.actor == 0 || signal.stance == 0 ||
+        (ability_started && signal.ability == 0) ||
+        (!ability_started && signal.ability != 0)) {
         result.error = QuestCombatTriggerError::invalid_signal;
         return result;
     }
     for (const auto& definition : definitions_) {
+        const bool prerequisites_complete = std::all_of(
+            definition.prerequisite_objectives.begin(),
+            definition.prerequisite_objectives.end(),
+            [&quest](const contracts::ContentId& objective) {
+                return quest.objective_state(objective.key) ==
+                       QuestObjectiveState::completed;
+            }
+        );
         if (definition.kind != signal.kind || definition.required_stance != signal.stance ||
+            definition.required_ability != signal.ability ||
+            !prerequisites_complete ||
             quest.objective_state(definition.objective_id.key) != QuestObjectiveState::active) {
             continue;
         }

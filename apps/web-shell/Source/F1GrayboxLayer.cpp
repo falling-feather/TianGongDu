@@ -1254,6 +1254,18 @@ void F1GrayboxLayer::publish(
                                               )) {
                     combat_event_label_->setString("WORKSHOP BELL SOUNDED / GATE CREW READY");
                 } else if (event.objective == tgd::contracts::stable_content_key(
+                                                  "f1_objective_commit_eavesguard_heavy"
+                                              )) {
+                    combat_event_label_->setString("EAVESGUARD HEAVY COMMITTED / WEIGHT LEARNED");
+                } else if (event.objective == tgd::contracts::stable_content_key(
+                                                  "f1_objective_enter_flower_turn"
+                                              )) {
+                    combat_event_label_->setString("FLOWER TURN ENTERED / TEMPO SHIFTED");
+                } else if (event.objective == tgd::contracts::stable_content_key(
+                                                  "f1_objective_commit_flower_turn_light"
+                                              )) {
+                    combat_event_label_->setString("FLOWER LIGHT COMMITTED / QUICK ARC LEARNED");
+                } else if (event.objective == tgd::contracts::stable_content_key(
                                            "f1_objective_reveal_spring_trace"
                                        )) {
                     combat_event_label_->setString("SPRING TRACE REVEALED / EVIDENCE COMMITTED");
@@ -1332,9 +1344,15 @@ void F1GrayboxLayer::publish(
 void F1GrayboxLayer::submitQuestCombatSignal(
     const tgd::contracts::CombatEvent& event
 ) noexcept {
-    if (event.target != definition_->player.actor ||
-        (event.type != tgd::contracts::CombatEventType::hit_guarded &&
-         event.type != tgd::contracts::CombatEventType::hit_evaded)) {
+    const bool player_action =
+        event.source == definition_->player.actor &&
+        (event.type == tgd::contracts::CombatEventType::ability_started ||
+         event.type == tgd::contracts::CombatEventType::stance_changed);
+    const bool player_defense =
+        event.target == definition_->player.actor &&
+        (event.type == tgd::contracts::CombatEventType::hit_guarded ||
+         event.type == tgd::contracts::CombatEventType::hit_evaded);
+    if (!player_action && !player_defense) {
         return;
     }
     const auto actors = combat_.actors();
@@ -1348,11 +1366,23 @@ void F1GrayboxLayer::submitQuestCombatSignal(
     if (player == actors.end()) {
         return;
     }
-    const auto kind = event.type == tgd::contracts::CombatEventType::hit_guarded
-                          ? tgd::contracts::QuestCombatTriggerKind::player_hit_guarded
-                          : tgd::contracts::QuestCombatTriggerKind::player_hit_evaded;
+    auto kind = tgd::contracts::QuestCombatTriggerKind::player_hit_evaded;
+    if (event.type == tgd::contracts::CombatEventType::ability_started) {
+        kind = tgd::contracts::QuestCombatTriggerKind::player_ability_started;
+    } else if (event.type == tgd::contracts::CombatEventType::stance_changed) {
+        kind = tgd::contracts::QuestCombatTriggerKind::player_stance_changed;
+    } else if (event.type == tgd::contracts::CombatEventType::hit_guarded) {
+        kind = tgd::contracts::QuestCombatTriggerKind::player_hit_guarded;
+    }
     const auto resolved = quest_combat_triggers_.resolve(
-        {player->actor, kind, player->stance},
+        {
+            player->actor,
+            kind,
+            player->stance,
+            event.type == tgd::contracts::CombatEventType::ability_started
+                ? event.ability
+                : 0,
+        },
         session_.quest_runtime()
     );
     if (resolved.error != tgd::gameplay::QuestCombatTriggerError::none) {

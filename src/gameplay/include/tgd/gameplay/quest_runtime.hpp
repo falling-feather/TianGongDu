@@ -132,6 +132,7 @@ struct QuestCombatSignal final {
         contracts::QuestCombatTriggerKind::player_hit_guarded
     };
     contracts::StableContentKey stance{};
+    contracts::StableContentKey ability{};
 };
 
 struct QuestCombatTriggerResult final {

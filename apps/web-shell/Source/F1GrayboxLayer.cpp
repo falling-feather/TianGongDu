@@ -1812,19 +1812,21 @@ bool F1GrayboxLayer::activateEncounterForBeat(
         tgd::contracts::SafePointRetryReason::quest_stage_advanced,
     };
     clearHeldInput(tgd::contracts::InputClearReason::safe_point_retry, false);
-    if (encounter_.retry_from_initial(command) !=
+    if (encounter_.activate_group(command, activation->actor_placements) !=
             tgd::gameplay::EncounterDirectorError::none ||
-        combat_.activate_group(command, activation->actor_keys, *this) !=
+        combat_.activate_group(command, activation->actor_placements, *this) !=
             tgd::gameplay::CombatError::none) {
         return false;
     }
     ++retry_command_sequence_;
     if (!definition_->quest_boss_phases.empty() &&
-        std::find(
-            activation->actor_keys.begin(),
-            activation->actor_keys.end(),
-            definition_->quest_boss_phases.front().actor
-        ) != activation->actor_keys.end()) {
+        std::any_of(
+            activation->actor_placements.begin(),
+            activation->actor_placements.end(),
+            [this](const tgd::contracts::EncounterActorPlacementDefinition& placement) {
+                return placement.actor == definition_->quest_boss_phases.front().actor;
+            }
+        )) {
         syncBossStanceForQuest();
     } else {
         pending_boss_stance_ = 0;

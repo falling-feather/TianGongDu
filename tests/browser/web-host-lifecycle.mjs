@@ -1261,8 +1261,8 @@ async function runBrowser(target, origin) {
     await captureRenderedFrame(
       page,
       canvas,
-      resolve(reportDirectory, `${target}-workbench-investigation-complete.png`),
-      `${target} workbench investigation complete`
+      resolve(reportDirectory, `${target}-return-formation-ready.png`),
+      `${target} authored return formation ready`
     );
     await page.keyboard.press("2");
     await page.waitForTimeout(100);
@@ -1612,7 +1612,7 @@ async function runBrowser(target, origin) {
         ),
         projectPath(resolve(reportDirectory, `${target}-umbrella-lane-complete.png`)),
         projectPath(
-          resolve(reportDirectory, `${target}-workbench-investigation-complete.png`)
+          resolve(reportDirectory, `${target}-return-formation-ready.png`)
         ),
         projectPath(resolve(reportDirectory, `${target}-canopy-return-complete.png`)),
         projectPath(bossSpringPath),

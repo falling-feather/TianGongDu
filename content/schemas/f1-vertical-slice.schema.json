@@ -492,7 +492,14 @@
     "questEncounterActivation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "beatId", "triggerObjectiveId", "encounterId", "actorKeys"],
+      "required": [
+        "id",
+        "beatId",
+        "triggerObjectiveId",
+        "encounterId",
+        "actorKeys",
+        "actorPlacements"
+      ],
       "properties": {
         "id": { "$ref": "#/$defs/id" },
         "beatId": { "$ref": "#/$defs/id" },
@@ -509,7 +516,23 @@
           "maxItems": 15,
           "uniqueItems": true,
           "items": { "type": "integer", "minimum": 1 }
+        },
+        "actorPlacements": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 15,
+          "items": { "$ref": "#/$defs/encounterActorPlacement" }
         }
+      }
+    },
+    "encounterActorPlacement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actorKey", "poseMm", "formationSlot"],
+      "properties": {
+        "actorKey": { "type": "integer", "minimum": 1 },
+        "poseMm": { "$ref": "#/$defs/pose" },
+        "formationSlot": { "type": "integer", "minimum": 0, "maximum": 14 }
       }
     },
     "questBossPhase": {

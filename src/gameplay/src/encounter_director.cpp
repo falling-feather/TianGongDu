@@ -151,7 +151,14 @@ EncounterDirectorError DeterministicEncounterDirector::initialize(
             if (hostile_count_ >= hostile_capacity) {
                 return EncounterDirectorError::invalid_actor_config;
             }
-            hostiles_[hostile_count_++] = {actor.actor, actor.initial_pose, 0, 0};
+            hostiles_[hostile_count_] = {
+                actor.actor,
+                actor.initial_pose,
+                static_cast<std::uint8_t>(hostile_count_),
+                0,
+                0,
+            };
+            ++hostile_count_;
             for (std::size_t stance = 0; stance < actor.stance_count; ++stance) {
                 if (find_ability(
                         contracts::CombatCommandType::light_attack,
@@ -346,8 +353,7 @@ EncounterDirectorError DeterministicEncounterDirector::retry_from_initial(
         return EncounterDirectorError::retry_targets_wrong_tick;
     }
     if (command.actor != definition_.player_actor ||
-        (command.reason != contracts::SafePointRetryReason::player_defeated &&
-         command.reason != contracts::SafePointRetryReason::quest_stage_advanced)) {
+        command.reason != contracts::SafePointRetryReason::player_defeated) {
         return EncounterDirectorError::retry_not_allowed;
     }
     if (command.sequence == 0 || command.sequence <= last_retry_sequence_) {
@@ -356,6 +362,64 @@ EncounterDirectorError DeterministicEncounterDirector::retry_from_initial(
     for (std::size_t index = 0; index < hostile_count_; ++index) {
         hostiles_[index].next_attack_tick = 0;
         hostiles_[index].attack_count = 0;
+    }
+    last_retry_sequence_ = command.sequence;
+    update_checksum();
+    return EncounterDirectorError::none;
+}
+
+EncounterDirectorError DeterministicEncounterDirector::activate_group(
+    const contracts::SafePointRetryCommand& command,
+    std::span<const contracts::EncounterActorPlacementDefinition> actor_placements
+) noexcept {
+    if (!initialized_) {
+        return EncounterDirectorError::invalid_lifecycle;
+    }
+    if (command.completed_tick != current_tick_) {
+        return EncounterDirectorError::retry_targets_wrong_tick;
+    }
+    if (command.actor != definition_.player_actor ||
+        command.reason != contracts::SafePointRetryReason::quest_stage_advanced ||
+        actor_placements.empty() || actor_placements.size() > hostile_count_) {
+        return EncounterDirectorError::retry_not_allowed;
+    }
+    if (command.sequence == 0 || command.sequence <= last_retry_sequence_) {
+        return EncounterDirectorError::stale_retry_sequence;
+    }
+
+    std::array<std::size_t, hostile_capacity> placement_indices{};
+    for (std::size_t index = 0; index < actor_placements.size(); ++index) {
+        const auto runtime = std::find_if(
+            hostiles_.begin(),
+            hostiles_.begin() + static_cast<std::ptrdiff_t>(hostile_count_),
+            [&actor_placements, index](const HostileRuntime& hostile) {
+                return hostile.actor == actor_placements[index].actor;
+            }
+        );
+        if (runtime == hostiles_.begin() + static_cast<std::ptrdiff_t>(hostile_count_) ||
+            actor_placements[index].formation_slot >=
+                contracts::encounter_formation_slot_capacity) {
+            return EncounterDirectorError::retry_not_allowed;
+        }
+        for (std::size_t prior = 0; prior < index; ++prior) {
+            if (placement_indices[prior] ==
+                    static_cast<std::size_t>(runtime - hostiles_.begin()) ||
+                actor_placements[prior].formation_slot ==
+                    actor_placements[index].formation_slot) {
+                return EncounterDirectorError::retry_not_allowed;
+            }
+        }
+        placement_indices[index] = static_cast<std::size_t>(runtime - hostiles_.begin());
+    }
+
+    for (std::size_t index = 0; index < hostile_count_; ++index) {
+        hostiles_[index].next_attack_tick = 0;
+        hostiles_[index].attack_count = 0;
+    }
+    for (std::size_t index = 0; index < actor_placements.size(); ++index) {
+        auto& runtime = hostiles_[placement_indices[index]];
+        runtime.home_pose = actor_placements[index].pose;
+        runtime.formation_slot = actor_placements[index].formation_slot;
     }
     last_retry_sequence_ = command.sequence;
     update_checksum();
@@ -441,8 +505,9 @@ contracts::GroundPoseMm DeterministicEncounterDirector::formation_target(
         {0, -contracts::ground_axis_one},
         {23'170, -23'170},
     }};
-    const auto& direction = directions[hostile_index % directions.size()];
-    const auto ring = static_cast<std::int64_t>(hostile_index / directions.size() + 1U);
+    const auto slot = static_cast<std::size_t>(hostiles_[hostile_index].formation_slot);
+    const auto& direction = directions[slot % directions.size()];
+    const auto ring = static_cast<std::int64_t>(slot / directions.size() + 1U);
     const auto radius = static_cast<std::int64_t>(definition_.formation_radius_mm) * ring;
     return {
         saturating_add(
@@ -479,6 +544,7 @@ void DeterministicEncounterDirector::update_checksum() noexcept {
         hash_integer(hash, hostile.home_pose.y);
         hash_integer(hash, hostile.home_pose.height);
         hash_integer(hash, hostile.home_pose.floor_layer);
+        hash_integer(hash, hostile.formation_slot);
         hash_integer(hash, hostile.next_attack_tick);
         hash_integer(hash, hostile.attack_count);
     }

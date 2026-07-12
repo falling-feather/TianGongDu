@@ -623,15 +623,17 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
             false,
         };
     }
-    for (const auto actor_key : definition().quest_encounter_activations[2].actor_keys) {
+    for (const auto& placement :
+         definition().quest_encounter_activations[2].actor_placements) {
         const auto actor = std::find_if(
             actors.begin(),
             actors.end(),
-            [actor_key](const tgd::contracts::CombatActorSnapshot& candidate) {
-                return candidate.actor == actor_key;
+            [&placement](const tgd::contracts::CombatActorSnapshot& candidate) {
+                return candidate.actor == placement.actor;
             }
         );
         if (actor != actors.end()) {
+            actor->pose = placement.pose;
             actor->active = true;
             actor->defeated = false;
         }
@@ -703,23 +705,25 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
         !outcomes.resolve(actors, quest).found,
         "a dormant paper egret is not misclassified as defeated"
     );
-    for (const auto actor_key : definition().quest_encounter_activations[3].actor_keys) {
+    for (const auto& placement :
+         definition().quest_encounter_activations[3].actor_placements) {
         const auto actor = std::find_if(
             actors.begin(),
             actors.end(),
-            [actor_key](const tgd::contracts::CombatActorSnapshot& candidate) {
-                return candidate.actor == actor_key;
+            [&placement](const tgd::contracts::CombatActorSnapshot& candidate) {
+                return candidate.actor == placement.actor;
             }
         );
         const auto config = std::find_if(
             combat_definition().actors.begin(),
             combat_definition().actors.end(),
-            [actor_key](const tgd::contracts::CombatActorConfig& candidate) {
-                return candidate.actor == actor_key;
+            [&placement](const tgd::contracts::CombatActorConfig& candidate) {
+                return candidate.actor == placement.actor;
             }
         );
         if (actor != actors.end() && config != combat_definition().actors.end()) {
             actor->resources = config->initial_resources;
+            actor->pose = placement.pose;
             actor->active = true;
             actor->defeated = false;
         }
@@ -865,19 +869,21 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
     );
 
     auto return_actors = actors;
-    for (const auto actor_key : definition().quest_encounter_activations[4].actor_keys) {
+    for (const auto& placement :
+         definition().quest_encounter_activations[4].actor_placements) {
         for (auto& actor : return_actors) {
-            if (actor.actor == actor_key) {
+            if (actor.actor == placement.actor) {
                 const auto config = std::find_if(
                     combat_definition().actors.begin(),
                     combat_definition().actors.end(),
-                    [actor_key](const tgd::contracts::CombatActorConfig& candidate) {
-                        return candidate.actor == actor_key;
+                    [&placement](const tgd::contracts::CombatActorConfig& candidate) {
+                        return candidate.actor == placement.actor;
                     }
                 );
                 if (config != combat_definition().actors.end()) {
                     actor.resources = config->initial_resources;
                 }
+                actor.pose = placement.pose;
                 actor.active = true;
                 actor.defeated = false;
             }
@@ -887,9 +893,10 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
         !outcomes.resolve(return_actors, quest).found,
         "reactivated return hostiles block calibration validation"
     );
-    for (const auto actor_key : definition().quest_encounter_activations[4].actor_keys) {
+    for (const auto& placement :
+         definition().quest_encounter_activations[4].actor_placements) {
         for (auto& actor : return_actors) {
-            if (actor.actor == actor_key) {
+            if (actor.actor == placement.actor) {
                 actor.resources.health = 0;
                 actor.active = false;
                 actor.defeated = true;

@@ -149,6 +149,33 @@ inline constexpr std::array<contracts::StableActorKey, 1> encounter_activation_5
     201ULL,
 }};
 
+inline constexpr std::array<contracts::EncounterActorPlacementDefinition, 1> encounter_activation_0_placements{{
+    {104ULL, {-5900, 2300, 0, 0}, 0U},
+}};
+
+inline constexpr std::array<contracts::EncounterActorPlacementDefinition, 1> encounter_activation_1_placements{{
+    {105ULL, {-5200, -1600, 700, 0}, 2U},
+}};
+
+inline constexpr std::array<contracts::EncounterActorPlacementDefinition, 2> encounter_activation_2_placements{{
+    {101ULL, {-4000, -2600, 0, 0}, 1U},
+    {102ULL, {-3000, -400, 0, 0}, 5U},
+}};
+
+inline constexpr std::array<contracts::EncounterActorPlacementDefinition, 1> encounter_activation_3_placements{{
+    {103ULL, {-1500, 900, 700, 0}, 2U},
+}};
+
+inline constexpr std::array<contracts::EncounterActorPlacementDefinition, 3> encounter_activation_4_placements{{
+    {101ULL, {-2500, -1800, 0, 0}, 0U},
+    {102ULL, {-900, -300, 0, 0}, 3U},
+    {103ULL, {-500, 1700, 700, 0}, 6U},
+}};
+
+inline constexpr std::array<contracts::EncounterActorPlacementDefinition, 1> encounter_activation_5_placements{{
+    {201ULL, {4000, 1900, 0, 0}, 4U},
+}};
+
 inline constexpr std::array<contracts::VerticalSliceBeatDefinition, 7> f1_beats{{
     {contracts::content_id("f1_beat_rain_ferry_arrival"), contracts::VerticalSliceBeatKind::exploration, 9, contracts::content_id("f1_cell_rain_ferry"), std::span<const contracts::ContentId>{beat_0_objectives}},
     {contracts::content_id("f1_beat_shen_yan_training"), contracts::VerticalSliceBeatKind::training, 8, contracts::content_id("f1_cell_rain_ferry"), std::span<const contracts::ContentId>{beat_1_objectives}},
@@ -226,12 +253,12 @@ inline constexpr std::array<contracts::QuestCombatOutcomeDefinition, 3> f1_quest
 }};
 
 inline constexpr std::array<contracts::QuestEncounterActivationDefinition, 6> f1_quest_encounter_activations{{
-    {contracts::content_id("f1_activation_shen_yan_training_rigs"), contracts::content_id("f1_beat_shen_yan_training"), contracts::ContentId{}, contracts::content_id("f1_encounter_umbrella_lane_bootstrap"), std::span<const contracts::StableActorKey>{encounter_activation_0_actors}},
-    {contracts::content_id("f1_activation_shen_yan_flower_turn_rig"), contracts::content_id("f1_beat_shen_yan_training"), contracts::content_id("f1_objective_eavesguard_counter"), contracts::content_id("f1_encounter_umbrella_lane_bootstrap"), std::span<const contracts::StableActorKey>{encounter_activation_1_actors}},
-    {contracts::content_id("f1_activation_umbrella_lane_first_encounter"), contracts::content_id("f1_beat_umbrella_lane_first_encounter"), contracts::ContentId{}, contracts::content_id("f1_encounter_umbrella_lane_bootstrap"), std::span<const contracts::StableActorKey>{encounter_activation_2_actors}},
-    {contracts::content_id("f1_activation_umbrella_lane_paper_egret"), contracts::content_id("f1_beat_umbrella_lane_first_encounter"), contracts::content_id("f1_objective_defeat_leaking_dolls"), contracts::content_id("f1_encounter_umbrella_lane_bootstrap"), std::span<const contracts::StableActorKey>{encounter_activation_3_actors}},
-    {contracts::content_id("f1_activation_canopy_return_encounter"), contracts::content_id("f1_beat_canopy_return_encounter"), contracts::ContentId{}, contracts::content_id("f1_encounter_umbrella_lane_bootstrap"), std::span<const contracts::StableActorKey>{encounter_activation_4_actors}},
-    {contracts::content_id("f1_activation_four_seasons_wraith"), contracts::content_id("f1_beat_four_seasons_wraith"), contracts::ContentId{}, contracts::content_id("f1_encounter_umbrella_lane_bootstrap"), std::span<const contracts::StableActorKey>{encounter_activation_5_actors}},
+    {contracts::content_id("f1_activation_shen_yan_training_rigs"), contracts::content_id("f1_beat_shen_yan_training"), contracts::ContentId{}, contracts::content_id("f1_encounter_umbrella_lane_bootstrap"), std::span<const contracts::StableActorKey>{encounter_activation_0_actors}, std::span<const contracts::EncounterActorPlacementDefinition>{encounter_activation_0_placements}},
+    {contracts::content_id("f1_activation_shen_yan_flower_turn_rig"), contracts::content_id("f1_beat_shen_yan_training"), contracts::content_id("f1_objective_eavesguard_counter"), contracts::content_id("f1_encounter_umbrella_lane_bootstrap"), std::span<const contracts::StableActorKey>{encounter_activation_1_actors}, std::span<const contracts::EncounterActorPlacementDefinition>{encounter_activation_1_placements}},
+    {contracts::content_id("f1_activation_umbrella_lane_first_encounter"), contracts::content_id("f1_beat_umbrella_lane_first_encounter"), contracts::ContentId{}, contracts::content_id("f1_encounter_umbrella_lane_bootstrap"), std::span<const contracts::StableActorKey>{encounter_activation_2_actors}, std::span<const contracts::EncounterActorPlacementDefinition>{encounter_activation_2_placements}},
+    {contracts::content_id("f1_activation_umbrella_lane_paper_egret"), contracts::content_id("f1_beat_umbrella_lane_first_encounter"), contracts::content_id("f1_objective_defeat_leaking_dolls"), contracts::content_id("f1_encounter_umbrella_lane_bootstrap"), std::span<const contracts::StableActorKey>{encounter_activation_3_actors}, std::span<const contracts::EncounterActorPlacementDefinition>{encounter_activation_3_placements}},
+    {contracts::content_id("f1_activation_canopy_return_encounter"), contracts::content_id("f1_beat_canopy_return_encounter"), contracts::ContentId{}, contracts::content_id("f1_encounter_umbrella_lane_bootstrap"), std::span<const contracts::StableActorKey>{encounter_activation_4_actors}, std::span<const contracts::EncounterActorPlacementDefinition>{encounter_activation_4_placements}},
+    {contracts::content_id("f1_activation_four_seasons_wraith"), contracts::content_id("f1_beat_four_seasons_wraith"), contracts::ContentId{}, contracts::content_id("f1_encounter_umbrella_lane_bootstrap"), std::span<const contracts::StableActorKey>{encounter_activation_5_actors}, std::span<const contracts::EncounterActorPlacementDefinition>{encounter_activation_5_placements}},
 }};
 
 inline constexpr std::array<contracts::QuestBossPhaseDefinition, 4> f1_quest_boss_phases{{

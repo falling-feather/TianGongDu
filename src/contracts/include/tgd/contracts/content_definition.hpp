@@ -110,12 +110,21 @@ struct QuestCombatOutcomeDefinition final {
     std::uint16_t required_count{};
 };
 
+inline constexpr std::uint8_t encounter_formation_slot_capacity = 15;
+
+struct EncounterActorPlacementDefinition final {
+    StableActorKey actor{};
+    GroundPoseMm pose{};
+    std::uint8_t formation_slot{};
+};
+
 struct QuestEncounterActivationDefinition final {
     ContentId id{};
     ContentId beat_id{};
     ContentId trigger_objective_id{};
     ContentId encounter_id{};
     std::span<const StableActorKey> actor_keys{};
+    std::span<const EncounterActorPlacementDefinition> actor_placements{};
 };
 
 struct QuestBossPhaseDefinition final {

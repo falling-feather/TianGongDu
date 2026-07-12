@@ -245,7 +245,7 @@ CombatError DeterministicCombatResolver::retry_from_initial(
 
 CombatError DeterministicCombatResolver::activate_group(
     const contracts::SafePointRetryCommand& command,
-    std::span<const contracts::StableActorKey> actor_keys,
+    std::span<const contracts::EncounterActorPlacementDefinition> actor_placements,
     ICombatEventSink& sink
 ) noexcept {
     if (lifecycle_ != CombatLifecycle::running && lifecycle_ != CombatLifecycle::paused) {
@@ -259,17 +259,19 @@ CombatError DeterministicCombatResolver::activate_group(
         actor_snapshots_[player_index].faction != contracts::CombatFaction::player ||
         !actor_snapshots_[player_index].active ||
         command.reason != contracts::SafePointRetryReason::quest_stage_advanced ||
-        actor_keys.empty() || actor_keys.size() >= actor_count_) {
+        actor_placements.empty() || actor_placements.size() >= actor_count_) {
         return CombatError::retry_not_allowed;
     }
     if (command.sequence == 0 || command.sequence <= last_retry_sequence_) {
         return CombatError::stale_retry_sequence;
     }
     std::array<std::size_t, actor_capacity> activation_indices{};
-    for (std::size_t index = 0; index < actor_keys.size(); ++index) {
-        const auto actor = actor_index(actor_keys[index]);
+    for (std::size_t index = 0; index < actor_placements.size(); ++index) {
+        const auto actor = actor_index(actor_placements[index].actor);
         if (actor == actor_capacity ||
-            actor_snapshots_[actor].faction != contracts::CombatFaction::hostile) {
+            actor_snapshots_[actor].faction != contracts::CombatFaction::hostile ||
+            actor_placements[index].formation_slot >=
+                contracts::encounter_formation_slot_capacity) {
             return CombatError::retry_not_allowed;
         }
         for (std::size_t prior = 0; prior < index; ++prior) {
@@ -286,12 +288,15 @@ CombatError DeterministicCombatResolver::activate_group(
             continue;
         }
         restore_actor(actor);
-        const auto selected = std::find(
-            activation_indices.begin(),
-            activation_indices.begin() + static_cast<std::ptrdiff_t>(actor_keys.size()),
-            actor
-        ) != activation_indices.begin() + static_cast<std::ptrdiff_t>(actor_keys.size());
-        if (selected) {
+        const auto placement = std::find_if(
+            actor_placements.begin(),
+            actor_placements.end(),
+            [this, actor](const contracts::EncounterActorPlacementDefinition& candidate) {
+                return actor_index(candidate.actor) == actor;
+            }
+        );
+        if (placement != actor_placements.end()) {
+            actor_snapshots_[actor].pose = placement->pose;
             actor_snapshots_[actor].active = actor_snapshots_[actor].resources.health > 0;
             actor_snapshots_[actor].defeated = false;
         } else {

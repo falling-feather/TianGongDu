@@ -9,6 +9,7 @@ const outputPath = resolve(
   root,
   "src/content-core/include/tgd/content/f1_vertical_slice.generated.hpp"
 );
+const encounterFormationSlotCapacity = 15;
 
 function fail(message) {
   throw new Error(`F1 vertical slice contract: ${message}`);
@@ -340,6 +341,24 @@ export function validateF1SliceContract(contract, catalog) {
       fail(`${activation.id} references an invalid hostile actor group`);
     }
     assertUnique(activation.actorKeys, `${activation.id} actor key`);
+    if (!Array.isArray(activation.actorPlacements) ||
+        activation.actorPlacements.length !== activation.actorKeys.length) {
+      fail(`${activation.id} must place every hostile actor exactly once`);
+    }
+    for (let index = 0; index < activation.actorPlacements.length; index += 1) {
+      const placement = activation.actorPlacements[index];
+      const pose = placement?.poseMm;
+      if (placement?.actorKey !== activation.actorKeys[index] ||
+          !Number.isInteger(placement?.formationSlot) || placement.formationSlot < 0 ||
+          placement.formationSlot >= encounterFormationSlotCapacity ||
+          !pose || ![pose.x, pose.y, pose.height, pose.floorLayer].every(Number.isInteger)) {
+        fail(`${activation.id} has an invalid ordered actor placement`);
+      }
+    }
+    assertUnique(
+      activation.actorPlacements.map((placement) => placement.formationSlot),
+      `${activation.id} formation slot`
+    );
   }
   assertUnique(encounterActivations.map((activation) => activation.id), "encounter activation id");
   assertUnique(
@@ -355,21 +374,27 @@ export function validateF1SliceContract(contract, catalog) {
       encounterActivations[0].beatId !== trainingBeat.id ||
       encounterActivations[0].triggerObjectiveId !== null ||
       !sameValues(encounterActivations[0].actorKeys, [104]) ||
+      !sameValues(encounterActivations[0].actorPlacements.map((value) => value.formationSlot), [0]) ||
       encounterActivations[1].beatId !== trainingBeat.id ||
       encounterActivations[1].triggerObjectiveId !== trainingBeat.objectiveIds[2] ||
       !sameValues(encounterActivations[1].actorKeys, [105]) ||
+      !sameValues(encounterActivations[1].actorPlacements.map((value) => value.formationSlot), [2]) ||
       encounterActivations[2].beatId !== laneBeat.id ||
       encounterActivations[2].triggerObjectiveId !== null ||
       !sameValues(encounterActivations[2].actorKeys, [101, 102]) ||
+      !sameValues(encounterActivations[2].actorPlacements.map((value) => value.formationSlot), [1, 5]) ||
       encounterActivations[3].beatId !== laneBeat.id ||
       encounterActivations[3].triggerObjectiveId !== laneBeat.objectiveIds[0] ||
       !sameValues(encounterActivations[3].actorKeys, [103]) ||
+      !sameValues(encounterActivations[3].actorPlacements.map((value) => value.formationSlot), [2]) ||
       encounterActivations[4].beatId !== returnBeat.id ||
       encounterActivations[4].triggerObjectiveId !== null ||
       !sameValues(encounterActivations[4].actorKeys, [101, 102, 103]) ||
+      !sameValues(encounterActivations[4].actorPlacements.map((value) => value.formationSlot), [0, 3, 6]) ||
       encounterActivations[5].beatId !== bossBeat.id ||
       encounterActivations[5].triggerObjectiveId !== null ||
-      !sameValues(encounterActivations[5].actorKeys, [201])) {
+      !sameValues(encounterActivations[5].actorKeys, [201]) ||
+      !sameValues(encounterActivations[5].actorPlacements.map((value) => value.formationSlot), [4])) {
     fail("training waves, lane waves, return, and boss beats must own authored activations");
   }
   const bossPhases = contract.questBossPhases;
@@ -1010,7 +1035,7 @@ function questEncounterActivationRow(activation, index) {
   const triggerObjective = activation.triggerObjectiveId === null
     ? "contracts::ContentId{}"
     : contentId(activation.triggerObjectiveId);
-  return `    {${contentId(activation.id)}, ${contentId(activation.beatId)}, ${triggerObjective}, ${contentId(activation.encounterId)}, std::span<const contracts::StableActorKey>{encounter_activation_${index}_actors}},`;
+  return `    {${contentId(activation.id)}, ${contentId(activation.beatId)}, ${triggerObjective}, ${contentId(activation.encounterId)}, std::span<const contracts::StableActorKey>{encounter_activation_${index}_actors}, std::span<const contracts::EncounterActorPlacementDefinition>{encounter_activation_${index}_placements}},`;
 }
 
 function questBossPhaseRow(phase) {
@@ -1075,6 +1100,11 @@ ${arrayRows(trigger.prerequisiteObjectiveIds)}
       (activation, index) => `inline constexpr std::array<contracts::StableActorKey, ${activation.actorKeys.length}> encounter_activation_${index}_actors{{${activation.actorKeys.map((actor) => `\n    ${actor}ULL,`).join("")}\n}};`
     )
     .join("\n\n");
+  const questEncounterActivationPlacementArrays = contract.questEncounterActivations
+    .map(
+      (activation, index) => `inline constexpr std::array<contracts::EncounterActorPlacementDefinition, ${activation.actorPlacements.length}> encounter_activation_${index}_placements{{${activation.actorPlacements.map((placement) => `\n    {${placement.actorKey}ULL, {${placement.poseMm.x}, ${placement.poseMm.y}, ${placement.poseMm.height}, ${placement.poseMm.floorLayer}}, ${placement.formationSlot}U},`).join("")}\n}};`
+    )
+    .join("\n\n");
   const questBossPhaseRows = contract.questBossPhases.map(questBossPhaseRow).join("\n");
   const questResolutionRewardRows = contract.questResolutionRewards
     .map(questResolutionRewardRow)
@@ -1098,6 +1128,8 @@ ${interactionPrerequisiteArrays}
 ${combatTriggerPrerequisiteArrays}
 
 ${questEncounterActivationActorArrays}
+
+${questEncounterActivationPlacementArrays}
 
 inline constexpr std::array<contracts::VerticalSliceBeatDefinition, ${contract.beats.length}> f1_beats{{
 ${beatRows}

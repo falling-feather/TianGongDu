@@ -166,6 +166,10 @@ int main() {
             definition->quest_encounter_activations.front().trigger_objective_id.key == 0 &&
             definition->quest_encounter_activations.front().actor_keys.size() == 1 &&
             definition->quest_encounter_activations.front().actor_keys.front() == 104 &&
+            definition->quest_encounter_activations.front().actor_placements.size() == 1 &&
+            definition->quest_encounter_activations.front()
+                    .actor_placements.front()
+                    .formation_slot == 0 &&
             definition->quest_encounter_activations[1].beat_id.key ==
                 tgd::contracts::stable_content_key(
                     "f1_beat_shen_yan_training"
@@ -176,22 +180,34 @@ int main() {
                 ) &&
             definition->quest_encounter_activations[1].actor_keys.size() == 1 &&
             definition->quest_encounter_activations[1].actor_keys.front() == 105 &&
+            definition->quest_encounter_activations[1]
+                    .actor_placements.front()
+                    .formation_slot == 2 &&
             definition->quest_encounter_activations[2].beat_id.key ==
                 tgd::contracts::stable_content_key(
                     "f1_beat_umbrella_lane_first_encounter"
                 ) &&
             definition->quest_encounter_activations[2].actor_keys.size() == 2 &&
+            definition->quest_encounter_activations[2].actor_placements[0].formation_slot == 1 &&
+            definition->quest_encounter_activations[2].actor_placements[1].formation_slot == 5 &&
             definition->quest_encounter_activations[3].trigger_objective_id.key ==
                 tgd::contracts::stable_content_key(
                     "f1_objective_defeat_leaking_dolls"
                 ) &&
             definition->quest_encounter_activations[3].actor_keys.size() == 1 &&
             definition->quest_encounter_activations[3].actor_keys.front() == 103 &&
+            definition->quest_encounter_activations[3]
+                    .actor_placements.front()
+                    .formation_slot == 2 &&
             definition->quest_encounter_activations[4].beat_id.key ==
                 tgd::contracts::stable_content_key(
                     "f1_beat_canopy_return_encounter"
                 ) &&
-            definition->quest_encounter_activations[4].actor_keys.size() == 3,
+            definition->quest_encounter_activations[4].actor_keys.size() == 3 &&
+            definition->quest_encounter_activations[4].actor_placements[0].pose ==
+                tgd::contracts::GroundPoseMm{-2500, -1800, 0, 0} &&
+            definition->quest_encounter_activations[4].actor_placements[1].formation_slot == 3 &&
+            definition->quest_encounter_activations[4].actor_placements[2].formation_slot == 6,
         "objective-driven training, lane waves, and return activations are generated content"
     );
     ok &= expect(
@@ -199,6 +215,9 @@ int main() {
                 tgd::contracts::stable_content_key("f1_beat_four_seasons_wraith") &&
             definition->quest_encounter_activations.back().actor_keys.size() == 1 &&
             definition->quest_encounter_activations.back().actor_keys.front() == 201 &&
+            definition->quest_encounter_activations.back()
+                    .actor_placements.front()
+                    .formation_slot == 4 &&
             definition->quest_boss_phases.size() == 4 &&
             definition->quest_boss_phases.front().health_percent == 75 &&
             definition->quest_boss_phases.back().health_percent == 0 &&

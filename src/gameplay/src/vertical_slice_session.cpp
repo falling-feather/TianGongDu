@@ -517,16 +517,31 @@ bool VerticalSliceSession::valid_definition(
             (has_trigger_objective && !trigger_objective_exists) ||
             activation.encounter_id.key == 0 ||
             activation.encounter_id.name.empty() || activation.actor_keys.empty() ||
+            activation.actor_placements.size() != activation.actor_keys.size() ||
             activation_beat == definition.beats.end()) {
             return false;
         }
         for (std::size_t actor = 0; actor < activation.actor_keys.size(); ++actor) {
             if (activation.actor_keys[actor] == 0 ||
+                activation.actor_placements[actor].actor != activation.actor_keys[actor] ||
+                activation.actor_placements[actor].formation_slot >=
+                    contracts::encounter_formation_slot_capacity ||
                 std::find(
                     activation.actor_keys.begin(),
                     activation.actor_keys.begin() + static_cast<std::ptrdiff_t>(actor),
                     activation.actor_keys[actor]
                 ) != activation.actor_keys.begin() +
+                         static_cast<std::ptrdiff_t>(actor) ||
+                std::find_if(
+                    activation.actor_placements.begin(),
+                    activation.actor_placements.begin() + static_cast<std::ptrdiff_t>(actor),
+                    [&activation, actor](
+                        const contracts::EncounterActorPlacementDefinition& placement
+                    ) {
+                        return placement.formation_slot ==
+                               activation.actor_placements[actor].formation_slot;
+                    }
+                ) != activation.actor_placements.begin() +
                          static_cast<std::ptrdiff_t>(actor)) {
                 return false;
             }

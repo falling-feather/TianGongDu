@@ -289,42 +289,99 @@ test("F1 encounters activate authored groups at beat and objective boundaries", 
       beatId: contract.beats[1].id,
       triggerObjectiveId: null,
       encounterId: contract.combatBootstrap.id,
-      actorKeys: [104]
+      actorKeys: [104],
+      actorPlacements: [
+        {
+          actorKey: 104,
+          poseMm: { x: -5900, y: 2300, height: 0, floorLayer: 0 },
+          formationSlot: 0
+        }
+      ]
     },
     {
       id: "f1_activation_shen_yan_flower_turn_rig",
       beatId: contract.beats[1].id,
       triggerObjectiveId: contract.beats[1].objectiveIds[2],
       encounterId: contract.combatBootstrap.id,
-      actorKeys: [105]
+      actorKeys: [105],
+      actorPlacements: [
+        {
+          actorKey: 105,
+          poseMm: { x: -5200, y: -1600, height: 700, floorLayer: 0 },
+          formationSlot: 2
+        }
+      ]
     },
     {
       id: "f1_activation_umbrella_lane_first_encounter",
       beatId: contract.beats[2].id,
       triggerObjectiveId: null,
       encounterId: contract.combatBootstrap.id,
-      actorKeys: [101, 102]
+      actorKeys: [101, 102],
+      actorPlacements: [
+        {
+          actorKey: 101,
+          poseMm: { x: -4000, y: -2600, height: 0, floorLayer: 0 },
+          formationSlot: 1
+        },
+        {
+          actorKey: 102,
+          poseMm: { x: -3000, y: -400, height: 0, floorLayer: 0 },
+          formationSlot: 5
+        }
+      ]
     },
     {
       id: "f1_activation_umbrella_lane_paper_egret",
       beatId: contract.beats[2].id,
       triggerObjectiveId: contract.beats[2].objectiveIds[0],
       encounterId: contract.combatBootstrap.id,
-      actorKeys: [103]
+      actorKeys: [103],
+      actorPlacements: [
+        {
+          actorKey: 103,
+          poseMm: { x: -1500, y: 900, height: 700, floorLayer: 0 },
+          formationSlot: 2
+        }
+      ]
     },
     {
       id: "f1_activation_canopy_return_encounter",
       beatId: contract.beats[4].id,
       triggerObjectiveId: null,
       encounterId: contract.combatBootstrap.id,
-      actorKeys: [101, 102, 103]
+      actorKeys: [101, 102, 103],
+      actorPlacements: [
+        {
+          actorKey: 101,
+          poseMm: { x: -2500, y: -1800, height: 0, floorLayer: 0 },
+          formationSlot: 0
+        },
+        {
+          actorKey: 102,
+          poseMm: { x: -900, y: -300, height: 0, floorLayer: 0 },
+          formationSlot: 3
+        },
+        {
+          actorKey: 103,
+          poseMm: { x: -500, y: 1700, height: 700, floorLayer: 0 },
+          formationSlot: 6
+        }
+      ]
     },
     {
       id: "f1_activation_four_seasons_wraith",
       beatId: contract.beats[5].id,
       triggerObjectiveId: null,
       encounterId: contract.combatBootstrap.id,
-      actorKeys: [201]
+      actorKeys: [201],
+      actorPlacements: [
+        {
+          actorKey: 201,
+          poseMm: { x: 4000, y: 1900, height: 0, floorLayer: 0 },
+          formationSlot: 4
+        }
+      ]
     }
   ]);
   assert.equal(
@@ -347,6 +404,21 @@ test("F1 encounters activate authored groups at beat and objective boundaries", 
   assert.throws(
     () => validateF1SliceContract(crossBeatTrigger, catalog),
     /references an objective outside its beat/
+  );
+
+  const misplacedActor = structuredClone(contract);
+  misplacedActor.questEncounterActivations[2].actorPlacements[0].actorKey = 103;
+  assert.throws(
+    () => validateF1SliceContract(misplacedActor, catalog),
+    /invalid ordered actor placement/
+  );
+
+  const duplicateFormationSlot = structuredClone(contract);
+  duplicateFormationSlot.questEncounterActivations[2].actorPlacements[1].formationSlot =
+    duplicateFormationSlot.questEncounterActivations[2].actorPlacements[0].formationSlot;
+  assert.throws(
+    () => validateF1SliceContract(duplicateFormationSlot, catalog),
+    /duplicate .* formation slot/
   );
 
   const leakedHostile = structuredClone(contract);

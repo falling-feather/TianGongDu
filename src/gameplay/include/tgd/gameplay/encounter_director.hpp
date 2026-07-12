@@ -64,6 +64,10 @@ class IEncounterDirector {
     [[nodiscard]] virtual EncounterDirectorError retry_from_initial(
         const contracts::SafePointRetryCommand& command
     ) noexcept = 0;
+    [[nodiscard]] virtual EncounterDirectorError activate_group(
+        const contracts::SafePointRetryCommand& command,
+        std::span<const contracts::EncounterActorPlacementDefinition> actor_placements
+    ) noexcept = 0;
     [[nodiscard]] virtual contracts::TickIndex current_tick() const noexcept = 0;
     [[nodiscard]] virtual std::uint64_t checksum() const noexcept = 0;
 };
@@ -72,6 +76,7 @@ class DeterministicEncounterDirector final : public IEncounterDirector {
   public:
     static constexpr std::size_t hostile_capacity = EncounterPlanBatch::capacity - 1;
     static constexpr std::size_t ability_capacity = 32;
+    static_assert(hostile_capacity == contracts::encounter_formation_slot_capacity);
 
     [[nodiscard]] EncounterDirectorError initialize(
         const contracts::EncounterDirectorDefinition& definition,
@@ -86,6 +91,10 @@ class DeterministicEncounterDirector final : public IEncounterDirector {
     [[nodiscard]] EncounterDirectorError retry_from_initial(
         const contracts::SafePointRetryCommand& command
     ) noexcept override;
+    [[nodiscard]] EncounterDirectorError activate_group(
+        const contracts::SafePointRetryCommand& command,
+        std::span<const contracts::EncounterActorPlacementDefinition> actor_placements
+    ) noexcept override;
     [[nodiscard]] contracts::TickIndex current_tick() const noexcept override;
     [[nodiscard]] std::uint64_t checksum() const noexcept override;
 
@@ -93,6 +102,7 @@ class DeterministicEncounterDirector final : public IEncounterDirector {
     struct HostileRuntime final {
         contracts::StableActorKey actor{};
         contracts::GroundPoseMm home_pose{};
+        std::uint8_t formation_slot{};
         contracts::TickIndex next_attack_tick{};
         std::uint32_t attack_count{};
     };

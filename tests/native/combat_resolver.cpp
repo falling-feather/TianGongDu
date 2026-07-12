@@ -447,7 +447,9 @@ bool test_defeat_retry_restores_initial_encounter() {
         resolver.retry_from_initial(stage_restart, sink) == CombatError::retry_not_allowed,
         "safe-point retry remains exclusive to defeated players"
     );
-    const std::array<tgd::contracts::StableActorKey, 1> return_group{2};
+    const std::array<tgd::contracts::EncounterActorPlacementDefinition, 1> return_group{{
+        {2, actor_configs[1].initial_pose, 0},
+    }};
     ok &= expect(
         resolver.activate_group(stage_restart, return_group, sink) == CombatError::none,
         "an active player can activate an authored hostile group"
@@ -476,7 +478,9 @@ bool test_authored_group_activation_isolates_hostiles() {
     actor_configs[2].initially_active = false;
     bool ok = resolver.initialize(actor_configs, abilities()) == CombatError::none;
     ok &= resolver.start() == CombatError::none;
-    const std::array<tgd::contracts::StableActorKey, 1> boss_group{3};
+    const std::array<tgd::contracts::EncounterActorPlacementDefinition, 1> boss_group{{
+        {3, {7'000, 1'200, 0, 0}, 4},
+    }};
     ok &= expect(
         resolver.activate_group(
             {0, 1, 1, tgd::contracts::SafePointRetryReason::quest_stage_advanced},
@@ -490,10 +494,13 @@ bool test_authored_group_activation_isolates_hostiles() {
             !resolver.actors()[1].defeated &&
             resolver.actors()[1].resources.health == 0 && resolver.actors()[2].active &&
             !resolver.actors()[2].defeated &&
+            resolver.actors()[2].pose == boss_group[0].pose &&
             resolver.actors()[2].resources == actor_configs[2].initial_resources,
         "activating a group distinguishes dormant actors from defeated actors"
     );
-    const std::array<tgd::contracts::StableActorKey, 1> lane_group{2};
+    const std::array<tgd::contracts::EncounterActorPlacementDefinition, 1> lane_group{{
+        {2, {-7'000, -1'200, 0, 0}, 6},
+    }};
     ok &= expect(
         resolver.activate_group(
             {0, 1, 2, tgd::contracts::SafePointRetryReason::quest_stage_advanced},
@@ -504,6 +511,7 @@ bool test_authored_group_activation_isolates_hostiles() {
     );
     ok &= expect(
         resolver.actors()[1].active && !resolver.actors()[1].defeated &&
+            resolver.actors()[1].pose == lane_group[0].pose &&
             !resolver.actors()[2].active && !resolver.actors()[2].defeated &&
             resolver.actors()[2].resources.health == 0,
         "replaced hostile groups remain inactive across stage and retry boundaries"

@@ -353,6 +353,45 @@ bool test_objective_driven_encounter_activations_fail_closed() {
             VerticalSliceError::invalid_definition,
         "one beat cannot declare two stage-entry encounter activations"
     );
+
+    auto mismatched_placement = definition();
+    std::vector<tgd::contracts::QuestEncounterActivationDefinition>
+        mismatched_activations(
+            definition().quest_encounter_activations.begin(),
+            definition().quest_encounter_activations.end()
+        );
+    std::vector<tgd::contracts::EncounterActorPlacementDefinition> mismatched_placements(
+        mismatched_activations[2].actor_placements.begin(),
+        mismatched_activations[2].actor_placements.end()
+    );
+    mismatched_placements[0].actor = mismatched_activations[3].actor_keys.front();
+    mismatched_activations[2].actor_placements = mismatched_placements;
+    mismatched_placement.quest_encounter_activations = mismatched_activations;
+    VerticalSliceSession mismatched_session;
+    ok &= expect(
+        mismatched_session.initialize(mismatched_placement, empty_world()) ==
+            VerticalSliceError::invalid_definition,
+        "an encounter placement must target its ordered actor key"
+    );
+
+    auto overlapping_slots = definition();
+    std::vector<tgd::contracts::QuestEncounterActivationDefinition> overlapping_activations(
+        definition().quest_encounter_activations.begin(),
+        definition().quest_encounter_activations.end()
+    );
+    std::vector<tgd::contracts::EncounterActorPlacementDefinition> overlapping_placements(
+        overlapping_activations[2].actor_placements.begin(),
+        overlapping_activations[2].actor_placements.end()
+    );
+    overlapping_placements[1].formation_slot = overlapping_placements[0].formation_slot;
+    overlapping_activations[2].actor_placements = overlapping_placements;
+    overlapping_slots.quest_encounter_activations = overlapping_activations;
+    VerticalSliceSession overlapping_session;
+    ok &= expect(
+        overlapping_session.initialize(overlapping_slots, empty_world()) ==
+            VerticalSliceError::invalid_definition,
+        "one encounter group cannot overlap formation slots"
+    );
     return ok;
 }
 

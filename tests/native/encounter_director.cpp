@@ -259,12 +259,54 @@ bool test_retry_resets_director_boundary() {
                 2,
                 tgd::contracts::SafePointRetryReason::quest_stage_advanced,
             }
-        ) == EncounterDirectorError::none,
-        "director resets for an authored quest stage transition"
+        ) == EncounterDirectorError::retry_not_allowed,
+        "player retry remains distinct from authored group activation"
+    );
+    const std::array<tgd::contracts::EncounterActorPlacementDefinition, 2>
+        duplicate_slots{{
+            {2, {2'000, 0, 0, 0}, 2},
+            {3, {-2'000, 0, 0, 0}, 2},
+        }};
+    const tgd::contracts::SafePointRetryCommand stage_activation{
+        1,
+        1,
+        2,
+        tgd::contracts::SafePointRetryReason::quest_stage_advanced,
+    };
+    ok &= expect(
+        director.activate_group(stage_activation, duplicate_slots) ==
+            EncounterDirectorError::retry_not_allowed,
+        "one authored group cannot overlap formation slots"
+    );
+    const std::array<tgd::contracts::EncounterActorPlacementDefinition, 2> placements{{
+        {2, {2'000, 0, 0, 0}, 2},
+        {3, {-2'000, 0, 0, 0}, 6},
+    }};
+    ok &= expect(
+        director.activate_group(stage_activation, placements) == EncounterDirectorError::none,
+        "director accepts authored home poses and formation slots"
+    );
+    snapshots[1].pose = placements[0].pose;
+    snapshots[2].pose = placements[1].pose;
+    const auto formation_plan = director.plan_tick(2, snapshots, 10);
+    ok &= expect(
+        formation_plan.error == EncounterDirectorError::none,
+        "director continues from the next monotonic tick after retry"
+    );
+    const auto upper = std::find_if(
+        formation_plan.batch.poses().begin(),
+        formation_plan.batch.poses().end(),
+        [](const auto& update) { return update.actor == 2; }
+    );
+    const auto lower = std::find_if(
+        formation_plan.batch.poses().begin(),
+        formation_plan.batch.poses().end(),
+        [](const auto& update) { return update.actor == 3; }
     );
     ok &= expect(
-        director.plan_tick(2, snapshots, 10).error == EncounterDirectorError::none,
-        "director continues from the next monotonic tick after retry"
+        upper != formation_plan.batch.poses().end() && upper->pose.y > 0 &&
+            lower != formation_plan.batch.poses().end() && lower->pose.y < 0,
+        "authored formation slots drive distinct approach vectors"
     );
     return ok;
 }

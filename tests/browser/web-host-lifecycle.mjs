@@ -975,9 +975,17 @@ async function runBrowser(target, origin) {
     await page.keyboard.press("2");
     await page.waitForTimeout(60);
     let trainingState = await page.evaluate(() => window.__tgdTest.getF1State());
-    for (let attempt = 0; attempt < 30 && trainingState.questBeatIndex === 1; attempt += 1) {
-      await page.keyboard.press("c");
-      await page.waitForTimeout(350);
+    const trainingDeadline = Date.now() + 20_000;
+    while (trainingState.questBeatIndex === 1 && Date.now() < trainingDeadline) {
+      assert.equal(trainingState.playerActive, true, `${target} player fell during training.`);
+      if (
+        trainingState.incomingAttackTicks > 0 &&
+        trainingState.incomingAttackTicks <= 10 &&
+        !trainingState.playerBusy
+      ) {
+        await page.keyboard.press("c");
+      }
+      await page.waitForTimeout(40);
       trainingState = await page.evaluate(() => window.__tgdTest.getF1State());
     }
     assert.equal(

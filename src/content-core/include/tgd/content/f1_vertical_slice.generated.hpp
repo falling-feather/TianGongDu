@@ -67,6 +67,10 @@ inline constexpr std::array<contracts::ContentId, 3> interaction_8_prerequisites
     contracts::content_id("f1_objective_review_shared_ledger"),
 }};
 
+inline constexpr std::array<contracts::ContentId, 1> interaction_9_prerequisites{{
+    contracts::content_id("f1_objective_validate_calibration"),
+}};
+
 inline constexpr std::array<contracts::VerticalSliceBeatDefinition, 7> f1_beats{{
     {contracts::content_id("f1_beat_rain_ferry_arrival"), contracts::VerticalSliceBeatKind::exploration, 9, contracts::content_id("f1_cell_rain_ferry"), std::span<const contracts::ContentId>{beat_0_objectives}},
     {contracts::content_id("f1_beat_shen_yan_training"), contracts::VerticalSliceBeatKind::training, 8, contracts::content_id("f1_cell_rain_ferry"), std::span<const contracts::ContentId>{beat_1_objectives}},
@@ -99,7 +103,7 @@ inline constexpr std::array<contracts::ContentId, 5> f1_cells{{
     contracts::content_id("f1_cell_return_safe_point"),
 }};
 
-inline constexpr std::array<contracts::QuestInteractionDefinition, 9> f1_quest_interactions{{
+inline constexpr std::array<contracts::QuestInteractionDefinition, 10> f1_quest_interactions{{
     {contracts::content_id("f1_interaction_travel_writ"), contracts::QuestInteractionKind::inspect, contracts::content_id("f1_cell_rain_ferry"), contracts::content_id("f1_objective_inspect_travel_writ"), contracts::ContentId{}, {-12000, -1600, 0, 0}, 800, std::span<const contracts::ContentId>{}},
     {contracts::content_id("f1_interaction_ferry_gate"), contracts::QuestInteractionKind::operate, contracts::content_id("f1_cell_rain_ferry"), contracts::content_id("f1_objective_reach_ferry_gate"), contracts::ContentId{}, {-10450, -100, 0, 0}, 900, std::span<const contracts::ContentId>{}},
     {contracts::content_id("f1_interaction_meet_shen_yan"), contracts::QuestInteractionKind::talk, contracts::content_id("f1_cell_rain_ferry"), contracts::content_id("f1_objective_meet_shen_yan"), contracts::ContentId{}, {-10500, -600, 0, 0}, 800, std::span<const contracts::ContentId>{}},
@@ -109,6 +113,7 @@ inline constexpr std::array<contracts::QuestInteractionDefinition, 9> f1_quest_i
     {contracts::content_id("f1_interaction_review_shared_ledger"), contracts::QuestInteractionKind::inspect, contracts::content_id("f1_cell_canopy_workstation"), contracts::content_id("f1_objective_review_shared_ledger"), contracts::ContentId{}, {-2300, -100, 0, 0}, 650, std::span<const contracts::ContentId>{}},
     {contracts::content_id("f1_interaction_calibrate_rib_spring"), contracts::QuestInteractionKind::choose, contracts::content_id("f1_cell_canopy_workstation"), contracts::content_id("f1_objective_choose_rib_calibration"), contracts::content_id("f1_choice_rib_spring_calibration"), {-1500, 400, 0, 0}, 500, std::span<const contracts::ContentId>{interaction_7_prerequisites}},
     {contracts::content_id("f1_interaction_calibrate_rib_winter"), contracts::QuestInteractionKind::choose, contracts::content_id("f1_cell_canopy_workstation"), contracts::content_id("f1_objective_choose_rib_calibration"), contracts::content_id("f1_choice_rib_winter_calibration"), {-1500, -600, 0, 0}, 500, std::span<const contracts::ContentId>{interaction_8_prerequisites}},
+    {contracts::content_id("f1_interaction_open_return_shortcut"), contracts::QuestInteractionKind::operate, contracts::content_id("f1_cell_canopy_workstation"), contracts::content_id("f1_objective_open_return_shortcut"), contracts::ContentId{}, {-800, 400, 0, 0}, 1400, std::span<const contracts::ContentId>{interaction_9_prerequisites}},
 }};
 
 inline constexpr std::array<contracts::QuestCombatTriggerDefinition, 2> f1_quest_combat_triggers{{
@@ -116,9 +121,14 @@ inline constexpr std::array<contracts::QuestCombatTriggerDefinition, 2> f1_quest
     {contracts::content_id("f1_trigger_flower_turn_counter"), contracts::QuestCombatTriggerKind::player_hit_evaded, contracts::content_id("f1_objective_flower_turn_counter"), contracts::stable_content_key("stance_flower_turn")},
 }};
 
-inline constexpr std::array<contracts::QuestCombatOutcomeDefinition, 2> f1_quest_combat_outcomes{{
+inline constexpr std::array<contracts::QuestCombatOutcomeDefinition, 3> f1_quest_combat_outcomes{{
     {contracts::content_id("f1_outcome_defeat_leaking_dolls"), contracts::QuestCombatOutcomeKind::hostile_archetype_defeated, contracts::content_id("f1_objective_defeat_leaking_dolls"), contracts::content_id("jn_enemy_leaking_umbrella_doll"), 2U},
     {contracts::content_id("f1_outcome_answer_paper_egret"), contracts::QuestCombatOutcomeKind::hostile_archetype_defeated, contracts::content_id("f1_objective_answer_paper_egret"), contracts::content_id("jn_enemy_faded_paper_egret"), 1U},
+    {contracts::content_id("f1_outcome_validate_return_calibration"), contracts::QuestCombatOutcomeKind::all_hostiles_defeated, contracts::content_id("f1_objective_validate_calibration"), contracts::ContentId{}, 0U},
+}};
+
+inline constexpr std::array<contracts::QuestEncounterActivationDefinition, 1> f1_quest_encounter_activations{{
+    {contracts::content_id("f1_activation_canopy_return_encounter"), contracts::content_id("f1_beat_canopy_return_encounter"), contracts::content_id("f1_encounter_umbrella_lane_bootstrap")},
 }};
 
 inline constexpr std::array<contracts::CombatActorConfig, 4> f1_combat_actors{{
@@ -180,6 +190,7 @@ inline constexpr contracts::VerticalSliceDefinition f1_vertical_slice_definition
     std::span<const contracts::QuestInteractionDefinition>{f1_quest_interactions},
     std::span<const contracts::QuestCombatTriggerDefinition>{f1_quest_combat_triggers},
     std::span<const contracts::QuestCombatOutcomeDefinition>{f1_quest_combat_outcomes},
+    std::span<const contracts::QuestEncounterActivationDefinition>{f1_quest_encounter_activations},
 };
 
 }  // namespace tgd::content::generated

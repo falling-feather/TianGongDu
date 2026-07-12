@@ -238,6 +238,39 @@ export function validateF1SliceContract(contract, catalog) {
   ) {
     fail("rib calibration must offer two stable choices after all workbench evidence");
   }
+  const returnBeat = contract.beats[4];
+  const returnShortcut = interactions.find(
+    (interaction) => interaction.objectiveId === returnBeat.objectiveIds[1]
+  );
+  if (
+    returnShortcut?.kind !== "operate" ||
+    returnShortcut.cellId !== returnBeat.cellId ||
+    !sameValues(returnShortcut.prerequisiteObjectiveIds, [returnBeat.objectiveIds[0]])
+  ) {
+    fail("the return shortcut must wait for calibration combat validation");
+  }
+  const encounterActivations = contract.questEncounterActivations;
+  if (!Array.isArray(encounterActivations) ||
+      encounterActivations.length < 1 || encounterActivations.length > 16) {
+    fail("quest encounter activations must contain 1..16 definitions");
+  }
+  for (const activation of encounterActivations) {
+    if (!beatIds.includes(activation.beatId)) {
+      fail(`${activation.id} references an unknown beat`);
+    }
+    if (activation.encounterId !== contract.combatBootstrap?.id) {
+      fail(`${activation.id} references an unknown encounter`);
+    }
+  }
+  assertUnique(encounterActivations.map((activation) => activation.id), "encounter activation id");
+  assertUnique(
+    encounterActivations.map((activation) => activation.beatId),
+    "encounter activation beat"
+  );
+  if (encounterActivations.length !== 1 ||
+      encounterActivations[0].beatId !== returnBeat.id) {
+    fail("the canopy return beat must own the authored encounter activation");
+  }
   const combatTriggers = contract.questCombatTriggers;
   if (!Array.isArray(combatTriggers) || combatTriggers.length < 2 || combatTriggers.length > 64) {
     fail("quest combat triggers must contain 2..64 definitions");
@@ -273,15 +306,24 @@ export function validateF1SliceContract(contract, catalog) {
   if (!Array.isArray(combatOutcomes) || combatOutcomes.length < 2 || combatOutcomes.length > 64) {
     fail("quest combat outcomes must contain 2..64 definitions");
   }
+  const combatOutcomeKinds = new Set([
+    "hostile_archetype_defeated",
+    "all_hostiles_defeated"
+  ]);
   for (const outcome of combatOutcomes) {
-    if (outcome.kind !== "hostile_archetype_defeated") {
+    if (!combatOutcomeKinds.has(outcome.kind)) {
       fail(`${outcome.id} has an unsupported quest combat outcome kind`);
     }
     if (!objectiveIds.includes(outcome.objectiveId)) {
       fail(`${outcome.id} references an unknown objective`);
     }
-    if (!Number.isInteger(outcome.requiredCount) || outcome.requiredCount <= 0 ||
-        outcome.requiredCount > 16) {
+    const archetypeGroup = outcome.kind === "hostile_archetype_defeated" &&
+      typeof outcome.archetypeId === "string" && outcome.archetypeId.length > 0 &&
+      Number.isInteger(outcome.requiredCount) && outcome.requiredCount > 0 &&
+      outcome.requiredCount <= 16;
+    const allHostiles = outcome.kind === "all_hostiles_defeated" &&
+      outcome.archetypeId === null && outcome.requiredCount === 0;
+    if (!archetypeGroup && !allHostiles) {
       fail(`${outcome.id} has an invalid required count`);
     }
   }
@@ -299,6 +341,12 @@ export function validateF1SliceContract(contract, catalog) {
     coveredLaneCombatObjectives.some((objective) => !laneCombatObjectives.has(objective))
   ) {
     fail("the umbrella-lane combat objectives must be fully covered by combat outcomes");
+  }
+  const returnCombatOutcome = combatOutcomes.find(
+    (outcome) => outcome.objectiveId === returnBeat.objectiveIds[0]
+  );
+  if (returnCombatOutcome?.kind !== "all_hostiles_defeated") {
+    fail("the canopy return validation must require all active hostiles defeated");
   }
   if (
     contract.paddingPolicy?.repeatableCombatCountsTowardTarget !== false ||
@@ -548,6 +596,7 @@ export function validateF1SliceContract(contract, catalog) {
     ...objectiveIds,
     ...interactions.map((interaction) => interaction.id),
     ...interactions.map((interaction) => interaction.selectionId).filter(Boolean),
+    ...encounterActivations.map((activation) => activation.id),
     ...combatTriggers.map((trigger) => trigger.id),
     ...combatOutcomes.map((outcome) => outcome.id),
     combat.id,
@@ -604,7 +653,14 @@ function questCombatTriggerRow(trigger) {
 }
 
 function questCombatOutcomeRow(outcome) {
-  return `    {${contentId(outcome.id)}, contracts::QuestCombatOutcomeKind::${outcome.kind}, ${contentId(outcome.objectiveId)}, ${contentId(outcome.archetypeId)}, ${outcome.requiredCount}U},`;
+  const archetype = outcome.archetypeId === null
+    ? "contracts::ContentId{}"
+    : contentId(outcome.archetypeId);
+  return `    {${contentId(outcome.id)}, contracts::QuestCombatOutcomeKind::${outcome.kind}, ${contentId(outcome.objectiveId)}, ${archetype}, ${outcome.requiredCount}U},`;
+}
+
+function questEncounterActivationRow(activation) {
+  return `    {${contentId(activation.id)}, ${contentId(activation.beatId)}, ${contentId(activation.encounterId)}},`;
 }
 
 export function renderF1SliceContract(contract) {
@@ -644,6 +700,9 @@ ${arrayRows(interaction.prerequisiteObjectiveIds)}
     .join("\n");
   const questCombatOutcomeRows = contract.questCombatOutcomes
     .map(questCombatOutcomeRow)
+    .join("\n");
+  const questEncounterActivationRows = contract.questEncounterActivations
+    .map(questEncounterActivationRow)
     .join("\n");
 
   return `// Generated from content/design/f1-vertical-slice.json. Do not edit by hand.
@@ -691,6 +750,10 @@ ${questCombatTriggerRows}
 
 inline constexpr std::array<contracts::QuestCombatOutcomeDefinition, ${contract.questCombatOutcomes.length}> f1_quest_combat_outcomes{{
 ${questCombatOutcomeRows}
+}};
+
+inline constexpr std::array<contracts::QuestEncounterActivationDefinition, ${contract.questEncounterActivations.length}> f1_quest_encounter_activations{{
+${questEncounterActivationRows}
 }};
 
 inline constexpr std::array<contracts::CombatActorConfig, ${combat.actors.length}> f1_combat_actors{{
@@ -741,6 +804,7 @@ inline constexpr contracts::VerticalSliceDefinition f1_vertical_slice_definition
     std::span<const contracts::QuestInteractionDefinition>{f1_quest_interactions},
     std::span<const contracts::QuestCombatTriggerDefinition>{f1_quest_combat_triggers},
     std::span<const contracts::QuestCombatOutcomeDefinition>{f1_quest_combat_outcomes},
+    std::span<const contracts::QuestEncounterActivationDefinition>{f1_quest_encounter_activations},
 };
 
 }  // namespace tgd::content::generated

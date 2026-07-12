@@ -91,6 +91,7 @@ struct QuestCombatTriggerDefinition final {
 
 enum class QuestCombatOutcomeKind : std::uint8_t {
     hostile_archetype_defeated,
+    all_hostiles_defeated,
 };
 
 struct QuestCombatOutcomeDefinition final {
@@ -99,6 +100,12 @@ struct QuestCombatOutcomeDefinition final {
     ContentId objective_id{};
     ContentId archetype_id{};
     std::uint16_t required_count{};
+};
+
+struct QuestEncounterActivationDefinition final {
+    ContentId id{};
+    ContentId beat_id{};
+    ContentId encounter_id{};
 };
 
 struct VerticalSliceDefinition final {
@@ -121,6 +128,7 @@ struct VerticalSliceDefinition final {
     std::span<const QuestInteractionDefinition> quest_interactions{};
     std::span<const QuestCombatTriggerDefinition> quest_combat_triggers{};
     std::span<const QuestCombatOutcomeDefinition> quest_combat_outcomes{};
+    std::span<const QuestEncounterActivationDefinition> quest_encounter_activations{};
 };
 
 }  // namespace tgd::contracts

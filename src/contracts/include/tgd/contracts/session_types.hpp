@@ -63,6 +63,7 @@ struct SessionCommand final {
 
 enum class SafePointRetryReason : std::uint8_t {
     player_defeated,
+    quest_stage_advanced,
 };
 
 struct SafePointRetryCommand final {

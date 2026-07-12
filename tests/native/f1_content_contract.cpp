@@ -60,7 +60,7 @@ int main() {
         "the first route, cells, and enemy families are explicit"
     );
     ok &= expect(
-        definition->quest_interactions.size() == 9 &&
+        definition->quest_interactions.size() == 10 &&
             definition->quest_interactions.front().objective_id.key ==
                 tgd::contracts::stable_content_key("f1_objective_inspect_travel_writ"),
         "the opening scene interactions are generated content, not presentation rules"
@@ -84,7 +84,7 @@ int main() {
             route_interaction->selection_id.key ==
                 tgd::contracts::stable_content_key("f1_choice_lane_canopy") &&
             route_interaction->prerequisite_objectives.size() == 2 &&
-            definition->quest_combat_outcomes.size() == 2,
+            definition->quest_combat_outcomes.size() == 3,
         "the lane choice waits for two generated hostile-group outcomes"
     );
     const auto calibration_count = std::count_if(
@@ -100,6 +100,16 @@ int main() {
     ok &= expect(
         calibration_count == 2,
         "the shared workbench exposes two generated calibration choices"
+    );
+    ok &= expect(
+        combat != nullptr && definition->quest_encounter_activations.size() == 1 &&
+            definition->quest_encounter_activations.front().beat_id.key ==
+                tgd::contracts::stable_content_key(
+                    "f1_beat_canopy_return_encounter"
+                ) &&
+            definition->quest_encounter_activations.front().encounter_id.key ==
+                combat->id.key,
+        "the canopy return encounter activation is generated content"
     );
 
     std::uint32_t minutes = 0;

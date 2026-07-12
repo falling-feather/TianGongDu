@@ -231,12 +231,17 @@ QuestCombatOutcomeError DeterministicQuestCombatOutcomeResolver::initialize(
     }
     for (std::size_t index = 0; index < definitions.size(); ++index) {
         const auto& definition = definitions[index];
-        if (definition.id.key == 0 || definition.objective_id.key == 0 ||
-            definition.archetype_id.key == 0 || definition.required_count == 0) {
+        if (definition.id.key == 0 || definition.objective_id.key == 0) {
             return QuestCombatOutcomeError::invalid_definition;
         }
-        if (definition.kind !=
-            contracts::QuestCombatOutcomeKind::hostile_archetype_defeated) {
+        const auto archetype_group =
+            definition.kind ==
+                contracts::QuestCombatOutcomeKind::hostile_archetype_defeated &&
+            definition.archetype_id.key != 0 && definition.required_count != 0;
+        const auto all_hostiles =
+            definition.kind == contracts::QuestCombatOutcomeKind::all_hostiles_defeated &&
+            definition.archetype_id.key == 0 && definition.required_count == 0;
+        if (!archetype_group && !all_hostiles) {
             return QuestCombatOutcomeError::invalid_definition;
         }
         for (std::size_t prior = 0; prior < index; ++prior) {
@@ -278,15 +283,39 @@ QuestCombatOutcomeResult DeterministicQuestCombatOutcomeResolver::resolve(
             QuestObjectiveState::active) {
             continue;
         }
-        const auto defeated = static_cast<std::size_t>(std::count_if(
-            actors.begin(),
-            actors.end(),
-            [&definition](const contracts::CombatActorSnapshot& actor) {
-                return actor.faction == contracts::CombatFaction::hostile && !actor.active &&
-                       actor.archetype == definition.archetype_id.key;
-            }
-        ));
-        if (defeated < definition.required_count) {
+        bool condition_met = false;
+        if (definition.kind ==
+            contracts::QuestCombatOutcomeKind::hostile_archetype_defeated) {
+            const auto defeated = static_cast<std::size_t>(std::count_if(
+                actors.begin(),
+                actors.end(),
+                [&definition](const contracts::CombatActorSnapshot& actor) {
+                    return actor.faction == contracts::CombatFaction::hostile &&
+                           !actor.active &&
+                           actor.archetype == definition.archetype_id.key;
+                }
+            ));
+            condition_met = defeated >= definition.required_count;
+        } else {
+            const auto hostile_count = static_cast<std::size_t>(std::count_if(
+                actors.begin(),
+                actors.end(),
+                [](const contracts::CombatActorSnapshot& actor) {
+                    return actor.faction == contracts::CombatFaction::hostile;
+                }
+            ));
+            condition_met = hostile_count != 0 &&
+                            std::none_of(
+                                actors.begin(),
+                                actors.end(),
+                                [](const contracts::CombatActorSnapshot& actor) {
+                                    return actor.faction ==
+                                               contracts::CombatFaction::hostile &&
+                                           actor.active;
+                                }
+                            );
+        }
+        if (!condition_met) {
             continue;
         }
         if (!result.found || definition.id.key < result.outcome) {

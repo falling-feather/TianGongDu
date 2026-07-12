@@ -381,6 +381,33 @@ bool VerticalSliceSession::valid_definition(
             ++objective_count;
         }
     }
+    if (definition.quest_encounter_activations.size() > max_beats) {
+        return false;
+    }
+    for (std::size_t index = 0;
+         index < definition.quest_encounter_activations.size();
+         ++index) {
+        const auto& activation = definition.quest_encounter_activations[index];
+        const auto beat_exists = std::any_of(
+            definition.beats.begin(),
+            definition.beats.end(),
+            [&activation](const contracts::VerticalSliceBeatDefinition& beat) {
+                return beat.id.key == activation.beat_id.key;
+            }
+        );
+        if (activation.id.key == 0 || activation.id.name.empty() ||
+            activation.beat_id.key == 0 || activation.encounter_id.key == 0 ||
+            activation.encounter_id.name.empty() || !beat_exists) {
+            return false;
+        }
+        for (std::size_t prior = 0; prior < index; ++prior) {
+            const auto& previous = definition.quest_encounter_activations[prior];
+            if (previous.id.key == activation.id.key ||
+                previous.beat_id.key == activation.beat_id.key) {
+                return false;
+            }
+        }
+    }
     return minutes == definition.playable_target_minutes &&
            definition.playable_target_minutes >= 60 &&
            definition.end_to_end_test_budget_minutes >= definition.playable_target_minutes;

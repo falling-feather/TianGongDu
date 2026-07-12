@@ -213,9 +213,16 @@ CombatError DeterministicCombatResolver::retry_from_initial(
     }
     const auto player_index = actor_index(command.actor);
     if (player_index == actor_capacity ||
-        actor_snapshots_[player_index].faction != contracts::CombatFaction::player ||
-        actor_snapshots_[player_index].active ||
-        command.reason != contracts::SafePointRetryReason::player_defeated) {
+        actor_snapshots_[player_index].faction != contracts::CombatFaction::player) {
+        return CombatError::retry_not_allowed;
+    }
+    const auto defeated_retry =
+        command.reason == contracts::SafePointRetryReason::player_defeated &&
+        !actor_snapshots_[player_index].active;
+    const auto stage_restart =
+        command.reason == contracts::SafePointRetryReason::quest_stage_advanced &&
+        actor_snapshots_[player_index].active;
+    if (!defeated_retry && !stage_restart) {
         return CombatError::retry_not_allowed;
     }
     if (command.sequence == 0 || command.sequence <= last_retry_sequence_) {

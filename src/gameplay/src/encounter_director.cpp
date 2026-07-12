@@ -346,7 +346,8 @@ EncounterDirectorError DeterministicEncounterDirector::retry_from_initial(
         return EncounterDirectorError::retry_targets_wrong_tick;
     }
     if (command.actor != definition_.player_actor ||
-        command.reason != contracts::SafePointRetryReason::player_defeated) {
+        (command.reason != contracts::SafePointRetryReason::player_defeated &&
+         command.reason != contracts::SafePointRetryReason::quest_stage_advanced)) {
         return EncounterDirectorError::retry_not_allowed;
     }
     if (command.sequence == 0 || command.sequence <= last_retry_sequence_) {

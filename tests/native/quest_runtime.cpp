@@ -687,6 +687,80 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
         "a later conflicting choice fails closed without rewriting history"
     );
 
+    auto return_actors = actors;
+    for (auto& actor : return_actors) {
+        if (actor.faction == tgd::contracts::CombatFaction::hostile) {
+            actor.active = true;
+        }
+    }
+    ok &= expect(
+        !outcomes.resolve(return_actors, quest).found,
+        "reactivated return hostiles block calibration validation"
+    );
+    for (auto& actor : return_actors) {
+        if (actor.faction == tgd::contracts::CombatFaction::hostile) {
+            actor.active = false;
+        }
+    }
+    const auto return_clear = outcomes.resolve(return_actors, quest);
+    ok &= expect(
+        return_clear.found && return_clear.objective ==
+                                  tgd::contracts::stable_content_key(
+                                      "f1_objective_validate_calibration"
+                                  ),
+        "defeating every reactivated hostile validates the selected calibration"
+    );
+    ok &= quest.apply(
+              {
+                  tick++,
+                  definition().player.actor,
+                  sequence++,
+                  {},
+                  return_clear.objective,
+              },
+              sink
+          ).error == QuestError::none;
+    const auto shortcut = std::find_if(
+        definition().quest_interactions.begin(),
+        definition().quest_interactions.end(),
+        [](const tgd::contracts::QuestInteractionDefinition& interaction) {
+            return interaction.objective_id.key ==
+                   tgd::contracts::stable_content_key(
+                       "f1_objective_open_return_shortcut"
+                   );
+        }
+    );
+    ok &= expect(
+        shortcut != definition().quest_interactions.end(),
+        "the return shortcut interaction exists"
+    );
+    if (shortcut != definition().quest_interactions.end()) {
+        const auto unlocked_shortcut = interactions.resolve(
+            {definition().player.actor, shortcut->cell_id.key, shortcut->pose},
+            quest
+        );
+        ok &= expect(
+            unlocked_shortcut.found &&
+                unlocked_shortcut.objective == shortcut->objective_id.key,
+            "validated calibration unlocks the authored return shortcut"
+        );
+        ok &= expect(
+            quest.apply(
+                     {
+                         tick++,
+                         definition().player.actor,
+                         sequence++,
+                         {},
+                         unlocked_shortcut.objective,
+                     },
+                     sink
+                 )
+                    .stage_advanced &&
+                quest.snapshot().stage_index == 5,
+            "opening the return shortcut advances into the boss beat"
+        );
+    }
+
     auto invalid_actors = actors;
     invalid_actors[1].actor = invalid_actors[0].actor;
     ok &= expect(

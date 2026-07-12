@@ -252,6 +252,17 @@ bool test_retry_resets_director_boundary() {
         "director rejects a duplicate retry sequence"
     );
     ok &= expect(
+        director.retry_from_initial(
+            {
+                1,
+                1,
+                2,
+                tgd::contracts::SafePointRetryReason::quest_stage_advanced,
+            }
+        ) == EncounterDirectorError::none,
+        "director resets for an authored quest stage transition"
+    );
+    ok &= expect(
         director.plan_tick(2, snapshots, 10).error == EncounterDirectorError::none,
         "director continues from the next monotonic tick after retry"
     );

@@ -493,6 +493,25 @@
         "f1_objective_reveal_winter_trace",
         "f1_objective_review_shared_ledger"
       ]
+    },
+    {
+      "id": "f1_interaction_open_return_shortcut",
+      "kind": "operate",
+      "cellId": "f1_cell_canopy_workstation",
+      "objectiveId": "f1_objective_open_return_shortcut",
+      "selectionId": null,
+      "poseMm": { "x": -800, "y": 400, "height": 0, "floorLayer": 0 },
+      "radiusMm": 1400,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_validate_calibration"
+      ]
+    }
+  ],
+  "questEncounterActivations": [
+    {
+      "id": "f1_activation_canopy_return_encounter",
+      "beatId": "f1_beat_canopy_return_encounter",
+      "encounterId": "f1_encounter_umbrella_lane_bootstrap"
     }
   ],
   "questCombatTriggers": [
@@ -523,6 +542,13 @@
       "objectiveId": "f1_objective_answer_paper_egret",
       "archetypeId": "jn_enemy_faded_paper_egret",
       "requiredCount": 1
+    },
+    {
+      "id": "f1_outcome_validate_return_calibration",
+      "kind": "all_hostiles_defeated",
+      "objectiveId": "f1_objective_validate_calibration",
+      "archetypeId": null,
+      "requiredCount": 0
     }
   ],
   "paddingPolicy": {

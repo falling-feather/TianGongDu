@@ -39,7 +39,7 @@ test("F1 one-hour contract and generated C++ stay synchronized", async () => {
     flowerLight.windupTicks + flowerLight.activeTicks + flowerLight.recoveryTicks,
     18
   );
-  assert.equal(contract.questInteractions.length, 9);
+  assert.equal(contract.questInteractions.length, 10);
   assert.deepEqual(
     new Set(
       contract.questInteractions
@@ -53,7 +53,11 @@ test("F1 one-hour contract and generated C++ stay synchronized", async () => {
     new Set(contract.beats[1].objectiveIds.slice(1))
   );
   assert.deepEqual(
-    new Set(contract.questCombatOutcomes.map((outcome) => outcome.objectiveId)),
+    new Set(
+      contract.questCombatOutcomes
+        .filter((outcome) => contract.beats[2].objectiveIds.includes(outcome.objectiveId))
+        .map((outcome) => outcome.objectiveId)
+    ),
     new Set(contract.beats[2].objectiveIds.slice(0, 2))
   );
   assert.deepEqual(
@@ -86,6 +90,7 @@ test("F1 stable content IDs have unique 64-bit keys", async () => {
     ...contract.questInteractions.map((interaction) => interaction.id),
     ...contract.questCombatTriggers.map((trigger) => trigger.id),
     ...contract.questCombatOutcomes.map((outcome) => outcome.id),
+    ...contract.questEncounterActivations.map((activation) => activation.id),
     ...contract.questInteractions.map((interaction) => interaction.selectionId).filter(Boolean)
   ];
   assert.equal(new Set(ids.map((id) => fnv1a64(id))).size, ids.length);
@@ -117,7 +122,9 @@ test("F1 opening objectives require valid content-driven scene interactions", as
   );
 
   const missingSelection = structuredClone(await loadF1SliceContract());
-  missingSelection.questInteractions.at(-1).selectionId = null;
+  missingSelection.questInteractions.find(
+    (interaction) => interaction.kind === "choose"
+  ).selectionId = null;
   assert.throws(
     () => validateF1SliceContract(missingSelection, catalog),
     /requires a selection id/
@@ -177,6 +184,30 @@ test("F1 umbrella-lane outcomes require reachable hostile groups", async () => {
   assert.throws(
     () => validateF1SliceContract(duplicateObjective, catalog),
     /duplicate quest combat outcome objective/
+  );
+});
+
+test("F1 canopy return reactivates combat before opening its shortcut", async () => {
+  const contract = await loadF1SliceContract();
+  assert.deepEqual(contract.questEncounterActivations, [
+    {
+      id: "f1_activation_canopy_return_encounter",
+      beatId: contract.beats[4].id,
+      encounterId: contract.combatBootstrap.id
+    }
+  ]);
+  assert.equal(
+    contract.questCombatOutcomes.find(
+      (outcome) => outcome.objectiveId === contract.beats[4].objectiveIds[0]
+    ).kind,
+    "all_hostiles_defeated"
+  );
+
+  const wrongBeat = structuredClone(contract);
+  wrongBeat.questEncounterActivations[0].beatId = contract.beats[3].id;
+  assert.throws(
+    () => validateF1SliceContract(wrongBeat, catalog),
+    /canopy return beat must own/
   );
 });
 

@@ -433,6 +433,16 @@ bool test_defeat_retry_restores_initial_encounter() {
         resolver.retry_from_initial({5, 1, 2}, sink) == CombatError::retry_not_allowed,
         "active player cannot restart repeatedly"
     );
+    const tgd::contracts::SafePointRetryCommand stage_restart{
+        5,
+        1,
+        2,
+        tgd::contracts::SafePointRetryReason::quest_stage_advanced,
+    };
+    ok &= expect(
+        resolver.retry_from_initial(stage_restart, sink) == CombatError::none,
+        "an active player can restart combat for an authored quest stage transition"
+    );
     for (int tick = 5; tick < 10; ++tick) {
         ok &= resolver.advance_one_tick(sink) == CombatError::none;
     }

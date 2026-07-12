@@ -1392,11 +1392,16 @@ async function runBrowser(target, origin) {
     let returnState = calibrationActionState;
     let returnReadyToAttack = false;
     let returnSawTelegraph = false;
+    let returnGuardHeld = false;
     let returnRetryAttempts = 0;
-    const maxReturnRetryAttempts = 2;
+    const maxReturnRetryAttempts = 1;
     let returnDeadline = Date.now() + 60_000;
     while (returnState.activeHostiles > 0 && Date.now() < returnDeadline) {
       if (!returnState.playerActive) {
+        if (returnGuardHeld) {
+          await page.keyboard.up("Shift");
+          returnGuardHeld = false;
+        }
         assert.ok(
           returnRetryAttempts < maxReturnRetryAttempts,
           `${target} exceeded the bounded return retry budget: ${JSON.stringify(returnState)}`
@@ -1424,16 +1429,29 @@ async function runBrowser(target, origin) {
       }
       if (returnState.incomingAttackTicks > 0) {
         returnSawTelegraph = true;
-        if (returnState.incomingAttackTicks <= 10 && !returnState.playerBusy) {
-          await page.keyboard.press("c");
-          returnReadyToAttack = true;
+        if (
+          returnState.incomingAttackTicks <= 10 &&
+          !returnState.playerBusy &&
+          !returnGuardHeld
+        ) {
+          await page.keyboard.down("Shift");
+          returnGuardHeld = true;
         }
-      } else if (returnReadyToAttack && !returnState.playerBusy) {
-        await page.keyboard.press("j");
-        returnReadyToAttack = false;
+      } else {
+        if (returnGuardHeld) {
+          await page.keyboard.up("Shift");
+          returnGuardHeld = false;
+          returnReadyToAttack = true;
+        } else if (returnReadyToAttack && !returnState.playerBusy) {
+          await page.keyboard.press("j");
+          returnReadyToAttack = false;
+        }
       }
       await page.waitForTimeout(40);
       returnState = await page.evaluate(() => window.__tgdTest.getF1State());
+    }
+    if (returnGuardHeld) {
+      await page.keyboard.up("Shift");
     }
     assert.equal(returnSawTelegraph, true, `${target} return encounter exposed no telegraph.`);
     assert.equal(

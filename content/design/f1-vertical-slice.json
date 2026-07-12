@@ -13,6 +13,7 @@
     "endToEndTestBudgetMinutes": 70,
     "startupMinutes": 3,
     "postResolutionPersistenceMinutes": 7,
+    "activityGraceTicks": 180,
     "excludedFromPlayable": [
       "title_loading",
       "failure_retry",

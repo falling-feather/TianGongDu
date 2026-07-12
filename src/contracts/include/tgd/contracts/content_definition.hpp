@@ -137,6 +137,7 @@ struct VerticalSliceDefinition final {
     std::string_view camera_mode{};
     std::uint16_t playable_target_minutes{};
     std::uint16_t end_to_end_test_budget_minutes{};
+    std::uint16_t playable_activity_grace_ticks{};
     ContentId start_fixture_id{};
     ContentId chapter_id{};
     ContentId boss_id{};

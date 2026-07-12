@@ -47,6 +47,7 @@
         "endToEndTestBudgetMinutes",
         "startupMinutes",
         "postResolutionPersistenceMinutes",
+        "activityGraceTicks",
         "excludedFromPlayable"
       ],
       "properties": {
@@ -54,6 +55,7 @@
         "endToEndTestBudgetMinutes": { "const": 70 },
         "startupMinutes": { "const": 3 },
         "postResolutionPersistenceMinutes": { "const": 7 },
+        "activityGraceTicks": { "const": 180 },
         "excludedFromPlayable": {
           "type": "array",
           "minItems": 4,

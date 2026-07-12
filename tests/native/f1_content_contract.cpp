@@ -51,8 +51,9 @@ int main() {
     );
     ok &= expect(
         definition->playable_target_minutes == 60 &&
-            definition->end_to_end_test_budget_minutes == 70,
-        "playable and E2E budgets stay separate"
+            definition->end_to_end_test_budget_minutes == 70 &&
+            definition->playable_activity_grace_ticks == 180,
+        "playable, E2E, and bounded activity-audit budgets stay explicit"
     );
     ok &= expect(
         definition->beats.size() == 7 && definition->cell_ids.size() == 5 &&

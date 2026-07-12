@@ -185,8 +185,13 @@ bool test_objective_driven_progression_and_lifecycle() {
         "quest events survive composition through the vertical slice"
     );
     ok &= expect(
-        session.current_snapshot().simulation_ticks == 1,
-        "content objectives never use a forced timer gate"
+        session.current_snapshot().simulation_ticks == 1 &&
+            session.current_snapshot().playtime.total_ticks == 1 &&
+            session.current_snapshot().playtime.eligible_ticks == 1 &&
+            session.current_snapshot().playtime.idle_ticks == 0 &&
+            session.current_snapshot().playtime.failure_retry_ticks == 0 &&
+            !session.current_snapshot().playtime.playable_target_met,
+        "content objectives never use a forced timer gate or fabricate the one-hour audit"
     );
     ok &= expect(
         session.advance(1).error == VerticalSliceError::invalid_lifecycle,
@@ -261,6 +266,13 @@ bool test_retry_preserves_objective_progress() {
             session.current_snapshot().safe_point_pose == definition().safe_points[2].pose,
         "entering the umbrella lane commits its authored retry pose"
     );
+    const tgd::contracts::SessionCommand failed_attempt_move{
+        {2, definition().player.actor, 2, tgd::contracts::SessionCommandType::move_intent},
+        {tgd::contracts::ground_axis_one, 0},
+    };
+    ok &= session.submit_movement(std::span{&failed_attempt_move, 1}) ==
+          VerticalSliceError::none;
+    ok &= session.advance(1).error == VerticalSliceError::none;
     const auto completed_before = session.current_snapshot().completed_objectives;
     const auto quest_checksum_before = session.quest_snapshot().checksum;
     const tgd::contracts::SafePointRetryCommand retry{
@@ -276,9 +288,12 @@ bool test_retry_preserves_objective_progress() {
         session.current_snapshot().player_pose == definition().safe_points[2].pose &&
             session.current_snapshot().safe_point_id == definition().safe_points[2].id &&
             session.current_snapshot().completed_objectives == completed_before &&
-            session.current_snapshot().simulation_ticks == 1 &&
+            session.current_snapshot().simulation_ticks == 2 &&
+            session.current_snapshot().playtime.eligible_ticks == 1 &&
+            session.current_snapshot().playtime.idle_ticks == 0 &&
+            session.current_snapshot().playtime.failure_retry_ticks == 1 &&
             session.quest_snapshot().checksum == quest_checksum_before,
-        "retry restores pose without erasing authored progress or elapsed simulation"
+        "retry restores pose and progress while excluding the failed attempt from playtime"
     );
     ok &= expect(session.generation() == 2, "slice generation changes on retry");
     return ok;
@@ -295,6 +310,21 @@ bool test_every_authored_safe_point_is_collision_checked_before_start() {
     );
 }
 
+bool test_idle_simulation_is_visible_but_never_eligible() {
+    VerticalSliceSession session;
+    bool ok = session.initialize(definition(), empty_world()) == VerticalSliceError::none;
+    ok &= session.start() == VerticalSliceError::none;
+    ok &= session.advance(181).error == VerticalSliceError::none;
+    return expect(
+        ok && session.current_snapshot().simulation_ticks == 181 &&
+            session.current_snapshot().playtime.total_ticks == 181 &&
+            session.current_snapshot().playtime.eligible_ticks == 0 &&
+            session.current_snapshot().playtime.idle_ticks == 181 &&
+            !session.current_snapshot().playtime.playable_target_met,
+        "running without player activity is audited as idle rather than playable time"
+    );
+}
+
 }  // namespace
 
 int main() {
@@ -303,5 +333,6 @@ int main() {
     ok &= test_same_commands_produce_same_composed_checksum();
     ok &= test_retry_preserves_objective_progress();
     ok &= test_every_authored_safe_point_is_collision_checked_before_start();
+    ok &= test_idle_simulation_is_visible_but_never_eligible();
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

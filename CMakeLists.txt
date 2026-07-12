@@ -102,6 +102,7 @@ target_sources(
     src/gameplay/src/combat_resolver.cpp
     src/gameplay/src/encounter_director.cpp
     src/gameplay/src/layer_probe.cpp
+    src/gameplay/src/playtime_audit.cpp
     src/gameplay/src/quest_runtime.cpp
     src/gameplay/src/session_input_state.cpp
     src/gameplay/src/vertical_slice_session.cpp

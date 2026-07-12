@@ -25,6 +25,7 @@ test("F1 one-hour contract and generated C++ stay synchronized", async () => {
   assert.equal(generated, renderF1SliceContract(contract));
   assert.equal(contract.beats.reduce((sum, beat) => sum + beat.targetMinutes, 0), 60);
   assert.equal(contract.timing.endToEndTestBudgetMinutes, 70);
+  assert.equal(contract.timing.activityGraceTicks, 180);
   assert.equal(contract.view.primaryGuidance, "douzhanshen");
   assert.equal(contract.beats.length, 7);
   assert.equal(contract.safePoints.length, 7);
@@ -382,6 +383,10 @@ test("F1 slice cannot auto-advance or shrink below one playable hour", async () 
   const shortContract = structuredClone(await loadF1SliceContract());
   shortContract.beats[0].targetMinutes -= 1;
   assert.throws(() => validateF1SliceContract(shortContract, catalog), /expected 60/);
+
+  const driftedGrace = structuredClone(await loadF1SliceContract());
+  driftedGrace.timing.activityGraceTicks = 181;
+  assert.throws(() => validateF1SliceContract(driftedGrace, catalog), /budgets are frozen/);
 });
 
 test("F1 combat contract requires stance abilities and stance-neutral evade", async () => {

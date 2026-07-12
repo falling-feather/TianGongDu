@@ -76,7 +76,15 @@ VerticalSliceError VerticalSliceSession::initialize(
     if (!collision_world) {
         return VerticalSliceError::missing_collision_world;
     }
+    if (playtime_.initialize(
+            definition.beats,
+            definition.playable_target_minutes,
+            definition.playable_activity_grace_ticks
+        ) != PlaytimeAuditError::none) {
+        return VerticalSliceError::invalid_definition;
+    }
     if (quest_.initialize(definition, definition.player.actor) != QuestError::none) {
+        static_cast<void>(playtime_.destroy());
         return VerticalSliceError::invalid_definition;
     }
 
@@ -93,6 +101,7 @@ VerticalSliceError VerticalSliceSession::initialize(
     last_movement_error_ = movement_.initialize(movement_config, std::move(collision_world));
     if (last_movement_error_ != runtime::GameSessionError::none) {
         static_cast<void>(quest_.destroy());
+        static_cast<void>(playtime_.destroy());
         return VerticalSliceError::movement_session_error;
     }
 
@@ -102,6 +111,7 @@ VerticalSliceError VerticalSliceSession::initialize(
         if (last_movement_error_ != runtime::GameSessionError::none) {
             static_cast<void>(movement_.destroy());
             static_cast<void>(quest_.destroy());
+            static_cast<void>(playtime_.destroy());
             definition_ = nullptr;
             return VerticalSliceError::movement_session_error;
         }
@@ -109,6 +119,7 @@ VerticalSliceError VerticalSliceSession::initialize(
     if (!commit_safe_point_for_beat(definition.beats.front().id.key)) {
         static_cast<void>(movement_.destroy());
         static_cast<void>(quest_.destroy());
+        static_cast<void>(playtime_.destroy());
         definition_ = nullptr;
         return VerticalSliceError::movement_session_error;
     }
@@ -130,7 +141,11 @@ VerticalSliceError VerticalSliceSession::start() noexcept {
     if (quest_.start() != QuestError::none) {
         return VerticalSliceError::quest_runtime_error;
     }
+    if (playtime_.start() != PlaytimeAuditError::none) {
+        return VerticalSliceError::playtime_audit_error;
+    }
     lifecycle_ = VerticalSliceLifecycle::running;
+    refresh_snapshot();
     return VerticalSliceError::none;
 }
 
@@ -145,7 +160,11 @@ VerticalSliceError VerticalSliceSession::pause() noexcept {
     if (quest_.pause() != QuestError::none) {
         return VerticalSliceError::quest_runtime_error;
     }
+    if (playtime_.pause() != PlaytimeAuditError::none) {
+        return VerticalSliceError::playtime_audit_error;
+    }
     lifecycle_ = VerticalSliceLifecycle::paused;
+    refresh_snapshot();
     return VerticalSliceError::none;
 }
 
@@ -160,7 +179,11 @@ VerticalSliceError VerticalSliceSession::resume() noexcept {
     if (quest_.resume() != QuestError::none) {
         return VerticalSliceError::quest_runtime_error;
     }
+    if (playtime_.resume() != PlaytimeAuditError::none) {
+        return VerticalSliceError::playtime_audit_error;
+    }
     lifecycle_ = VerticalSliceLifecycle::running;
+    refresh_snapshot();
     return VerticalSliceError::none;
 }
 
@@ -176,6 +199,9 @@ VerticalSliceError VerticalSliceSession::destroy() noexcept {
     if (quest_.destroy() != QuestError::none) {
         return VerticalSliceError::quest_runtime_error;
     }
+    if (playtime_.destroy() != PlaytimeAuditError::none) {
+        return VerticalSliceError::playtime_audit_error;
+    }
     lifecycle_ = VerticalSliceLifecycle::destroyed;
     ++generation_;
     definition_ = nullptr;
@@ -190,9 +216,30 @@ VerticalSliceError VerticalSliceSession::submit_movement(
         return VerticalSliceError::invalid_lifecycle;
     }
     last_movement_error_ = movement_.submit(commands);
-    return last_movement_error_ == runtime::GameSessionError::none
+    if (last_movement_error_ != runtime::GameSessionError::none) {
+        return VerticalSliceError::movement_session_error;
+    }
+    for (const auto& command : commands) {
+        const bool moving = command.header.type == contracts::SessionCommandType::move_intent &&
+                            (command.ground_direction.x != 0 ||
+                             command.ground_direction.y != 0);
+        const bool jumping =
+            command.header.type == contracts::SessionCommandType::jump_pressed;
+        if (moving || jumping) {
+            return report_playtime_activity(
+                jumping ? PlaytimeActivityKind::jump : PlaytimeActivityKind::movement
+            );
+        }
+    }
+    return VerticalSliceError::none;
+}
+
+VerticalSliceError VerticalSliceSession::report_playtime_activity(
+    PlaytimeActivityKind kind
+) noexcept {
+    return playtime_.note_activity(kind) == PlaytimeAuditError::none
                ? VerticalSliceError::none
-               : VerticalSliceError::movement_session_error;
+               : VerticalSliceError::playtime_audit_error;
 }
 
 VerticalSliceError VerticalSliceSession::retry_from_safe_point(
@@ -205,6 +252,9 @@ VerticalSliceError VerticalSliceSession::retry_from_safe_point(
     last_movement_error_ = movement_.retry_from_safe_point(command);
     if (last_movement_error_ != runtime::GameSessionError::none) {
         return VerticalSliceError::movement_session_error;
+    }
+    if (playtime_.discard_current_attempt_for_retry() != PlaytimeAuditError::none) {
+        return VerticalSliceError::playtime_audit_error;
     }
     previous_snapshot_ = current_snapshot_;
     ++generation_;
@@ -220,6 +270,9 @@ VerticalSliceAdvanceResult VerticalSliceSession::advance(std::uint32_t tick_budg
     last_movement_error_ = result.error;
     if (result.error != runtime::GameSessionError::none) {
         return {VerticalSliceError::movement_session_error, result.executed_ticks};
+    }
+    if (playtime_.advance(result.executed_ticks) != PlaytimeAuditError::none) {
+        return {VerticalSliceError::playtime_audit_error, result.executed_ticks};
     }
     if (result.executed_ticks != 0) {
         previous_snapshot_ = current_snapshot_;
@@ -293,11 +346,24 @@ CompleteObjectiveResult VerticalSliceSession::complete_objective(
     }
     ++quest_command_sequence_;
     previous_snapshot_ = current_snapshot_;
+    if (result.accepted &&
+        playtime_.note_activity(PlaytimeActivityKind::authored_progress) !=
+            PlaytimeAuditError::none) {
+        return {VerticalSliceError::playtime_audit_error, result.accepted, false, false};
+    }
     if (result.stage_advanced && !result.quest_resolved &&
         !commit_safe_point_for_beat(quest_.snapshot().stage)) {
         return {VerticalSliceError::movement_session_error, result.accepted, false, false};
     }
+    if (result.stage_advanced && !result.quest_resolved &&
+        playtime_.commit_current_beat(quest_.snapshot().stage_index) !=
+            PlaytimeAuditError::none) {
+        return {VerticalSliceError::playtime_audit_error, result.accepted, false, false};
+    }
     if (result.quest_resolved && lifecycle_ != VerticalSliceLifecycle::resolved) {
+        if (playtime_.resolve() != PlaytimeAuditError::none) {
+            return {VerticalSliceError::playtime_audit_error, result.accepted, false, false};
+        }
         last_movement_error_ = movement_.pause();
         if (last_movement_error_ != runtime::GameSessionError::none) {
             return {VerticalSliceError::movement_session_error, result.accepted, false, false};
@@ -366,7 +432,10 @@ bool VerticalSliceSession::valid_definition(
         definition.player.jump_speed_mm_per_second <= 0 ||
         definition.player.gravity_mm_per_second_squared <= 0 ||
         definition.player.collision_radius_mm <= 0 ||
-        definition.player.collision_height_mm <= 0 || !valid_basis(definition.player.camera_basis)) {
+        definition.player.collision_height_mm <= 0 ||
+        definition.playable_activity_grace_ticks == 0 ||
+        definition.playable_activity_grace_ticks > 600 ||
+        !valid_basis(definition.player.camera_basis)) {
         return false;
     }
 
@@ -517,6 +586,7 @@ void VerticalSliceSession::refresh_snapshot() noexcept {
     current_snapshot_.required_objectives = quest_snapshot.required_in_stage;
     current_snapshot_.selected_choices = quest_snapshot.selection_count;
     current_snapshot_.simulation_ticks = simulation_ticks_;
+    current_snapshot_.playtime = playtime_.snapshot();
     current_snapshot_.resolved = quest_snapshot.resolved;
     update_checksum();
 }
@@ -541,6 +611,7 @@ void VerticalSliceSession::update_checksum() noexcept {
     hash_integer(hash, current_snapshot_.required_objectives);
     hash_integer(hash, current_snapshot_.selected_choices);
     hash_integer(hash, current_snapshot_.simulation_ticks);
+    hash_integer(hash, current_snapshot_.playtime.checksum);
     hash_byte(hash, current_snapshot_.resolved ? 1U : 0U);
     hash_integer(hash, quest_.snapshot().checksum);
     current_snapshot_.checksum = hash;

@@ -214,6 +214,7 @@ inline constexpr contracts::VerticalSliceDefinition f1_vertical_slice_definition
     "author-controlled-oblique",
     60,
     70,
+    180,
     contracts::content_id("fixture_f1_rainy_umbrella_start"),
     contracts::content_id("jn_chapter_02"),
     contracts::content_id("jn_boss_umbrella_wraith"),

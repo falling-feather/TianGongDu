@@ -2,6 +2,7 @@
 
 #include <tgd/contracts/content_definition.hpp>
 #include <tgd/contracts/session_types.hpp>
+#include <tgd/gameplay/playtime_audit.hpp>
 #include <tgd/gameplay/quest_runtime.hpp>
 #include <tgd/runtime/collision_world.hpp>
 #include <tgd/runtime/game_session.hpp>
@@ -28,6 +29,7 @@ enum class VerticalSliceError : std::uint8_t {
     invalid_definition,
     missing_collision_world,
     movement_session_error,
+    playtime_audit_error,
     quest_runtime_error,
     unknown_objective,
     objective_not_active,
@@ -49,6 +51,7 @@ struct VerticalSliceSnapshot final {
     std::uint16_t required_objectives{};
     std::uint16_t selected_choices{};
     std::uint64_t simulation_ticks{};
+    PlaytimeAuditSnapshot playtime{};
     bool resolved{};
     std::uint64_t checksum{};
 };
@@ -81,6 +84,9 @@ class VerticalSliceSession final {
 
     [[nodiscard]] VerticalSliceError submit_movement(
         std::span<const contracts::SessionCommand> commands
+    ) noexcept;
+    [[nodiscard]] VerticalSliceError report_playtime_activity(
+        PlaytimeActivityKind kind
     ) noexcept;
     [[nodiscard]] VerticalSliceError retry_from_safe_point(
         const contracts::SafePointRetryCommand& command
@@ -133,6 +139,7 @@ class VerticalSliceSession final {
     const contracts::VerticalSliceDefinition* definition_{};
     runtime::GameSession movement_{};
     runtime::GameSessionError last_movement_error_{runtime::GameSessionError::none};
+    DeterministicPlaytimeAudit playtime_{};
     DeterministicQuestRuntime quest_{};
     contracts::CommandSequence quest_command_sequence_{1};
     contracts::CommandSequence safe_point_command_sequence_{1};

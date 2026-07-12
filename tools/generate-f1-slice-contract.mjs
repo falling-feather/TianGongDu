@@ -60,7 +60,8 @@ export function validateF1SliceContract(contract, catalog) {
     timing?.playableTargetMinutes !== 60 ||
     timing?.endToEndTestBudgetMinutes !== 70 ||
     timing?.startupMinutes !== 3 ||
-    timing?.postResolutionPersistenceMinutes !== 7
+    timing?.postResolutionPersistenceMinutes !== 7 ||
+    timing?.activityGraceTicks !== 180
   ) {
     fail("60-minute playable and 70-minute E2E budgets are frozen");
   }
@@ -993,6 +994,7 @@ inline constexpr contracts::VerticalSliceDefinition f1_vertical_slice_definition
     "${contract.view.cameraMode}",
     ${contract.timing.playableTargetMinutes},
     ${contract.timing.endToEndTestBudgetMinutes},
+    ${contract.timing.activityGraceTicks},
     ${contentId(refs.startFixtureId)},
     ${contentId(refs.chapterId)},
     ${contentId(refs.bossId)},

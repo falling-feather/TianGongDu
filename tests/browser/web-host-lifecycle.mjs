@@ -43,6 +43,19 @@ const ribCalibration =
 if (!["spring", "winter"].includes(ribCalibration)) {
   throw new Error(`Unsupported F1 rib calibration QA branch: ${ribCalibration}`);
 }
+const laneRoute = argument("lane-route") ?? process.env.TGD_F1_LANE_ROUTE ?? "canopy";
+if (!["canopy", "drain"].includes(laneRoute)) {
+  throw new Error(`Unsupported F1 lane route QA branch: ${laneRoute}`);
+}
+const laneRoutePose = laneRoute === "canopy"
+  ? { x: -3_900, y: -100 }
+  : { x: -800, y: 900 };
+const selectedSpringTracePose = laneRoute === "canopy"
+  ? { x: -3_900, y: -100 }
+  : { x: -2_700, y: -1_700 };
+const hiddenSpringTracePose = laneRoute === "canopy"
+  ? { x: -2_700, y: -1_700 }
+  : { x: -3_900, y: -100 };
 const forceSoftwareGraphics =
   process.env.TGD_FORCE_SOFTWARE_WEBGL === "1" || process.env.CI === "true";
 
@@ -246,6 +259,7 @@ function analyzePng(buffer) {
   const png = PNG.sync.read(buffer);
   const uniqueColors = new Set();
   let goldPixels = 0;
+  let nearBlackPixels = 0;
   let opaquePixels = 0;
   for (let offset = 0; offset < png.data.length; offset += 4) {
     const red = png.data[offset];
@@ -256,6 +270,7 @@ function analyzePng(buffer) {
     opaquePixels += 1;
     if (uniqueColors.size < 1024) uniqueColors.add((red << 16) | (green << 8) | blue);
     if (red >= 150 && green >= 80 && green <= 190 && blue <= 130) goldPixels += 1;
+    if (red <= 3 && green <= 3 && blue <= 3) nearBlackPixels += 1;
   }
   return {
     width: png.width,
@@ -263,6 +278,8 @@ function analyzePng(buffer) {
     opaquePixels,
     uniqueColors: uniqueColors.size,
     goldPixelRatio: opaquePixels === 0 ? 0 : goldPixels / opaquePixels,
+    nearBlackPixels,
+    nearBlackPixelRatio: opaquePixels === 0 ? 1 : nearBlackPixels / opaquePixels,
     sha256: createHash("sha256").update(buffer).digest("hex"),
     pixels: png.data
   };
@@ -326,7 +343,11 @@ async function captureRenderedFrame(page, canvas, path, label, timeoutMs = 20_00
   while (Date.now() < deadline) {
     buffer = await canvas.screenshot();
     frame = analyzePng(buffer);
-    if (frame.uniqueColors >= 4 && frame.goldPixelRatio >= 0.005) {
+    if (
+      frame.uniqueColors >= 4 &&
+      frame.goldPixelRatio >= 0.005 &&
+      frame.nearBlackPixelRatio <= 0.0001
+    ) {
       await writeFile(path, buffer);
       return frame;
     }
@@ -334,9 +355,11 @@ async function captureRenderedFrame(page, canvas, path, label, timeoutMs = 20_00
   }
   if (buffer) await writeFile(path, buffer);
   throw new Error(
-    `${label} did not render the bootstrap probe: ${frame?.uniqueColors ?? 0} colors, ${(
+    `${label} did not render a complete bootstrap frame: ${frame?.uniqueColors ?? 0} colors, ${(
       (frame?.goldPixelRatio ?? 0) * 100
-    ).toFixed(3)}% gold pixels.`
+    ).toFixed(3)}% gold pixels, ${(
+      (frame?.nearBlackPixelRatio ?? 1) * 100
+    ).toFixed(3)}% near-black pixels.`
   );
 }
 
@@ -1268,7 +1291,7 @@ async function runBrowser(target, origin) {
     assert.equal(victoryState.questCompletedObjectives, 5);
     assert.equal(victoryState.questRequiredObjectives, 6);
 
-    await moveF1PlayerTo(page, -3_900, -100);
+    await moveF1PlayerTo(page, laneRoutePose.x, laneRoutePose.y);
     await page.keyboard.press("f");
     await page.waitForFunction(
       () => window.__tgdTest?.getF1State()?.questBeatIndex === 3,
@@ -1278,20 +1301,41 @@ async function runBrowser(target, origin) {
     await captureRenderedFrame(
       page,
       canvas,
-      resolve(reportDirectory, `${target}-umbrella-lane-complete.png`),
-      `${target} umbrella-lane beat complete`
+      resolve(reportDirectory, `${target}-umbrella-lane-${laneRoute}-complete.png`),
+      `${target} umbrella-lane ${laneRoute} route complete`
     );
     let workbenchState = await page.evaluate(() => window.__tgdTest.getF1State());
     assert.equal(workbenchState.questCompletedObjectives, 0);
     assert.equal(workbenchState.questRequiredObjectives, 4);
     assert.equal(workbenchState.questSelectedChoices, 1);
 
-    await moveF1PlayerTo(page, -3_900, -100);
+    await moveF1PlayerTo(page, hiddenSpringTracePose.x, hiddenSpringTracePose.y);
+    await page.keyboard.press("f");
+    await page.waitForTimeout(200);
+    const hiddenRouteAttemptState = await page.evaluate(() => window.__tgdTest.getF1State());
+    assert.equal(
+      hiddenRouteAttemptState.questCompletedObjectives,
+      0,
+      `${target} exposed the spring-trace interaction for the unselected ${
+        laneRoute === "canopy" ? "drain" : "canopy"
+      } route.`
+    );
+
+    await moveF1PlayerTo(page, selectedSpringTracePose.x, selectedSpringTracePose.y);
+    await captureRenderedFrame(
+      page,
+      canvas,
+      resolve(reportDirectory, `${target}-workbench-${laneRoute}-entry.png`),
+      `${target} workbench ${laneRoute} route entry`
+    );
     await page.keyboard.press("f");
     await page.waitForFunction(
       () => window.__tgdTest?.getF1State()?.questCompletedObjectives === 1,
       undefined,
       { timeout: 5_000 }
+    );
+    const selectedRouteEntryState = await page.evaluate(
+      () => window.__tgdTest.getF1State()
     );
     await moveF1PlayerTo(page, -3_100, -100);
     await page.keyboard.press("f");
@@ -1735,8 +1779,11 @@ async function runBrowser(target, origin) {
       movementComparison,
       combatActionComparison,
       combatHitComparison,
+      laneRoute,
       ribCalibration,
       retryState,
+      hiddenRouteAttemptState,
+      selectedRouteEntryState,
       workbenchState,
       reinforcementState,
       calibrationActionState,
@@ -1755,7 +1802,10 @@ async function runBrowser(target, origin) {
         projectPath(
           resolve(reportDirectory, `${target}-umbrella-lane-paper-egret-wave.png`)
         ),
-        projectPath(resolve(reportDirectory, `${target}-umbrella-lane-complete.png`)),
+        projectPath(
+          resolve(reportDirectory, `${target}-umbrella-lane-${laneRoute}-complete.png`)
+        ),
+        projectPath(resolve(reportDirectory, `${target}-workbench-${laneRoute}-entry.png`)),
         projectPath(
           resolve(reportDirectory, `${target}-return-formation-ready.png`)
         ),
@@ -1824,6 +1874,7 @@ const report = {
   graphicsMode: forceSoftwareGraphics ? "forced-software" : "browser-default",
   distDirectory: projectPath(distDirectory),
   expectedCommit,
+  laneRoute,
   ribCalibration,
   targets,
   results

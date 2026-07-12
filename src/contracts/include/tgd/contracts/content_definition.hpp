@@ -76,6 +76,8 @@ struct QuestInteractionDefinition final {
     ContentId cell_id{};
     ContentId objective_id{};
     ContentId selection_id{};
+    ContentId required_selection_objective_id{};
+    ContentId required_selection_id{};
     GroundPoseMm pose{};
     std::int32_t radius_mm{};
     std::span<const ContentId> prerequisite_objectives{};

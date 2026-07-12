@@ -46,7 +46,7 @@ function sameValues(left, right) {
 }
 
 export function validateF1SliceContract(contract, catalog) {
-  if (contract.schemaVersion !== "1.3.0") fail("unsupported schemaVersion");
+  if (contract.schemaVersion !== "1.4.0") fail("unsupported schemaVersion");
   const catalogSlice = catalog.f1VerticalSlice;
   if (contract.id !== catalogSlice.id) fail("slice id drifted from the 1.0 catalog");
   const expectedView = {
@@ -181,6 +181,39 @@ export function validateF1SliceContract(contract, catalog) {
     } else if (interaction.selectionId !== null) {
       fail(`${interaction.id} non-choice interaction cannot declare a selection id`);
     }
+    const hasSelectionObjective = interaction.requiredSelectionObjectiveId !== null;
+    const hasSelection = interaction.requiredSelectionId !== null;
+    if (hasSelectionObjective !== hasSelection) {
+      fail(`${interaction.id} has an invalid interaction selection gate`);
+    }
+    if (hasSelection) {
+      const selectionInteraction = interactions.find(
+        (candidate) => candidate.kind === "choose" &&
+          candidate.objectiveId === interaction.requiredSelectionObjectiveId &&
+          candidate.selectionId === interaction.requiredSelectionId
+      );
+      const selectionStageIndex = objectiveStages.get(
+        interaction.requiredSelectionObjectiveId
+      );
+      const interactionStageIndex = objectiveStages.get(interaction.objectiveId);
+      const selectionObjectiveIndex = selectionStageIndex === undefined
+        ? -1
+        : contract.beats[selectionStageIndex].objectiveIds.indexOf(
+            interaction.requiredSelectionObjectiveId
+          );
+      const interactionObjectiveIndex = interactionStageIndex === undefined
+        ? -1
+        : contract.beats[interactionStageIndex].objectiveIds.indexOf(
+            interaction.objectiveId
+          );
+      const selectionPrecedesInteraction =
+        selectionStageIndex < interactionStageIndex ||
+        (selectionStageIndex === interactionStageIndex &&
+         selectionObjectiveIndex < interactionObjectiveIndex);
+      if (!selectionInteraction || !selectionPrecedesInteraction) {
+        fail(`${interaction.id} has a missing or future interaction selection gate`);
+      }
+    }
     const objectiveInteractions = interactionsByObjective.get(interaction.objectiveId) ?? [];
     objectiveInteractions.push(interaction);
     interactionsByObjective.set(interaction.objectiveId, objectiveInteractions);
@@ -206,14 +239,55 @@ export function validateF1SliceContract(contract, catalog) {
   }
   assertUnique(interactions.map((interaction) => interaction.id), "quest interaction id");
   for (const [objective, objectiveInteractions] of interactionsByObjective) {
-    if (objectiveInteractions.length === 1) continue;
-    if (objectiveInteractions.some((interaction) => interaction.kind !== "choose")) {
-      fail(`duplicate non-choice quest interaction objective: ${objective}`);
+    const gatedVariants = objectiveInteractions.filter(
+      (interaction) => interaction.requiredSelectionId !== null
+    );
+    if (gatedVariants.length === 0) {
+      if (objectiveInteractions.length === 1) continue;
+      if (objectiveInteractions.some((interaction) => interaction.kind !== "choose")) {
+        fail(`duplicate non-choice quest interaction objective: ${objective}`);
+      }
+      assertUnique(
+        objectiveInteractions.map((interaction) => interaction.selectionId),
+        `${objective} quest choice selection`
+      );
+      continue;
+    }
+    const selectionObjectiveId = gatedVariants[0].requiredSelectionObjectiveId;
+    const chooseTarget = gatedVariants[0].kind === "choose";
+    if (gatedVariants.length !== objectiveInteractions.length ||
+        gatedVariants.some(
+          (candidate) =>
+            candidate.requiredSelectionObjectiveId !== selectionObjectiveId ||
+            (candidate.kind === "choose") !== chooseTarget
+        )) {
+      fail(`${objective} mixes incompatible interaction selection gates`);
     }
     assertUnique(
-      objectiveInteractions.map((interaction) => interaction.selectionId),
-      `${objective} quest choice selection`
+      gatedVariants.map((candidate) => candidate.requiredSelectionId),
+      `${objective} interaction selection gate`
     );
+    if (chooseTarget) {
+      assertUnique(
+        gatedVariants.map((candidate) => candidate.selectionId),
+        `${objective} gated quest choice selection`
+      );
+    }
+    const selectionOptions = interactions
+      .filter(
+        (candidate) => candidate.kind === "choose" &&
+          candidate.objectiveId === selectionObjectiveId &&
+          candidate.selectionId !== null
+      )
+      .map((candidate) => candidate.selectionId);
+    if (selectionOptions.length !== gatedVariants.length ||
+        selectionOptions.some(
+          (selection) => !gatedVariants.some(
+            (candidate) => candidate.requiredSelectionId === selection
+          )
+        )) {
+      fail(`${objective} interactions do not cover every authored selection option`);
+    }
   }
   const firstBeatObjectives = new Set(contract.beats[0].objectiveIds);
   const firstBeatInteractionObjectives = interactions
@@ -238,6 +312,8 @@ export function validateF1SliceContract(contract, catalog) {
     cellId: contract.beats[0].cellId,
     objectiveId,
     selectionId: null,
+    requiredSelectionObjectiveId: null,
+    requiredSelectionId: null,
     poseMm: {x, y, height: 0, floorLayer: 0},
     radiusMm,
     prerequisiteObjectiveIds
@@ -289,6 +365,8 @@ export function validateF1SliceContract(contract, catalog) {
     cellId: umbrellaLaneBeat.cellId,
     objectiveId,
     selectionId: null,
+    requiredSelectionObjectiveId: null,
+    requiredSelectionId: null,
     poseMm: {x, y, height: 0, floorLayer: 0},
     radiusMm,
     prerequisiteObjectiveIds
@@ -305,38 +383,60 @@ export function validateF1SliceContract(contract, catalog) {
   ) {
     fail("the umbrella-lane rainworks chain drifted");
   }
-  const laneRouteInteraction = interactions.find(
+  const laneRouteInteractions = interactions.filter(
     (interaction) => interaction.objectiveId === umbrellaLaneBeat.objectiveIds[5]
   );
   if (
-    laneRouteInteraction?.kind !== "choose" ||
-    laneRouteInteraction.selectionId !== "f1_choice_lane_canopy" ||
+    laneRouteInteractions.length !== 2 ||
+    laneRouteInteractions.some(
+      (interaction) => interaction.kind !== "choose" ||
+        interaction.requiredSelectionId !== null ||
+        !sameValues(
+          interaction.prerequisiteObjectiveIds,
+          umbrellaLaneBeat.objectiveIds.slice(0, 5)
+        )
+    ) ||
     !sameValues(
-      laneRouteInteraction.prerequisiteObjectiveIds,
-      umbrellaLaneBeat.objectiveIds.slice(0, 5)
+      laneRouteInteractions.map((interaction) => interaction.selectionId),
+      ["f1_choice_lane_canopy", "f1_choice_lane_drain"]
     )
   ) {
-    fail("the umbrella-lane route choice must require combat and rainworks objectives");
+    fail("the umbrella-lane route choice must offer two routes after combat and rainworks");
   }
   const workbenchBeat = contract.beats[3];
   const workbenchEvidence = workbenchBeat.objectiveIds.slice(0, 3);
   const workbenchChoice = workbenchBeat.objectiveIds[3];
-  const evidenceInteractions = interactions.filter((interaction) =>
-    workbenchEvidence.includes(interaction.objectiveId)
+  const routeEvidenceInteractions = interactions.filter(
+    (interaction) => interaction.objectiveId === workbenchEvidence[0]
+  );
+  const independentEvidenceInteractions = interactions.filter((interaction) =>
+    workbenchEvidence.slice(1).includes(interaction.objectiveId)
   );
   const calibrationInteractions = interactions.filter(
     (interaction) => interaction.objectiveId === workbenchChoice
   );
   if (
-    evidenceInteractions.length !== 3 ||
-    evidenceInteractions.some(
+    routeEvidenceInteractions.length !== 2 ||
+    routeEvidenceInteractions.some(
       (interaction) =>
         interaction.kind !== "inspect" ||
         interaction.cellId !== workbenchBeat.cellId ||
-        interaction.prerequisiteObjectiveIds.length !== 0
+        interaction.prerequisiteObjectiveIds.length !== 0 ||
+        interaction.requiredSelectionObjectiveId !== umbrellaLaneBeat.objectiveIds[5]
+    ) ||
+    !sameValues(
+      routeEvidenceInteractions.map((interaction) => interaction.requiredSelectionId),
+      ["f1_choice_lane_canopy", "f1_choice_lane_drain"]
+    ) ||
+    independentEvidenceInteractions.length !== 2 ||
+    independentEvidenceInteractions.some(
+      (interaction) => interaction.kind !== "inspect" ||
+        interaction.cellId !== workbenchBeat.cellId ||
+        interaction.prerequisiteObjectiveIds.length !== 0 ||
+        interaction.requiredSelectionId !== null
     )
   ) {
-    fail("the workbench investigation must expose three independent evidence inspections");
+    fail("the workbench investigation must expose one route-gated and two independent evidence inspections");
   }
   if (
     calibrationInteractions.length !== 2 ||
@@ -1328,7 +1428,13 @@ function questInteractionRow(interaction, index) {
     ? "std::span<const contracts::ContentId>{}"
     : `std::span<const contracts::ContentId>{interaction_${index}_prerequisites}`;
   const selection = interaction.selectionId === null ? "contracts::ContentId{}" : contentId(interaction.selectionId);
-  return `    {${contentId(interaction.id)}, contracts::QuestInteractionKind::${interaction.kind}, ${contentId(interaction.cellId)}, ${contentId(interaction.objectiveId)}, ${selection}, {${pose.x}, ${pose.y}, ${pose.height}, ${pose.floorLayer}}, ${interaction.radiusMm}, ${prerequisites}},`;
+  const requiredSelectionObjective = interaction.requiredSelectionObjectiveId === null
+    ? "contracts::ContentId{}"
+    : contentId(interaction.requiredSelectionObjectiveId);
+  const requiredSelection = interaction.requiredSelectionId === null
+    ? "contracts::ContentId{}"
+    : contentId(interaction.requiredSelectionId);
+  return `    {${contentId(interaction.id)}, contracts::QuestInteractionKind::${interaction.kind}, ${contentId(interaction.cellId)}, ${contentId(interaction.objectiveId)}, ${selection}, ${requiredSelectionObjective}, ${requiredSelection}, {${pose.x}, ${pose.y}, ${pose.height}, ${pose.floorLayer}}, ${interaction.radiusMm}, ${prerequisites}},`;
 }
 
 function questCombatTriggerRow(trigger, index) {

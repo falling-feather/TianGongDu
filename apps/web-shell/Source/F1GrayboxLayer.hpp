@@ -151,9 +151,13 @@ class F1GrayboxLayer final :
     std::array<ax::Node*, hostile_capacity> hostile_nodes_{};
     std::array<tgd::contracts::StableActorKey, hostile_capacity> hostile_actor_keys_{};
     std::array<ax::Node*, quest_marker_capacity> quest_marker_nodes_{};
-    std::array<tgd::contracts::StableContentKey, quest_marker_capacity>
-        quest_marker_objectives_{};
+    std::array<const tgd::contracts::QuestInteractionDefinition*, quest_marker_capacity>
+        quest_marker_definitions_{};
     std::size_t quest_marker_count_{};
+    std::array<ax::Node*, quest_marker_capacity> quest_prop_nodes_{};
+    std::array<const tgd::contracts::QuestInteractionDefinition*, quest_marker_capacity>
+        quest_prop_definitions_{};
+    std::size_t quest_prop_count_{};
     ax::DrawNode* combat_fx_{};
     ax::DrawNode* foreground_awning_{};
     ax::Label* combat_resources_label_{};

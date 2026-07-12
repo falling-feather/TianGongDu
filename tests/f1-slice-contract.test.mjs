@@ -47,7 +47,7 @@ test("F1 one-hour contract and generated C++ stay synchronized", async () => {
     flowerLight.windupTicks + flowerLight.activeTicks + flowerLight.recoveryTicks,
     18
   );
-  assert.equal(contract.questInteractions.length, 21);
+  assert.equal(contract.questInteractions.length, 23);
   assert.deepEqual(
     contract.beats[0].objectiveIds,
     [
@@ -111,17 +111,37 @@ test("F1 one-hour contract and generated C++ stay synchronized", async () => {
     ),
     new Set([contract.beats[2].objectiveIds[0], contract.beats[2].objectiveIds[4]])
   );
-  assert.deepEqual(
-    contract.questInteractions.find(
-      (interaction) => interaction.objectiveId === "f1_objective_choose_lane_route"
-    ).prerequisiteObjectiveIds,
-    contract.beats[2].objectiveIds.slice(0, 5)
+  const laneRoutes = contract.questInteractions.filter(
+    (interaction) => interaction.objectiveId === "f1_objective_choose_lane_route"
   );
-  assert.equal(
-    contract.questInteractions.find(
-      (interaction) => interaction.objectiveId === "f1_objective_choose_lane_route"
-    ).selectionId,
-    "f1_choice_lane_canopy"
+  assert.deepEqual(
+    laneRoutes.map((interaction) => interaction.selectionId),
+    ["f1_choice_lane_canopy", "f1_choice_lane_drain"]
+  );
+  assert(
+    laneRoutes.every(
+      (interaction) =>
+        JSON.stringify(interaction.prerequisiteObjectiveIds) ===
+        JSON.stringify(contract.beats[2].objectiveIds.slice(0, 5))
+    )
+  );
+  assert.deepEqual(
+    contract.questInteractions
+      .filter((interaction) => interaction.objectiveId === contract.beats[3].objectiveIds[0])
+      .map((interaction) => ({
+        requiredSelectionObjectiveId: interaction.requiredSelectionObjectiveId,
+        requiredSelectionId: interaction.requiredSelectionId
+      })),
+    [
+      {
+        requiredSelectionObjectiveId: contract.beats[2].objectiveIds[5],
+        requiredSelectionId: "f1_choice_lane_canopy"
+      },
+      {
+        requiredSelectionObjectiveId: contract.beats[2].objectiveIds[5],
+        requiredSelectionId: "f1_choice_lane_drain"
+      }
+    ]
   );
   assert(
     contract.combatBootstrap.actors.every((actor) =>
@@ -259,6 +279,44 @@ test("F1 workbench investigation gates two stable calibration choices", async ()
   assert.throws(
     () => validateF1SliceContract(missingEvidence, catalog),
     /two stable choices after all workbench evidence/
+  );
+
+  const halfSelectionGate = structuredClone(contract);
+  halfSelectionGate.questInteractions.find(
+    (interaction) => interaction.id === "f1_interaction_reveal_spring_trace"
+  ).requiredSelectionId = null;
+  assert.throws(
+    () => validateF1SliceContract(halfSelectionGate, catalog),
+    /invalid interaction selection gate/
+  );
+
+  const futureSelectionGate = structuredClone(contract);
+  const futureInteraction = futureSelectionGate.questInteractions.find(
+    (interaction) => interaction.id === "f1_interaction_reveal_spring_trace"
+  );
+  futureInteraction.requiredSelectionObjectiveId = futureSelectionGate.beats[6].objectiveIds[0];
+  futureInteraction.requiredSelectionId = "f1_choice_resolution_subdue";
+  assert.throws(
+    () => validateF1SliceContract(futureSelectionGate, catalog),
+    /missing or future interaction selection gate/
+  );
+
+  const duplicateSelectionGate = structuredClone(contract);
+  duplicateSelectionGate.questInteractions.find(
+    (interaction) => interaction.id === "f1_interaction_reveal_spring_trace_from_drain"
+  ).requiredSelectionId = "f1_choice_lane_canopy";
+  assert.throws(
+    () => validateF1SliceContract(duplicateSelectionGate, catalog),
+    /duplicate .* interaction selection gate/
+  );
+
+  const incompleteSelectionCoverage = structuredClone(contract);
+  incompleteSelectionCoverage.questInteractions = incompleteSelectionCoverage.questInteractions.filter(
+    (interaction) => interaction.id !== "f1_interaction_reveal_spring_trace_from_drain"
+  );
+  assert.throws(
+    () => validateF1SliceContract(incompleteSelectionCoverage, catalog),
+    /interactions do not cover every authored selection option/
   );
 });
 

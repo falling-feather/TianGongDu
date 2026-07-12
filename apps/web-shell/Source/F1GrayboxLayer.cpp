@@ -308,6 +308,9 @@ void solidPolygon(
 ) {
     const auto spring_trace =
         tgd::contracts::stable_content_key("f1_interaction_reveal_spring_trace");
+    const auto spring_trace_from_drain = tgd::contracts::stable_content_key(
+        "f1_interaction_reveal_spring_trace_from_drain"
+    );
     const auto winter_trace =
         tgd::contracts::stable_content_key("f1_interaction_reveal_winter_trace");
     const auto ledger =
@@ -322,7 +325,9 @@ void solidPolygon(
                                 interaction == tgd::contracts::stable_content_key(
                                                    "f1_interaction_calibrate_rib_winter"
                                                );
-    const auto accent = interaction == spring_trace || interaction == spring_rib
+    const auto accent = interaction == spring_trace ||
+                                interaction == spring_trace_from_drain ||
+                                interaction == spring_rib
                             ? color(116, 205, 135, 235)
                             : interaction == winter_trace
                                   ? color(128, 193, 225, 235)
@@ -423,8 +428,17 @@ void solidPolygon(
     if (interaction == tgd::contracts::stable_content_key("f1_interaction_choose_lane_route")) {
         return "F / CHOOSE CANOPY ROUTE";
     }
+    if (interaction ==
+        tgd::contracts::stable_content_key("f1_interaction_choose_lane_drain_route")) {
+        return "F / CHOOSE DRAIN ROUTE";
+    }
     if (interaction == tgd::contracts::stable_content_key("f1_interaction_reveal_spring_trace")) {
-        return "F / REVEAL SPRING TRACE";
+        return "F / REVEAL SPRING TRACE / CANOPY ENTRY";
+    }
+    if (interaction == tgd::contracts::stable_content_key(
+                           "f1_interaction_reveal_spring_trace_from_drain"
+                       )) {
+        return "F / REVEAL SPRING TRACE / DRAIN ENTRY";
     }
     if (interaction == tgd::contracts::stable_content_key("f1_interaction_reveal_winter_trace")) {
         return "F / REVEAL WINTER TRACE";
@@ -683,7 +697,7 @@ void F1GrayboxLayer::createWorld() {
         marker->setPosition(screen);
         world_layer_->addChild(marker, depthOrder(screen.y) + 2);
         quest_marker_nodes_[quest_marker_count_] = marker;
-        quest_marker_objectives_[quest_marker_count_] = interaction.objective_id.key;
+        quest_marker_definitions_[quest_marker_count_] = &interaction;
         ++quest_marker_count_;
     }
 
@@ -749,9 +763,15 @@ void F1GrayboxLayer::createActors() {
 
     const auto workbench_cell =
         tgd::contracts::stable_content_key("f1_cell_canopy_workstation");
+    quest_prop_count_ = 0;
     for (const auto& interaction : definition_->quest_interactions) {
-        if (interaction.cell_id.key == workbench_cell) {
-            place(workbenchPropVisual(interaction.id.key), interaction.pose);
+        if (interaction.cell_id.key == workbench_cell &&
+            quest_prop_count_ < quest_marker_capacity) {
+            auto* prop = workbenchPropVisual(interaction.id.key);
+            place(prop, interaction.pose);
+            quest_prop_nodes_[quest_prop_count_] = prop;
+            quest_prop_definitions_[quest_prop_count_] = &interaction;
+            ++quest_prop_count_;
         }
     }
 
@@ -1055,12 +1075,29 @@ void F1GrayboxLayer::updateQuestPresentation() noexcept {
             std::to_string(snapshot.selected_choices) + " | " + std::string{beat_name}
         );
     }
+    const auto selection_matches = [this](
+                                       const tgd::contracts::QuestInteractionDefinition&
+                                           interaction
+                                   ) noexcept {
+        return interaction.required_selection_id.key == 0 ||
+               session_.quest_runtime().selected_option(
+                   interaction.required_selection_objective_id.key
+               ) == interaction.required_selection_id.key;
+    };
     for (std::size_t index = 0; index < quest_marker_count_; ++index) {
-        if (quest_marker_nodes_[index] != nullptr) {
+        const auto* interaction = quest_marker_definitions_[index];
+        if (quest_marker_nodes_[index] != nullptr && interaction != nullptr) {
             quest_marker_nodes_[index]->setVisible(
-                session_.objective_state(quest_marker_objectives_[index]) ==
-                tgd::gameplay::QuestObjectiveState::active
+                session_.objective_state(interaction->objective_id.key) ==
+                    tgd::gameplay::QuestObjectiveState::active &&
+                selection_matches(*interaction)
             );
+        }
+    }
+    for (std::size_t index = 0; index < quest_prop_count_; ++index) {
+        const auto* interaction = quest_prop_definitions_[index];
+        if (quest_prop_nodes_[index] != nullptr && interaction != nullptr) {
+            quest_prop_nodes_[index]->setVisible(selection_matches(*interaction));
         }
     }
     if (interaction_prompt_label_ == nullptr) {

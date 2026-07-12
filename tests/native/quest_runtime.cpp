@@ -329,6 +329,8 @@ bool test_scene_interaction_ties_are_stable() {
             first.cell_id,
             first.objectives.front(),
             {},
+            {},
+            {},
             shared_pose,
             1000,
         },
@@ -337,6 +339,8 @@ bool test_scene_interaction_ties_are_stable() {
             tgd::contracts::QuestInteractionKind::operate,
             first.cell_id,
             first.objectives.back(),
+            {},
+            {},
             {},
             shared_pose,
             1000,
@@ -364,6 +368,207 @@ bool test_scene_interaction_ties_are_stable() {
         invalid_resolver.initialize(invalid) == QuestInteractionError::invalid_definition,
         "duplicate interaction objectives fail definition validation"
     );
+
+    auto invalid_interactions = std::vector<tgd::contracts::QuestInteractionDefinition>{
+        definition().quest_interactions.begin(),
+        definition().quest_interactions.end(),
+    };
+    const auto spring_trace = std::find_if(
+        invalid_interactions.begin(),
+        invalid_interactions.end(),
+        [](const tgd::contracts::QuestInteractionDefinition& interaction) {
+            return interaction.id.key == tgd::contracts::stable_content_key(
+                                             "f1_interaction_reveal_spring_trace"
+                                         );
+        }
+    );
+    if (spring_trace == invalid_interactions.end()) {
+        return false;
+    }
+    spring_trace->required_selection_id = {};
+    auto half_gate_definition = definition();
+    half_gate_definition.quest_interactions = invalid_interactions;
+    DeterministicQuestRuntime half_gate_runtime;
+    ok &= expect(
+        half_gate_runtime.initialize(half_gate_definition, definition().player.actor) ==
+            QuestError::invalid_definition,
+        "half-configured interaction selection gates fail quest definition validation"
+    );
+
+    invalid_interactions.assign(
+        definition().quest_interactions.begin(),
+        definition().quest_interactions.end()
+    );
+    const auto spring_variants = std::array{
+        tgd::contracts::stable_content_key("f1_choice_lane_canopy"),
+        tgd::contracts::stable_content_key("f1_choice_lane_drain"),
+    };
+    for (std::size_t index = 0; index < spring_variants.size(); ++index) {
+        const auto variant = std::find_if(
+            invalid_interactions.begin(),
+            invalid_interactions.end(),
+            [selection = spring_variants[index]](
+                const tgd::contracts::QuestInteractionDefinition& interaction
+            ) {
+                return interaction.objective_id.key == tgd::contracts::stable_content_key(
+                                                          "f1_objective_reveal_spring_trace"
+                                                      ) &&
+                       interaction.required_selection_id.key == selection;
+            }
+        );
+        if (variant == invalid_interactions.end()) {
+            return false;
+        }
+        variant->required_selection_objective_id = tgd::contracts::content_id(
+            "f1_objective_choose_resolution"
+        );
+        variant->required_selection_id = index == 0
+                                             ? tgd::contracts::content_id(
+                                                   "f1_choice_resolution_subdue"
+                                               )
+                                             : tgd::contracts::content_id(
+                                                   "f1_choice_resolution_restore_shared_mark"
+                                               );
+    }
+    auto future_gate_definition = definition();
+    future_gate_definition.quest_interactions = invalid_interactions;
+    DeterministicQuestRuntime future_gate_runtime;
+    ok &= expect(
+        future_gate_runtime.initialize(future_gate_definition, definition().player.actor) ==
+            QuestError::invalid_definition,
+        "interaction selection gates cannot depend on a future choice objective"
+    );
+
+    invalid_interactions.assign(
+        definition().quest_interactions.begin(),
+        definition().quest_interactions.end()
+    );
+    const auto drain_variant = std::find_if(
+        invalid_interactions.begin(),
+        invalid_interactions.end(),
+        [](const tgd::contracts::QuestInteractionDefinition& interaction) {
+            return interaction.id.key == tgd::contracts::stable_content_key(
+                                             "f1_interaction_reveal_spring_trace_from_drain"
+                                         );
+        }
+    );
+    if (drain_variant == invalid_interactions.end()) {
+        return false;
+    }
+    invalid_interactions.erase(drain_variant);
+    auto incomplete_gate_definition = definition();
+    incomplete_gate_definition.quest_interactions = invalid_interactions;
+    DeterministicQuestRuntime incomplete_gate_runtime;
+    ok &= expect(
+        incomplete_gate_runtime.initialize(
+            incomplete_gate_definition,
+            definition().player.actor
+        ) == QuestError::invalid_definition,
+        "interaction variants must cover every authored source choice"
+    );
+    return ok;
+}
+
+bool test_scene_interaction_selection_gates_follow_lane_route() {
+    const auto lane_objective =
+        tgd::contracts::stable_content_key("f1_objective_choose_lane_route");
+    const auto spring_objective =
+        tgd::contracts::stable_content_key("f1_objective_reveal_spring_trace");
+    const auto canopy_selection =
+        tgd::contracts::stable_content_key("f1_choice_lane_canopy");
+    const auto drain_selection =
+        tgd::contracts::stable_content_key("f1_choice_lane_drain");
+    const auto canopy_interaction = tgd::contracts::stable_content_key(
+        "f1_interaction_reveal_spring_trace"
+    );
+    const auto drain_interaction = tgd::contracts::stable_content_key(
+        "f1_interaction_reveal_spring_trace_from_drain"
+    );
+    bool ok = true;
+    for (const auto selected_route : std::array{canopy_selection, drain_selection}) {
+        DeterministicQuestRuntime quest;
+        DeterministicQuestInteractionResolver interactions;
+        CollectingSink sink;
+        ok &= quest.initialize(definition(), definition().player.actor) == QuestError::none;
+        ok &= quest.start() == QuestError::none;
+        ok &= interactions.initialize(definition().quest_interactions) ==
+              QuestInteractionError::none;
+        tgd::contracts::CommandSequence sequence = 1;
+        tgd::contracts::TickIndex tick = 1;
+        for (std::size_t stage = 0; stage < 2; ++stage) {
+            for (const auto& objective : definition().beats[stage].objectives) {
+                ok &= quest.apply(
+                          {
+                              tick++,
+                              definition().player.actor,
+                              sequence++,
+                              {},
+                              objective.key,
+                          },
+                          sink
+                      ).error == QuestError::none;
+            }
+        }
+        for (std::size_t index = 0; index < 5; ++index) {
+            ok &= quest.apply(
+                      {
+                          tick++,
+                          definition().player.actor,
+                          sequence++,
+                          {},
+                          definition().beats[2].objectives[index].key,
+                      },
+                      sink
+                  ).error == QuestError::none;
+        }
+        ok &= quest.apply(
+                  {
+                      tick++,
+                      definition().player.actor,
+                      sequence++,
+                      {},
+                      lane_objective,
+                      selected_route,
+                  },
+                  sink
+              ).error == QuestError::none;
+        ok &= expect(
+            quest.snapshot().stage_index == 3 &&
+                quest.selected_option(lane_objective) == selected_route,
+            "an authored lane route advances into the shared workbench beat"
+        );
+
+        for (const auto& candidate : definition().quest_interactions) {
+            if (candidate.objective_id.key != spring_objective) {
+                continue;
+            }
+            const auto resolved = interactions.resolve(
+                {definition().player.actor, candidate.cell_id.key, candidate.pose},
+                quest
+            );
+            const bool selected_variant = candidate.required_selection_id.key == selected_route;
+            ok &= expect(
+                selected_variant
+                    ? resolved.found && resolved.interaction == candidate.id.key &&
+                          resolved.objective == spring_objective
+                    : !resolved.found,
+                "only the spring-trace interaction for the committed lane route resolves"
+            );
+        }
+        const auto expected = selected_route == canopy_selection ? canopy_interaction
+                                                                 : drain_interaction;
+        const auto selected_definition = std::find_if(
+            definition().quest_interactions.begin(),
+            definition().quest_interactions.end(),
+            [expected](const tgd::contracts::QuestInteractionDefinition& interaction) {
+                return interaction.id.key == expected;
+            }
+        );
+        ok &= expect(
+            selected_definition != definition().quest_interactions.end(),
+            "each lane route owns a stable route-specific workbench interaction"
+        );
+    }
     return ok;
 }
 
@@ -1507,6 +1712,7 @@ int main() {
     ok &= test_invalid_definition_fails_closed();
     ok &= test_scene_interactions_resolve_from_active_objectives();
     ok &= test_scene_interaction_ties_are_stable();
+    ok &= test_scene_interaction_selection_gates_follow_lane_route();
     ok &= test_combat_signals_resolve_training_objectives();
     ok &= test_hostile_group_outcomes_unlock_lane_choice();
     ok &= test_return_calibration_combat_trigger_follows_choice();

@@ -53,6 +53,29 @@ void hash_integer(std::uint64_t& hash, Integer value) noexcept {
     }
 }
 
+[[nodiscard]] bool interaction_variants_compatible(
+    const contracts::QuestInteractionDefinition& left,
+    const contracts::QuestInteractionDefinition& right
+) noexcept {
+    const bool left_gated = left.required_selection_id.key != 0;
+    const bool right_gated = right.required_selection_id.key != 0;
+    if (!left_gated && !right_gated) {
+        return left.kind == contracts::QuestInteractionKind::choose &&
+               right.kind == contracts::QuestInteractionKind::choose &&
+               left.selection_id.key != right.selection_id.key;
+    }
+    if (!left_gated || !right_gated ||
+        left.required_selection_objective_id.key !=
+            right.required_selection_objective_id.key ||
+        left.required_selection_id.key == right.required_selection_id.key ||
+        (left.kind == contracts::QuestInteractionKind::choose) !=
+            (right.kind == contracts::QuestInteractionKind::choose)) {
+        return false;
+    }
+    return left.kind != contracts::QuestInteractionKind::choose ||
+           left.selection_id.key != right.selection_id.key;
+}
+
 }  // namespace
 
 QuestInteractionError DeterministicQuestInteractionResolver::initialize(
@@ -82,6 +105,15 @@ QuestInteractionError DeterministicQuestInteractionResolver::initialize(
              definition.selection_id.key != 0)) {
             return QuestInteractionError::invalid_definition;
         }
+        const bool has_selection_objective =
+            definition.required_selection_objective_id.key != 0;
+        const bool has_selection = definition.required_selection_id.key != 0;
+        if (has_selection_objective ==
+                definition.required_selection_objective_id.name.empty() ||
+            has_selection == definition.required_selection_id.name.empty() ||
+            has_selection_objective != has_selection) {
+            return QuestInteractionError::invalid_definition;
+        }
         for (std::size_t prerequisite = 0;
              prerequisite < definition.prerequisite_objectives.size();
              ++prerequisite) {
@@ -100,9 +132,7 @@ QuestInteractionError DeterministicQuestInteractionResolver::initialize(
                 return QuestInteractionError::invalid_definition;
             }
             if (definitions[prior].objective_id.key == definition.objective_id.key &&
-                (definitions[prior].kind != contracts::QuestInteractionKind::choose ||
-                 definition.kind != contracts::QuestInteractionKind::choose ||
-                 definitions[prior].selection_id.key == definition.selection_id.key)) {
+                !interaction_variants_compatible(definitions[prior], definition)) {
                 return QuestInteractionError::invalid_definition;
             }
         }
@@ -130,6 +160,9 @@ QuestInteractionResult DeterministicQuestInteractionResolver::resolve(
     for (const auto& definition : definitions_) {
         if (definition.cell_id.key != query.cell ||
             definition.pose.floor_layer != query.pose.floor_layer ||
+            (definition.required_selection_id.key != 0 &&
+             quest.selected_option(definition.required_selection_objective_id.key) !=
+                 definition.required_selection_id.key) ||
             quest.objective_state(definition.objective_id.key) != QuestObjectiveState::active) {
             continue;
         }
@@ -781,26 +814,108 @@ QuestError DeterministicQuestRuntime::validate_definition(
     }
     for (std::size_t index = 0; index < definition.quest_interactions.size(); ++index) {
         const auto& interaction = definition.quest_interactions[index];
-        const auto objective_known = std::find(
+        const auto objective_position = std::find(
             objectives.begin(),
             objectives.begin() + objective_count,
             interaction.objective_id.key
-        ) != objectives.begin() + objective_count;
+        );
+        const auto objective_end = objectives.begin() + objective_count;
+        const bool objective_known = objective_position != objective_end;
+        const bool has_selection_objective =
+            interaction.required_selection_objective_id.key != 0;
+        const bool has_selection = interaction.required_selection_id.key != 0;
         if (interaction.id.key == 0 || !objective_known ||
             (interaction.kind == contracts::QuestInteractionKind::choose &&
              interaction.selection_id.key == 0) ||
             (interaction.kind != contracts::QuestInteractionKind::choose &&
-             interaction.selection_id.key != 0)) {
+             interaction.selection_id.key != 0) ||
+            has_selection_objective ==
+                interaction.required_selection_objective_id.name.empty() ||
+            has_selection == interaction.required_selection_id.name.empty() ||
+            has_selection_objective != has_selection) {
             return QuestError::invalid_definition;
+        }
+        if (has_selection) {
+            const auto selection_objective_position = std::find(
+                objectives.begin(),
+                objective_end,
+                interaction.required_selection_objective_id.key
+            );
+            const auto selection_interaction = std::find_if(
+                definition.quest_interactions.begin(),
+                definition.quest_interactions.end(),
+                [&interaction](
+                    const contracts::QuestInteractionDefinition& candidate
+                ) {
+                    return candidate.kind == contracts::QuestInteractionKind::choose &&
+                           candidate.objective_id.key ==
+                               interaction.required_selection_objective_id.key &&
+                           candidate.selection_id.key ==
+                               interaction.required_selection_id.key;
+                }
+            );
+            if (selection_objective_position == objective_end ||
+                selection_objective_position >= objective_position ||
+                selection_interaction == definition.quest_interactions.end()) {
+                return QuestError::invalid_definition;
+            }
         }
         for (std::size_t prior = 0; prior < index; ++prior) {
             const auto& previous = definition.quest_interactions[prior];
             if (previous.id.key == interaction.id.key ||
                 (previous.objective_id.key == interaction.objective_id.key &&
-                 (previous.kind != contracts::QuestInteractionKind::choose ||
-                  interaction.kind != contracts::QuestInteractionKind::choose ||
-                  previous.selection_id.key == interaction.selection_id.key))) {
+                 !interaction_variants_compatible(previous, interaction))) {
                 return QuestError::invalid_definition;
+            }
+        }
+        if (has_selection) {
+            const auto authored_option_count = static_cast<std::size_t>(std::count_if(
+                definition.quest_interactions.begin(),
+                definition.quest_interactions.end(),
+                [&interaction](
+                    const contracts::QuestInteractionDefinition& candidate
+                ) {
+                    return candidate.kind == contracts::QuestInteractionKind::choose &&
+                           candidate.objective_id.key ==
+                               interaction.required_selection_objective_id.key;
+                }
+            ));
+            const auto variant_count = static_cast<std::size_t>(std::count_if(
+                definition.quest_interactions.begin(),
+                definition.quest_interactions.end(),
+                [&interaction](
+                    const contracts::QuestInteractionDefinition& candidate
+                ) {
+                    return candidate.objective_id.key == interaction.objective_id.key &&
+                           candidate.required_selection_objective_id.key ==
+                               interaction.required_selection_objective_id.key;
+                }
+            ));
+            if (authored_option_count == 0 || authored_option_count != variant_count) {
+                return QuestError::invalid_definition;
+            }
+            for (const auto& option : definition.quest_interactions) {
+                if (option.kind != contracts::QuestInteractionKind::choose ||
+                    option.objective_id.key !=
+                        interaction.required_selection_objective_id.key) {
+                    continue;
+                }
+                const auto covered = std::find_if(
+                    definition.quest_interactions.begin(),
+                    definition.quest_interactions.end(),
+                    [&interaction, &option](
+                        const contracts::QuestInteractionDefinition& candidate
+                    ) {
+                        return candidate.objective_id.key ==
+                                   interaction.objective_id.key &&
+                               candidate.required_selection_objective_id.key ==
+                                   interaction.required_selection_objective_id.key &&
+                               candidate.required_selection_id.key == option.selection_id.key;
+                    }
+                );
+                if (covered == definition.quest_interactions.end()) {
+                    return QuestError::invalid_definition;
+                }
             }
         }
     }
@@ -878,12 +993,16 @@ bool DeterministicQuestRuntime::valid_selection(
            std::any_of(
                definition_->quest_interactions.begin(),
                definition_->quest_interactions.end(),
-               [objective, selection](
+               [this, objective, selection](
                    const contracts::QuestInteractionDefinition& interaction
                ) {
                    return interaction.objective_id.key == objective &&
                           interaction.kind == contracts::QuestInteractionKind::choose &&
-                          interaction.selection_id.key == selection;
+                          interaction.selection_id.key == selection &&
+                          (interaction.required_selection_id.key == 0 ||
+                           selected_option(
+                               interaction.required_selection_objective_id.key
+                           ) == interaction.required_selection_id.key);
                }
            );
 }

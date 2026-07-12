@@ -74,7 +74,7 @@ int main() {
         "every beat owns an ordered content-driven movement safe point"
     );
     ok &= expect(
-        definition->quest_interactions.size() == 21 &&
+        definition->quest_interactions.size() == 23 &&
             definition->quest_interactions.front().objective_id.key ==
                 tgd::contracts::stable_content_key("f1_objective_inspect_travel_writ"),
         "the expanded opening scene interactions are generated content, not presentation rules"
@@ -111,7 +111,7 @@ int main() {
                 ),
         "return calibration actions are generated as mutually exclusive choice variants"
     );
-    const auto route_interaction = std::find_if(
+    const auto route_interaction_count = std::count_if(
         definition->quest_interactions.begin(),
         definition->quest_interactions.end(),
         [](const tgd::contracts::QuestInteractionDefinition& interaction) {
@@ -119,14 +119,47 @@ int main() {
                    tgd::contracts::stable_content_key("f1_objective_choose_lane_route");
         }
     );
+    const auto canopy_route_interaction = std::find_if(
+        definition->quest_interactions.begin(),
+        definition->quest_interactions.end(),
+        [](const tgd::contracts::QuestInteractionDefinition& interaction) {
+            return interaction.selection_id.key ==
+                   tgd::contracts::stable_content_key("f1_choice_lane_canopy");
+        }
+    );
+    const auto drain_route_interaction = std::find_if(
+        definition->quest_interactions.begin(),
+        definition->quest_interactions.end(),
+        [](const tgd::contracts::QuestInteractionDefinition& interaction) {
+            return interaction.selection_id.key ==
+                   tgd::contracts::stable_content_key("f1_choice_lane_drain");
+        }
+    );
     ok &= expect(
-        route_interaction != definition->quest_interactions.end() &&
-            route_interaction->selection_id.key ==
-                tgd::contracts::stable_content_key("f1_choice_lane_canopy") &&
-            definition->quest_interactions.size() == 21 &&
-            route_interaction->prerequisite_objectives.size() == 5 &&
+        route_interaction_count == 2 &&
+            canopy_route_interaction != definition->quest_interactions.end() &&
+            drain_route_interaction != definition->quest_interactions.end() &&
+            canopy_route_interaction->prerequisite_objectives.size() == 5 &&
+            drain_route_interaction->prerequisite_objectives.size() == 5 &&
             definition->quest_combat_outcomes.size() == 3,
-        "the lane choice waits for combat and the ordered rainworks chain"
+        "two lane choices wait for combat and the ordered rainworks chain"
+    );
+    const auto route_evidence_count = std::count_if(
+        definition->quest_interactions.begin(),
+        definition->quest_interactions.end(),
+        [](const tgd::contracts::QuestInteractionDefinition& interaction) {
+            return interaction.objective_id.key == tgd::contracts::stable_content_key(
+                                                      "f1_objective_reveal_spring_trace"
+                                                  ) &&
+                   interaction.required_selection_objective_id.key ==
+                       tgd::contracts::stable_content_key(
+                           "f1_objective_choose_lane_route"
+                       );
+        }
+    );
+    ok &= expect(
+        route_evidence_count == 2,
+        "each authored lane route owns one selection-gated spring-trace entry"
     );
     const auto calibration_count = std::count_if(
         definition->quest_interactions.begin(),

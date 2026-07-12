@@ -56,7 +56,7 @@ class F1GrayboxLayer final :
         tgd::contracts::StableContentKey stance{};
     };
 
-    static constexpr std::size_t hostile_capacity = 4;
+    static constexpr std::size_t hostile_capacity = 6;
     static constexpr std::size_t combat_intent_capacity = 8;
     static constexpr std::size_t quest_marker_capacity =
         tgd::gameplay::DeterministicQuestInteractionResolver::interaction_capacity;
@@ -94,6 +94,7 @@ class F1GrayboxLayer final :
     [[nodiscard]] bool activateEncounterForBeat(
         tgd::contracts::StableContentKey beat
     ) noexcept;
+    [[nodiscard]] bool applyPendingEncounterActivation() noexcept;
     [[nodiscard]] bool retryEncounter() noexcept;
     void refreshCombatHud() noexcept;
 
@@ -133,6 +134,7 @@ class F1GrayboxLayer final :
     std::uint32_t retry_count_{};
     tgd::contracts::TickIndex incoming_attack_tick_{};
     tgd::contracts::StableActorKey incoming_attack_source_{};
+    tgd::contracts::StableContentKey pending_encounter_activation_beat_{};
     tgd::contracts::StableContentKey pending_boss_stance_{};
     tgd::contracts::StableContentKey resolution_reward_{};
     tgd::contracts::StableContentKey resolution_reward_dedup_key_{};

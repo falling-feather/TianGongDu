@@ -118,7 +118,7 @@
         },
         "stanceIds": ["stance_umbrella_rust"],
         "initialStanceId": "stance_umbrella_rust",
-        "initiallyActive": true
+        "initiallyActive": false
       },
       {
         "actorKey": 102,
@@ -146,7 +146,7 @@
         },
         "stanceIds": ["stance_umbrella_rust"],
         "initialStanceId": "stance_umbrella_rust",
-        "initiallyActive": true
+        "initiallyActive": false
       },
       {
         "actorKey": 103,
@@ -174,7 +174,63 @@
         },
         "stanceIds": ["stance_paper_egret"],
         "initialStanceId": "stance_paper_egret",
-        "initiallyActive": true
+        "initiallyActive": false
+      },
+      {
+        "actorKey": 104,
+        "archetypeId": "f1_training_umbrella_rig",
+        "faction": "hostile",
+        "poseMm": { "x": -5900, "y": 2300, "height": 0, "floorLayer": 0 },
+        "resources": {
+          "health": 160,
+          "healthMax": 160,
+          "stamina": 100,
+          "staminaMax": 100,
+          "poise": 80,
+          "poiseMax": 80,
+          "lantern": 0,
+          "lanternMax": 0,
+          "evidence": 0
+        },
+        "recovery": {
+          "staminaDelayTicks": 45,
+          "staminaIntervalTicks": 10,
+          "staminaPerInterval": 2,
+          "poiseDelayTicks": 150,
+          "poiseIntervalTicks": 15,
+          "poisePerInterval": 3
+        },
+        "stanceIds": ["stance_umbrella_rust"],
+        "initialStanceId": "stance_umbrella_rust",
+        "initiallyActive": false
+      },
+      {
+        "actorKey": 105,
+        "archetypeId": "f1_training_egret_rig",
+        "faction": "hostile",
+        "poseMm": { "x": -5200, "y": -1600, "height": 700, "floorLayer": 0 },
+        "resources": {
+          "health": 140,
+          "healthMax": 140,
+          "stamina": 120,
+          "staminaMax": 120,
+          "poise": 60,
+          "poiseMax": 60,
+          "lantern": 0,
+          "lanternMax": 0,
+          "evidence": 0
+        },
+        "recovery": {
+          "staminaDelayTicks": 36,
+          "staminaIntervalTicks": 8,
+          "staminaPerInterval": 2,
+          "poiseDelayTicks": 120,
+          "poiseIntervalTicks": 12,
+          "poisePerInterval": 3
+        },
+        "stanceIds": ["stance_paper_egret"],
+        "initialStanceId": "stance_paper_egret",
+        "initiallyActive": false
       },
       {
         "actorKey": 201,
@@ -784,6 +840,18 @@
     }
   ],
   "questEncounterActivations": [
+    {
+      "id": "f1_activation_shen_yan_training_rigs",
+      "beatId": "f1_beat_shen_yan_training",
+      "encounterId": "f1_encounter_umbrella_lane_bootstrap",
+      "actorKeys": [104, 105]
+    },
+    {
+      "id": "f1_activation_umbrella_lane_first_encounter",
+      "beatId": "f1_beat_umbrella_lane_first_encounter",
+      "encounterId": "f1_encounter_umbrella_lane_bootstrap",
+      "actorKeys": [101, 102, 103]
+    },
     {
       "id": "f1_activation_canopy_return_encounter",
       "beatId": "f1_beat_canopy_return_encounter",

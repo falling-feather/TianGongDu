@@ -883,6 +883,7 @@ async function runBrowser(target, origin) {
     assert.equal(openingQuestState.questBeatIndex, 0);
     assert.equal(openingQuestState.questCompletedObjectives, 0);
     assert.equal(openingQuestState.questRequiredObjectives, 6);
+    assert.equal(openingQuestState.activeHostiles, 0);
     await captureRenderedFrame(
       page,
       canvas,
@@ -935,6 +936,7 @@ async function runBrowser(target, origin) {
     const advancedQuestState = await page.evaluate(() => window.__tgdTest.getF1State());
     assert.equal(advancedQuestState.questCompletedObjectives, 0);
     assert.equal(advancedQuestState.questRequiredObjectives, 6);
+    assert.equal(advancedQuestState.activeHostiles, 2);
     await captureRenderedFrame(
       page,
       canvas,
@@ -1051,6 +1053,11 @@ async function runBrowser(target, origin) {
       trainingState.questBeatIndex,
       2,
       `${target} flower-turn evade never completed the training beat.`
+    );
+    assert.equal(
+      trainingState.activeHostiles,
+      3,
+      `${target} umbrella-lane group did not replace the training rigs.`
     );
     await captureRenderedFrame(
       page,

@@ -122,13 +122,24 @@ inline constexpr std::array<contracts::ContentId, 1> combat_trigger_4_prerequisi
     contracts::content_id("f1_objective_commit_flower_turn_light"),
 }};
 
-inline constexpr std::array<contracts::StableActorKey, 3> encounter_activation_0_actors{{
+inline constexpr std::array<contracts::StableActorKey, 2> encounter_activation_0_actors{{
+    104ULL,
+    105ULL,
+}};
+
+inline constexpr std::array<contracts::StableActorKey, 3> encounter_activation_1_actors{{
     101ULL,
     102ULL,
     103ULL,
 }};
 
-inline constexpr std::array<contracts::StableActorKey, 1> encounter_activation_1_actors{{
+inline constexpr std::array<contracts::StableActorKey, 3> encounter_activation_2_actors{{
+    101ULL,
+    102ULL,
+    103ULL,
+}};
+
+inline constexpr std::array<contracts::StableActorKey, 1> encounter_activation_3_actors{{
     201ULL,
 }};
 
@@ -208,9 +219,11 @@ inline constexpr std::array<contracts::QuestCombatOutcomeDefinition, 3> f1_quest
     {contracts::content_id("f1_outcome_validate_return_calibration"), contracts::QuestCombatOutcomeKind::all_hostiles_defeated, contracts::content_id("f1_objective_validate_calibration"), contracts::ContentId{}, 0U},
 }};
 
-inline constexpr std::array<contracts::QuestEncounterActivationDefinition, 2> f1_quest_encounter_activations{{
-    {contracts::content_id("f1_activation_canopy_return_encounter"), contracts::content_id("f1_beat_canopy_return_encounter"), contracts::content_id("f1_encounter_umbrella_lane_bootstrap"), std::span<const contracts::StableActorKey>{encounter_activation_0_actors}},
-    {contracts::content_id("f1_activation_four_seasons_wraith"), contracts::content_id("f1_beat_four_seasons_wraith"), contracts::content_id("f1_encounter_umbrella_lane_bootstrap"), std::span<const contracts::StableActorKey>{encounter_activation_1_actors}},
+inline constexpr std::array<contracts::QuestEncounterActivationDefinition, 4> f1_quest_encounter_activations{{
+    {contracts::content_id("f1_activation_shen_yan_training_rigs"), contracts::content_id("f1_beat_shen_yan_training"), contracts::content_id("f1_encounter_umbrella_lane_bootstrap"), std::span<const contracts::StableActorKey>{encounter_activation_0_actors}},
+    {contracts::content_id("f1_activation_umbrella_lane_first_encounter"), contracts::content_id("f1_beat_umbrella_lane_first_encounter"), contracts::content_id("f1_encounter_umbrella_lane_bootstrap"), std::span<const contracts::StableActorKey>{encounter_activation_1_actors}},
+    {contracts::content_id("f1_activation_canopy_return_encounter"), contracts::content_id("f1_beat_canopy_return_encounter"), contracts::content_id("f1_encounter_umbrella_lane_bootstrap"), std::span<const contracts::StableActorKey>{encounter_activation_2_actors}},
+    {contracts::content_id("f1_activation_four_seasons_wraith"), contracts::content_id("f1_beat_four_seasons_wraith"), contracts::content_id("f1_encounter_umbrella_lane_bootstrap"), std::span<const contracts::StableActorKey>{encounter_activation_3_actors}},
 }};
 
 inline constexpr std::array<contracts::QuestBossPhaseDefinition, 4> f1_quest_boss_phases{{
@@ -225,11 +238,13 @@ inline constexpr std::array<contracts::QuestResolutionRewardDefinition, 2> f1_qu
     {contracts::content_id("f1_resolution_reward_restore_shared_mark"), contracts::content_id("f1_objective_choose_resolution"), contracts::content_id("f1_choice_resolution_restore_shared_mark"), contracts::content_id("f1_reward_joint_workshop_formula"), contracts::content_id("f1_claim_resolution_restore_shared_mark")},
 }};
 
-inline constexpr std::array<contracts::CombatActorConfig, 5> f1_combat_actors{{
+inline constexpr std::array<contracts::CombatActorConfig, 7> f1_combat_actors{{
     {1ULL, contracts::content_id("actor_f1_player"), contracts::CombatFaction::player, {-12000, -1600, 0, 0}, {120, 120, 100, 100, 80, 80, 30, 30, 0}, {contracts::stable_content_key("stance_eavesguard"), contracts::stable_content_key("stance_flower_turn"), 0, 0}, 2U, contracts::stable_content_key("stance_eavesguard"), {30, 6, 2, 120, 12, 4}, true},
-    {101ULL, contracts::content_id("jn_enemy_leaking_umbrella_doll"), contracts::CombatFaction::hostile, {-4000, -2600, 0, 0}, {90, 90, 80, 80, 40, 40, 0, 0, 0}, {contracts::stable_content_key("stance_umbrella_rust"), 0, 0, 0}, 1U, contracts::stable_content_key("stance_umbrella_rust"), {45, 10, 2, 150, 15, 3}, true},
-    {102ULL, contracts::content_id("jn_enemy_leaking_umbrella_doll"), contracts::CombatFaction::hostile, {-3000, -400, 0, 0}, {90, 90, 80, 80, 40, 40, 0, 0, 0}, {contracts::stable_content_key("stance_umbrella_rust"), 0, 0, 0}, 1U, contracts::stable_content_key("stance_umbrella_rust"), {45, 10, 2, 150, 15, 3}, true},
-    {103ULL, contracts::content_id("jn_enemy_faded_paper_egret"), contracts::CombatFaction::hostile, {-1500, 900, 700, 0}, {70, 70, 100, 100, 28, 28, 0, 0, 0}, {contracts::stable_content_key("stance_paper_egret"), 0, 0, 0}, 1U, contracts::stable_content_key("stance_paper_egret"), {36, 8, 2, 120, 12, 3}, true},
+    {101ULL, contracts::content_id("jn_enemy_leaking_umbrella_doll"), contracts::CombatFaction::hostile, {-4000, -2600, 0, 0}, {90, 90, 80, 80, 40, 40, 0, 0, 0}, {contracts::stable_content_key("stance_umbrella_rust"), 0, 0, 0}, 1U, contracts::stable_content_key("stance_umbrella_rust"), {45, 10, 2, 150, 15, 3}, false},
+    {102ULL, contracts::content_id("jn_enemy_leaking_umbrella_doll"), contracts::CombatFaction::hostile, {-3000, -400, 0, 0}, {90, 90, 80, 80, 40, 40, 0, 0, 0}, {contracts::stable_content_key("stance_umbrella_rust"), 0, 0, 0}, 1U, contracts::stable_content_key("stance_umbrella_rust"), {45, 10, 2, 150, 15, 3}, false},
+    {103ULL, contracts::content_id("jn_enemy_faded_paper_egret"), contracts::CombatFaction::hostile, {-1500, 900, 700, 0}, {70, 70, 100, 100, 28, 28, 0, 0, 0}, {contracts::stable_content_key("stance_paper_egret"), 0, 0, 0}, 1U, contracts::stable_content_key("stance_paper_egret"), {36, 8, 2, 120, 12, 3}, false},
+    {104ULL, contracts::content_id("f1_training_umbrella_rig"), contracts::CombatFaction::hostile, {-5900, 2300, 0, 0}, {160, 160, 100, 100, 80, 80, 0, 0, 0}, {contracts::stable_content_key("stance_umbrella_rust"), 0, 0, 0}, 1U, contracts::stable_content_key("stance_umbrella_rust"), {45, 10, 2, 150, 15, 3}, false},
+    {105ULL, contracts::content_id("f1_training_egret_rig"), contracts::CombatFaction::hostile, {-5200, -1600, 700, 0}, {140, 140, 120, 120, 60, 60, 0, 0, 0}, {contracts::stable_content_key("stance_paper_egret"), 0, 0, 0}, 1U, contracts::stable_content_key("stance_paper_egret"), {36, 8, 2, 120, 12, 3}, false},
     {201ULL, contracts::content_id("jn_boss_umbrella_wraith"), contracts::CombatFaction::hostile, {4000, 1900, 0, 0}, {420, 420, 240, 240, 120, 120, 0, 0, 0}, {contracts::stable_content_key("stance_wraith_spring"), contracts::stable_content_key("stance_wraith_summer"), contracts::stable_content_key("stance_wraith_autumn"), contracts::stable_content_key("stance_wraith_winter")}, 4U, contracts::stable_content_key("stance_wraith_spring"), {24, 6, 4, 90, 10, 5}, false},
 }};
 

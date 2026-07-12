@@ -29,7 +29,7 @@ test("F1 one-hour contract and generated C++ stay synchronized", async () => {
   assert.equal(contract.view.primaryGuidance, "douzhanshen");
   assert.equal(contract.beats.length, 7);
   assert.equal(contract.safePoints.length, 7);
-  assert.equal(contract.combatBootstrap.actors.length, 5);
+  assert.equal(contract.combatBootstrap.actors.length, 7);
   assert.equal(contract.combatBootstrap.abilities.length, 17);
   assert.equal(contract.combatBootstrap.director.maxSimultaneousAttackers, 1);
   assert.equal(contract.combatBootstrap.director.formationRadiusMm, 1500);
@@ -281,9 +281,21 @@ test("F1 umbrella-lane outcomes require reachable hostile groups", async () => {
   );
 });
 
-test("F1 canopy return reactivates combat before opening its shortcut", async () => {
+test("F1 encounters activate authored groups at beat boundaries", async () => {
   const contract = await loadF1SliceContract();
   assert.deepEqual(contract.questEncounterActivations, [
+    {
+      id: "f1_activation_shen_yan_training_rigs",
+      beatId: contract.beats[1].id,
+      encounterId: contract.combatBootstrap.id,
+      actorKeys: [104, 105]
+    },
+    {
+      id: "f1_activation_umbrella_lane_first_encounter",
+      beatId: contract.beats[2].id,
+      encounterId: contract.combatBootstrap.id,
+      actorKeys: [101, 102, 103]
+    },
     {
       id: "f1_activation_canopy_return_encounter",
       beatId: contract.beats[4].id,
@@ -308,7 +320,14 @@ test("F1 canopy return reactivates combat before opening its shortcut", async ()
   wrongBeat.questEncounterActivations[0].beatId = contract.beats[3].id;
   assert.throws(
     () => validateF1SliceContract(wrongBeat, catalog),
-    /canopy return and four-seasons boss beats must own/
+    /training, lane, return, and boss beats must own/
+  );
+
+  const leakedHostile = structuredClone(contract);
+  leakedHostile.combatBootstrap.actors.find((actor) => actor.actorKey === 101).initiallyActive = true;
+  assert.throws(
+    () => validateF1SliceContract(leakedHostile, catalog),
+    /beat-scoped hostile actors must start dormant/
   );
 });
 

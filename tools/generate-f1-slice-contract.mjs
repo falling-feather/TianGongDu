@@ -341,13 +341,19 @@ export function validateF1SliceContract(contract, catalog) {
     encounterActivations.map((activation) => activation.beatId),
     "encounter activation beat"
   );
+  const trainingBeat = contract.beats[1];
+  const laneBeat = contract.beats[2];
   const bossBeat = contract.beats[5];
-  if (encounterActivations.length !== 2 ||
-      encounterActivations[0].beatId !== returnBeat.id ||
-      !sameValues(encounterActivations[0].actorKeys, [101, 102, 103]) ||
-      encounterActivations[1].beatId !== bossBeat.id ||
-      !sameValues(encounterActivations[1].actorKeys, [201])) {
-    fail("the canopy return and four-seasons boss beats must own authored activations");
+  if (encounterActivations.length !== 4 ||
+      encounterActivations[0].beatId !== trainingBeat.id ||
+      !sameValues(encounterActivations[0].actorKeys, [104, 105]) ||
+      encounterActivations[1].beatId !== laneBeat.id ||
+      !sameValues(encounterActivations[1].actorKeys, [101, 102, 103]) ||
+      encounterActivations[2].beatId !== returnBeat.id ||
+      !sameValues(encounterActivations[2].actorKeys, [101, 102, 103]) ||
+      encounterActivations[3].beatId !== bossBeat.id ||
+      !sameValues(encounterActivations[3].actorKeys, [201])) {
+    fail("training, lane, return, and boss beats must own authored activations");
   }
   const bossPhases = contract.questBossPhases;
   if (!Array.isArray(bossPhases) || bossPhases.length !== 4) {
@@ -813,6 +819,21 @@ export function validateF1SliceContract(contract, catalog) {
   const hostileCount = combat.actors.filter((actor) => actor.faction === "hostile").length;
   if (director.maxSimultaneousAttackers > hostileCount) {
     fail("combat attack token count exceeds hostile actors");
+  }
+  if (combat.actors.some((actor) => actor.faction === "hostile" && actor.initiallyActive)) {
+    fail("beat-scoped hostile actors must start dormant");
+  }
+  const trainingUmbrella = combat.actors.find((actor) => actor.actorKey === 104);
+  const trainingEgret = combat.actors.find((actor) => actor.actorKey === 105);
+  if (trainingUmbrella?.archetypeId !== "f1_training_umbrella_rig" ||
+      trainingUmbrella.initialStanceId !== "stance_umbrella_rust" ||
+      trainingUmbrella.initiallyActive !== false ||
+      !sameValues(trainingUmbrella.poseMm, { x: -5900, y: 2300, height: 0, floorLayer: 0 }) ||
+      trainingEgret?.archetypeId !== "f1_training_egret_rig" ||
+      trainingEgret.initialStanceId !== "stance_paper_egret" ||
+      trainingEgret.initiallyActive !== false ||
+      !sameValues(trainingEgret.poseMm, { x: -5200, y: -1600, height: 700, floorLayer: 0 })) {
+    fail("the Shen Yan training rigs drifted from their authored encounter roles");
   }
   const bossActor = combat.actors.find((actor) => actor.actorKey === 201);
   if (bossActor?.archetypeId !== refs.bossId || bossActor.faction !== "hostile" ||

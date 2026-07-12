@@ -156,15 +156,26 @@ int main() {
         "two resolutions gate the authored return and map to stable reward receipts"
     );
     ok &= expect(
-        combat != nullptr && definition->quest_encounter_activations.size() == 2 &&
+        combat != nullptr && definition->quest_encounter_activations.size() == 4 &&
             definition->quest_encounter_activations.front().beat_id.key ==
                 tgd::contracts::stable_content_key(
-                    "f1_beat_canopy_return_encounter"
+                    "f1_beat_shen_yan_training"
                 ) &&
             definition->quest_encounter_activations.front().encounter_id.key ==
                 combat->id.key &&
-            definition->quest_encounter_activations.front().actor_keys.size() == 3,
-        "the canopy return encounter activation is generated content"
+            definition->quest_encounter_activations.front().actor_keys.size() == 2 &&
+            definition->quest_encounter_activations.front().actor_keys.front() == 104 &&
+            definition->quest_encounter_activations[1].beat_id.key ==
+                tgd::contracts::stable_content_key(
+                    "f1_beat_umbrella_lane_first_encounter"
+                ) &&
+            definition->quest_encounter_activations[1].actor_keys.size() == 3 &&
+            definition->quest_encounter_activations[2].beat_id.key ==
+                tgd::contracts::stable_content_key(
+                    "f1_beat_canopy_return_encounter"
+                ) &&
+            definition->quest_encounter_activations[2].actor_keys.size() == 3,
+        "training, lane, and return encounter activations are generated content"
     );
     ok &= expect(
         definition->quest_encounter_activations.back().beat_id.key ==
@@ -196,7 +207,7 @@ int main() {
 
     if (combat != nullptr) {
         ok &= expect(
-            combat->actors.size() == 5 && combat->abilities.size() == 17,
+            combat->actors.size() == 7 && combat->abilities.size() == 17,
             "the player, enemy groups, and four-season boss combat set is explicit"
         );
         ok &= expect(
@@ -207,16 +218,40 @@ int main() {
             "the encounter director has deterministic player and attack-token rules"
         );
         bool found_player = false;
+        bool found_training_umbrella = false;
+        bool found_training_egret = false;
         bool found_inactive_boss = false;
+        bool all_hostiles_dormant = true;
         std::unordered_set<tgd::contracts::StableContentKey> ability_ids;
         for (const auto& actor : combat->actors) {
             found_player |= actor.actor == definition->player.actor &&
                             actor.faction == tgd::contracts::CombatFaction::player &&
                             actor.initial_pose == definition->player.initial_pose;
+            found_training_umbrella |= actor.actor == 104 &&
+                                       actor.archetype_id.key ==
+                                           tgd::contracts::stable_content_key(
+                                               "f1_training_umbrella_rig"
+                                           ) &&
+                                       actor.initial_stance ==
+                                           tgd::contracts::stable_content_key(
+                                               "stance_umbrella_rust"
+                                           );
+            found_training_egret |= actor.actor == 105 &&
+                                    actor.archetype_id.key ==
+                                        tgd::contracts::stable_content_key(
+                                            "f1_training_egret_rig"
+                                        ) &&
+                                    actor.initial_stance ==
+                                        tgd::contracts::stable_content_key(
+                                            "stance_paper_egret"
+                                        );
             found_inactive_boss |= actor.actor == 201 &&
                                    actor.archetype_id.key == definition->boss_id.key &&
                                    actor.faction == tgd::contracts::CombatFaction::hostile &&
                                    actor.stance_count == 4 && !actor.initially_active;
+            if (actor.faction == tgd::contracts::CombatFaction::hostile) {
+                all_hostiles_dormant &= !actor.initially_active;
+            }
             ok &= expect(
                 actor.stance_count > 0 && actor.initial_stance != 0,
                 "each combat actor declares a stance"
@@ -239,6 +274,10 @@ int main() {
             ok &= expect(ability.active_ticks > 0, "ability has an authoritative active window");
         }
         ok &= expect(found_player, "combat and movement share the same player seed");
+        ok &= expect(
+            found_training_umbrella && found_training_egret && all_hostiles_dormant,
+            "training rigs and future hostile groups start dormant until their authored beat"
+        );
         ok &= expect(found_inactive_boss, "the four-season boss starts inactive with four stances");
     }
 

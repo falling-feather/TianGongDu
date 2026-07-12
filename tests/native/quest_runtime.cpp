@@ -605,7 +605,9 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
     ok &= interactions.initialize(definition().quest_interactions) ==
           QuestInteractionError::none;
 
-    std::array<tgd::contracts::CombatActorSnapshot, 5> actors{};
+    std::vector<tgd::contracts::CombatActorSnapshot> actors(
+        combat_definition().actors.size()
+    );
     for (std::size_t index = 0; index < combat_definition().actors.size(); ++index) {
         const auto& config = combat_definition().actors[index];
         actors[index] = {
@@ -619,6 +621,18 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
             false,
             config.initially_active,
         };
+    }
+    for (const auto actor_key : definition().quest_encounter_activations[1].actor_keys) {
+        const auto actor = std::find_if(
+            actors.begin(),
+            actors.end(),
+            [actor_key](const tgd::contracts::CombatActorSnapshot& candidate) {
+                return candidate.actor == actor_key;
+            }
+        );
+        if (actor != actors.end()) {
+            actor->active = true;
+        }
     }
     ok &= expect(
         !outcomes.resolve(actors, quest).found,
@@ -820,7 +834,7 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
     );
 
     auto return_actors = actors;
-    for (const auto actor_key : definition().quest_encounter_activations.front().actor_keys) {
+    for (const auto actor_key : definition().quest_encounter_activations[2].actor_keys) {
         for (auto& actor : return_actors) {
             if (actor.actor == actor_key) {
                 actor.active = true;
@@ -831,7 +845,7 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
         !outcomes.resolve(return_actors, quest).found,
         "reactivated return hostiles block calibration validation"
     );
-    for (const auto actor_key : definition().quest_encounter_activations.front().actor_keys) {
+    for (const auto actor_key : definition().quest_encounter_activations[2].actor_keys) {
         for (auto& actor : return_actors) {
             if (actor.actor == actor_key) {
                 actor.active = false;
@@ -941,7 +955,9 @@ bool test_four_seasons_boss_phases_are_ordered() {
         "generated boss phase bindings initialize once"
     );
 
-    std::array<tgd::contracts::CombatActorSnapshot, 5> actors{};
+    std::vector<tgd::contracts::CombatActorSnapshot> actors(
+        combat_definition().actors.size()
+    );
     for (std::size_t index = 0; index < combat_definition().actors.size(); ++index) {
         const auto& config = combat_definition().actors[index];
         actors[index] = {

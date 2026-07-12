@@ -720,7 +720,13 @@ void F1GrayboxLayer::createActors() {
         if (actor.archetype_id.key == definition_->boss_id.key) {
             visual = bossVisual(&boss_phase_aura_);
         } else if (actor.archetype_id.key ==
-            tgd::contracts::stable_content_key("jn_enemy_faded_paper_egret")) {
+                       tgd::contracts::stable_content_key(
+                           "jn_enemy_faded_paper_egret"
+                       ) ||
+                   actor.archetype_id.key ==
+                       tgd::contracts::stable_content_key(
+                           "f1_training_egret_rig"
+                       )) {
             visual = paperEgretVisual();
         } else {
             visual = umbrellaDollVisual((actor.actor % 2U) == 0U);
@@ -906,7 +912,13 @@ void F1GrayboxLayer::simulateTick() noexcept {
             }
         }
     }
+    if (!applyPendingEncounterActivation()) {
+        return;
+    }
     if (!submitCombatTick(next_tick)) {
+        return;
+    }
+    if (!applyPendingEncounterActivation()) {
         return;
     }
     if (player_action_ticks_ > 0) {
@@ -1298,11 +1310,8 @@ void F1GrayboxLayer::publish(
                 }
                 break;
             case tgd::contracts::QuestEventType::stage_advanced:
-                if (!activateEncounterForBeat(event.stage)) {
-                    combat_event_label_->setString(
-                        "BEAT ENCOUNTER ACTIVATION REJECTED / CONTRACT DRIFT"
-                    );
-                } else if (event.selection == tgd::contracts::stable_content_key(
+                pending_encounter_activation_beat_ = event.stage;
+                if (event.selection == tgd::contracts::stable_content_key(
                                            "f1_choice_rib_spring_calibration"
                                        )) {
                     combat_event_label_->setString(
@@ -1692,6 +1701,7 @@ bool F1GrayboxLayer::retryEncounter() noexcept {
         encounter_.current_tick() != completed_tick) {
         return false;
     }
+    pending_encounter_activation_beat_ = 0;
     const tgd::contracts::SafePointRetryCommand command{
         completed_tick,
         definition_->player.actor,
@@ -1716,6 +1726,23 @@ bool F1GrayboxLayer::retryEncounter() noexcept {
     incoming_attack_tick_ = 0;
     incoming_attack_source_ = 0;
     return true;
+}
+
+bool F1GrayboxLayer::applyPendingEncounterActivation() noexcept {
+    if (pending_encounter_activation_beat_ == 0) {
+        return true;
+    }
+    const auto beat = pending_encounter_activation_beat_;
+    pending_encounter_activation_beat_ = 0;
+    if (activateEncounterForBeat(beat)) {
+        return true;
+    }
+    if (combat_event_label_ != nullptr) {
+        combat_event_label_->setString(
+            "BEAT ENCOUNTER ACTIVATION REJECTED / CONTRACT DRIFT"
+        );
+    }
+    return false;
 }
 
 bool F1GrayboxLayer::activateEncounterForBeat(

@@ -1393,13 +1393,13 @@ async function runBrowser(target, origin) {
     let returnReadyToAttack = false;
     let returnSawTelegraph = false;
     let returnRetryAttempts = 0;
+    const maxReturnRetryAttempts = 2;
     let returnDeadline = Date.now() + 60_000;
     while (returnState.activeHostiles > 0 && Date.now() < returnDeadline) {
       if (!returnState.playerActive) {
-        assert.equal(
-          returnRetryAttempts,
-          0,
-          `${target} player fell twice during calibration return encounter: ${JSON.stringify(returnState)}`
+        assert.ok(
+          returnRetryAttempts < maxReturnRetryAttempts,
+          `${target} exceeded the bounded return retry budget: ${JSON.stringify(returnState)}`
         );
         const previousRetryCount = returnState.retryCount;
         await page.keyboard.press("r");

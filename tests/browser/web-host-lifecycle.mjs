@@ -1323,9 +1323,17 @@ async function runBrowser(target, origin) {
       combatActionComparison,
       combatHitComparison,
       retryState,
+      workbenchState,
       retryFrameComparison,
       frameComparison,
       screenshots: [
+        projectPath(resolve(reportDirectory, `${target}-quest-interaction-ready.png`)),
+        projectPath(resolve(reportDirectory, `${target}-quest-stage-advanced.png`)),
+        projectPath(resolve(reportDirectory, `${target}-training-complete.png`)),
+        projectPath(resolve(reportDirectory, `${target}-umbrella-lane-complete.png`)),
+        projectPath(
+          resolve(reportDirectory, `${target}-workbench-investigation-complete.png`)
+        ),
         projectPath(combatReadyPath),
         projectPath(combatActionPath),
         projectPath(combatHitPath),

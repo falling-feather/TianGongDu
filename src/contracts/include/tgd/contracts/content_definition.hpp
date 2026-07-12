@@ -113,6 +113,7 @@ struct QuestCombatOutcomeDefinition final {
 struct QuestEncounterActivationDefinition final {
     ContentId id{};
     ContentId beat_id{};
+    ContentId trigger_objective_id{};
     ContentId encounter_id{};
     std::span<const StableActorKey> actor_keys{};
 };

@@ -72,6 +72,7 @@ class VerticalSliceSession final {
   public:
     static constexpr std::size_t max_beats = 16;
     static constexpr std::size_t max_objectives = 64;
+    static constexpr std::size_t max_encounter_activations = 16;
 
     [[nodiscard]] VerticalSliceError initialize(
         const contracts::VerticalSliceDefinition& definition,

@@ -1244,6 +1244,24 @@ void F1GrayboxLayer::publish(
                 resolution_reward_dedup_key_ = receipt.reward_dedup_key;
             }
         }
+        if (event.type == tgd::contracts::QuestEventType::objective_completed) {
+            const auto activation = std::find_if(
+                definition_->quest_encounter_activations.begin(),
+                definition_->quest_encounter_activations.end(),
+                [&event](
+                    const tgd::contracts::QuestEncounterActivationDefinition& candidate
+                ) {
+                    return candidate.trigger_objective_id.key == event.objective;
+                }
+            );
+            if (activation != definition_->quest_encounter_activations.end()) {
+                pending_encounter_activation_beat_ = activation->beat_id.key;
+                pending_encounter_activation_objective_ = event.objective;
+            }
+        } else if (event.type == tgd::contracts::QuestEventType::stage_advanced) {
+            pending_encounter_activation_beat_ = event.stage;
+            pending_encounter_activation_objective_ = 0;
+        }
         if (combat_event_label_ == nullptr) {
             continue;
         }
@@ -1270,6 +1288,12 @@ void F1GrayboxLayer::publish(
                                               )) {
                     combat_event_label_->setString("EAVESGUARD HEAVY COMMITTED / WEIGHT LEARNED");
                 } else if (event.objective == tgd::contracts::stable_content_key(
+                                                  "f1_objective_eavesguard_counter"
+                                              )) {
+                    combat_event_label_->setString(
+                        "EAVESGUARD COUNTER COMPLETE / EGRET RIG RELEASED"
+                    );
+                } else if (event.objective == tgd::contracts::stable_content_key(
                                                   "f1_objective_enter_flower_turn"
                                               )) {
                     combat_event_label_->setString("FLOWER TURN ENTERED / TEMPO SHIFTED");
@@ -1277,6 +1301,12 @@ void F1GrayboxLayer::publish(
                                                   "f1_objective_commit_flower_turn_light"
                                               )) {
                     combat_event_label_->setString("FLOWER LIGHT COMMITTED / QUICK ARC LEARNED");
+                } else if (event.objective == tgd::contracts::stable_content_key(
+                                                  "f1_objective_flower_turn_counter"
+                                              )) {
+                    combat_event_label_->setString(
+                        "FLOWER COUNTER COMPLETE / UMBRELLA LANE UNLOCKED"
+                    );
                 } else if (event.objective == tgd::contracts::stable_content_key(
                                            "f1_objective_reveal_spring_trace"
                                        )) {
@@ -1310,7 +1340,6 @@ void F1GrayboxLayer::publish(
                 }
                 break;
             case tgd::contracts::QuestEventType::stage_advanced:
-                pending_encounter_activation_beat_ = event.stage;
                 if (event.selection == tgd::contracts::stable_content_key(
                                            "f1_choice_rib_spring_calibration"
                                        )) {
@@ -1702,6 +1731,7 @@ bool F1GrayboxLayer::retryEncounter() noexcept {
         return false;
     }
     pending_encounter_activation_beat_ = 0;
+    pending_encounter_activation_objective_ = 0;
     const tgd::contracts::SafePointRetryCommand command{
         completed_tick,
         definition_->player.actor,
@@ -1715,7 +1745,7 @@ bool F1GrayboxLayer::retryEncounter() noexcept {
         return false;
     }
     ++retry_command_sequence_;
-    if (!activateEncounterForBeat(session_.current_snapshot().beat_id.key)) {
+    if (!activateEncounterForBeat(session_.current_snapshot().beat_id.key, 0)) {
         return false;
     }
     ++retry_count_;
@@ -1725,6 +1755,9 @@ bool F1GrayboxLayer::retryEncounter() noexcept {
     hostile_flash_ticks_.fill(0);
     incoming_attack_tick_ = 0;
     incoming_attack_source_ = 0;
+    if (combat_event_label_ != nullptr) {
+        combat_event_label_->setString("ENCOUNTER RETRIED / SAFE POINT RESTORED");
+    }
     return true;
 }
 
@@ -1733,8 +1766,10 @@ bool F1GrayboxLayer::applyPendingEncounterActivation() noexcept {
         return true;
     }
     const auto beat = pending_encounter_activation_beat_;
+    const auto trigger_objective = pending_encounter_activation_objective_;
     pending_encounter_activation_beat_ = 0;
-    if (activateEncounterForBeat(beat)) {
+    pending_encounter_activation_objective_ = 0;
+    if (activateEncounterForBeat(beat, trigger_objective)) {
         return true;
     }
     if (combat_event_label_ != nullptr) {
@@ -1746,16 +1781,23 @@ bool F1GrayboxLayer::applyPendingEncounterActivation() noexcept {
 }
 
 bool F1GrayboxLayer::activateEncounterForBeat(
-    tgd::contracts::StableContentKey beat
+    tgd::contracts::StableContentKey beat,
+    tgd::contracts::StableContentKey trigger_objective
 ) noexcept {
     const auto activation = std::find_if(
         definition_->quest_encounter_activations.begin(),
         definition_->quest_encounter_activations.end(),
-        [beat](const tgd::contracts::QuestEncounterActivationDefinition& candidate) {
-            return candidate.beat_id.key == beat;
+        [beat, trigger_objective](
+            const tgd::contracts::QuestEncounterActivationDefinition& candidate
+        ) {
+            return candidate.beat_id.key == beat &&
+                   candidate.trigger_objective_id.key == trigger_objective;
         }
     );
     if (activation == definition_->quest_encounter_activations.end()) {
+        if (trigger_objective != 0) {
+            return false;
+        }
         pending_boss_stance_ = 0;
         return true;
     }
@@ -1793,6 +1835,33 @@ bool F1GrayboxLayer::activateEncounterForBeat(
     hostile_flash_ticks_.fill(0);
     incoming_attack_tick_ = 0;
     incoming_attack_source_ = 0;
+    if (combat_event_label_ != nullptr) {
+        if (trigger_objective == tgd::contracts::stable_content_key(
+                                     "f1_objective_eavesguard_counter"
+                                 )) {
+            combat_event_label_->setString(
+                "TRAINING WAVE 2 / PAPER EGRET RIG RELEASED"
+            );
+        } else if (beat == tgd::contracts::stable_content_key(
+                               "f1_beat_shen_yan_training"
+                           )) {
+            combat_event_label_->setString(
+                "TRAINING WAVE 1 / UMBRELLA RIG RELEASED"
+            );
+        } else if (beat == tgd::contracts::stable_content_key(
+                                      "f1_beat_umbrella_lane_first_encounter"
+                                  )) {
+            combat_event_label_->setString("UMBRELLA LANE GROUP DEPLOYED");
+        } else if (beat == tgd::contracts::stable_content_key(
+                                      "f1_beat_canopy_return_encounter"
+                                  )) {
+            combat_event_label_->setString("CALIBRATION RETURN GROUP DEPLOYED");
+        } else if (beat == tgd::contracts::stable_content_key(
+                                      "f1_beat_four_seasons_wraith"
+                                  )) {
+            combat_event_label_->setString("FOUR-SEASONS WRAITH AWAKENED");
+        }
+    }
     return true;
 }
 

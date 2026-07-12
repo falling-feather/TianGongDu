@@ -325,6 +325,37 @@ bool test_idle_simulation_is_visible_but_never_eligible() {
     );
 }
 
+bool test_objective_driven_encounter_activations_fail_closed() {
+    auto cross_beat = definition();
+    std::vector<tgd::contracts::QuestEncounterActivationDefinition> cross_beat_activations(
+        definition().quest_encounter_activations.begin(),
+        definition().quest_encounter_activations.end()
+    );
+    cross_beat_activations[1].trigger_objective_id = definition().beats[2].objectives.front();
+    cross_beat.quest_encounter_activations = cross_beat_activations;
+    VerticalSliceSession cross_beat_session;
+    bool ok = expect(
+        cross_beat_session.initialize(cross_beat, empty_world()) ==
+            VerticalSliceError::invalid_definition,
+        "an encounter activation cannot listen to an objective from another beat"
+    );
+
+    auto duplicate_entry = definition();
+    std::vector<tgd::contracts::QuestEncounterActivationDefinition> duplicate_activations(
+        definition().quest_encounter_activations.begin(),
+        definition().quest_encounter_activations.end()
+    );
+    duplicate_activations[1].trigger_objective_id = {};
+    duplicate_entry.quest_encounter_activations = duplicate_activations;
+    VerticalSliceSession duplicate_session;
+    ok &= expect(
+        duplicate_session.initialize(duplicate_entry, empty_world()) ==
+            VerticalSliceError::invalid_definition,
+        "one beat cannot declare two stage-entry encounter activations"
+    );
+    return ok;
+}
+
 }  // namespace
 
 int main() {
@@ -334,5 +365,6 @@ int main() {
     ok &= test_retry_preserves_objective_progress();
     ok &= test_every_authored_safe_point_is_collision_checked_before_start();
     ok &= test_idle_simulation_is_visible_but_never_eligible();
+    ok &= test_objective_driven_encounter_activations_fail_closed();
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

@@ -486,24 +486,38 @@ bool VerticalSliceSession::valid_definition(
             }
         }
     }
-    if (definition.quest_encounter_activations.size() > max_beats) {
+    if (definition.quest_encounter_activations.size() > max_encounter_activations) {
         return false;
     }
     for (std::size_t index = 0;
          index < definition.quest_encounter_activations.size();
          ++index) {
         const auto& activation = definition.quest_encounter_activations[index];
-        const auto beat_exists = std::any_of(
+        const auto activation_beat = std::find_if(
             definition.beats.begin(),
             definition.beats.end(),
             [&activation](const contracts::VerticalSliceBeatDefinition& beat) {
                 return beat.id.key == activation.beat_id.key;
             }
         );
+        const bool has_trigger_objective = activation.trigger_objective_id.key != 0;
+        const bool trigger_objective_exists =
+            activation_beat != definition.beats.end() &&
+            has_trigger_objective &&
+            std::any_of(
+                activation_beat->objectives.begin(),
+                activation_beat->objectives.end(),
+                [&activation](const contracts::ContentId& objective) {
+                    return objective.key == activation.trigger_objective_id.key;
+                }
+            );
         if (activation.id.key == 0 || activation.id.name.empty() ||
-            activation.beat_id.key == 0 || activation.encounter_id.key == 0 ||
+            activation.beat_id.key == 0 || activation.beat_id.name.empty() ||
+            has_trigger_objective == activation.trigger_objective_id.name.empty() ||
+            (has_trigger_objective && !trigger_objective_exists) ||
+            activation.encounter_id.key == 0 ||
             activation.encounter_id.name.empty() || activation.actor_keys.empty() ||
-            !beat_exists) {
+            activation_beat == definition.beats.end()) {
             return false;
         }
         for (std::size_t actor = 0; actor < activation.actor_keys.size(); ++actor) {
@@ -520,7 +534,9 @@ bool VerticalSliceSession::valid_definition(
         for (std::size_t prior = 0; prior < index; ++prior) {
             const auto& previous = definition.quest_encounter_activations[prior];
             if (previous.id.key == activation.id.key ||
-                previous.beat_id.key == activation.beat_id.key) {
+                (previous.beat_id.key == activation.beat_id.key &&
+                 previous.trigger_objective_id.key ==
+                     activation.trigger_objective_id.key)) {
                 return false;
             }
         }

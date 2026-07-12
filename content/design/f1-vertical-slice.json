@@ -843,24 +843,35 @@
     {
       "id": "f1_activation_shen_yan_training_rigs",
       "beatId": "f1_beat_shen_yan_training",
+      "triggerObjectiveId": null,
       "encounterId": "f1_encounter_umbrella_lane_bootstrap",
-      "actorKeys": [104, 105]
+      "actorKeys": [104]
+    },
+    {
+      "id": "f1_activation_shen_yan_flower_turn_rig",
+      "beatId": "f1_beat_shen_yan_training",
+      "triggerObjectiveId": "f1_objective_eavesguard_counter",
+      "encounterId": "f1_encounter_umbrella_lane_bootstrap",
+      "actorKeys": [105]
     },
     {
       "id": "f1_activation_umbrella_lane_first_encounter",
       "beatId": "f1_beat_umbrella_lane_first_encounter",
+      "triggerObjectiveId": null,
       "encounterId": "f1_encounter_umbrella_lane_bootstrap",
       "actorKeys": [101, 102, 103]
     },
     {
       "id": "f1_activation_canopy_return_encounter",
       "beatId": "f1_beat_canopy_return_encounter",
+      "triggerObjectiveId": null,
       "encounterId": "f1_encounter_umbrella_lane_bootstrap",
       "actorKeys": [101, 102, 103]
     },
     {
       "id": "f1_activation_four_seasons_wraith",
       "beatId": "f1_beat_four_seasons_wraith",
+      "triggerObjectiveId": null,
       "encounterId": "f1_encounter_umbrella_lane_bootstrap",
       "actorKeys": [201]
     }

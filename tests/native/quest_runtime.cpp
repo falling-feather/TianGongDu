@@ -622,7 +622,7 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
             config.initially_active,
         };
     }
-    for (const auto actor_key : definition().quest_encounter_activations[1].actor_keys) {
+    for (const auto actor_key : definition().quest_encounter_activations[2].actor_keys) {
         const auto actor = std::find_if(
             actors.begin(),
             actors.end(),
@@ -834,7 +834,7 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
     );
 
     auto return_actors = actors;
-    for (const auto actor_key : definition().quest_encounter_activations[2].actor_keys) {
+    for (const auto actor_key : definition().quest_encounter_activations[3].actor_keys) {
         for (auto& actor : return_actors) {
             if (actor.actor == actor_key) {
                 actor.active = true;
@@ -845,7 +845,7 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
         !outcomes.resolve(return_actors, quest).found,
         "reactivated return hostiles block calibration validation"
     );
-    for (const auto actor_key : definition().quest_encounter_activations[2].actor_keys) {
+    for (const auto actor_key : definition().quest_encounter_activations[3].actor_keys) {
         for (auto& actor : return_actors) {
             if (actor.actor == actor_key) {
                 actor.active = false;

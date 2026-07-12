@@ -281,30 +281,41 @@ test("F1 umbrella-lane outcomes require reachable hostile groups", async () => {
   );
 });
 
-test("F1 encounters activate authored groups at beat boundaries", async () => {
+test("F1 encounters activate authored groups at beat and objective boundaries", async () => {
   const contract = await loadF1SliceContract();
   assert.deepEqual(contract.questEncounterActivations, [
     {
       id: "f1_activation_shen_yan_training_rigs",
       beatId: contract.beats[1].id,
+      triggerObjectiveId: null,
       encounterId: contract.combatBootstrap.id,
-      actorKeys: [104, 105]
+      actorKeys: [104]
+    },
+    {
+      id: "f1_activation_shen_yan_flower_turn_rig",
+      beatId: contract.beats[1].id,
+      triggerObjectiveId: contract.beats[1].objectiveIds[2],
+      encounterId: contract.combatBootstrap.id,
+      actorKeys: [105]
     },
     {
       id: "f1_activation_umbrella_lane_first_encounter",
       beatId: contract.beats[2].id,
+      triggerObjectiveId: null,
       encounterId: contract.combatBootstrap.id,
       actorKeys: [101, 102, 103]
     },
     {
       id: "f1_activation_canopy_return_encounter",
       beatId: contract.beats[4].id,
+      triggerObjectiveId: null,
       encounterId: contract.combatBootstrap.id,
       actorKeys: [101, 102, 103]
     },
     {
       id: "f1_activation_four_seasons_wraith",
       beatId: contract.beats[5].id,
+      triggerObjectiveId: null,
       encounterId: contract.combatBootstrap.id,
       actorKeys: [201]
     }
@@ -320,7 +331,15 @@ test("F1 encounters activate authored groups at beat boundaries", async () => {
   wrongBeat.questEncounterActivations[0].beatId = contract.beats[3].id;
   assert.throws(
     () => validateF1SliceContract(wrongBeat, catalog),
-    /training, lane, return, and boss beats must own/
+    /training waves, lane, return, and boss beats must own/
+  );
+
+  const crossBeatTrigger = structuredClone(contract);
+  crossBeatTrigger.questEncounterActivations[1].triggerObjectiveId =
+    contract.beats[2].objectiveIds[0];
+  assert.throws(
+    () => validateF1SliceContract(crossBeatTrigger, catalog),
+    /references an objective outside its beat/
   );
 
   const leakedHostile = structuredClone(contract);

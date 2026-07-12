@@ -318,8 +318,13 @@ export function validateF1SliceContract(contract, catalog) {
     fail("quest encounter activations must contain 1..16 definitions");
   }
   for (const activation of encounterActivations) {
-    if (!beatIds.includes(activation.beatId)) {
+    const activationBeat = contract.beats.find((beat) => beat.id === activation.beatId);
+    if (!activationBeat) {
       fail(`${activation.id} references an unknown beat`);
+    }
+    if (activation.triggerObjectiveId !== null &&
+        !activationBeat.objectiveIds.includes(activation.triggerObjectiveId)) {
+      fail(`${activation.id} references an objective outside its beat`);
     }
     if (activation.encounterId !== contract.combatBootstrap?.id) {
       fail(`${activation.id} references an unknown encounter`);
@@ -338,22 +343,31 @@ export function validateF1SliceContract(contract, catalog) {
   }
   assertUnique(encounterActivations.map((activation) => activation.id), "encounter activation id");
   assertUnique(
-    encounterActivations.map((activation) => activation.beatId),
-    "encounter activation beat"
+    encounterActivations.map(
+      (activation) => `${activation.beatId}:${activation.triggerObjectiveId ?? "stage_entered"}`
+    ),
+    "encounter activation trigger"
   );
   const trainingBeat = contract.beats[1];
   const laneBeat = contract.beats[2];
   const bossBeat = contract.beats[5];
-  if (encounterActivations.length !== 4 ||
+  if (encounterActivations.length !== 5 ||
       encounterActivations[0].beatId !== trainingBeat.id ||
-      !sameValues(encounterActivations[0].actorKeys, [104, 105]) ||
-      encounterActivations[1].beatId !== laneBeat.id ||
-      !sameValues(encounterActivations[1].actorKeys, [101, 102, 103]) ||
-      encounterActivations[2].beatId !== returnBeat.id ||
+      encounterActivations[0].triggerObjectiveId !== null ||
+      !sameValues(encounterActivations[0].actorKeys, [104]) ||
+      encounterActivations[1].beatId !== trainingBeat.id ||
+      encounterActivations[1].triggerObjectiveId !== trainingBeat.objectiveIds[2] ||
+      !sameValues(encounterActivations[1].actorKeys, [105]) ||
+      encounterActivations[2].beatId !== laneBeat.id ||
+      encounterActivations[2].triggerObjectiveId !== null ||
       !sameValues(encounterActivations[2].actorKeys, [101, 102, 103]) ||
-      encounterActivations[3].beatId !== bossBeat.id ||
-      !sameValues(encounterActivations[3].actorKeys, [201])) {
-    fail("training, lane, return, and boss beats must own authored activations");
+      encounterActivations[3].beatId !== returnBeat.id ||
+      encounterActivations[3].triggerObjectiveId !== null ||
+      !sameValues(encounterActivations[3].actorKeys, [101, 102, 103]) ||
+      encounterActivations[4].beatId !== bossBeat.id ||
+      encounterActivations[4].triggerObjectiveId !== null ||
+      !sameValues(encounterActivations[4].actorKeys, [201])) {
+    fail("training waves, lane, return, and boss beats must own authored activations");
   }
   const bossPhases = contract.questBossPhases;
   if (!Array.isArray(bossPhases) || bossPhases.length !== 4) {
@@ -990,7 +1004,10 @@ function questCombatOutcomeRow(outcome) {
 }
 
 function questEncounterActivationRow(activation, index) {
-  return `    {${contentId(activation.id)}, ${contentId(activation.beatId)}, ${contentId(activation.encounterId)}, std::span<const contracts::StableActorKey>{encounter_activation_${index}_actors}},`;
+  const triggerObjective = activation.triggerObjectiveId === null
+    ? "contracts::ContentId{}"
+    : contentId(activation.triggerObjectiveId);
+  return `    {${contentId(activation.id)}, ${contentId(activation.beatId)}, ${triggerObjective}, ${contentId(activation.encounterId)}, std::span<const contracts::StableActorKey>{encounter_activation_${index}_actors}},`;
 }
 
 function questBossPhaseRow(phase) {

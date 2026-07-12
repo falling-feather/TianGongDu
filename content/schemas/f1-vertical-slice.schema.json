@@ -492,10 +492,16 @@
     "questEncounterActivation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "beatId", "encounterId", "actorKeys"],
+      "required": ["id", "beatId", "triggerObjectiveId", "encounterId", "actorKeys"],
       "properties": {
         "id": { "$ref": "#/$defs/id" },
         "beatId": { "$ref": "#/$defs/id" },
+        "triggerObjectiveId": {
+          "anyOf": [
+            { "$ref": "#/$defs/id" },
+            { "type": "null" }
+          ]
+        },
         "encounterId": { "$ref": "#/$defs/id" },
         "actorKeys": {
           "type": "array",

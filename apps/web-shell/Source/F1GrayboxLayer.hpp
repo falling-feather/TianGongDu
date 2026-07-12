@@ -92,7 +92,8 @@ class F1GrayboxLayer final :
     ) noexcept;
     [[nodiscard]] bool submitCombatTick(tgd::contracts::TickIndex tick) noexcept;
     [[nodiscard]] bool activateEncounterForBeat(
-        tgd::contracts::StableContentKey beat
+        tgd::contracts::StableContentKey beat,
+        tgd::contracts::StableContentKey trigger_objective
     ) noexcept;
     [[nodiscard]] bool applyPendingEncounterActivation() noexcept;
     [[nodiscard]] bool retryEncounter() noexcept;
@@ -135,6 +136,7 @@ class F1GrayboxLayer final :
     tgd::contracts::TickIndex incoming_attack_tick_{};
     tgd::contracts::StableActorKey incoming_attack_source_{};
     tgd::contracts::StableContentKey pending_encounter_activation_beat_{};
+    tgd::contracts::StableContentKey pending_encounter_activation_objective_{};
     tgd::contracts::StableContentKey pending_boss_stance_{};
     tgd::contracts::StableContentKey resolution_reward_{};
     tgd::contracts::StableContentKey resolution_reward_dedup_key_{};

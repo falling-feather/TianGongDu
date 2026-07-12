@@ -936,7 +936,7 @@ async function runBrowser(target, origin) {
     const advancedQuestState = await page.evaluate(() => window.__tgdTest.getF1State());
     assert.equal(advancedQuestState.questCompletedObjectives, 0);
     assert.equal(advancedQuestState.questRequiredObjectives, 6);
-    assert.equal(advancedQuestState.activeHostiles, 2);
+    assert.equal(advancedQuestState.activeHostiles, 1);
     await captureRenderedFrame(
       page,
       canvas,
@@ -1020,8 +1020,11 @@ async function runBrowser(target, origin) {
       page,
       canvas,
       combatGuardPath,
-      `${target} guard held after heavy commitment`
+      `${target} guard completed and flower-turn rig released`
     );
+    const flowerRigState = await page.evaluate(() => window.__tgdTest.getF1State());
+    assert.equal(flowerRigState.questCompletedObjectives, 3);
+    assert.equal(flowerRigState.activeHostiles, 1);
     await page.keyboard.up("Shift");
     await page.waitForTimeout(120);
     await page.keyboard.press("2");

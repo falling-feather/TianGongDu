@@ -41,7 +41,18 @@ test("F1 one-hour contract and generated C++ stay synchronized", async () => {
     flowerLight.windupTicks + flowerLight.activeTicks + flowerLight.recoveryTicks,
     18
   );
-  assert.equal(contract.questInteractions.length, 13);
+  assert.equal(contract.questInteractions.length, 17);
+  assert.deepEqual(
+    contract.beats[0].objectiveIds,
+    [
+      "f1_objective_inspect_travel_writ",
+      "f1_objective_read_flood_marks",
+      "f1_objective_secure_ferry_mooring",
+      "f1_objective_raise_wayfinding_lantern",
+      "f1_objective_sound_workshop_bell",
+      "f1_objective_reach_ferry_gate"
+    ]
+  );
   assert.deepEqual(
     new Set(
       contract.questInteractions
@@ -114,11 +125,21 @@ test("F1 opening objectives require valid content-driven scene interactions", as
   );
 
   const duplicateObjective = structuredClone(await loadF1SliceContract());
-  duplicateObjective.questInteractions[1].objectiveId =
-    duplicateObjective.questInteractions[0].objectiveId;
+  duplicateObjective.questInteractions.find(
+    (interaction) => interaction.id === "f1_interaction_ferry_gate"
+  ).objectiveId = duplicateObjective.questInteractions[0].objectiveId;
   assert.throws(
     () => validateF1SliceContract(duplicateObjective, catalog),
     /duplicate non-choice quest interaction objective/
+  );
+
+  const brokenReadinessChain = structuredClone(await loadF1SliceContract());
+  brokenReadinessChain.questInteractions.find(
+    (interaction) => interaction.id === "f1_interaction_ferry_gate"
+  ).prerequisiteObjectiveIds = [];
+  assert.throws(
+    () => validateF1SliceContract(brokenReadinessChain, catalog),
+    /Rain Ferry readiness chain drifted/
   );
 
   const futurePrerequisite = structuredClone(await loadF1SliceContract());

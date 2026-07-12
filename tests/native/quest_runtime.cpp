@@ -126,14 +126,23 @@ bool test_ordering_idempotency_and_lifecycle() {
             sink.contains(tgd::contracts::QuestEventType::objective_already_completed),
         "a new command for a completed objective is idempotent"
     );
-    const auto advanced = quest.apply(
-        {11, definition().player.actor, 3, {}, first.objectives.front().key},
-        sink
-    );
+    auto advanced = first_result;
+    tgd::contracts::CommandSequence sequence = 3;
+    tgd::contracts::TickIndex tick = 11;
+    for (const auto& objective : first.objectives.first(first.objectives.size() - 1U)) {
+        advanced = quest.apply(
+            {tick++, definition().player.actor, sequence++, {}, objective.key},
+            sink
+        );
+        ok &= expect(
+            advanced.error == QuestError::none && advanced.accepted,
+            "every authored opening objective completes exactly once"
+        );
+    }
     ok &= expect(
         advanced.error == QuestError::none && advanced.accepted && advanced.stage_advanced &&
             !advanced.quest_resolved,
-        "completing the parallel objective group advances one stage"
+        "completing the expanded opening objective group advances one stage"
     );
     ok &= expect(
         quest.snapshot().stage == definition().beats[1].id.key &&
@@ -143,12 +152,15 @@ bool test_ordering_idempotency_and_lifecycle() {
         "snapshot exposes completed, active, and locked objective states"
     );
     ok &= expect(
-        quest.apply({11, definition().player.actor, 3, {}, future}, sink).error ==
+        quest.apply(
+                 {tick, definition().player.actor, sequence - 1U, {}, future},
+                 sink
+             ).error ==
             QuestError::stale_command_sequence,
         "reused command sequences are rejected"
     );
     ok &= expect(
-        quest.apply({9, definition().player.actor, 4, {}, future}, sink).error ==
+        quest.apply({9, definition().player.actor, sequence, {}, future}, sink).error ==
             QuestError::tick_regressed,
         "quest events cannot move backward in simulation time"
     );
@@ -278,8 +290,10 @@ bool test_scene_interactions_resolve_from_active_objectives() {
         quest
     );
     ok &= expect(
-        !consumed.found,
-        "a completed objective no longer exposes an interaction prompt"
+        consumed.found && consumed.objective != initial.objective &&
+            consumed.objective ==
+                tgd::contracts::stable_content_key("f1_objective_read_flood_marks"),
+        "a completed interaction disappears and exposes the next readiness step"
     );
 
     auto wrong_floor_pose = definition().quest_interactions.back().pose;

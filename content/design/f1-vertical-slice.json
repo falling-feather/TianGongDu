@@ -464,8 +464,12 @@
       "targetMinutes": 9,
       "cellId": "f1_cell_rain_ferry",
       "objectiveIds": [
-        "f1_objective_reach_ferry_gate",
-        "f1_objective_inspect_travel_writ"
+        "f1_objective_inspect_travel_writ",
+        "f1_objective_read_flood_marks",
+        "f1_objective_secure_ferry_mooring",
+        "f1_objective_raise_wayfinding_lantern",
+        "f1_objective_sound_workshop_bell",
+        "f1_objective_reach_ferry_gate"
       ],
       "autoAdvance": false
     },
@@ -591,6 +595,54 @@
       "prerequisiteObjectiveIds": []
     },
     {
+      "id": "f1_interaction_read_flood_marks",
+      "kind": "inspect",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_read_flood_marks",
+      "selectionId": null,
+      "poseMm": { "x": -11700, "y": -1300, "height": 0, "floorLayer": 0 },
+      "radiusMm": 650,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_inspect_travel_writ"
+      ]
+    },
+    {
+      "id": "f1_interaction_secure_ferry_mooring",
+      "kind": "operate",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_secure_ferry_mooring",
+      "selectionId": null,
+      "poseMm": { "x": -11400, "y": -1000, "height": 0, "floorLayer": 0 },
+      "radiusMm": 650,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_read_flood_marks"
+      ]
+    },
+    {
+      "id": "f1_interaction_raise_wayfinding_lantern",
+      "kind": "operate",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_raise_wayfinding_lantern",
+      "selectionId": null,
+      "poseMm": { "x": -11100, "y": -700, "height": 0, "floorLayer": 0 },
+      "radiusMm": 650,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_secure_ferry_mooring"
+      ]
+    },
+    {
+      "id": "f1_interaction_sound_workshop_bell",
+      "kind": "operate",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_sound_workshop_bell",
+      "selectionId": null,
+      "poseMm": { "x": -10800, "y": -400, "height": 0, "floorLayer": 0 },
+      "radiusMm": 650,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_raise_wayfinding_lantern"
+      ]
+    },
+    {
       "id": "f1_interaction_ferry_gate",
       "kind": "operate",
       "cellId": "f1_cell_rain_ferry",
@@ -598,7 +650,9 @@
       "selectionId": null,
       "poseMm": { "x": -10450, "y": -100, "height": 0, "floorLayer": 0 },
       "radiusMm": 900,
-      "prerequisiteObjectiveIds": []
+      "prerequisiteObjectiveIds": [
+        "f1_objective_sound_workshop_bell"
+      ]
     },
     {
       "id": "f1_interaction_meet_shen_yan",

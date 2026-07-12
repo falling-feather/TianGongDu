@@ -224,6 +224,35 @@ export function validateF1SliceContract(contract, catalog) {
   ) {
     fail("the first playable beat must be fully covered by scene interactions");
   }
+  const expectedRainFerryChain = [
+    ["f1_interaction_travel_writ", "inspect", "f1_objective_inspect_travel_writ", -12000, -1600, 800, []],
+    ["f1_interaction_read_flood_marks", "inspect", "f1_objective_read_flood_marks", -11700, -1300, 650, ["f1_objective_inspect_travel_writ"]],
+    ["f1_interaction_secure_ferry_mooring", "operate", "f1_objective_secure_ferry_mooring", -11400, -1000, 650, ["f1_objective_read_flood_marks"]],
+    ["f1_interaction_raise_wayfinding_lantern", "operate", "f1_objective_raise_wayfinding_lantern", -11100, -700, 650, ["f1_objective_secure_ferry_mooring"]],
+    ["f1_interaction_sound_workshop_bell", "operate", "f1_objective_sound_workshop_bell", -10800, -400, 650, ["f1_objective_raise_wayfinding_lantern"]],
+    ["f1_interaction_ferry_gate", "operate", "f1_objective_reach_ferry_gate", -10450, -100, 900, ["f1_objective_sound_workshop_bell"]]
+  ].map(([id, kind, objectiveId, x, y, radiusMm, prerequisiteObjectiveIds]) => ({
+    id,
+    kind,
+    cellId: contract.beats[0].cellId,
+    objectiveId,
+    selectionId: null,
+    poseMm: {x, y, height: 0, floorLayer: 0},
+    radiusMm,
+    prerequisiteObjectiveIds
+  }));
+  const rainFerryChain = interactions.filter((interaction) =>
+    firstBeatObjectives.has(interaction.objectiveId)
+  );
+  if (
+    !sameValues(
+      contract.beats[0].objectiveIds,
+      expectedRainFerryChain.map((interaction) => interaction.objectiveId)
+    ) ||
+    !sameValues(rainFerryChain, expectedRainFerryChain)
+  ) {
+    fail("the Rain Ferry readiness chain drifted");
+  }
   const laneRouteInteraction = interactions.find(
     (interaction) => interaction.objectiveId === contract.beats[2].objectiveIds[2]
   );

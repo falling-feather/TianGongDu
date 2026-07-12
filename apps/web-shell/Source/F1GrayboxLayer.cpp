@@ -399,6 +399,21 @@ void solidPolygon(
     if (interaction == tgd::contracts::stable_content_key("f1_interaction_travel_writ")) {
         return "F / INSPECT TRAVEL WRIT";
     }
+    if (interaction == tgd::contracts::stable_content_key("f1_interaction_read_flood_marks")) {
+        return "F / READ FLOOD MARKS";
+    }
+    if (interaction ==
+        tgd::contracts::stable_content_key("f1_interaction_secure_ferry_mooring")) {
+        return "F / SECURE FERRY MOORING";
+    }
+    if (interaction ==
+        tgd::contracts::stable_content_key("f1_interaction_raise_wayfinding_lantern")) {
+        return "F / RAISE WAYFINDING LANTERN";
+    }
+    if (interaction ==
+        tgd::contracts::stable_content_key("f1_interaction_sound_workshop_bell")) {
+        return "F / SOUND WORKSHOP BELL";
+    }
     if (interaction == tgd::contracts::stable_content_key("f1_interaction_ferry_gate")) {
         return "F / OPEN FERRY GATE";
     }
@@ -767,7 +782,7 @@ void F1GrayboxLayer::createHud() {
     addChild(quest_state_label_, 1001);
 
     combat_event_label_ = label(
-        "Inspect the travel writ, then move uphill to the ferry gate.",
+        "Inspect the travel writ, then prepare the Rain Ferry route.",
         12.0F,
         ax::Color4B(174, 217, 203, 255)
     );
@@ -1223,6 +1238,22 @@ void F1GrayboxLayer::publish(
         switch (event.type) {
             case tgd::contracts::QuestEventType::objective_completed:
                 if (event.objective == tgd::contracts::stable_content_key(
+                                           "f1_objective_read_flood_marks"
+                                       )) {
+                    combat_event_label_->setString("FLOOD MARKS READ / SAFE WATERLINE FOUND");
+                } else if (event.objective == tgd::contracts::stable_content_key(
+                                                  "f1_objective_secure_ferry_mooring"
+                                              )) {
+                    combat_event_label_->setString("FERRY MOORING SECURED / CURRENT HELD");
+                } else if (event.objective == tgd::contracts::stable_content_key(
+                                                  "f1_objective_raise_wayfinding_lantern"
+                                              )) {
+                    combat_event_label_->setString("WAYFINDING LANTERN RAISED / ROUTE VISIBLE");
+                } else if (event.objective == tgd::contracts::stable_content_key(
+                                                  "f1_objective_sound_workshop_bell"
+                                              )) {
+                    combat_event_label_->setString("WORKSHOP BELL SOUNDED / GATE CREW READY");
+                } else if (event.objective == tgd::contracts::stable_content_key(
                                            "f1_objective_reveal_spring_trace"
                                        )) {
                     combat_event_label_->setString("SPRING TRACE REVEALED / EVIDENCE COMMITTED");

@@ -74,10 +74,10 @@ int main() {
         "every beat owns an ordered content-driven movement safe point"
     );
     ok &= expect(
-        definition->quest_interactions.size() == 13 &&
+        definition->quest_interactions.size() == 17 &&
             definition->quest_interactions.front().objective_id.key ==
                 tgd::contracts::stable_content_key("f1_objective_inspect_travel_writ"),
-        "the opening scene interactions are generated content, not presentation rules"
+        "the expanded opening scene interactions are generated content, not presentation rules"
     );
     ok &= expect(
         definition->quest_combat_triggers.size() == 2 &&

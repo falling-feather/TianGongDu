@@ -875,13 +875,14 @@ async function runBrowser(target, origin) {
 
     await canvas.focus();
     await page.waitForFunction(
-      () => window.__tgdTest?.getF1State()?.questRequiredObjectives === 2,
+      () => window.__tgdTest?.getF1State()?.questRequiredObjectives === 6,
       undefined,
       { timeout: 5_000 }
     );
     const openingQuestState = await page.evaluate(() => window.__tgdTest.getF1State());
     assert.equal(openingQuestState.questBeatIndex, 0);
     assert.equal(openingQuestState.questCompletedObjectives, 0);
+    assert.equal(openingQuestState.questRequiredObjectives, 6);
     await captureRenderedFrame(
       page,
       canvas,
@@ -908,6 +909,23 @@ async function runBrowser(target, origin) {
         movementComparison.changedPixelRatio * 100
       ).toFixed(2)}% of the frame.`
     );
+    const rainFerryReadiness = [
+      { x: -11_700, y: -1_300, completed: 2 },
+      { x: -11_400, y: -1_000, completed: 3 },
+      { x: -11_100, y: -700, completed: 4 },
+      { x: -10_800, y: -400, completed: 5 }
+    ];
+    for (const step of rainFerryReadiness) {
+      await moveF1PlayerTo(page, step.x, step.y);
+      await page.keyboard.press("f");
+      await page.waitForFunction(
+        (completed) =>
+          window.__tgdTest?.getF1State()?.questCompletedObjectives === completed,
+        step.completed,
+        { timeout: 5_000 }
+      );
+    }
+    await moveF1PlayerTo(page, -10_450, -100);
     await page.keyboard.press("f");
     await page.waitForFunction(
       () => window.__tgdTest?.getF1State()?.questBeatIndex === 1,

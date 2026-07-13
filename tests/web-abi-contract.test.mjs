@@ -27,6 +27,8 @@ test("Web ABI 的 C/JavaScript/TypeScript 合同保持同步", async () => {
   assert.equal(contract.payloads.storageRequestV1HeaderBytes, 208);
   assert.equal(contract.payloads.storageCompletionV1HeaderBytes, 152);
   assert.equal(contract.payloads.maxStorageTransferBytes, 16 * 1024 * 1024 + 176);
+  assert.equal(contract.payloads.persistentOperationV1Bytes, 80);
+  assert.equal(contract.payloads.maxAtomicOperationsPerWrite, 16);
 });
 
 test("Web ABI 各 ID 命名空间稳定且不碰撞", async () => {
@@ -51,8 +53,8 @@ test("Web ABI 对版本、顺序和消息元数据漂移失败关闭", async () 
   const clone = () => structuredClone(source);
 
   const wrongVersion = clone();
-  wrongVersion.abi.minor = 1;
-  assert.throws(() => validateWebAbiContract(wrongVersion), /only supports 1\.0/);
+  wrongVersion.abi.minor = 2;
+  assert.throws(() => validateWebAbiContract(wrongVersion), /only supports 1\.1/);
 
   const wrongPayloadSize = clone();
   wrongPayloadSize.payloads.storageRequestV1HeaderBytes += 1;

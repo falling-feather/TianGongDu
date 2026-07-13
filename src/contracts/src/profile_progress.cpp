@@ -176,6 +176,10 @@ ProfileProgressError validate_profile_progress(
                 return ProfileProgressError::duplicate_operation;
             }
         }
+        if (operation.operation_id !=
+            reward_operation_id(progress.profile_id, operation.reward_dedup_key)) {
+            return ProfileProgressError::invalid_operation;
+        }
     }
     return ProfileProgressError::none;
 }

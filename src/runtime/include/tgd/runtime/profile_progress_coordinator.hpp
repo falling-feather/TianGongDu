@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <span>
 
 namespace tgd::runtime {
 
@@ -20,6 +21,7 @@ enum class ProfileProgressCoordinatorError : std::uint8_t {
     invalid_state,
     invalid_snapshot,
     invalid_progress,
+    invalid_claim,
     allocation_failed,
     revision_overflow,
 };
@@ -68,6 +70,8 @@ class ProfileProgressCoordinator final {
     [[nodiscard]] bool has_pending() const noexcept;
     [[nodiscard]] ProfileProgressSaveKind pending_kind() const noexcept;
     [[nodiscard]] const contracts::SaveEnvelopeV1& pending_snapshot() const noexcept;
+    [[nodiscard]] std::span<const contracts::PersistentOperationV1>
+    pending_new_operations() const noexcept;
     [[nodiscard]] const contracts::ProfileProgressV1& committed_progress() const noexcept;
     [[nodiscard]] contracts::StableId128 committed_snapshot_id() const noexcept;
     [[nodiscard]] bool has_reward_claim(

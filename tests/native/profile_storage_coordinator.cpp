@@ -3,6 +3,7 @@
 #include <tgd/runtime/profile_storage_coordinator.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cstdlib>
 #include <new>
@@ -18,6 +19,7 @@ namespace {
 
 using tgd::contracts::SaveEnvelopeV1;
 using tgd::contracts::StableId128;
+using tgd::contracts::PersistentOperationV1;
 using tgd::runtime::IStorage;
 using tgd::runtime::ProfileStorageConfig;
 using tgd::runtime::ProfileStorageCoordinator;
@@ -68,6 +70,7 @@ struct PendingWrite final {
     StorageProfileHead expected_head{};
     StorageProfileHead next_head{};
     std::vector<std::uint8_t> bytes{};
+    std::vector<PersistentOperationV1> operations{};
     StorageDurability durability{StorageDurability::relaxed};
 };
 
@@ -126,6 +129,7 @@ class MockStorage final : public IStorage {
             pending.expected_head = request.expected_head;
             pending.next_head = request.next_head;
             pending.bytes.assign(request.snapshot_bytes.begin(), request.snapshot_bytes.end());
+            pending.operations.assign(request.operations.begin(), request.operations.end());
             pending.durability = request.durability;
             pending_write_ = std::move(pending);
             return StorageSubmitError::none;
@@ -199,6 +203,11 @@ class MockStorage final : public IStorage {
         }
         if (completion.error == StorageCompletionError::none) {
             snapshots_.push_back({pending.next_head.snapshot_id, std::move(pending.bytes)});
+            operations_.insert(
+                operations_.end(),
+                pending.operations.begin(),
+                pending.operations.end()
+            );
             head_ = pending.next_head;
         }
         completions_.push_back(std::move(completion));
@@ -215,6 +224,24 @@ class MockStorage final : public IStorage {
 
     [[nodiscard]] StableId128 pending_request_id() const noexcept {
         return pending_write_.has_value() ? pending_write_->context.request_id : StableId128{};
+    }
+
+    [[nodiscard]] std::size_t pending_operation_count() const noexcept {
+        return pending_write_.has_value() ? pending_write_->operations.size() : 0;
+    }
+
+    [[nodiscard]] std::size_t operation_count() const noexcept {
+        return operations_.size();
+    }
+
+    [[nodiscard]] bool has_reward_dedup(std::uint64_t reward_dedup_key) const noexcept {
+        return std::any_of(
+            operations_.begin(),
+            operations_.end(),
+            [reward_dedup_key](const PersistentOperationV1& operation) {
+                return operation.reward_dedup_key == reward_dedup_key;
+            }
+        );
     }
 
     void force_head(const StorageProfileHead& head) {
@@ -258,6 +285,7 @@ class MockStorage final : public IStorage {
 
     std::optional<StorageProfileHead> head_{};
     std::vector<SnapshotRecord> snapshots_{};
+    std::vector<PersistentOperationV1> operations_{};
     std::optional<PendingWrite> pending_write_{};
     std::vector<StorageCompletion> completions_{};
 };
@@ -509,17 +537,55 @@ int main() {
               resolution_source,
               reward_one,
               reward_dedup_one
-          ).disposition == ProfileProgressPrepareDisposition::already_pending;
-    ok &= reward_storage_session.begin_save(reward_progress.pending_snapshot()) ==
-          ProfileStorageError::none;
+           ).disposition == ProfileProgressPrepareDisposition::already_pending;
+    ok &= expect(
+        reward_progress.prepare_reward_claim(
+            resolution_source,
+            reward_two,
+            reward_dedup_one
+        ).error == ProfileProgressCoordinatorError::invalid_claim,
+        "a pending deduplication key cannot be rebound to a different reward"
+    );
+    ok &= expect(
+        reward_storage_session.begin_save(
+            reward_progress.pending_snapshot(),
+            StorageDurability::strict_if_supported
+        ) == ProfileStorageError::invalid_snapshot,
+        "a reward snapshot cannot advance its ledger without the matching atomic Operation"
+    );
+    auto illegal_operation = reward_progress.pending_new_operations().front();
+    illegal_operation.reward_id = 0;
+    const std::array<PersistentOperationV1, 1> illegal_operations{illegal_operation};
+    ok &= expect(
+        reward_storage_session.begin_save(
+            reward_progress.pending_snapshot(),
+            StorageDurability::strict_if_supported,
+            illegal_operations
+        ) == ProfileStorageError::invalid_snapshot &&
+            reward_storage_session.state() == ProfileStorageState::ready &&
+            !reward_storage.has_pending_write(),
+        "an Operation that drifts from its canonical Profile snapshot fails before submission"
+    );
+    ok &= expect(
+        reward_progress.pending_new_operations().size() == 1 &&
+            reward_storage_session.begin_save(
+                reward_progress.pending_snapshot(),
+                StorageDurability::strict_if_supported,
+                reward_progress.pending_new_operations()
+            ) == ProfileStorageError::none &&
+            reward_storage.pending_operation_count() == 1,
+        "the reward Operation is copied into the same strict atomic write as its snapshot"
+    );
     reward_storage.complete_write();
     ok &= expect(
         reward_storage_session.pump().error == ProfileStorageError::none &&
             reward_progress.accept_commit(reward_storage_session.current_head().snapshot_id) ==
                 ProfileProgressCoordinatorError::none &&
             reward_progress.has_reward_claim(reward_dedup_one) &&
-            reward_progress.committed_operation_count() == 1,
-        "the reward becomes claimed only after an atomic storage acknowledgement"
+            reward_progress.committed_operation_count() == 1 &&
+            reward_storage.operation_count() == 1 &&
+            reward_storage.has_reward_dedup(reward_dedup_one),
+        "the reward and its Operation become visible only after one atomic storage acknowledgement"
     );
     ok &= expect(
         reward_progress.prepare_reward_claim(
@@ -529,6 +595,52 @@ int main() {
         ).disposition == ProfileProgressPrepareDisposition::already_committed,
         "replaying a committed reward receipt cannot prepare another save"
     );
+    ok &= expect(
+        reward_progress.prepare_reward_claim(
+            resolution_source,
+            reward_two,
+            reward_dedup_one
+        ).error == ProfileProgressCoordinatorError::invalid_claim,
+        "a committed deduplication key remains bound to its original reward"
+    );
+
+    MockStorage reward_conflict_storage = reward_storage;
+    ProfileStorageCoordinator reward_conflict_session;
+    ProfileProgressCoordinator reward_conflict_progress;
+    ok &= reward_conflict_session.initialize(reward_conflict_storage, config(8, 8)) ==
+          ProfileStorageError::none;
+    ok &= restore(reward_conflict_session);
+    const auto conflict_reward_envelope = tgd::contracts::decode_save_envelope(
+        reward_conflict_session.current_snapshot_bytes()
+    );
+    ok &= conflict_reward_envelope.error == tgd::contracts::SaveEnvelopeError::none &&
+          reward_conflict_progress.restore(conflict_reward_envelope.envelope) ==
+              ProfileProgressCoordinatorError::none;
+    ok &= reward_conflict_progress.prepare_reward_claim(
+              resolution_source,
+              reward_two,
+              reward_dedup_two
+          ).disposition == ProfileProgressPrepareDisposition::prepared;
+    ok &= reward_conflict_session.begin_save(
+              reward_conflict_progress.pending_snapshot(),
+              StorageDurability::strict_if_supported,
+              reward_conflict_progress.pending_new_operations()
+          ) == ProfileStorageError::none;
+    auto competing_reward_head = reward_conflict_session.current_head();
+    competing_reward_head.snapshot_id = snapshot_external;
+    competing_reward_head.logical_sequence += 1;
+    competing_reward_head.envelope_hash[0] ^= 0x3cU;
+    reward_conflict_storage.force_head(competing_reward_head);
+    reward_conflict_storage.complete_write();
+    ok &= expect(
+        reward_conflict_session.pump().error == ProfileStorageError::storage_conflict &&
+            reward_conflict_session.state() == ProfileStorageState::conflict_read_only &&
+            reward_conflict_session.pending_operations().size() == 1 &&
+            reward_conflict_storage.operation_count() == 1 &&
+            reward_conflict_progress.has_pending() &&
+            !reward_conflict_progress.has_reward_claim(reward_dedup_two),
+        "a reward Head CAS loser keeps its pending Operation without duplicating the committed ledger"
+    );
 
     const auto prepared_quota_reward = reward_progress.prepare_reward_claim(
         resolution_source,
@@ -536,14 +648,19 @@ int main() {
         reward_dedup_two
     );
     ok &= prepared_quota_reward.disposition == ProfileProgressPrepareDisposition::prepared;
-    ok &= reward_storage_session.begin_save(reward_progress.pending_snapshot()) ==
-          ProfileStorageError::none;
+    ok &= reward_storage_session.begin_save(
+              reward_progress.pending_snapshot(),
+              StorageDurability::strict_if_supported,
+              reward_progress.pending_new_operations()
+          ) == ProfileStorageError::none;
     reward_storage.complete_write(StorageCompletionError::quota);
     ok &= expect(
         reward_storage_session.pump().error == ProfileStorageError::storage_quota &&
             reward_progress.has_pending() &&
-            !reward_progress.has_reward_claim(reward_dedup_two),
-        "quota failure retains the pending Operation without publishing its reward"
+            !reward_progress.has_reward_claim(reward_dedup_two) &&
+            reward_storage.operation_count() == 1 &&
+            reward_storage_session.pending_operations().size() == 1,
+        "quota failure rolls back the Operation and retains its canonical retry bytes"
     );
     ok &= reward_storage_session.retry_pending_save() == ProfileStorageError::none;
     reward_storage.complete_write();
@@ -552,7 +669,9 @@ int main() {
             reward_progress.accept_commit(reward_storage_session.current_head().snapshot_id) ==
                 ProfileProgressCoordinatorError::none &&
             reward_progress.has_reward_claim(reward_dedup_two) &&
-            reward_progress.committed_operation_count() == 2,
+            reward_progress.committed_operation_count() == 2 &&
+            reward_storage.operation_count() == 2 &&
+            reward_storage.has_reward_dedup(reward_dedup_two),
         "retry commits the identical retained Operation exactly once"
     );
 
@@ -589,6 +708,30 @@ int main() {
             migrated_legacy_progress.committed_progress().revision == 5 &&
             migrated_legacy_progress.committed_operation_count() == 0,
         "the previous F1 checkpoint payload migrates to an empty v1 Operation ledger"
+    );
+
+    ok &= expect(
+        ProfileProgressCoordinator{}.prepare_reward_claim(
+            resolution_source,
+            reward_one,
+            reward_dedup_one
+        ).error == ProfileProgressCoordinatorError::invalid_state,
+        "a reward claim cannot initialize Profile ownership implicitly"
+    );
+    ok &= expect(
+        migrated_legacy_progress.prepare_reward_claim(0, reward_one, reward_dedup_one).error ==
+                ProfileProgressCoordinatorError::invalid_claim &&
+            migrated_legacy_progress.prepare_reward_claim(
+                resolution_source,
+                0,
+                reward_dedup_one
+            ).error == ProfileProgressCoordinatorError::invalid_claim &&
+            migrated_legacy_progress.prepare_reward_claim(
+                resolution_source,
+                reward_one,
+                0
+            ).error == ProfileProgressCoordinatorError::invalid_claim,
+        "zero source, reward, or dedup identifiers are rejected as invalid claims"
     );
 
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;

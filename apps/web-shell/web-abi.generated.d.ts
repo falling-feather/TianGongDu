@@ -46,7 +46,7 @@ export type TgdWebErrorName =
 
 export interface TgdWebAbiContract {
   readonly major: 1;
-  readonly minor: 0;
+  readonly minor: 1;
   readonly headerBytes: 40;
   readonly maxMessageBytes: 262144;
   readonly payload: {
@@ -56,6 +56,8 @@ export interface TgdWebAbiContract {
     readonly storageRequestV1HeaderBytes: 208;
     readonly storageCompletionV1HeaderBytes: 152;
     readonly maxStorageTransferBytes: 16777392;
+    readonly persistentOperationV1Bytes: 80;
+    readonly maxAtomicOperationsPerWrite: 16;
   };
   readonly messageType: {
     readonly boot_config: 1;

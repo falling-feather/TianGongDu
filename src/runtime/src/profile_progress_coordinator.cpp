@@ -59,6 +59,29 @@ constexpr std::string_view legacy_checkpoint_magic = "tgd.f1.guest.profile.check
     return snapshot_id;
 }
 
+[[nodiscard]] const contracts::PersistentOperationV1* find_reward_claim(
+    const contracts::ProfileProgressV1& progress,
+    contracts::StableContentKey reward_dedup_key
+) noexcept {
+    const auto found = std::find_if(
+        progress.operations.begin(),
+        progress.operations.end(),
+        [reward_dedup_key](const contracts::PersistentOperationV1& operation) {
+            return operation.domain == contracts::PersistentOperationDomain::quest_reward &&
+                   operation.reward_dedup_key == reward_dedup_key;
+        }
+    );
+    return found == progress.operations.end() ? nullptr : &*found;
+}
+
+[[nodiscard]] bool reward_claim_matches(
+    const contracts::PersistentOperationV1& operation,
+    contracts::StableContentKey source_id,
+    contracts::StableContentKey reward_id
+) noexcept {
+    return operation.source_id == source_id && operation.reward_id == reward_id;
+}
+
 }  // namespace
 
 ProfileProgressCoordinatorError ProfileProgressCoordinator::initialize(
@@ -142,26 +165,39 @@ ProfileProgressPrepareResult ProfileProgressCoordinator::prepare_reward_claim(
     contracts::StableContentKey reward_id,
     contracts::StableContentKey reward_dedup_key
 ) noexcept {
-    if (state_ == ProfileProgressCoordinatorState::uninitialized || source_id == 0 ||
-        reward_id == 0 || reward_dedup_key == 0) {
+    if (state_ == ProfileProgressCoordinatorState::uninitialized) {
         return {ProfileProgressCoordinatorError::invalid_state, {}};
     }
-    if (contracts::contains_reward_dedup(committed_progress_, reward_dedup_key)) {
+    if (source_id == 0 || reward_id == 0 || reward_dedup_key == 0) {
+        return {ProfileProgressCoordinatorError::invalid_claim, {}};
+    }
+    if (const auto* committed = find_reward_claim(committed_progress_, reward_dedup_key);
+        committed != nullptr) {
+        if (!reward_claim_matches(*committed, source_id, reward_id)) {
+            return {ProfileProgressCoordinatorError::invalid_claim, {}};
+        }
         return {
             ProfileProgressCoordinatorError::none,
             ProfileProgressPrepareDisposition::already_committed,
         };
     }
     if (state_ == ProfileProgressCoordinatorState::pending) {
-        return contracts::contains_reward_dedup(pending_progress_, reward_dedup_key)
-                   ? ProfileProgressPrepareResult{
-                         ProfileProgressCoordinatorError::none,
-                         ProfileProgressPrepareDisposition::already_pending,
-                     }
-                   : ProfileProgressPrepareResult{
-                         ProfileProgressCoordinatorError::invalid_state,
-                         ProfileProgressPrepareDisposition::none,
-                     };
+        if (const auto* pending = find_reward_claim(pending_progress_, reward_dedup_key);
+            pending != nullptr) {
+            return reward_claim_matches(*pending, source_id, reward_id)
+                       ? ProfileProgressPrepareResult{
+                             ProfileProgressCoordinatorError::none,
+                             ProfileProgressPrepareDisposition::already_pending,
+                         }
+                       : ProfileProgressPrepareResult{
+                             ProfileProgressCoordinatorError::invalid_claim,
+                             ProfileProgressPrepareDisposition::none,
+                         };
+        }
+        return {
+            ProfileProgressCoordinatorError::invalid_state,
+            ProfileProgressPrepareDisposition::none,
+        };
     }
     if (committed_progress_.revision == std::numeric_limits<std::uint64_t>::max()) {
         return {ProfileProgressCoordinatorError::revision_overflow, {}};
@@ -227,6 +263,17 @@ ProfileProgressSaveKind ProfileProgressCoordinator::pending_kind() const noexcep
 
 const contracts::SaveEnvelopeV1& ProfileProgressCoordinator::pending_snapshot() const noexcept {
     return pending_snapshot_;
+}
+
+std::span<const contracts::PersistentOperationV1>
+ProfileProgressCoordinator::pending_new_operations() const noexcept {
+    if (state_ != ProfileProgressCoordinatorState::pending ||
+        pending_progress_.operations.size() < committed_progress_.operations.size()) {
+        return {};
+    }
+    return std::span<const contracts::PersistentOperationV1>{pending_progress_.operations}.subspan(
+        committed_progress_.operations.size()
+    );
 }
 
 const contracts::ProfileProgressV1&

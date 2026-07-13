@@ -13,6 +13,9 @@
   const ZERO_DIGEST = "0".repeat(64);
   const PACKAGE_SET_ID = "82cba9bf9f2251f8b74575fa8bda891d";
   const GUEST_PROFILE_KEY = "tgd.prototype_f1.guest-profile-id.v1";
+  const GUEST_DEVICE_KEY = "tgd.prototype_f1.guest-device-id.v1";
+  const FNV_OFFSET = 14_695_981_039_346_656_037n;
+  const FNV_PRIME = 1_099_511_628_211n;
   const COMPLETION_HEADER_BYTES = abi.payload.storageCompletionV1HeaderBytes;
   const REQUEST_HEADER_BYTES = abi.payload.storageRequestV1HeaderBytes;
   const MAX_COMPLETION_CHUNK_BYTES =
@@ -200,13 +203,13 @@
     const operation = view.getUint16(offset, true);
     const recordKind = view.getUint16(offset + 2, true);
     const durability = view.getUint16(offset + 4, true);
-    const reserved16 = view.getUint16(offset + 6, true);
+    const operationCount = view.getUint16(offset + 6, true);
     const chunkIndex = view.getUint32(offset + 8, true);
     const chunkCount = view.getUint32(offset + 12, true);
     const totalBytes = view.getUint32(offset + 16, true);
     const chunkOffset = view.getUint32(offset + 20, true);
     const chunkLength = view.getUint32(offset + 24, true);
-    const reserved32 = view.getUint32(offset + 28, true);
+    let snapshotByteLength = view.getUint32(offset + 28, true);
     const key = {
       recordKind,
       profileId: readId(view, offset + 32),
@@ -222,8 +225,6 @@
       recordKind < 1 ||
       recordKind > schema.stores.length ||
       durability > 1 ||
-      reserved16 !== 0 ||
-      reserved32 !== 0 ||
       chunkCount === 0 ||
       chunkIndex >= chunkCount ||
       totalBytes > abi.payload.maxStorageTransferBytes ||
@@ -234,6 +235,12 @@
       throw new WireError("Invalid storage request metadata");
     }
     if (operation === abi.storageOperation.write_atomic) {
+      if (header.abiMinor === 0) {
+        if (operationCount !== 0 || snapshotByteLength !== 0) {
+          throw new WireError("Web ABI 1.0 atomic metadata must stay reserved");
+        }
+        snapshotByteLength = totalBytes;
+      }
       const expectedChunkCount = Math.ceil(totalBytes / MAX_REQUEST_CHUNK_BYTES);
       const expectedChunkOffset = chunkIndex * MAX_REQUEST_CHUNK_BYTES;
       const expectedChunkLength = Math.min(
@@ -243,6 +250,10 @@
       if (
         recordKind !== 2 ||
         totalBytes === 0 ||
+        snapshotByteLength === 0 ||
+        operationCount > abi.payload.maxAtomicOperationsPerWrite ||
+        snapshotByteLength +
+            operationCount * abi.payload.persistentOperationV1Bytes !== totalBytes ||
         idEmpty(key.profileId) ||
         idEmpty(key.recordId) ||
         chunkCount !== expectedChunkCount ||
@@ -252,6 +263,8 @@
         throw new WireError("Atomic writes require a non-empty snapshot key and payload");
       }
     } else if (
+      operationCount !== 0 ||
+      snapshotByteLength !== 0 ||
       totalBytes !== 0 ||
       chunkLength !== 0 ||
       chunkIndex !== 0 ||
@@ -265,6 +278,8 @@
       operation,
       recordKind,
       durability,
+      operationCount,
+      snapshotByteLength,
       chunkIndex,
       chunkCount,
       totalBytes,
@@ -532,6 +547,99 @@
     }
   }
 
+  function hashU64(hash, value) {
+    let next = hash;
+    for (let index = 0n; index < 8n; index += 1n) {
+      next ^= (value >> (index * 8n)) & 0xffn;
+      next = (next * FNV_PRIME) & MAX_U64;
+    }
+    return next;
+  }
+
+  function rewardOperationId(profileId, rewardDedupKey) {
+    let high = hashU64(FNV_OFFSET, 0x7265776172642d31n);
+    high = hashU64(high, profileId.high);
+    high = hashU64(high, profileId.low);
+    high = hashU64(high, rewardDedupKey);
+    let low = hashU64(FNV_OFFSET, 0x636c61696d2d7631n);
+    low = hashU64(low, rewardDedupKey);
+    low = hashU64(low, profileId.low);
+    low = hashU64(low, profileId.high);
+    if (high === 0n && low === 0n) low = 1n;
+    return { high, low };
+  }
+
+  function decodeAtomicOperations(request, deviceId) {
+    const output = [];
+    const operationIds = new Set();
+    const rewardDedupKeys = new Set();
+    for (let index = 0; index < request.operationCount; index += 1) {
+      const offset = request.snapshotByteLength +
+        index * abi.payload.persistentOperationV1Bytes;
+      const operationBytes = request.body.subarray(
+        offset,
+        offset + abi.payload.persistentOperationV1Bytes
+      );
+      const view = new DataView(
+        operationBytes.buffer,
+        operationBytes.byteOffset,
+        operationBytes.byteLength
+      );
+      const operationId = readId(view, 0);
+      const profileId = readId(view, 16);
+      const baseRevision = view.getBigUint64(32, true);
+      const createdLogicalTime = view.getBigUint64(40, true);
+      const domain = view.getUint16(48, true);
+      const payloadVersion = view.getUint16(50, true);
+      const reserved = view.getUint32(52, true);
+      const sourceId = view.getBigUint64(56, true);
+      const rewardId = view.getBigUint64(64, true);
+      const rewardDedupKey = view.getBigUint64(72, true);
+      const canonicalId = rewardOperationId(profileId, rewardDedupKey);
+      const operationIdHex = idToHex(operationId);
+      const rewardDedupHex = rewardDedupKey.toString(16).padStart(16, "0");
+      if (
+        idEmpty(operationId) ||
+        !idEqual(profileId, request.key.profileId) ||
+        !idEqual(operationId, canonicalId) ||
+        baseRevision < request.expectedHead.logicalSequence ||
+        baseRevision >= createdLogicalTime ||
+        createdLogicalTime > request.nextHead.logicalSequence ||
+        domain !== 1 ||
+        payloadVersion !== 1 ||
+        reserved !== 0 ||
+        sourceId === 0n ||
+        rewardId === 0n ||
+        rewardDedupKey === 0n ||
+        operationIds.has(operationIdHex) ||
+        rewardDedupKeys.has(rewardDedupHex)
+      ) {
+        throw new WireError("Atomic write contains an invalid PersistentOperationV1");
+      }
+      operationIds.add(operationIdHex);
+      rewardDedupKeys.add(rewardDedupHex);
+      output.push({
+        schemaVersion: 1,
+        profileId: idToHex(profileId),
+        operationId: operationIdHex,
+        deviceId,
+        baseRevision: baseRevision.toString().padStart(20, "0"),
+        logicalSequence: createdLogicalTime.toString().padStart(20, "0"),
+        domain,
+        payloadVersion,
+        sourceId: sourceId.toString(16).padStart(16, "0"),
+        rewardId: rewardId.toString(16).padStart(16, "0"),
+        rewardDedupKey: rewardDedupHex,
+        status: "pending",
+        bytes: operationBytes.buffer.slice(
+          operationBytes.byteOffset,
+          operationBytes.byteOffset + operationBytes.byteLength
+        )
+      });
+    }
+    return output;
+  }
+
   function transactionWithDurability(database, stores, mode, strict) {
     if (strict) {
       try {
@@ -547,10 +655,27 @@
     constructor(environment = {}) {
       this.indexedDB = environment.indexedDB ?? globalThis.indexedDB;
       this.navigator = environment.navigator ?? globalThis.navigator;
-      if (environment.testFaultMode && environment.testFaultMode !== "quota_once") {
+      if (
+        environment.testFaultMode &&
+        !["quota_once", "reward_abort_once", "reward_conflict_once"].includes(
+          environment.testFaultMode
+        )
+      ) {
         throw new TypeError(`Unknown IndexedDB test fault: ${environment.testFaultMode}`);
       }
+      if (
+        typeof environment.deviceId !== "string" ||
+        !/^[0-9a-f]{32}$/.test(environment.deviceId) ||
+        environment.deviceId === "0".repeat(32)
+      ) {
+        throw new TypeError("A stable 128-bit deviceId is required for IndexedDB operations");
+      }
+      this.deviceId = environment.deviceId;
       this.remainingQuotaFailures = environment.testFaultMode === "quota_once" ? 1 : 0;
+      this.remainingRewardAbortFailures =
+        environment.testFaultMode === "reward_abort_once" ? 1 : 0;
+      this.remainingRewardConflictFailures =
+        environment.testFaultMode === "reward_conflict_once" ? 1 : 0;
       this.databasePromise = null;
       this.databaseHandle = null;
       this.transfers = new Map();
@@ -654,6 +779,8 @@
         request.operation,
         request.recordKind,
         request.durability,
+        request.operationCount,
+        request.snapshotByteLength,
         request.chunkCount,
         request.totalBytes,
         idToHex(request.key.profileId),
@@ -752,9 +879,15 @@
         !idEqual(request.key.profileId, request.nextHead.profileId) ||
         !idEqual(request.key.recordId, request.nextHead.snapshotId) ||
         !idEqual(request.expectedHead.profileId, request.nextHead.profileId) ||
-        request.nextHead.logicalSequence === 0n ||
+        request.nextHead.logicalSequence <= request.expectedHead.logicalSequence ||
         request.nextHead.envelopeHash === ZERO_DIGEST
       ) {
+        return { request, error: storageError.invalidRequest };
+      }
+      let operationRecords;
+      try {
+        operationRecords = decodeAtomicOperations(request, this.deviceId);
+      } catch {
         return { request, error: storageError.invalidRequest };
       }
       if (this.remainingQuotaFailures > 0) {
@@ -766,12 +899,13 @@
         let forcedError = null;
         const transaction = transactionWithDurability(
           database,
-          ["snapshots", "profile_heads"],
+          ["snapshots", "operations", "profile_heads"],
           "readwrite",
           request.durability === 1
         );
         const heads = transaction.objectStore("profile_heads");
         const snapshots = transaction.objectStore("snapshots");
+        const operations = transaction.objectStore("operations");
         const headRequest = heads.get([CHANNEL, profileId]);
         headRequest.addEventListener("success", () => {
           const current = headRequest.result;
@@ -785,6 +919,12 @@
             transaction.abort();
             return;
           }
+          if (operationRecords.length > 0 && this.remainingRewardConflictFailures > 0) {
+            this.remainingRewardConflictFailures -= 1;
+            forcedError = storageError.conflict;
+            transaction.abort();
+            return;
+          }
           const nextRecord = headToRecord(request.nextHead);
           snapshots.add({
             schemaVersion: 1,
@@ -794,10 +934,16 @@
             envelopeHash: request.nextHead.envelopeHash,
             bytes: request.body.buffer.slice(
               request.body.byteOffset,
-              request.body.byteOffset + request.body.byteLength
+              request.body.byteOffset + request.snapshotByteLength
             )
           });
+          for (const operation of operationRecords) operations.add(operation);
           heads.put(nextRecord);
+          if (operationRecords.length > 0 && this.remainingRewardAbortFailures > 0) {
+            this.remainingRewardAbortFailures -= 1;
+            forcedError = storageError.unavailable;
+            transaction.abort();
+          }
         });
         transaction.addEventListener("complete", () => resolve(storageError.none), { once: true });
         transaction.addEventListener(
@@ -935,6 +1081,20 @@
     }
   }
 
+  function guestDeviceId(storage, cryptoObject) {
+    try {
+      const current = storage?.getItem(GUEST_DEVICE_KEY);
+      if (current && /^[0-9a-f]{32}$/.test(current) && current !== "0".repeat(32)) {
+        return idToHex(idFromHex(current));
+      }
+      const created = randomId(cryptoObject);
+      storage?.setItem(GUEST_DEVICE_KEY, idToHex(created));
+      return idToHex(created);
+    } catch {
+      return "fa141c7dbb5a5a3390a45ea99f3f2628";
+    }
+  }
+
   function randomSessionGeneration(cryptoObject) {
     const value = new Uint32Array(1);
     cryptoObject.getRandomValues(value);
@@ -963,8 +1123,9 @@
     }
     const cryptoObject = options.crypto ?? globalThis.crypto;
     const localStorageObject = options.localStorage ?? globalThis.localStorage;
-    const backend = new IndexedDbBackend(options);
     const profileId = guestProfileId(localStorageObject, cryptoObject);
+    const deviceId = guestDeviceId(localStorageObject, cryptoObject);
+    const backend = new IndexedDbBackend({ ...options, deviceId });
     const packageSetId = idFromHex(PACKAGE_SET_ID);
     const requestSeed = randomId(cryptoObject);
     const sessionGeneration = randomSessionGeneration(cryptoObject);
@@ -1152,6 +1313,7 @@
       identity: Object.freeze({
         channel: CHANNEL,
         profileId: idToHex(profileId),
+        deviceId,
         packageSetId: idToHex(packageSetId),
         sessionGeneration
       })
@@ -1169,6 +1331,7 @@
     profileErrorNames,
     test: Object.freeze({
       decodeStorageRequest,
+      decodeAtomicOperations,
       decodeProfileUiEvent,
       encodeBootMessage,
       encodeRetryCommand,
@@ -1177,6 +1340,7 @@
       idFromHex,
       idToHex,
       randomId,
+      rewardOperationId,
       storageError
     })
   });

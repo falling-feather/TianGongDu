@@ -43,8 +43,8 @@ function assertIdList(entries, label) {
 
 export function validateWebAbiContract(contract) {
   if (contract.schemaVersion !== "1.0.0") throw new Error("Unsupported Web ABI schema.");
-  if (contract.abi.major !== 1 || contract.abi.minor !== 0) {
-    throw new Error("Web ABI generator only supports 1.0.");
+  if (contract.abi.major !== 1 || contract.abi.minor !== 1) {
+    throw new Error("Web ABI generator only supports 1.1.");
   }
   if (contract.abi.endianness !== "little" || contract.abi.headerBytes !== 40) {
     throw new Error("Web ABI v1 requires a 40-byte explicit little-endian header.");
@@ -58,7 +58,9 @@ export function validateWebAbiContract(contract) {
     uiEventV1Bytes: 40,
     storageRequestV1HeaderBytes: 208,
     storageCompletionV1HeaderBytes: 152,
-    maxStorageTransferBytes: 16 * 1024 * 1024 + 176
+    maxStorageTransferBytes: 16 * 1024 * 1024 + 176,
+    persistentOperationV1Bytes: 80,
+    maxAtomicOperationsPerWrite: 16
   });
   for (const [name, value] of Object.entries(expectedPayloads)) {
     if (contract.payloads?.[name] !== value) {
@@ -111,6 +113,8 @@ export function renderCHeader(contract) {
 #define TGD_WEB_STORAGE_REQUEST_V1_HEADER_BYTES UINT32_C(${contract.payloads.storageRequestV1HeaderBytes})
 #define TGD_WEB_STORAGE_COMPLETION_V1_HEADER_BYTES UINT32_C(${contract.payloads.storageCompletionV1HeaderBytes})
 #define TGD_WEB_MAX_STORAGE_TRANSFER_BYTES UINT32_C(${contract.payloads.maxStorageTransferBytes})
+#define TGD_WEB_PERSISTENT_OPERATION_V1_BYTES UINT32_C(${contract.payloads.persistentOperationV1Bytes})
+#define TGD_WEB_MAX_ATOMIC_OPERATIONS_PER_WRITE UINT16_C(${contract.payloads.maxAtomicOperationsPerWrite})
 
 typedef enum tgd_web_message_type {
 ${messageEnum}
@@ -182,7 +186,9 @@ export function renderJavaScript(contract) {
       uiEventV1Bytes: ${contract.payloads.uiEventV1Bytes},
       storageRequestV1HeaderBytes: ${contract.payloads.storageRequestV1HeaderBytes},
       storageCompletionV1HeaderBytes: ${contract.payloads.storageCompletionV1HeaderBytes},
-      maxStorageTransferBytes: ${contract.payloads.maxStorageTransferBytes}
+      maxStorageTransferBytes: ${contract.payloads.maxStorageTransferBytes},
+      persistentOperationV1Bytes: ${contract.payloads.persistentOperationV1Bytes},
+      maxAtomicOperationsPerWrite: ${contract.payloads.maxAtomicOperationsPerWrite}
     }),
     messageType: Object.freeze({
 ${objectEntries(contract.messageTypes)}
@@ -236,6 +242,8 @@ export interface TgdWebAbiContract {
     readonly storageRequestV1HeaderBytes: ${contract.payloads.storageRequestV1HeaderBytes};
     readonly storageCompletionV1HeaderBytes: ${contract.payloads.storageCompletionV1HeaderBytes};
     readonly maxStorageTransferBytes: ${contract.payloads.maxStorageTransferBytes};
+    readonly persistentOperationV1Bytes: ${contract.payloads.persistentOperationV1Bytes};
+    readonly maxAtomicOperationsPerWrite: ${contract.payloads.maxAtomicOperationsPerWrite};
   };
   readonly messageType: {
 ${messageKeys}

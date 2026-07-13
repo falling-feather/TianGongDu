@@ -148,6 +148,8 @@ class WebPlatformBridge final : public runtime::IStorage {
         runtime::StorageProfileHead next_head{};
         runtime::StorageDurability durability{runtime::StorageDurability::relaxed};
         std::vector<std::uint8_t> bytes{};
+        std::uint32_t snapshot_byte_length{};
+        std::uint16_t operation_count{};
         std::uint32_t chunk_index{};
         std::uint32_t chunk_count{1};
         std::uint32_t chunk_offset{};

@@ -63,7 +63,8 @@ class ProfileStorageCoordinator final {
     [[nodiscard]] ProfileStorageError begin_restore() noexcept;
     [[nodiscard]] ProfileStorageError begin_save(
         const contracts::SaveEnvelopeV1& snapshot,
-        StorageDurability durability = StorageDurability::relaxed
+        StorageDurability durability = StorageDurability::relaxed,
+        std::span<const contracts::PersistentOperationV1> operations = {}
     ) noexcept;
     [[nodiscard]] ProfileStorageError retry_pending_save() noexcept;
     [[nodiscard]] ProfileStoragePumpResult pump() noexcept;
@@ -74,6 +75,8 @@ class ProfileStorageCoordinator final {
     [[nodiscard]] bool has_pending_save() const noexcept;
     [[nodiscard]] std::span<const std::uint8_t> current_snapshot_bytes() const noexcept;
     [[nodiscard]] std::span<const std::uint8_t> pending_snapshot_bytes() const noexcept;
+    [[nodiscard]] std::span<const contracts::PersistentOperationV1>
+    pending_operations() const noexcept;
     [[nodiscard]] const StorageProfileHead& current_head() const noexcept;
     [[nodiscard]] std::uint64_t committed_save_count() const noexcept;
     [[nodiscard]] contracts::StableId128 last_committed_request_id() const noexcept;
@@ -116,6 +119,7 @@ class ProfileStorageCoordinator final {
     StorageDurability pending_durability_{StorageDurability::relaxed};
     std::vector<std::uint8_t> current_snapshot_bytes_{};
     std::vector<std::uint8_t> pending_snapshot_bytes_{};
+    std::vector<contracts::PersistentOperationV1> pending_operations_{};
     std::uint64_t committed_save_count_{};
     contracts::StableId128 last_committed_request_id_{};
     std::uint64_t ignored_stale_completion_count_{};

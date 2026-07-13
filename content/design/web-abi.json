@@ -3,7 +3,7 @@
   "schemaVersion": "1.0.0",
   "abi": {
     "major": 1,
-    "minor": 0,
+    "minor": 1,
     "endianness": "little",
     "maxMessageBytes": 262144,
     "headerBytes": 40
@@ -14,7 +14,9 @@
     "uiEventV1Bytes": 40,
     "storageRequestV1HeaderBytes": 208,
     "storageCompletionV1HeaderBytes": 152,
-    "maxStorageTransferBytes": 16777392
+    "maxStorageTransferBytes": 16777392,
+    "persistentOperationV1Bytes": 80,
+    "maxAtomicOperationsPerWrite": 16
   },
   "messageTypes": [
     { "id": 1, "name": "boot_config", "direction": "js_to_cpp", "payloadVersion": 1, "critical": true },

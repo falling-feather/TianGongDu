@@ -3,7 +3,7 @@
   "use strict";
   const contract = Object.freeze({
     major: 1,
-    minor: 0,
+    minor: 1,
     headerBytes: 40,
     maxMessageBytes: 262144,
     payload: Object.freeze({
@@ -12,7 +12,9 @@
       uiEventV1Bytes: 40,
       storageRequestV1HeaderBytes: 208,
       storageCompletionV1HeaderBytes: 152,
-      maxStorageTransferBytes: 16777392
+      maxStorageTransferBytes: 16777392,
+      persistentOperationV1Bytes: 80,
+      maxAtomicOperationsPerWrite: 16
     }),
     messageType: Object.freeze({
     boot_config: 1,

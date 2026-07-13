@@ -3,6 +3,7 @@
 #include <tgd/contracts/sha256.hpp>
 
 #include <algorithm>
+#include <new>
 #include <utility>
 
 namespace tgd::runtime {
@@ -70,6 +71,48 @@ namespace {
     return ProfileStorageState::restore_failed;
 }
 
+[[nodiscard]] bool valid_atomic_operations(
+    const contracts::SaveEnvelopeV1& snapshot,
+    std::uint64_t expected_sequence,
+    std::span<const contracts::PersistentOperationV1> operations
+) noexcept {
+    const auto decoded = contracts::decode_profile_progress(snapshot.payload);
+    if (decoded.error != contracts::ProfileProgressError::none) {
+        return operations.empty();
+    }
+    if (decoded.progress.profile_id != snapshot.profile_id ||
+        decoded.progress.revision != snapshot.created_logical_sequence) {
+        return false;
+    }
+    const auto first_new = std::find_if(
+        decoded.progress.operations.begin(),
+        decoded.progress.operations.end(),
+        [expected_sequence](const contracts::PersistentOperationV1& operation) {
+            return operation.created_logical_time > expected_sequence;
+        }
+    );
+    const auto new_count = static_cast<std::size_t>(
+        decoded.progress.operations.end() - first_new
+    );
+    if (operations.size() != new_count ||
+        !std::equal(operations.begin(), operations.end(), first_new)) {
+        return false;
+    }
+    for (const auto& operation : operations) {
+        if (operation.profile_id != snapshot.profile_id ||
+            operation.operation_id != contracts::reward_operation_id(
+                                          snapshot.profile_id,
+                                          operation.reward_dedup_key
+                                      ) ||
+            operation.base_revision < expected_sequence ||
+            operation.created_logical_time <= expected_sequence ||
+            operation.created_logical_time > snapshot.created_logical_sequence) {
+            return false;
+        }
+    }
+    return true;
+}
+
 }  // namespace
 
 ProfileStorageError ProfileStorageCoordinator::initialize(
@@ -97,6 +140,7 @@ ProfileStorageError ProfileStorageCoordinator::initialize(
     pending_durability_ = StorageDurability::relaxed;
     current_snapshot_bytes_.clear();
     pending_snapshot_bytes_.clear();
+    pending_operations_.clear();
     committed_save_count_ = 0;
     last_committed_request_id_ = {};
     ignored_stale_completion_count_ = 0;
@@ -118,6 +162,7 @@ ProfileStorageError ProfileStorageCoordinator::begin_restore() noexcept {
     has_current_head_ = false;
     current_snapshot_bytes_.clear();
     pending_snapshot_bytes_.clear();
+    pending_operations_.clear();
     pending_expected_head_ = {};
     pending_head_ = {};
     last_error_ = ProfileStorageError::none;
@@ -132,10 +177,11 @@ ProfileStorageError ProfileStorageCoordinator::begin_restore() noexcept {
 
 ProfileStorageError ProfileStorageCoordinator::begin_save(
     const contracts::SaveEnvelopeV1& snapshot,
-    StorageDurability durability
+    StorageDurability durability,
+    std::span<const contracts::PersistentOperationV1> operations
 ) noexcept {
     if (storage_ == nullptr || state_ != ProfileStorageState::ready ||
-        !pending_snapshot_bytes_.empty()) {
+        !pending_snapshot_bytes_.empty() || !pending_operations_.empty()) {
         return ProfileStorageError::invalid_state;
     }
 
@@ -148,7 +194,8 @@ ProfileStorageError ProfileStorageCoordinator::begin_save(
         snapshot.created_logical_sequence <= expected_sequence ||
         (has_current_head_ && snapshot.snapshot_id == current_head_.snapshot_id) ||
         contracts::validate_save_envelope_descriptor(snapshot) !=
-            contracts::SaveEnvelopeError::none) {
+            contracts::SaveEnvelopeError::none ||
+        !valid_atomic_operations(snapshot, expected_sequence, operations)) {
         return ProfileStorageError::invalid_snapshot;
     }
 
@@ -159,6 +206,11 @@ ProfileStorageError ProfileStorageCoordinator::begin_save(
                    : ProfileStorageError::invalid_snapshot;
     }
 
+    try {
+        pending_operations_.assign(operations.begin(), operations.end());
+    } catch (const std::bad_alloc&) {
+        return ProfileStorageError::allocation_failed;
+    }
     pending_snapshot_bytes_ = std::move(encoded.bytes);
     pending_expected_head_ = has_current_head_
                                  ? current_head_
@@ -261,6 +313,11 @@ std::span<const std::uint8_t> ProfileStorageCoordinator::pending_snapshot_bytes(
     return pending_snapshot_bytes_;
 }
 
+std::span<const contracts::PersistentOperationV1>
+ProfileStorageCoordinator::pending_operations() const noexcept {
+    return pending_operations_;
+}
+
 const StorageProfileHead& ProfileStorageCoordinator::current_head() const noexcept {
     return current_head_;
 }
@@ -328,6 +385,7 @@ ProfileStorageError ProfileStorageCoordinator::submit_pending_save() noexcept {
         pending_head_,
         pending_snapshot_bytes_,
         pending_durability_,
+        pending_operations_,
     };
     const auto submitted = storage_->write_atomic(request);
     if (submitted != StorageSubmitError::none) {
@@ -447,6 +505,7 @@ ProfileStoragePumpResult ProfileStorageCoordinator::handle_save_completion(
     current_head_ = pending_head_;
     has_current_head_ = true;
     current_snapshot_bytes_ = std::move(pending_snapshot_bytes_);
+    pending_operations_.clear();
     pending_expected_head_ = {};
     pending_head_ = {};
     pending_durability_ = StorageDurability::relaxed;

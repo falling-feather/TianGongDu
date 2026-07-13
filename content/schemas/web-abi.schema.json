@@ -37,7 +37,9 @@
         "uiEventV1Bytes",
         "storageRequestV1HeaderBytes",
         "storageCompletionV1HeaderBytes",
-        "maxStorageTransferBytes"
+        "maxStorageTransferBytes",
+        "persistentOperationV1Bytes",
+        "maxAtomicOperationsPerWrite"
       ],
       "properties": {
         "bootConfigV1Bytes": { "const": 52 },
@@ -45,7 +47,9 @@
         "uiEventV1Bytes": { "const": 40 },
         "storageRequestV1HeaderBytes": { "const": 208 },
         "storageCompletionV1HeaderBytes": { "const": 152 },
-        "maxStorageTransferBytes": { "const": 16777392 }
+        "maxStorageTransferBytes": { "const": 16777392 },
+        "persistentOperationV1Bytes": { "const": 80 },
+        "maxAtomicOperationsPerWrite": { "const": 16 }
       }
     },
     "messageTypes": { "$ref": "#/$defs/idList" },

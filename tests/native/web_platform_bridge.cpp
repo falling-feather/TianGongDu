@@ -2,6 +2,7 @@
 #include <tgd/platform/web/web_platform_bridge.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -14,6 +15,7 @@
 namespace {
 
 using tgd::contracts::StableId128;
+using tgd::contracts::PersistentOperationV1;
 using tgd::platform::web::WebAbiError;
 using tgd::platform::web::WebPlatformBridge;
 using tgd::runtime::StorageChannel;
@@ -224,10 +226,35 @@ int main() {
         StorageChannel::prototype_f1,
     };
     const auto next_head = head(snapshot_two, 2);
+    const auto reward_operation = tgd::contracts::make_reward_operation(
+        profile_id,
+        1,
+        2,
+        0x7100000000000001ULL,
+        0x7200000000000001ULL,
+        0x7300000000000001ULL
+    );
+    const std::array<PersistentOperationV1, 1> reward_operations{reward_operation};
+    auto stale_reward_operation = reward_operation;
+    stale_reward_operation.base_revision = 0;
+    const std::array<PersistentOperationV1, 1> stale_reward_operations{
+        stale_reward_operation
+    };
     std::vector<std::uint8_t> large_write(WebPlatformBridge::max_request_chunk_bytes + 17);
     for (std::size_t index = 0; index < large_write.size(); ++index) {
         large_write[index] = static_cast<std::uint8_t>(index & 0xffU);
     }
+    ok &= expect(
+        bridge.write_atomic({
+            write_context,
+            first_head,
+            next_head,
+            large_write,
+            StorageDurability::strict_if_supported,
+            stale_reward_operations,
+        }) == StorageSubmitError::invalid_request,
+        "an atomic Operation cannot claim a base revision older than the expected Head"
+    );
     ok &= expect(
         bridge.write_atomic(StorageWriteAtomicRequest{
             write_context,
@@ -235,8 +262,9 @@ int main() {
             next_head,
             large_write,
             StorageDurability::strict_if_supported,
+            reward_operations,
         }) == StorageSubmitError::none,
-        "large atomic write enters the bridge"
+        "large atomic snapshot and Operation enter the bridge together"
     );
     ok &= expect(
         bridge.peek_platform_request_size() == WebPlatformBridge::max_message_bytes,
@@ -244,25 +272,35 @@ int main() {
     );
     const auto write_chunk_one = poll_request(bridge);
     ok &= expect(
-        read_integer<std::uint32_t>(write_chunk_one, 48) == 0 &&
+        read_integer<std::uint16_t>(write_chunk_one, 46) == 1 &&
+            read_integer<std::uint32_t>(write_chunk_one, 48) == 0 &&
             read_integer<std::uint32_t>(write_chunk_one, 52) == 2 &&
-            read_integer<std::uint32_t>(write_chunk_one, 56) == large_write.size() &&
+            read_integer<std::uint32_t>(write_chunk_one, 56) ==
+                large_write.size() + tgd::contracts::persistent_operation_v1_bytes &&
             read_integer<std::uint32_t>(write_chunk_one, 60) == 0 &&
             read_integer<std::uint32_t>(write_chunk_one, 64) ==
-                WebPlatformBridge::max_request_chunk_bytes,
-        "first write chunk declares canonical offset and total"
+                WebPlatformBridge::max_request_chunk_bytes &&
+            read_integer<std::uint32_t>(write_chunk_one, 68) == large_write.size(),
+        "first write chunk declares canonical snapshot and Operation boundaries"
     );
     const auto write_chunk_two = poll_request(bridge);
     ok &= expect(
         write_chunk_two.size() ==
             WebPlatformBridge::message_header_bytes +
-                WebPlatformBridge::request_payload_header_bytes + 17 &&
+                WebPlatformBridge::request_payload_header_bytes + 17 +
+                tgd::contracts::persistent_operation_v1_bytes &&
             read_integer<std::uint32_t>(write_chunk_two, 48) == 1 &&
             read_integer<std::uint32_t>(write_chunk_two, 60) ==
                 WebPlatformBridge::max_request_chunk_bytes &&
-            read_integer<std::uint32_t>(write_chunk_two, 64) == 17 &&
+            read_integer<std::uint32_t>(write_chunk_two, 64) ==
+                17 + tgd::contracts::persistent_operation_v1_bytes &&
+            read_integer<std::uint64_t>(
+                write_chunk_two,
+                WebPlatformBridge::message_header_bytes +
+                    WebPlatformBridge::request_payload_header_bytes + 17
+            ) == reward_operation.operation_id.high &&
             bridge.peek_platform_request_size() == 0,
-        "last write chunk is bounded and closes the outbound transfer"
+        "last chunk carries the canonical Operation bytes after the snapshot"
     );
     const StorageKey next_key{StorageRecordKind::snapshot, profile_id, snapshot_two};
     ok &= expect(

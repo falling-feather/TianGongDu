@@ -19,6 +19,9 @@ static_assert(
     contracts::save_envelope_v1_header_bytes + contracts::max_save_payload_bytes
 );
 static_assert(
+    TGD_WEB_PERSISTENT_OPERATION_V1_BYTES == contracts::persistent_operation_v1_bytes
+);
+static_assert(
     static_cast<std::uint16_t>(runtime::StorageOperation::write_atomic) ==
     TGD_WEB_STORAGE_WRITE_ATOMIC
 );
@@ -154,6 +157,51 @@ class ByteReader final {
            reader.read(head.logical_sequence) && reader.read_digest(head.envelope_hash);
 }
 
+[[nodiscard]] bool write_operation(
+    ByteWriter& writer,
+    const contracts::PersistentOperationV1& operation
+) noexcept {
+    return writer.write_id(operation.operation_id) && writer.write_id(operation.profile_id) &&
+           writer.write(operation.base_revision) &&
+           writer.write(operation.created_logical_time) &&
+           writer.write(static_cast<std::uint16_t>(operation.domain)) &&
+           writer.write(operation.payload_version) && writer.write(static_cast<std::uint32_t>(0)) &&
+           writer.write(operation.source_id) && writer.write(operation.reward_id) &&
+           writer.write(operation.reward_dedup_key);
+}
+
+[[nodiscard]] bool valid_atomic_operations(
+    const runtime::StorageWriteAtomicRequest& request
+) noexcept {
+    if (request.operations.size() > TGD_WEB_MAX_ATOMIC_OPERATIONS_PER_WRITE) {
+        return false;
+    }
+    for (std::size_t index = 0; index < request.operations.size(); ++index) {
+        const auto& operation = request.operations[index];
+        if (operation.operation_id.empty() ||
+            operation.operation_id != contracts::reward_operation_id(
+                                          request.next_head.profile_id,
+                                          operation.reward_dedup_key
+                                      ) ||
+            operation.profile_id != request.next_head.profile_id ||
+            operation.base_revision < request.expected_head.logical_sequence ||
+            operation.base_revision >= operation.created_logical_time ||
+            operation.created_logical_time > request.next_head.logical_sequence ||
+            operation.domain != contracts::PersistentOperationDomain::quest_reward ||
+            operation.payload_version != 1 || operation.source_id == 0 ||
+            operation.reward_id == 0 || operation.reward_dedup_key == 0) {
+            return false;
+        }
+        for (std::size_t prior = 0; prior < index; ++prior) {
+            if (request.operations[prior].operation_id == operation.operation_id ||
+                request.operations[prior].reward_dedup_key == operation.reward_dedup_key) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 [[nodiscard]] bool write_message_header(
     ByteWriter& writer,
     std::uint16_t message_type,
@@ -235,11 +283,18 @@ runtime::StorageSubmitError WebPlatformBridge::read(
 runtime::StorageSubmitError WebPlatformBridge::write_atomic(
     const runtime::StorageWriteAtomicRequest& request
 ) noexcept {
+    if (request.operations.size() > TGD_WEB_MAX_ATOMIC_OPERATIONS_PER_WRITE) {
+        return runtime::StorageSubmitError::invalid_request;
+    }
+    const auto operation_bytes =
+        request.operations.size() * contracts::persistent_operation_v1_bytes;
     if (!valid_context(request.context) || request.snapshot_bytes.empty() ||
         request.snapshot_bytes.size() > max_transfer_bytes ||
+        operation_bytes > max_transfer_bytes - request.snapshot_bytes.size() ||
         request.expected_head.profile_id != request.next_head.profile_id ||
         request.next_head.profile_id.empty() || request.next_head.snapshot_id.empty() ||
-        request.next_head.logical_sequence == 0) {
+        request.next_head.logical_sequence <= request.expected_head.logical_sequence ||
+        !valid_atomic_operations(request)) {
         return runtime::StorageSubmitError::invalid_request;
     }
     if (!request_slot_available()) {
@@ -258,7 +313,28 @@ runtime::StorageSubmitError WebPlatformBridge::write_atomic(
         outbound_.expected_head = request.expected_head;
         outbound_.next_head = request.next_head;
         outbound_.durability = request.durability;
-        outbound_.bytes.assign(request.snapshot_bytes.begin(), request.snapshot_bytes.end());
+        outbound_.snapshot_byte_length =
+            static_cast<std::uint32_t>(request.snapshot_bytes.size());
+        outbound_.operation_count = static_cast<std::uint16_t>(request.operations.size());
+        outbound_.bytes.resize(request.snapshot_bytes.size() + operation_bytes);
+        std::copy(
+            request.snapshot_bytes.begin(),
+            request.snapshot_bytes.end(),
+            outbound_.bytes.begin()
+        );
+        ByteWriter operation_writer(
+            std::span<std::uint8_t>{outbound_.bytes}.subspan(request.snapshot_bytes.size())
+        );
+        for (const auto& operation : request.operations) {
+            if (!write_operation(operation_writer, operation)) {
+                outbound_ = {};
+                return runtime::StorageSubmitError::invalid_request;
+            }
+        }
+        if (operation_writer.size() != operation_bytes) {
+            outbound_ = {};
+            return runtime::StorageSubmitError::invalid_request;
+        }
         outbound_.chunk_count = static_cast<std::uint32_t>(
             (outbound_.bytes.size() + max_request_chunk_bytes - 1) /
             max_request_chunk_bytes
@@ -370,10 +446,10 @@ std::int32_t WebPlatformBridge::poll_platform_request(
         writer.write(static_cast<std::uint16_t>(operation)) &&
         writer.write(static_cast<std::uint16_t>(outbound_.key.kind)) &&
         writer.write(static_cast<std::uint16_t>(outbound_.durability)) &&
-        writer.write(static_cast<std::uint16_t>(0)) && writer.write(outbound_.chunk_index) &&
+        writer.write(outbound_.operation_count) && writer.write(outbound_.chunk_index) &&
         writer.write(outbound_.chunk_count) && writer.write(total_bytes) &&
         writer.write(outbound_.chunk_offset) && writer.write(chunk_size) &&
-        writer.write(static_cast<std::uint32_t>(0)) &&
+        writer.write(outbound_.snapshot_byte_length) &&
         writer.write_id(outbound_.key.profile_id) && writer.write_id(outbound_.key.record_id) &&
         write_head(writer, outbound_.expected_head) && write_head(writer, outbound_.next_head) &&
         writer.write_bytes(

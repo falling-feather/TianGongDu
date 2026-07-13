@@ -41,8 +41,12 @@ function writeHead(view, offset, profile, snapshot, sequence, digestByte) {
   new Uint8Array(view.buffer, offset + 40, 32).fill(digestByte);
 }
 
-function storageWriteMessage(abi) {
-  const body = Uint8Array.of(1, 2, 3, 4, 5);
+function storageWriteMessage(abi, { withOperation = false } = {}) {
+  const snapshotBytes = Uint8Array.of(1, 2, 3, 4, 5);
+  const body = new Uint8Array(
+    snapshotBytes.byteLength + (withOperation ? abi.payload.persistentOperationV1Bytes : 0)
+  );
+  body.set(snapshotBytes);
   const output = new Uint8Array(
     abi.headerBytes + abi.payload.storageRequestV1HeaderBytes + body.byteLength
   );
@@ -50,6 +54,18 @@ function storageWriteMessage(abi) {
   const profile = [0x1111222233334444n, 0x5555666677778888n];
   const snapshot = [0x9999aaaabbbbccccn, 0xddddeeeeffff0001n];
   const request = [0x0102030405060708n, 0x1112131415161718n];
+  if (withOperation) {
+    const operationView = new DataView(body.buffer, snapshotBytes.byteLength);
+    writeId(operationView, 0, 0x9e7f1d2b9a71e71en, 0x3a5eae7e53b6c75fn);
+    writeId(operationView, 16, ...profile);
+    operationView.setBigUint64(32, 0n, true);
+    operationView.setBigUint64(40, 1n, true);
+    operationView.setUint16(48, 1, true);
+    operationView.setUint16(50, 1, true);
+    operationView.setBigUint64(56, 0x7100000000000001n, true);
+    operationView.setBigUint64(64, 0x7200000000000001n, true);
+    operationView.setBigUint64(72, 0x7300000000000001n, true);
+  }
   view.setUint16(0, abi.major, true);
   view.setUint16(2, abi.minor, true);
   view.setUint16(4, abi.messageType.storage_request, true);
@@ -62,11 +78,13 @@ function storageWriteMessage(abi) {
   view.setUint16(offset, abi.storageOperation.write_atomic, true);
   view.setUint16(offset + 2, 2, true);
   view.setUint16(offset + 4, 1, true);
+  view.setUint16(offset + 6, withOperation ? 1 : 0, true);
   view.setUint32(offset + 8, 0, true);
   view.setUint32(offset + 12, 1, true);
   view.setUint32(offset + 16, body.byteLength, true);
   view.setUint32(offset + 20, 0, true);
   view.setUint32(offset + 24, body.byteLength, true);
+  view.setUint32(offset + 28, snapshotBytes.byteLength, true);
   writeId(view, offset + 32, ...profile);
   writeId(view, offset + 48, ...snapshot);
   writeHead(view, offset + 64, profile, [0n, 0n], 0n, 0);
@@ -167,6 +185,8 @@ test("浏览器存储桥解码原子写请求并分块编码完成消息", async
   assert.equal(request.operation, abi.storageOperation.write_atomic);
   assert.equal(request.recordKind, 2);
   assert.equal(request.durability, 1);
+  assert.equal(request.operationCount, 0);
+  assert.equal(request.snapshotByteLength, 5);
   assert.equal(storage.test.idToHex(request.key.profileId), "11112222333344445555666677778888");
   assert.equal(storage.test.idToHex(request.key.recordId), "9999aaaabbbbccccddddeeeeffff0001");
   assert.deepEqual(Array.from(request.chunk), [1, 2, 3, 4, 5]);
@@ -193,4 +213,56 @@ test("浏览器存储桥解码原子写请求并分块编码完成消息", async
   assert.equal(second.getUint32(60, true), 261_952);
   assert.equal(second.getUint32(64, true), 300_000 - 261_952);
   assert(messages.every((message) => message.byteLength <= abi.maxMessageBytes));
+});
+
+test("浏览器存储桥兼容 Web ABI 1.0 的快照原子写请求", async () => {
+  const { abi, storage } = await loadBrowserContract();
+  const legacyMessage = storageWriteMessage(abi);
+  const legacyView = new DataView(legacyMessage.buffer);
+  legacyView.setUint16(2, 0, true);
+  legacyView.setUint32(abi.headerBytes + 28, 0, true);
+
+  const request = storage.test.decodeStorageRequest(legacyMessage);
+  assert.equal(request.operationCount, 0);
+  assert.equal(request.snapshotByteLength, 5);
+  assert.deepEqual(Array.from(request.chunk), [1, 2, 3, 4, 5]);
+});
+
+test("奖励 Operation 与快照共享显式边界并生成稳定 IndexedDB 记录", async () => {
+  const { abi, storage } = await loadBrowserContract();
+  const request = storage.test.decodeStorageRequest(
+    storageWriteMessage(abi, { withOperation: true })
+  );
+  assert.equal(request.operationCount, 1);
+  assert.equal(request.snapshotByteLength, 5);
+  assert.equal(request.totalBytes, 5 + abi.payload.persistentOperationV1Bytes);
+  assert.equal(
+    storage.test.idToHex(storage.test.rewardOperationId(
+      storage.test.idFromHex("01020304050607081112131415161718"),
+      0x7300000000000001n
+    )),
+    "d41837c7680ae62e2bd4eb04b4860ecf"
+  );
+  const operations = storage.test.decodeAtomicOperations(
+    { ...request, body: request.chunk },
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  );
+  assert.equal(operations.length, 1);
+  assert.equal(operations[0].operationId, "9e7f1d2b9a71e71e3a5eae7e53b6c75f");
+  assert.equal(operations[0].rewardDedupKey, "7300000000000001");
+  assert.equal(operations[0].logicalSequence, "00000000000000000001");
+  assert.equal(operations[0].status, "pending");
+  assert.equal(operations[0].bytes.byteLength, abi.payload.persistentOperationV1Bytes);
+  assert.throws(
+    () => storage.test.decodeAtomicOperations(
+      {
+        ...request,
+        expectedHead: { ...request.expectedHead, logicalSequence: 1n },
+        body: request.chunk
+      },
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ),
+    /invalid PersistentOperationV1/,
+    "an Operation cannot be rebased behind the expected Profile Head"
+  );
 });

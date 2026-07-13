@@ -1,5 +1,6 @@
 #pragma once
 
+#include <tgd/contracts/profile_progress.hpp>
 #include <tgd/contracts/save_envelope.hpp>
 
 #include <cstdint>
@@ -101,6 +102,7 @@ struct StorageWriteAtomicRequest final {
     StorageProfileHead next_head{};
     std::span<const std::uint8_t> snapshot_bytes{};
     StorageDurability durability{StorageDurability::relaxed};
+    std::span<const contracts::PersistentOperationV1> operations{};
 };
 
 struct StorageListRequest final {
@@ -145,8 +147,9 @@ class IStorage {
     virtual ~IStorage() = default;
 
     // Implementations must validate and copy every request span before returning. A successful
-    // write_atomic completion is emitted only after the snapshot, Head CAS, and transaction
-    // completion all succeed. strict_if_supported is a capability hint, not an fsync promise.
+    // write_atomic completion is emitted only after the snapshot, every supplied Operation,
+    // Head CAS, and transaction completion all succeed. strict_if_supported is a capability
+    // hint, not an fsync promise.
     [[nodiscard]] virtual StorageSubmitError read(
         const StorageReadRequest& request
     ) noexcept = 0;

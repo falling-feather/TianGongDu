@@ -84,8 +84,10 @@ int main() {
     ok &= expect(
         progress.operations.front().operation_id ==
             tgd::contracts::reward_operation_id(profile_id, dedup_one) &&
-            progress.operations.front().operation_id ==
-                tgd::contracts::reward_operation_id(profile_id, dedup_one),
+            tgd::contracts::reward_operation_id(
+                {0x0102030405060708ULL, 0x1112131415161718ULL},
+                0x7300000000000001ULL
+            ) == StableId128{0xd41837c7680ae62eULL, 0x2bd4eb04b4860ecfULL},
         "the same Profile and reward key always derive the same Operation ID"
     );
 
@@ -115,6 +117,14 @@ int main() {
         tgd::contracts::validate_profile_progress(wrong_profile) ==
             ProfileProgressError::invalid_operation,
         "an Operation cannot cross Profile ownership"
+    );
+
+    auto noncanonical_id = progress;
+    noncanonical_id.operations.back().operation_id.low ^= 1U;
+    ok &= expect(
+        tgd::contracts::validate_profile_progress(noncanonical_id) ==
+            ProfileProgressError::invalid_operation,
+        "a reward Operation ID must be derived from its Profile and deduplication key"
     );
 
     auto future_operation = progress;

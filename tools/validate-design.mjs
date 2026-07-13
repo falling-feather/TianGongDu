@@ -82,7 +82,7 @@ const handoffContractMarkers = [
   ["docs/07-1.0地区与内容蓝图.md", ["Boss 制作展开", "核心 NPC 内在驱动", "生产成本与容量校准"]],
   ["docs/08-UI-UX与可访问性.md", ["地面八向移动", "纵跃/跨越", "DOM、Canvas 与状态所有权矩阵", "保存与同步用语"]],
   ["docs/09-术语与索引.md", ["2.5D 斜向全景", "体验指导优先级", "待决问题登记", "文档与实现状态词", "文档维护门"]],
-  ["docs/01-developer/10-技术架构与依赖规则.md", ["斜向全景权威坐标与碰撞", "JS↔WASM ABI v1.0", "G1 工具锁清单"]],
+  ["docs/01-developer/10-技术架构与依赖规则.md", ["斜向全景权威坐标与碰撞", "JS↔WASM ABI v1.1", "G1 工具锁清单"]],
   ["docs/01-developer/12-内容存档与版本契约.md", ["Web 持久化唯一主路径", "Snapshot/Operation v1 Envelope", "七条版本线"]],
   ["docs/01-developer/15-服务端热更新与模组边界.md", ["普通单机进度与官方权益", "Sync API v1 错误包络", "PostgreSQL v1 不变量"]],
   ["docs/01-developer/16-测试CI与发布门禁.md", ["标准证据包", "机器 Schema 验证成熟度", "门禁例外"]],

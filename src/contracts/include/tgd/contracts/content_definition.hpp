@@ -63,6 +63,26 @@ struct VerticalSliceSafePointDefinition final {
     GroundPoseMm pose{};
 };
 
+enum class QuestConditionOpcode : std::uint8_t {
+    objective_completed,
+    selection_equals,
+    all,
+    any,
+    negate,
+};
+
+struct QuestConditionInstructionDefinition final {
+    QuestConditionOpcode opcode{QuestConditionOpcode::objective_completed};
+    ContentId objective_id{};
+    ContentId selection_id{};
+    std::uint8_t operand_count{};
+};
+
+struct QuestConditionProgramDefinition final {
+    ContentId id{};
+    std::span<const QuestConditionInstructionDefinition> instructions{};
+};
+
 enum class QuestInteractionKind : std::uint8_t {
     inspect,
     operate,

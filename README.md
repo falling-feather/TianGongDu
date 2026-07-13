@@ -15,7 +15,7 @@
 - 建立可机器校验的 1.0 内容目录、9 类模板注册表（含独立精英机制战）和 C++ Web 技术基线。
 - 确立 C++ Contracts / Runtime / Gameplay / Presentation / Platform 分层，玩法状态不归渲染树或 JavaScript 所有。
 - 完成 F1 固定 60 Hz `GameSession`、斜向世界输入与版本化命令回放；同一 C++ 黄金夹具已通过 Native 双编译器双配置和 Web Single 三浏览器验证。
-- 已实现 Web ABI 1.1、`SaveEnvelopeV1`、`ProfileProgressCoordinator`、Profile 原子提交协调器和 256 KiB 分块存储桥；F1 结算 claim 现在把规范 Persistent Operation、Profile 快照与 Head CAS 放进同一 IndexedDB v1 事务，只有 `transaction.complete` 后才报告已保存。Guest 首存/刷新及奖励正常路径已通过本地 Chrome/Edge/Firefox，两种结算、重复 claim、刷新恢复和离线本地提交已有候选证据；奖励事务中断/Head 冲突的浏览器故障注入、远端阶段门与迁移/导入仍待收口，因此尚未标记 Verified。
+- 已实现 Web ABI 1.1、`SaveEnvelopeV1`、`ProfileProgressCoordinator`、Profile 原子提交协调器和 256 KiB 分块存储桥；F1 结算 claim 现在把规范 Persistent Operation、Profile 快照与 Head CAS 放进同一 IndexedDB v1 事务，只有 `transaction.complete` 后才报告已保存。精确候选 `a9ac2fa` 已通过本地 Chrome/Edge/Firefox 正常矩阵、两种结算、重复/非法 claim、刷新恢复、离线本地提交和 Head CAS 冲突回滚；事务中断后的显式重试浏览器证据、远端阶段门与迁移/导入仍待收口，因此尚未标记 Verified。
 - 已将 F1 的 5 个 Cell、7 个目标驱动玩法段、斜向相机基和 60/70 分钟口径固化为 JSON→C++ 机器合同，并用 `VerticalSliceSession` 组合既有移动核心。
 - 已实现数据驱动的首个战斗遭遇合同与确定性 `ICombatResolver` / `ICombatEventSink` / `IEncounterDirector` 启动边界：当前 Web 灰盒可移动接敌，使用檐守/翻花、轻重击、守势和闪身；7 个敌对 Actor 全部默认休眠，由 8 项 Beat/Objective 激活定义按内容启用。当前 F1 schema `1.4.0` 保留 `replace` / `reinforce`、逐 Actor Home Pose/Formation Slot 与选择 Objective/Option 门；`VerticalSliceSession` 依据 `IQuestRuntime` 的权威选择只返回唯一激活，缺选择、半配置、重复分支或选项覆盖不全均失败关闭。返程春肋追加地面伞偶，冬肋追加高位纸鹭，均由三角 3 敌变为 4 敌且不重置玩家或既有 Active 敌人的资源/位姿。失败重试会按触发边界去重重放已完成 Objective 对应的唯一变体。`CombatActorSnapshot.defeated` 明确区分休眠与真实击败；Active 敌人按量化地面坐标追击/归位、占据内容指定的接敌槽位并由单一进攻令牌轮流出招。
 - 已实现确定性 `IQuestRuntime`、目标图快照/事件/校验和、内容驱动的场景交互、战斗信号、敌群结果、稳定选择、Boss 阶段与结算奖励收据解析；玩家可连续完成全部 7 Beat：雨渡、沈砚五步实操训练（檐守重击→格挡反制→切换翻花→翻花轻击→闪避反制）、伞巷清场后选择雨棚或排水路线、只从对应入口调查工位春痕、完成其余工灯调查/调校、返程三角组→启动校准架触发与春/冬调校一致的伞偶或纸鹭增援→按春肋檐守重击或冬肋翻花轻击证明调校→清场/捷径、四时伞祟春夏秋冬四阶段，再选择直接制伏或恢复共同工印并返回沈砚。`QuestInteractionDefinition` 与 `QuestCombatTriggerDefinition` 都能用既有选择互斥同一 Objective 的变体；Presentation 只显示匹配入口，只有匹配的姿态 + Ability 能推进返程。两种数据驱动奖励收据都经 `IF1RewardClaimSink` 进入同一 Profile/Persistent Operation 路径；重复 `rewardDedupKey`、刷新和命令回放不会增加第二条 Operation。此处只持久化结算奖励账本，不等于战斗/任务/世界的完整跨域事务快照。
@@ -50,10 +50,10 @@
 | 领域 | 状态 | 已有 | 仍没有 |
 | --- | --- | --- | --- |
 | 产品/世界/1.0 范围 | Scope Approved | 三地区、战斗/武器、14 Boss、24 NPC、内容预算 | 全量任务/POI 实例和最终平衡 |
-| 技术架构 | In Progress（`F1-GAME-01`，并行收口 `F1-DEV-03-RWD-01` 证据） | 精确工具链与分层；60 Hz Session、量化回放；Web ABI 1.1/Profile；F1 奖励 Operation+快照+Head 原子提交；Definition Provider、组合纵切会话、确定性任务/交互/战斗解析、事件与权威位姿批次 | 奖励事务中断/CAS 浏览器故障证据、远端阶段门、迁移/导入、完整玩法纵切和真实设备性能证据 |
+| 技术架构 | In Progress（`F1-GAME-01`，并行收口 `F1-DEV-03-RWD-01` 证据） | 精确工具链与分层；60 Hz Session、量化回放；Web ABI 1.1/Profile；F1 奖励 Operation+快照+Head 原子提交；Head CAS 冲突浏览器回滚；Definition Provider、组合纵切会话、确定性任务/交互/战斗解析、事件与权威位姿批次 | 奖励事务中断重试浏览器证据、远端阶段门、迁移/导入、完整玩法纵切和真实设备性能证据 |
 | 可玩纵切 | In Progress（7/7 Beat 功能闭环 + 可操作战斗/调查/Boss/结算灰盒） | F1 唯一流程、5 Cell/7 Beat 机器合同；代码绘制的 2.5D 斜向全景雨夜场景；雨渡交互、沈砚五步有序双架势训练、失败重试、伞巷 2→三步雨障→1 的战斗/空间操作递进、雨棚/排水双路线及对应工位入口、三证据工灯调查、双调校、返程 3→4 选择驱动的伞偶/纸鹭互斥增援、春肋檐守重击/冬肋翻花轻击动作证明与捷径、四季 Boss 四阶段、双结算和返沈砚；两种结算奖励走同一幂等 Profile Operation 路径；7 个内容驱动移动安全点；合格/闲置/失败重试与逐 Beat 预算审计 | 真实 60 分钟非重复内容密度/盲测、可保存环境机关、多单位增援与复杂 AI/掉落、真实 5 Cell、完整跨域事务快照和正式资产 |
 | 内容工具 | In Progress（Bootstrap） | 9 类模板注册表、工作台范围、F1 纵切、schema `1.4.0`、23 项场景交互（含伞巷三步雨障、双路线/选择门和返程校准架）、7 项安全点、7 项带 Objective 前置且可由选择互斥约束的战斗任务触发器、3 项敌群结果、8 项含 Home Pose/Formation Slot、replace/reinforce 与选择门的 Beat/Objective 敌群激活、4 项 Boss 阶段、2 项结算奖励映射及 8 实体/17 能力战斗包的 JSON/Schema/确定性 C++ 生成 | 可用 Workbench、多 Objective 会合/通用复合条件、多单位增援、动态队形/角色职责/多令牌协同、通用 ContentCore/baker、迁移、资源预览与错误定位 UI |
-| 本地存档/云同步 | In Progress（`F1-DEV-03-RWD-01` 候选，未 Verified） | IndexedDB v1 六 store、`SaveEnvelopeV1`、Profile Head CAS/C++ 异步桥、奖励 Operation+快照+Head 单事务、Guest 首存/刷新、两结算正常/重复/离线本地证据 | 奖励事务中断重试与 CAS 冲突浏览器证据、远端三浏览器/CI、迁移/导入、多标签主动接管、云 API/DDL/OIDC |
+| 本地存档/云同步 | In Progress（`F1-DEV-03-RWD-01` 候选，未 Verified） | IndexedDB v1 六 store、`SaveEnvelopeV1`、Profile Head CAS/C++ 异步桥、奖励 Operation+快照+Head 单事务、Guest 首存/刷新、两结算正常/重复/离线及 CAS 冲突本地证据 | 奖励事务中断重试浏览器证据、远端三浏览器/CI、迁移/导入、多标签主动接管、云 API/DDL/OIDC |
 | 发布运维 | Accepted Baseline | 渠道、缓存、回滚、证据与灾备门；F1 Windows 2022 干净 CI 已落地 | CD、正式 origin/CDN/监控与演练 |
 
 `Scope Approved` 或 `Accepted Baseline` 都不等于 `Implemented`。状态词统一定义在 [`docs/09-术语与索引.md`](docs/09-术语与索引.md)。

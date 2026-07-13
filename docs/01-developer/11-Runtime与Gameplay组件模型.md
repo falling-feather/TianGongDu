@@ -2,7 +2,7 @@
 
 > 上级文档：[`../01-开发者文档.md`](../01-开发者文档.md)
 > 状态：Accepted Baseline
-> 最后更新：2026-07-11
+> 最后更新：2026-07-14
 > 维护者角色：C++ 核心负责人；Gameplay、AI、存档与表现 Owner 会签
 
 ## 1. 混合组件模型
@@ -304,7 +304,7 @@ F1 命令回放使用版本化、显式小端的 `CommandReplay` 二进制格式
 
 当前 F1 schema `1.3.0` 允许战斗触发器同时携带成对的 `required_selection_objective_id` / `required_selection_id`。选择门只能引用先前已发生的 `choose` Objective；同一任务 Objective 可以有多个变体，但不能把无条件与有条件触发器混用，所有变体必须引用同一选择 Objective、option 不重复并完整覆盖 authored options。生成器负责拒绝未来选择与覆盖不全；C++ Resolver 还会拒绝半门、重复 option 和不兼容的同目标定义，并在解析信号时只读取 `IQuestRuntime::selected_option`。Web、Axmol 与输入适配器不得复制“选择→动作”的映射。
 
-沈砚训练保留 5 项触发：檐守重击起手、檐守格挡反制、切换翻花式、翻花轻击起手和翻花闪避反制。返程再增加两个互斥 Definition，共同指向 `f1_objective_demonstrate_rib_calibration`：已选春肋只接受 `stance_eavesguard` + `ability_eavesguard_heavy`，已选冬肋只接受 `stance_flower_turn` + `ability_flower_light`，因此当前总数为 7 项。Web Shell 只把已经由战斗解析器接受的 `CombatEvent` 映射成 `QuestCombatSignal`；物理键、Presentation 特效和敌人偶然命中不能直接完成任务。每次被接受的任务战斗信号后都要重新核对内容化敌群结果，和敌人击败后的核对使用同一 Gameplay Definition；这样即使全部敌人先被清空，随后完成调校动作仍可解锁并收敛 `all_hostiles_defeated`，不会因事件顺序形成软锁。新增 Ability/Stance/防御触发种类可复用这一合同，但通用条件表达式、等待/失败替代节点和编辑器预览仍为 Missing/Reserved，不能继续向解析器加入 F1 专属分支。
+沈砚训练保留 5 项触发：檐守重击起手、檐守格挡反制、切换翻花式、翻花轻击起手和翻花闪避反制。返程再增加两个互斥 Definition，共同指向 `f1_objective_demonstrate_rib_calibration`：已选春肋只接受 `stance_eavesguard` + `ability_eavesguard_heavy`，已选冬肋只接受 `stance_flower_turn` + `ability_flower_light`，因此当前总数为 7 项。Web Shell 只把已经由战斗解析器接受的 `CombatEvent` 映射成 `QuestCombatSignal`；物理键、Presentation 特效和敌人偶然命中不能直接完成任务。每次被接受的任务战斗信号后都要重新核对内容化敌群结果，和敌人击败后的核对使用同一 Gameplay Definition；这样即使全部敌人先被清空，随后完成调校动作仍可解锁并收敛 `all_hostiles_defeated`，不会因事件顺序形成软锁。新增 Ability/Stance/防御触发种类可复用这一合同；第 27 节的通用条件求值器已建立最小 Bootstrap，但这些触发 Definition 尚未迁移，等待/失败替代节点和编辑器预览仍为 Missing/Reserved，不能继续向解析器加入 F1 专属分支。
 
 ## 26. Beat 边界的敌群激活
 
@@ -314,4 +314,12 @@ F1 的敌对 Actor Definition 全部以 `initially_active=false` 烘焙；`Quest
 
 内容激活使用独立 `EncounterActivationCommand`，以同一 Tick 和全局单调边界序列分别请求 `IEncounterDirector::activate_group` 与 `ICombatResolver::activate_group`；Director 更新归位点/接敌槽并只重置受影响的攻击 Runtime，Combat 按模式恢复/隔离 Actor。`SafePointRetryCommand` 及 `SafePointRetryReason::player_defeated` 只用于真正倒地的玩家，不再承载任务推进。失败重试先恢复当前 Beat 的入场 `replace`，再按 Beat/触发 Objective 对已完成边界去重，交由上述 Gameplay 匹配器重放唯一已选变体，因此返程 `reinforce` 不会丢失或把春冬两个 Definition 都重放。`CombatActorSnapshot` 以独立 `defeated` 位表达生命归零：`active=false && defeated=false` 是休眠/未选中，只有 `defeated=true && health=0` 才可计入击败任务；Active+Defeated、Defeated+非零生命均失败关闭。训练构件继续使用独立 Archetype，避免练习对手进入正式伞偶/纸鹭族群计数。
 
-Stage Advance 和 Objective Complete 都可能由场景交互或 `CombatEvent` 产生。Web Shell 只能先记录待激活 Beat/Objective，再在交互解析后或战斗事件发布完成后的 Tick 安全点应用，禁止在 `ICombatEventSink::publish` 回调栈中重入修改 Combat Resolver。沈砚训练用两种单体教学方位、伞巷用 1/5 对向夹击与纵深纸鹭槽、返程用 0/3/6 三角入口组，并在 Slot 5 根据春肋选择追加地面伞偶、根据冬肋选择追加高位纸鹭，共同证明同一内容边界可驱动完整替换、单 Actor 叠加增援和先前选择的可见后果。当前已实现的是 8 项固定 Definition 与“3→4”Bootstrap；通用布尔条件语言、多个 Objective 会合、动态队形、角色职责层、多单位增援、刷出/退场演出、多令牌协同、导航避障和 Workbench 条件/编队/时间线仍为 Missing/Reserved。
+Stage Advance 和 Objective Complete 都可能由场景交互或 `CombatEvent` 产生。Web Shell 只能先记录待激活 Beat/Objective，再在交互解析后或战斗事件发布完成后的 Tick 安全点应用，禁止在 `ICombatEventSink::publish` 回调栈中重入修改 Combat Resolver。沈砚训练用两种单体教学方位、伞巷用 1/5 对向夹击与纵深纸鹭槽、返程用 0/3/6 三角入口组，并在 Slot 5 根据春肋选择追加地面伞偶、根据冬肋选择追加高位纸鹭，共同证明同一内容边界可驱动完整替换、单 Actor 叠加增援和先前选择的可见后果。当前已实现的是 8 项固定 Definition 与“3→4”Bootstrap；通用条件程序的 C++ 最小合同/求值器已按第 27 节 Bootstrap，但多个 Objective 会合尚未接入激活 Definition，动态队形、角色职责层、多单位增援、刷出/退场演出、多令牌协同、导航避障和 Workbench 条件/编队/时间线仍为 Missing/Reserved。
+
+## 27. 通用任务复合条件最小合同
+
+`QuestConditionProgramDefinition` 用稳定 `ContentId` 命名一段有界后缀布尔程序；当前指令仅允许 `objective_completed`、`selection_equals`、`all`、`any` 和 `negate`。`DeterministicQuestConditionEvaluator::initialize` 在进入 Session 前一次性校验条件库：1–64 个程序、每程序 1–64 条指令、求值栈最多 16 项、`all`/`any` 的 fan-in 为 2–8，并拒绝不稳定/重复条件 ID、未知 Objective、未由 `choose` 交互声明的 option、操作数不足、悬空结果、非法 payload 和未知 opcode。任一错误都失败关闭，不生成部分可用的条件库。
+
+条件状态的唯一 Owner 仍是 `IQuestRuntime`。求值器只调用 `objective_state` 与 `selected_option`，使用固定栈、无分配、无状态写入；未初始化和未知条件返回显式错误，Objective 未完成或选择不匹配只得到 `false`。Presentation、Web Shell、浏览器 QA 与内容工具不得复制求值逻辑或保存第二份条件结果。
+
+形成精确提交 `37f5dd6` 的同一源码由 Native 用例证明两个 Objective 与一个选择的 AND 会合、路线 OR、NOT、嵌套 AND/OR 和替代分支，并覆盖未知引用、空程序、栈上/下溢、fan-in 超限与重复 ID；提交前工作树的 MSVC/Clang Release、目标 CTest 和 Emscripten Web Single Release 均通过。该状态仅为 **Bootstrap Implemented**：`VerticalSliceDefinition` 尚未拥有条件程序 span，JSON Schema/生成器/生成头和现有 Interaction/Combat/Encounter 消费者也尚未接线。旧的 `prerequisite_objectives` 与成对选择门在一次性迁移完成前仍是权威真相；后续迁移必须同时删除被替代字段和专用匹配分支，禁止长期保留两套条件真相。

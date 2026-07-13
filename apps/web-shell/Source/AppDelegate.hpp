@@ -1,9 +1,12 @@
 #pragma once
 
+#include "F1RewardClaim.hpp"
+
 #include <axmol.h>
 
 #include <tgd/platform/web/web_platform_bridge.hpp>
 #include <tgd/presentation/presentation_lifecycle.hpp>
+#include <tgd/runtime/profile_progress_coordinator.hpp>
 #include <tgd/runtime/profile_storage_coordinator.hpp>
 #include <tgd/runtime/runtime_facade.hpp>
 
@@ -13,7 +16,7 @@
 
 class F1GrayboxLayer;
 
-class AppDelegate final : private ax::Application {
+class AppDelegate final : private ax::Application, private IF1RewardClaimSink {
   public:
     AppDelegate();
     ~AppDelegate() override;
@@ -39,6 +42,10 @@ class AppDelegate final : private ax::Application {
     [[nodiscard]] std::uint32_t webF1QaQuestSelectedChoices() const noexcept;
     [[nodiscard]] int webF1QaQuestResolved() const noexcept;
     [[nodiscard]] int webF1QaResolutionRewardReady() const noexcept;
+    [[nodiscard]] int webF1QaRewardClaimCommitted() const noexcept;
+    [[nodiscard]] std::uint32_t webF1QaProfileOperationCount() const noexcept;
+    [[nodiscard]] int webF1QaReplayRewardClaim() noexcept;
+    [[nodiscard]] int webF1QaSubmitInvalidRewardClaim() noexcept;
     [[nodiscard]] std::int32_t webF1QaSafePointPoseX() const noexcept;
     [[nodiscard]] std::int32_t webF1QaSafePointPoseY() const noexcept;
     [[nodiscard]] std::int32_t webF1QaPlayerPoseX() const noexcept;
@@ -67,6 +74,10 @@ class AppDelegate final : private ax::Application {
     void pausePresentationOutput() noexcept;
     void resumePresentationOutputIfEligible() noexcept;
     void publishProfileUi() noexcept;
+    void synchronizeProfileProgress() noexcept;
+    void tryBeginQueuedRewardClaim() noexcept;
+    void notifyObservedRewardClaimIfCommitted() noexcept;
+    void submitF1RewardClaim(const F1RewardClaim& claim) noexcept override;
     void trace(std::string_view event, std::string_view result) noexcept;
 
     static AppDelegate* active_;
@@ -75,10 +86,19 @@ class AppDelegate final : private ax::Application {
     tgd::presentation::PresentationLifecycle presentation_;
     tgd::platform::web::WebPlatformBridge webPlatform_;
     tgd::runtime::ProfileStorageCoordinator profileStorage_;
+    tgd::runtime::ProfileProgressCoordinator profileProgress_;
+    tgd::runtime::ProfileProgressCoordinatorError profileProgressError_{
+        tgd::runtime::ProfileProgressCoordinatorError::none
+    };
     tgd::platform::web::WebBootConfig webBootConfig_{};
+    F1RewardClaim queuedRewardClaim_{};
+    F1RewardClaim observedRewardClaim_{};
     F1GrayboxLayer* grayboxLayer_{};
     std::uint64_t traceSequence_{0};
     bool profileBooted_{false};
+    bool profileProgressReady_{false};
+    bool hasQueuedRewardClaim_{false};
+    bool hasObservedRewardClaim_{false};
     bool pageHidden_{false};
     bool pageFocused_{true};
     bool suspendedForPage_{false};

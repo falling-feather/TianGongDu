@@ -111,6 +111,31 @@ constexpr std::string_view toString(tgd::runtime::ProfileStorageError error) noe
     return "unknown";
 }
 
+constexpr std::string_view toString(
+    tgd::runtime::ProfileProgressCoordinatorError error
+) noexcept {
+    using tgd::runtime::ProfileProgressCoordinatorError;
+    switch (error) {
+        case ProfileProgressCoordinatorError::none:
+            return "none";
+        case ProfileProgressCoordinatorError::invalid_config:
+            return "invalid_config";
+        case ProfileProgressCoordinatorError::invalid_state:
+            return "invalid_state";
+        case ProfileProgressCoordinatorError::invalid_snapshot:
+            return "invalid_snapshot";
+        case ProfileProgressCoordinatorError::invalid_progress:
+            return "invalid_progress";
+        case ProfileProgressCoordinatorError::invalid_claim:
+            return "invalid_claim";
+        case ProfileProgressCoordinatorError::allocation_failed:
+            return "allocation_failed";
+        case ProfileProgressCoordinatorError::revision_overflow:
+            return "revision_overflow";
+    }
+    return "unknown";
+}
+
 constexpr tgd::platform::web::WebAbiError
 toWebError(tgd::runtime::ProfileStorageError error) noexcept {
     using tgd::platform::web::WebAbiError;
@@ -140,6 +165,27 @@ toWebError(tgd::runtime::ProfileStorageError error) noexcept {
             return WebAbiError::cancelled;
         case ProfileStorageError::timeout:
             return WebAbiError::timeout;
+    }
+    return WebAbiError::internal;
+}
+
+constexpr tgd::platform::web::WebAbiError toWebError(
+    tgd::runtime::ProfileProgressCoordinatorError error
+) noexcept {
+    using tgd::platform::web::WebAbiError;
+    using tgd::runtime::ProfileProgressCoordinatorError;
+    switch (error) {
+        case ProfileProgressCoordinatorError::none:
+            return WebAbiError::none;
+        case ProfileProgressCoordinatorError::invalid_config:
+        case ProfileProgressCoordinatorError::invalid_state:
+        case ProfileProgressCoordinatorError::invalid_snapshot:
+        case ProfileProgressCoordinatorError::invalid_progress:
+        case ProfileProgressCoordinatorError::invalid_claim:
+        case ProfileProgressCoordinatorError::revision_overflow:
+            return WebAbiError::invalid_message;
+        case ProfileProgressCoordinatorError::allocation_failed:
+            return WebAbiError::internal;
     }
     return WebAbiError::internal;
 }
@@ -198,7 +244,7 @@ bool AppDelegate::applicationDidFinishLaunching() {
 #endif
     director->setAnimationInterval(1.0F / 60.0F);
     renderView->setDesignResolutionSize(designWidth, designHeight, ResolutionPolicy::SHOW_ALL);
-    auto* scene = createF1GrayboxScene(&grayboxLayer_);
+    auto* scene = createF1GrayboxScene(&grayboxLayer_, this);
     if (scene == nullptr) {
         static_cast<void>(presentation_.stop());
         static_cast<void>(runtime_.shutdown());
@@ -327,6 +373,33 @@ int AppDelegate::webF1QaResolutionRewardReady() const noexcept {
     return grayboxLayer_ != nullptr && grayboxLayer_->qaResolutionRewardReady() ? 1 : 0;
 }
 
+int AppDelegate::webF1QaRewardClaimCommitted() const noexcept {
+    return grayboxLayer_ != nullptr && grayboxLayer_->qaResolutionRewardCommitted() ? 1 : 0;
+}
+
+std::uint32_t AppDelegate::webF1QaProfileOperationCount() const noexcept {
+    if (!profileProgressReady_) {
+        return 0;
+    }
+    return profileProgress_.committed_operation_count() >
+                   std::numeric_limits<std::uint32_t>::max()
+               ? std::numeric_limits<std::uint32_t>::max()
+               : static_cast<std::uint32_t>(profileProgress_.committed_operation_count());
+}
+
+int AppDelegate::webF1QaReplayRewardClaim() noexcept {
+    if (!observedRewardClaim_.valid()) {
+        return 0;
+    }
+    submitF1RewardClaim(observedRewardClaim_);
+    return 1;
+}
+
+int AppDelegate::webF1QaSubmitInvalidRewardClaim() noexcept {
+    submitF1RewardClaim({});
+    return 1;
+}
+
 std::int32_t AppDelegate::webF1QaSafePointPoseX() const noexcept {
     return grayboxLayer_ == nullptr ? 0 : grayboxLayer_->qaSafePointPoseX();
 }
@@ -399,6 +472,13 @@ std::int32_t AppDelegate::webBoot(std::span<const std::uint8_t> message) noexcep
 
     webBootConfig_ = config;
     profileBooted_ = true;
+    profileProgress_ = {};
+    profileProgressError_ = tgd::runtime::ProfileProgressCoordinatorError::none;
+    profileProgressReady_ = false;
+    queuedRewardClaim_ = {};
+    observedRewardClaim_ = {};
+    hasQueuedRewardClaim_ = false;
+    hasObservedRewardClaim_ = false;
     const auto restore = profileStorage_.begin_restore();
     trace("profile.restore.begin", toString(restore));
     publishProfileUi();
@@ -426,34 +506,31 @@ std::int32_t AppDelegate::webSubmitUiCommand(std::span<const std::uint8_t> messa
         return static_cast<std::int32_t>(toWebError(retried));
     }
 
-    const auto current_sequence =
-        profileStorage_.has_snapshot() ? profileStorage_.current_head().logical_sequence : 0;
-    if (current_sequence == std::numeric_limits<std::uint64_t>::max()) {
-        return static_cast<std::int32_t>(WebAbiError::invalid_message);
+    synchronizeProfileProgress();
+    if (!profileProgressReady_) {
+        return static_cast<std::int32_t>(
+            profileProgressError_ == tgd::runtime::ProfileProgressCoordinatorError::none
+                ? WebAbiError::invalid_message
+                : toWebError(profileProgressError_)
+        );
     }
-
-    tgd::contracts::SaveEnvelopeV1 snapshot;
-    snapshot.profile_id = webBootConfig_.profile_id;
-    snapshot.snapshot_id = command.command_id;
-    snapshot.parent_snapshot_id = profileStorage_.has_snapshot()
-                                      ? profileStorage_.current_head().snapshot_id
-                                      : tgd::contracts::StableId128{};
-    snapshot.package_set_id = webBootConfig_.package_set_id;
-    snapshot.created_logical_sequence = current_sequence + 1;
-    snapshot.checkpoint_kind = command.checkpoint_kind;
-    try {
-        constexpr std::string_view payload = "tgd.f1.guest.profile.checkpoint.v1";
-        snapshot.payload.assign(payload.begin(), payload.end());
-        for (std::size_t index = 0; index < sizeof(snapshot.created_logical_sequence); ++index) {
-            snapshot.payload.push_back(static_cast<std::uint8_t>(
-                snapshot.created_logical_sequence >> static_cast<unsigned>(index * 8U)));
-        }
-    } catch (const std::bad_alloc&) {
-        return static_cast<std::int32_t>(WebAbiError::internal);
+    const auto prepared =
+        profileProgress_.prepare_checkpoint(command.command_id, command.checkpoint_kind);
+    profileProgressError_ = prepared.error;
+    if (prepared.error != tgd::runtime::ProfileProgressCoordinatorError::none ||
+        prepared.disposition != tgd::runtime::ProfileProgressPrepareDisposition::prepared) {
+        trace("profile.progress.checkpoint", toString(prepared.error));
+        return static_cast<std::int32_t>(toWebError(prepared.error));
     }
-
-    const auto saved =
-        profileStorage_.begin_save(snapshot, tgd::runtime::StorageDurability::strict_if_supported);
+    const auto saved = profileStorage_.begin_save(
+        profileProgress_.pending_snapshot(),
+        tgd::runtime::StorageDurability::strict_if_supported,
+        profileProgress_.pending_new_operations()
+    );
+    if (saved != tgd::runtime::ProfileStorageError::none &&
+        !profileStorage_.has_pending_save()) {
+        static_cast<void>(profileProgress_.discard_pending());
+    }
     trace("profile.save.begin", toString(saved));
     publishProfileUi();
     return static_cast<std::int32_t>(toWebError(saved));
@@ -476,6 +553,7 @@ std::int32_t AppDelegate::webCompleteAsyncRequest(std::span<const std::uint8_t> 
     const auto pumped = profileStorage_.pump();
     if (pumped.completion_consumed) {
         trace("profile.storage.complete", toString(pumped.error));
+        synchronizeProfileProgress();
         publishProfileUi();
     }
     return static_cast<std::int32_t>(tgd::platform::web::WebAbiError::none);
@@ -503,6 +581,123 @@ void AppDelegate::publishProfileUi() noexcept {
         event.snapshot_id = profileStorage_.current_head().snapshot_id;
     }
     webPlatform_.publish_profile_ui(webBootConfig_.session_generation, event);
+}
+
+void AppDelegate::synchronizeProfileProgress() noexcept {
+    if (!profileBooted_ || profileStorage_.state() != tgd::runtime::ProfileStorageState::ready) {
+        return;
+    }
+    if (!profileProgressReady_) {
+        if (profileStorage_.has_snapshot()) {
+            const auto decoded =
+                tgd::contracts::decode_save_envelope(profileStorage_.current_snapshot_bytes());
+            profileProgressError_ =
+                decoded.error == tgd::contracts::SaveEnvelopeError::none
+                    ? profileProgress_.restore(decoded.envelope)
+                    : tgd::runtime::ProfileProgressCoordinatorError::invalid_snapshot;
+        } else {
+            profileProgressError_ = profileProgress_.initialize(
+                webBootConfig_.profile_id,
+                webBootConfig_.package_set_id
+            );
+        }
+        profileProgressReady_ =
+            profileProgressError_ == tgd::runtime::ProfileProgressCoordinatorError::none;
+        trace("profile.progress.restore", toString(profileProgressError_));
+        if (!profileProgressReady_) {
+            return;
+        }
+    }
+
+    if (profileProgress_.has_pending() && profileStorage_.has_snapshot() &&
+        profileStorage_.current_head().snapshot_id ==
+            profileProgress_.pending_snapshot().snapshot_id) {
+        profileProgressError_ =
+            profileProgress_.accept_commit(profileStorage_.current_head().snapshot_id);
+        trace("profile.progress.commit", toString(profileProgressError_));
+    }
+    notifyObservedRewardClaimIfCommitted();
+    tryBeginQueuedRewardClaim();
+}
+
+void AppDelegate::tryBeginQueuedRewardClaim() noexcept {
+    if (!hasQueuedRewardClaim_ || !profileProgressReady_ ||
+        profileStorage_.state() != tgd::runtime::ProfileStorageState::ready) {
+        return;
+    }
+    const auto prepared = profileProgress_.prepare_reward_claim(
+        queuedRewardClaim_.source_id,
+        queuedRewardClaim_.reward_id,
+        queuedRewardClaim_.reward_dedup_key
+    );
+    profileProgressError_ = prepared.error;
+    trace("profile.reward.prepare", toString(prepared.error));
+    if (prepared.error != tgd::runtime::ProfileProgressCoordinatorError::none) {
+        if (prepared.error == tgd::runtime::ProfileProgressCoordinatorError::invalid_claim) {
+            hasQueuedRewardClaim_ = false;
+        }
+        return;
+    }
+    if (prepared.disposition ==
+        tgd::runtime::ProfileProgressPrepareDisposition::already_committed) {
+        hasQueuedRewardClaim_ = false;
+        notifyObservedRewardClaimIfCommitted();
+        return;
+    }
+    if (prepared.disposition ==
+        tgd::runtime::ProfileProgressPrepareDisposition::already_pending) {
+        hasQueuedRewardClaim_ = false;
+        return;
+    }
+    if (prepared.disposition != tgd::runtime::ProfileProgressPrepareDisposition::prepared) {
+        return;
+    }
+    const auto saved = profileStorage_.begin_save(
+        profileProgress_.pending_snapshot(),
+        tgd::runtime::StorageDurability::strict_if_supported,
+        profileProgress_.pending_new_operations()
+    );
+    trace("profile.reward.save", toString(saved));
+    if (saved == tgd::runtime::ProfileStorageError::none ||
+        profileStorage_.has_pending_save()) {
+        hasQueuedRewardClaim_ = false;
+        publishProfileUi();
+        return;
+    }
+    static_cast<void>(profileProgress_.discard_pending());
+}
+
+void AppDelegate::notifyObservedRewardClaimIfCommitted() noexcept {
+    if (!hasObservedRewardClaim_ || !profileProgressReady_ ||
+        !profileProgress_.has_reward_claim(observedRewardClaim_.reward_dedup_key)) {
+        return;
+    }
+    if (grayboxLayer_ != nullptr) {
+        grayboxLayer_->notifyRewardClaimCommitted(observedRewardClaim_.reward_dedup_key);
+    }
+    hasObservedRewardClaim_ = false;
+}
+
+void AppDelegate::submitF1RewardClaim(const F1RewardClaim& claim) noexcept {
+    if (!claim.valid()) {
+        trace("profile.reward.claim", "invalid_claim");
+        return;
+    }
+    if (hasQueuedRewardClaim_ && queuedRewardClaim_ != claim) {
+        trace("profile.reward.claim", "conflicting_claim");
+        return;
+    }
+    if (hasObservedRewardClaim_ && observedRewardClaim_ != claim) {
+        trace("profile.reward.claim", "conflicting_claim");
+        return;
+    }
+    observedRewardClaim_ = claim;
+    hasObservedRewardClaim_ = true;
+    queuedRewardClaim_ = claim;
+    hasQueuedRewardClaim_ = true;
+    trace("profile.reward.claim", "queued");
+    synchronizeProfileProgress();
+    tryBeginQueuedRewardClaim();
 }
 
 tgd::presentation::PresentationError AppDelegate::synchronizeSuspension() noexcept {
@@ -736,6 +931,34 @@ EMSCRIPTEN_KEEPALIVE int tgd_web_f1_qa_quest_resolved() {
 EMSCRIPTEN_KEEPALIVE int tgd_web_f1_qa_resolution_reward_ready() {
     if (const auto* app = AppDelegate::active(); app != nullptr) {
         return app->webF1QaResolutionRewardReady();
+    }
+    return 0;
+}
+
+EMSCRIPTEN_KEEPALIVE int tgd_web_f1_qa_reward_claim_committed() {
+    if (const auto* app = AppDelegate::active(); app != nullptr) {
+        return app->webF1QaRewardClaimCommitted();
+    }
+    return 0;
+}
+
+EMSCRIPTEN_KEEPALIVE std::uint32_t tgd_web_f1_qa_profile_operation_count() {
+    if (const auto* app = AppDelegate::active(); app != nullptr) {
+        return app->webF1QaProfileOperationCount();
+    }
+    return 0;
+}
+
+EMSCRIPTEN_KEEPALIVE int tgd_web_f1_qa_replay_reward_claim() {
+    if (auto* app = AppDelegate::active(); app != nullptr) {
+        return app->webF1QaReplayRewardClaim();
+    }
+    return 0;
+}
+
+EMSCRIPTEN_KEEPALIVE int tgd_web_f1_qa_submit_invalid_reward_claim() {
+    if (auto* app = AppDelegate::active(); app != nullptr) {
+        return app->webF1QaSubmitInvalidRewardClaim();
     }
     return 0;
 }

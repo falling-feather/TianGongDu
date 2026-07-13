@@ -1,5 +1,7 @@
 #pragma once
 
+#include "F1RewardClaim.hpp"
+
 #include <axmol.h>
 
 #include <tgd/content/content_definition_provider.hpp>
@@ -26,6 +28,10 @@ class F1GrayboxLayer final :
 
     void clearInput(tgd::contracts::InputClearReason reason) noexcept;
     void shutdown() noexcept;
+    void setRewardClaimSink(IF1RewardClaimSink* sink) noexcept;
+    void notifyRewardClaimCommitted(
+        tgd::contracts::StableContentKey reward_dedup_key
+    ) noexcept;
     void publish(std::span<const tgd::contracts::CombatEvent> events) noexcept override;
     void publish(std::span<const tgd::contracts::QuestEvent> events) noexcept override;
     [[nodiscard]] std::int32_t qaPlayerHealth() const noexcept;
@@ -38,6 +44,7 @@ class F1GrayboxLayer final :
     [[nodiscard]] std::uint32_t qaQuestSelectedChoices() const noexcept;
     [[nodiscard]] bool qaQuestResolved() const noexcept;
     [[nodiscard]] bool qaResolutionRewardReady() const noexcept;
+    [[nodiscard]] bool qaResolutionRewardCommitted() const noexcept;
     [[nodiscard]] std::int32_t qaSafePointPoseX() const noexcept;
     [[nodiscard]] std::int32_t qaSafePointPoseY() const noexcept;
     [[nodiscard]] std::int32_t qaPlayerPoseX() const noexcept;
@@ -143,6 +150,8 @@ class F1GrayboxLayer final :
     tgd::contracts::StableContentKey pending_boss_stance_{};
     tgd::contracts::StableContentKey resolution_reward_{};
     tgd::contracts::StableContentKey resolution_reward_dedup_key_{};
+    IF1RewardClaimSink* reward_claim_sink_{};
+    bool resolution_reward_committed_{};
     float tick_accumulator_{};
 
     ax::Node* world_layer_{};
@@ -171,4 +180,7 @@ class F1GrayboxLayer final :
     std::uint8_t attack_fx_ticks_{};
 };
 
-[[nodiscard]] ax::Scene* createF1GrayboxScene(F1GrayboxLayer** layer_out);
+[[nodiscard]] ax::Scene* createF1GrayboxScene(
+    F1GrayboxLayer** layer_out,
+    IF1RewardClaimSink* reward_claim_sink
+);

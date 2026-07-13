@@ -193,6 +193,8 @@
       const lifecycleTrace = [];
       let contextLossExtension = null;
       let profileBridge = null;
+      let profilePumpTimer = null;
+      let profilePumpStopped = false;
       const presentationStateNames = Object.freeze({
         0: "stopped",
         1: "running",
@@ -288,6 +290,22 @@
           identity: profileBridge.identity
         });
         await profileBridge.boot();
+        scheduleProfilePump();
+      }
+
+      function scheduleProfilePump() {
+        if (profilePumpStopped || profilePumpTimer !== null) return;
+        profilePumpTimer = window.setTimeout(async () => {
+          profilePumpTimer = null;
+          try {
+            await profileBridge?.drain();
+          } catch (error) {
+            profilePumpStopped = true;
+            recordLifecycle("profile.pump_failed", { message: String(error) });
+            return;
+          }
+          scheduleProfilePump();
+        }, 50);
       }
 
       async function waitForActiveServiceWorker(registration) {
@@ -373,7 +391,12 @@
       window.addEventListener("error", (event) => {
         recordLifecycle("window.error", { message: event.message });
       });
-      window.addEventListener("pagehide", () => profileBridge?.shutdown(), { once: true });
+      window.addEventListener("pagehide", () => {
+        profilePumpStopped = true;
+        if (profilePumpTimer !== null) window.clearTimeout(profilePumpTimer);
+        profilePumpTimer = null;
+        profileBridge?.shutdown();
+      }, { once: true });
 
       saveProfileButton.addEventListener("click", async () => {
         saveProfileButton.disabled = true;
@@ -437,6 +460,12 @@
           questResolved: invokeBridge("tgd_web_f1_qa_quest_resolved", "number") !== 0,
           resolutionRewardReady:
             invokeBridge("tgd_web_f1_qa_resolution_reward_ready", "number") !== 0,
+          rewardClaimCommitted:
+            invokeBridge("tgd_web_f1_qa_reward_claim_committed", "number") !== 0,
+          profileOperationCount: invokeBridge(
+            "tgd_web_f1_qa_profile_operation_count",
+            "number"
+          ),
           safePointPoseX: invokeBridge("tgd_web_f1_qa_safe_point_pose_x", "number"),
           safePointPoseY: invokeBridge("tgd_web_f1_qa_safe_point_pose_y", "number"),
           playerPoseX: invokeBridge("tgd_web_f1_qa_player_pose_x", "number"),
@@ -457,6 +486,10 @@
           playerBusy: invokeBridge("tgd_web_f1_qa_player_busy", "number") !== 0
         }),
         getTrace: () => lifecycleTrace.map((entry) => ({ ...entry })),
+        replayRewardClaim: () =>
+          invokeBridge("tgd_web_f1_qa_replay_reward_claim", "number") !== 0,
+        submitInvalidRewardClaim: () =>
+          invokeBridge("tgd_web_f1_qa_submit_invalid_reward_claim", "number") !== 0,
         setHidden: (hidden) => dispatchVisibility(Boolean(hidden)),
         setFocused: (focused) => dispatchFocus(Boolean(focused)),
         loseContext: () => {

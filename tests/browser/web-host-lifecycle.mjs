@@ -56,6 +56,35 @@ const selectedSpringTracePose = laneRoute === "canopy"
 const hiddenSpringTracePose = laneRoute === "canopy"
   ? { x: -2_700, y: -1_700 }
   : { x: -3_900, y: -100 };
+const resolutionChoice =
+  argument("resolution-choice") ??
+  process.env.TGD_F1_RESOLUTION_CHOICE ??
+  "restore-shared-mark";
+if (!["subdue", "restore-shared-mark"].includes(resolutionChoice)) {
+  throw new Error(`Unsupported F1 resolution choice: ${resolutionChoice}`);
+}
+const resolutionChoicePose = resolutionChoice === "subdue"
+  ? { x: 3_300, y: 1_200 }
+  : { x: 4_200, y: 2_300 };
+const expectedResolutionReward = resolutionChoice === "subdue"
+  ? {
+      sourceId: "d0f941408eb43548",
+      rewardId: "114b65073b29fe2c",
+      rewardDedupKey: "ff8e0d62ed634ab7"
+    }
+  : {
+      sourceId: "44db64887748264e",
+      rewardId: "4337ec5d1426b5de",
+      rewardDedupKey: "9b2f5e4a8d6f8877"
+    };
+const rewardStorageFault =
+  argument("reward-storage-fault") ??
+  process.env.TGD_F1_REWARD_STORAGE_FAULT ??
+  "";
+if (!["", "reward_abort_once", "reward_conflict_once"].includes(rewardStorageFault)) {
+  throw new Error(`Unsupported reward storage fault: ${rewardStorageFault}`);
+}
+const rewardOffline = process.env.TGD_F1_REWARD_OFFLINE === "1";
 const forceSoftwareGraphics =
   process.env.TGD_FORCE_SOFTWARE_WEBGL === "1" || process.env.CI === "true";
 
@@ -462,6 +491,48 @@ function isExpectedConsoleDiagnostic(target, type, text) {
   );
 }
 
+async function inspectProfileOperations(page) {
+  return page.evaluate(async () => {
+    const profileId = window.__tgdProfile.identity.profileId;
+    const database = await new Promise((resolveOpen, rejectOpen) => {
+      const request = indexedDB.open("tiangongdu.prototype_f1.internal.profile", 1);
+      request.onsuccess = () => resolveOpen(request.result);
+      request.onerror = () => rejectOpen(request.error);
+    });
+    try {
+      const transaction = database.transaction("operations", "readonly");
+      const transactionDone = new Promise((resolveTransaction, rejectTransaction) => {
+        transaction.oncomplete = resolveTransaction;
+        transaction.onabort = () => rejectTransaction(transaction.error);
+        transaction.onerror = () => rejectTransaction(transaction.error);
+      });
+      const records = await new Promise((resolveRecords, rejectRecords) => {
+        const request = transaction.objectStore("operations").getAll();
+        request.onsuccess = () => resolveRecords(request.result);
+        request.onerror = () => rejectRecords(request.error);
+      });
+      await transactionDone;
+      return records
+        .filter((record) => record.profileId === profileId)
+        .map((record) => ({
+          operationId: record.operationId,
+          deviceId: record.deviceId,
+          baseRevision: record.baseRevision,
+          logicalSequence: record.logicalSequence,
+          domain: record.domain,
+          payloadVersion: record.payloadVersion,
+          sourceId: record.sourceId,
+          rewardId: record.rewardId,
+          rewardDedupKey: record.rewardDedupKey,
+          status: record.status,
+          byteLength: record.bytes?.byteLength ?? 0
+        }));
+    } finally {
+      database.close();
+    }
+  });
+}
+
 async function runBrowser(target, origin) {
   const definition = launchDefinition(target);
   const consoleProblems = [];
@@ -521,9 +592,12 @@ async function runBrowser(target, origin) {
       }
     });
 
-    const url = `${origin}/tiangongdu-f1.html?qa=1`;
-    const response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 45_000 });
-    assert(response?.ok(), `${target} failed to load ${url}: HTTP ${response?.status()}`);
+    const url = new URL("/tiangongdu-f1.html", origin);
+    url.searchParams.set("qa", "1");
+    if (rewardStorageFault) url.searchParams.set("storageFault", rewardStorageFault);
+    const pageUrl = url.href;
+    const response = await page.goto(pageUrl, { waitUntil: "domcontentloaded", timeout: 45_000 });
+    assert(response?.ok(), `${target} failed to load ${pageUrl}: HTTP ${response?.status()}`);
     assert.equal(await page.title(), "天工渡 · F1 Web Host");
 
     const status = page.locator("#status");
@@ -705,7 +779,7 @@ async function runBrowser(target, origin) {
     contender.on("console", (message) => {
       if (message.type() === "error") contenderProblems.push(message.text());
     });
-    const contenderResponse = await contender.goto(url, {
+    const contenderResponse = await contender.goto(pageUrl, {
       waitUntil: "domcontentloaded",
       timeout: 45_000
     });
@@ -815,68 +889,6 @@ async function runBrowser(target, origin) {
     const onlineRestoredProfile = await page.evaluate(() => window.__tgdProfile.getState());
     assert.equal(onlineRestoredProfile.logicalSequence, "4");
     assert.equal(onlineRestoredProfile.snapshotId, offlineSavedProfile.snapshotId);
-
-    await page.evaluate(async () => {
-      const profile = window.__tgdProfile.getState();
-      const profileId = window.__tgdProfile.identity.profileId;
-      const database = await new Promise((resolveOpen, rejectOpen) => {
-        const request = indexedDB.open("tiangongdu.prototype_f1.internal.profile", 1);
-        request.onsuccess = () => resolveOpen(request.result);
-        request.onerror = () => rejectOpen(request.error);
-      });
-      const transaction = database.transaction("snapshots", "readwrite");
-      const store = transaction.objectStore("snapshots");
-      const record = await new Promise((resolveRecord, rejectRecord) => {
-        const request = store.get([profileId, profile.snapshotId]);
-        request.onsuccess = () => resolveRecord(request.result);
-        request.onerror = () => rejectRecord(request.error);
-      });
-      const corrupted = new Uint8Array(record.bytes);
-      corrupted[0] ^= 0xff;
-      record.bytes = corrupted.buffer;
-      store.put(record);
-      await new Promise((resolveTransaction, rejectTransaction) => {
-        transaction.oncomplete = resolveTransaction;
-        transaction.onabort = () => rejectTransaction(transaction.error);
-        transaction.onerror = () => rejectTransaction(transaction.error);
-      });
-      database.close();
-    });
-    await page.reload({ waitUntil: "domcontentloaded", timeout: 45_000 });
-    await waitForText(page, status, "宿主已就绪", 45_000);
-    await page.waitForFunction(
-      () => window.__tgdProfile?.getState()?.stateName === "recovery_required",
-      undefined,
-      { timeout: 45_000 }
-    );
-    const corruptProfile = await page.evaluate(() => window.__tgdProfile.getState());
-    assert.equal(corruptProfile.errorName, "storage_corrupt");
-    assert.equal(corruptProfile.committedSaveCount, "0");
-    assert.equal(await saveProfile.isDisabled(), true);
-    assert.doesNotMatch(await profileState.innerText(), /已保存/);
-    assert.equal(await page.getByTestId("export-profile").isEnabled(), true);
-    const recoveryExport = await page.evaluate(async () => {
-      const exported = await window.__tgdProfile.export();
-      return {
-        expectedProfileId: window.__tgdProfile.identity.profileId,
-        fileName: exported.fileName,
-        mediaType: exported.mediaType,
-        profileId: exported.profileId,
-        snapshotId: exported.snapshotId,
-        logicalSequence: exported.logicalSequence,
-        envelopeHash: exported.envelopeHash,
-        byteLength: exported.bytes.byteLength,
-        firstByte: exported.bytes[0]
-      };
-    });
-    assert.match(recoveryExport.fileName, /\.tgdprofile$/);
-    assert.equal(recoveryExport.mediaType, "application/vnd.tiangongdu.profile+octet-stream");
-    assert.equal(recoveryExport.profileId, recoveryExport.expectedProfileId);
-    assert.equal(recoveryExport.snapshotId, offlineSavedProfile.snapshotId);
-    assert.equal(recoveryExport.logicalSequence, "4");
-    assert.match(recoveryExport.envelopeHash, /^[0-9a-f]{64}$/);
-    assert(recoveryExport.byteLength > 176);
-    assert.notEqual(recoveryExport.firstByte, 0x54);
 
     await page.evaluate(() => {
       const canvasElement = document.querySelector("canvas");
@@ -1605,12 +1617,12 @@ async function runBrowser(target, origin) {
       bossCompletePath,
       `${target} four-seasons wraith complete`
     );
-    await moveF1PlayerTo(page, 4_200, 2_300);
+    await moveF1PlayerTo(page, resolutionChoicePose.x, resolutionChoicePose.y);
     await captureRenderedFrame(
       page,
       canvas,
       resolutionChoicePath,
-      `${target} restore-shared-mark resolution choice`
+      `${target} ${resolutionChoice} resolution choice`
     );
     await page.keyboard.press("f");
     await page.waitForFunction(
@@ -1622,6 +1634,15 @@ async function runBrowser(target, origin) {
       undefined,
       { timeout: 5_000 }
     );
+    const beforeRewardState = await page.evaluate(() => window.__tgdTest.getF1State());
+    const beforeRewardProfile = await page.evaluate(() => window.__tgdProfile.getState());
+    const rewardTraceStart = await page.evaluate(() => window.__tgdLifecycleTrace.length);
+    assert.equal(beforeRewardState.profileOperationCount, 0);
+    assert.equal(beforeRewardProfile.stateName, "ready");
+    assert.equal(beforeRewardProfile.logicalSequence, "4");
+    assert.deepEqual(await inspectProfileOperations(page), []);
+
+    if (rewardOffline) await page.context().setOffline(true);
     await moveF1PlayerTo(page, -10_500, -600);
     await page.keyboard.press("f");
     await page.waitForFunction(
@@ -1632,6 +1653,63 @@ async function runBrowser(target, origin) {
       undefined,
       { timeout: 5_000 }
     );
+
+    let rewardFailureState = null;
+    if (rewardStorageFault === "reward_abort_once") {
+      await page.waitForFunction(
+        () => window.__tgdProfile?.getState()?.stateName === "save_failed",
+        undefined,
+        { timeout: 15_000 }
+      );
+      rewardFailureState = {
+        profile: await page.evaluate(() => window.__tgdProfile.getState()),
+        f1: await page.evaluate(() => window.__tgdTest.getF1State()),
+        operations: await inspectProfileOperations(page),
+        displayText: await profileState.innerText()
+      };
+      assert.equal(rewardFailureState.profile.errorName, "storage_unavailable");
+      assert.equal(rewardFailureState.profile.hasPendingSave, true);
+      assert.equal(rewardFailureState.profile.logicalSequence, "4");
+      assert.equal(rewardFailureState.f1.rewardClaimCommitted, false);
+      assert.equal(rewardFailureState.f1.profileOperationCount, 0);
+      assert.deepEqual(rewardFailureState.operations, []);
+      assert.doesNotMatch(rewardFailureState.displayText, /已保存/);
+      await saveProfile.click();
+    } else if (rewardStorageFault === "reward_conflict_once") {
+      await page.waitForFunction(
+        () => window.__tgdProfile?.getState()?.stateName === "conflict_read_only",
+        undefined,
+        { timeout: 15_000 }
+      );
+      rewardFailureState = {
+        profile: await page.evaluate(() => window.__tgdProfile.getState()),
+        f1: await page.evaluate(() => window.__tgdTest.getF1State()),
+        operations: await inspectProfileOperations(page),
+        displayText: await profileState.innerText()
+      };
+      assert.equal(rewardFailureState.profile.errorName, "storage_conflict");
+      assert.equal(rewardFailureState.profile.hasPendingSave, true);
+      assert.equal(rewardFailureState.profile.logicalSequence, "4");
+      assert.equal(rewardFailureState.f1.rewardClaimCommitted, false);
+      assert.equal(rewardFailureState.f1.profileOperationCount, 0);
+      assert.deepEqual(rewardFailureState.operations, []);
+      assert.doesNotMatch(rewardFailureState.displayText, /已保存/);
+    }
+
+    if (rewardStorageFault !== "reward_conflict_once") {
+      await page.waitForFunction(
+        () => {
+          const f1 = window.__tgdTest?.getF1State();
+          const profile = window.__tgdProfile?.getState();
+          return f1?.rewardClaimCommitted === true && f1.profileOperationCount === 1 &&
+            profile?.stateName === "ready" && profile.logicalSequence === "5";
+        },
+        undefined,
+        { timeout: 15_000 }
+      );
+    }
+    if (rewardOffline) await page.context().setOffline(false);
+
     const resolutionState = await page.evaluate(() => window.__tgdTest.getF1State());
     assert.equal(resolutionState.questBeatIndex, 6);
     assert.equal(resolutionState.questCompletedObjectives, 2);
@@ -1640,6 +1718,14 @@ async function runBrowser(target, origin) {
     assert.equal(resolutionState.activeHostiles, 0);
     assert.equal(resolutionState.questResolved, true);
     assert.equal(resolutionState.resolutionRewardReady, true);
+    assert.equal(
+      resolutionState.rewardClaimCommitted,
+      rewardStorageFault !== "reward_conflict_once"
+    );
+    assert.equal(
+      resolutionState.profileOperationCount,
+      rewardStorageFault === "reward_conflict_once" ? 0 : 1
+    );
     assert.equal(resolutionState.safePointPoseX, 3_000);
     assert.equal(resolutionState.safePointPoseY, 800);
     assert(resolutionState.eligiblePlayTicks > 0);
@@ -1650,6 +1736,81 @@ async function runBrowser(target, origin) {
       false,
       `${target} fast functional route must not masquerade as a one-hour playtest.`
     );
+    const rewardOperations = await inspectProfileOperations(page);
+    if (rewardStorageFault === "reward_conflict_once") {
+      assert.deepEqual(rewardOperations, []);
+    } else {
+      assert.equal(rewardOperations.length, 1);
+      assert.match(rewardOperations[0].operationId, /^[0-9a-f]{32}$/);
+      assert.match(rewardOperations[0].deviceId, /^[0-9a-f]{32}$/);
+      assert.equal(rewardOperations[0].baseRevision, "00000000000000000004");
+      assert.equal(rewardOperations[0].logicalSequence, "00000000000000000005");
+      assert.equal(rewardOperations[0].domain, 1);
+      assert.equal(rewardOperations[0].payloadVersion, 1);
+      assert.equal(rewardOperations[0].sourceId, expectedResolutionReward.sourceId);
+      assert.equal(rewardOperations[0].rewardId, expectedResolutionReward.rewardId);
+      assert.equal(
+        rewardOperations[0].rewardDedupKey,
+        expectedResolutionReward.rewardDedupKey
+      );
+      assert.equal(rewardOperations[0].status, "pending");
+      assert.equal(rewardOperations[0].byteLength, 80);
+    }
+    const rewardReplayTraceStart = await page.evaluate(
+      () => window.__tgdLifecycleTrace.length
+    );
+    const rewardReplayProbe = await page.evaluate((replayCommitted) => ({
+      invalidSubmitted: window.__tgdTest.submitInvalidRewardClaim(),
+      replaySubmitted: replayCommitted ? window.__tgdTest.replayRewardClaim() : null
+    }), rewardStorageFault !== "reward_conflict_once");
+    assert.equal(rewardReplayProbe.invalidSubmitted, true);
+    if (rewardStorageFault !== "reward_conflict_once") {
+      assert.equal(rewardReplayProbe.replaySubmitted, true);
+    }
+    await page.waitForTimeout(150);
+    const rewardReplayProfile = await page.evaluate(() => window.__tgdProfile.getState());
+    const rewardReplayState = await page.evaluate(() => window.__tgdTest.getF1State());
+    assert.equal(
+      rewardReplayProfile.logicalSequence,
+      rewardStorageFault === "reward_conflict_once" ? "4" : "5"
+    );
+    assert.equal(
+      rewardReplayState.profileOperationCount,
+      rewardStorageFault === "reward_conflict_once" ? 0 : 1
+    );
+    assert.equal(
+      (await inspectProfileOperations(page)).length,
+      rewardStorageFault === "reward_conflict_once" ? 0 : 1
+    );
+    const rewardReplayTrace = await page.evaluate((start) =>
+      window.__tgdLifecycleTrace.slice(start).map((record) => ({ ...record })),
+    rewardReplayTraceStart);
+    assert.equal(
+      rewardReplayTrace.some(
+        (record) => record.event === "profile.state" && record.stateName === "saving"
+      ),
+      false,
+      `${target} duplicate or invalid reward claim started a second transaction.`
+    );
+    const rewardSaveTrace = await page.evaluate((start) => window.__tgdLifecycleTrace
+      .slice(start)
+      .filter((record) => record.event === "profile.state")
+      .map((record) => ({ ...record })), rewardTraceStart);
+    const rewardSavingIndex = rewardSaveTrace.findIndex(
+      (record) => record.stateName === "saving"
+    );
+    assert(rewardSavingIndex >= 0, `${target} reward omitted the pending UI state.`);
+    assert.doesNotMatch(rewardSaveTrace[rewardSavingIndex].displayText, /已保存/);
+    if (rewardStorageFault !== "reward_conflict_once") {
+      const rewardCommittedIndex = rewardSaveTrace.findIndex(
+        (record) => record.stateName === "ready" && record.logicalSequence === "5"
+      );
+      assert(
+        rewardCommittedIndex > rewardSavingIndex,
+        `${target} reward UI claimed persistence before transaction completion.`
+      );
+      assert.match(rewardSaveTrace[rewardCommittedIndex].displayText, /已保存/);
+    }
     await captureRenderedFrame(
       page,
       canvas,
@@ -1658,6 +1819,93 @@ async function runBrowser(target, origin) {
     );
     await page.reload({ waitUntil: "domcontentloaded", timeout: 45_000 });
     await waitForText(page, status, "宿主已就绪", 45_000);
+    await page.waitForFunction(
+      () => window.__tgdProfile?.getState()?.stateName === "ready",
+      undefined,
+      { timeout: 45_000 }
+    );
+    const finalPersistedProfile = await page.evaluate(() => window.__tgdProfile.getState());
+    const restoredRewardState = await page.evaluate(() => window.__tgdTest.getF1State());
+    assert.equal(
+      finalPersistedProfile.logicalSequence,
+      rewardStorageFault === "reward_conflict_once" ? "4" : "5"
+    );
+    assert.equal(
+      restoredRewardState.profileOperationCount,
+      rewardStorageFault === "reward_conflict_once" ? 0 : 1
+    );
+    assert.equal(
+      (await inspectProfileOperations(page)).length,
+      rewardStorageFault === "reward_conflict_once" ? 0 : 1
+    );
+
+    if (rewardStorageFault === "") {
+      await page.evaluate(async () => {
+        const profile = window.__tgdProfile.getState();
+        const profileId = window.__tgdProfile.identity.profileId;
+        const database = await new Promise((resolveOpen, rejectOpen) => {
+          const request = indexedDB.open("tiangongdu.prototype_f1.internal.profile", 1);
+          request.onsuccess = () => resolveOpen(request.result);
+          request.onerror = () => rejectOpen(request.error);
+        });
+        const transaction = database.transaction("snapshots", "readwrite");
+        const transactionDone = new Promise((resolveTransaction, rejectTransaction) => {
+          transaction.oncomplete = resolveTransaction;
+          transaction.onabort = () => rejectTransaction(transaction.error);
+          transaction.onerror = () => rejectTransaction(transaction.error);
+        });
+        const store = transaction.objectStore("snapshots");
+        const record = await new Promise((resolveRecord, rejectRecord) => {
+          const request = store.get([profileId, profile.snapshotId]);
+          request.onsuccess = () => resolveRecord(request.result);
+          request.onerror = () => rejectRecord(request.error);
+        });
+        const corrupted = new Uint8Array(record.bytes);
+        corrupted[0] ^= 0xff;
+        record.bytes = corrupted.buffer;
+        store.put(record);
+        await transactionDone;
+        database.close();
+      });
+      await page.reload({ waitUntil: "domcontentloaded", timeout: 45_000 });
+      await waitForText(page, status, "宿主已就绪", 45_000);
+      await page.waitForFunction(
+        () => window.__tgdProfile?.getState()?.stateName === "recovery_required",
+        undefined,
+        { timeout: 45_000 }
+      );
+      const corruptProfile = await page.evaluate(() => window.__tgdProfile.getState());
+      assert.equal(corruptProfile.errorName, "storage_corrupt");
+      assert.equal(corruptProfile.committedSaveCount, "0");
+      assert.equal(await saveProfile.isDisabled(), true);
+      assert.doesNotMatch(await profileState.innerText(), /已保存/);
+      assert.equal(await page.getByTestId("export-profile").isEnabled(), true);
+      const recoveryExport = await page.evaluate(async () => {
+        const exported = await window.__tgdProfile.export();
+        return {
+          expectedProfileId: window.__tgdProfile.identity.profileId,
+          fileName: exported.fileName,
+          mediaType: exported.mediaType,
+          profileId: exported.profileId,
+          snapshotId: exported.snapshotId,
+          logicalSequence: exported.logicalSequence,
+          envelopeHash: exported.envelopeHash,
+          byteLength: exported.bytes.byteLength,
+          firstByte: exported.bytes[0]
+        };
+      });
+      assert.match(recoveryExport.fileName, /\.tgdprofile$/);
+      assert.equal(
+        recoveryExport.mediaType,
+        "application/vnd.tiangongdu.profile+octet-stream"
+      );
+      assert.equal(recoveryExport.profileId, recoveryExport.expectedProfileId);
+      assert.equal(recoveryExport.snapshotId, finalPersistedProfile.snapshotId);
+      assert.equal(recoveryExport.logicalSequence, "5");
+      assert.match(recoveryExport.envelopeHash, /^[0-9a-f]{64}$/);
+      assert(recoveryExport.byteLength > 176);
+      assert.notEqual(recoveryExport.firstByte, 0x54);
+    }
     await canvas.focus();
     await page.waitForTimeout(150);
 
@@ -1781,6 +2029,11 @@ async function runBrowser(target, origin) {
       combatHitComparison,
       laneRoute,
       ribCalibration,
+      resolutionChoice,
+      rewardStorageFault: rewardStorageFault || null,
+      rewardOffline,
+      rewardOperations,
+      rewardFailureState,
       retryState,
       hiddenRouteAttemptState,
       selectedRouteEntryState,
@@ -1876,6 +2129,9 @@ const report = {
   expectedCommit,
   laneRoute,
   ribCalibration,
+  resolutionChoice,
+  rewardStorageFault: rewardStorageFault || null,
+  rewardOffline,
   targets,
   results
 };

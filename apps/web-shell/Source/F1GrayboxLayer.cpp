@@ -585,6 +585,24 @@ void F1GrayboxLayer::clearInput(tgd::contracts::InputClearReason reason) noexcep
     tick_accumulator_ = 0.0F;
 }
 
+void F1GrayboxLayer::setRewardClaimSink(IF1RewardClaimSink* sink) noexcept {
+    reward_claim_sink_ = sink;
+}
+
+void F1GrayboxLayer::notifyRewardClaimCommitted(
+    tgd::contracts::StableContentKey reward_dedup_key
+) noexcept {
+    if (reward_dedup_key == 0 || reward_dedup_key != resolution_reward_dedup_key_) {
+        return;
+    }
+    resolution_reward_committed_ = true;
+    if (combat_event_label_ != nullptr) {
+        combat_event_label_->setString(
+            "RESOLUTION COMMITTED / REWARD CLAIM PERSISTED / REPLAY DEDUP ARMED"
+        );
+    }
+}
+
 void F1GrayboxLayer::clearHeldInput(
     tgd::contracts::InputClearReason reason,
     bool release_guard
@@ -1289,6 +1307,13 @@ void F1GrayboxLayer::publish(
                 receipt.found) {
                 resolution_reward_ = receipt.reward;
                 resolution_reward_dedup_key_ = receipt.reward_dedup_key;
+                if (reward_claim_sink_ != nullptr) {
+                    reward_claim_sink_->submitF1RewardClaim({
+                        receipt.resolution,
+                        receipt.reward,
+                        receipt.reward_dedup_key,
+                    });
+                }
             }
         }
         if (event.type == tgd::contracts::QuestEventType::objective_completed) {
@@ -1418,11 +1443,17 @@ void F1GrayboxLayer::publish(
                 }
                 break;
             case tgd::contracts::QuestEventType::quest_resolved:
-                combat_event_label_->setString(
-                    resolution_reward_ != 0 && resolution_reward_dedup_key_ != 0
-                        ? "RESOLUTION COMMITTED / REWARD RECEIPT READY / SAVE RESERVED"
-                        : "RESOLUTION REWARD REJECTED / CONTRACT DRIFT"
-                );
+                if (resolution_reward_committed_) {
+                    combat_event_label_->setString(
+                        "RESOLUTION COMMITTED / REWARD CLAIM PERSISTED / REPLAY DEDUP ARMED"
+                    );
+                } else {
+                    combat_event_label_->setString(
+                        resolution_reward_ != 0 && resolution_reward_dedup_key_ != 0
+                            ? "RESOLUTION COMMITTED / REWARD CLAIM SUBMITTED / PROFILE COMMIT PENDING"
+                            : "RESOLUTION REWARD REJECTED / CONTRACT DRIFT"
+                    );
+                }
                 break;
             case tgd::contracts::QuestEventType::objective_already_completed:
                 combat_event_label_->setString("OBJECTIVE ALREADY COMPLETE");
@@ -1627,6 +1658,10 @@ bool F1GrayboxLayer::qaQuestResolved() const noexcept {
 
 bool F1GrayboxLayer::qaResolutionRewardReady() const noexcept {
     return resolution_reward_ != 0 && resolution_reward_dedup_key_ != 0;
+}
+
+bool F1GrayboxLayer::qaResolutionRewardCommitted() const noexcept {
+    return resolution_reward_committed_;
 }
 
 std::int32_t F1GrayboxLayer::qaSafePointPoseX() const noexcept {
@@ -2276,12 +2311,16 @@ int F1GrayboxLayer::depthOrder(float screen_y) const noexcept {
     return 10'000 - static_cast<int>(screen_y * 10.0F);
 }
 
-ax::Scene* createF1GrayboxScene(F1GrayboxLayer** layer_out) {
+ax::Scene* createF1GrayboxScene(
+    F1GrayboxLayer** layer_out,
+    IF1RewardClaimSink* reward_claim_sink
+) {
     auto* scene = ax::Scene::create();
     auto* layer = F1GrayboxLayer::create();
     if (scene == nullptr || layer == nullptr) {
         return nullptr;
     }
+    layer->setRewardClaimSink(reward_claim_sink);
     scene->addChild(layer);
     if (layer_out != nullptr) {
         *layer_out = layer;

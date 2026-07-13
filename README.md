@@ -32,6 +32,7 @@
 2. 开发者从 [`docs/01-开发者文档.md`](docs/01-开发者文档.md) 进入 10–19 二级手册。
 3. 技术路线以 [`docs/01-developer/10-技术架构与依赖规则.md`](docs/01-developer/10-技术架构与依赖规则.md) 和 [`content/design/technical-baseline.json`](content/design/technical-baseline.json) 为准。
 4. 内容/叙事/关卡团队依次读 [`docs/04-游戏设计总纲.md`](docs/04-游戏设计总纲.md)、[`docs/05-世界与叙事圣经.md`](docs/05-世界与叙事圣经.md)、[`docs/06-内容生产规范.md`](docs/06-内容生产规范.md)、[`docs/07-1.0地区与内容蓝图.md`](docs/07-1.0地区与内容蓝图.md) 与 [`docs/08-UI-UX与可访问性.md`](docs/08-UI-UX与可访问性.md)。
+5. 新开 Codex 对话或并行工作树从 [`docs/handovers/2026-07-13-f1`](docs/handovers/2026-07-13-f1/README.md) 领取主开发、美术、UI/UX、内容关卡或 QA 的聚焦目标；交接快照不替代 02 的计划权威。
 
 按开发、美术、叙事、关卡、UI、音频、QA/发布分别交接时，直接使用 00 §1.1 的团队阅读路线；开发能力编号见 01 §15，当前 F1 可复制派工卡见 02 §4.3–4.4，F1 美术资源需求与状态台账见 [`14 §17`](docs/01-developer/14-资产管线与性能预算.md#17-f1-最小资产集合)。05 是世界/叙事文档，技术栈入口是 01 与 10–19。
 

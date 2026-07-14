@@ -67,7 +67,7 @@ test("F1 one-hour contract and generated C++ stay synchronized", async () => {
       (count, cue) => count + cue.attemptEvidenceRules.length,
       0
     ),
-    14
+    16
   );
   assert(
     contract.questUiCues.every(

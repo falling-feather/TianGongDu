@@ -2050,6 +2050,36 @@
         },
         {
           "source": "recovery_resume",
+          "objectiveId": "f1_objective_eavesguard_counter",
+          "primaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "secondaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "classification": "resume_no_duplicate_progress"
+        },
+        {
+          "source": "recovery_offer",
+          "objectiveId": "f1_objective_flower_turn_counter",
+          "primaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "secondaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "classification": "failure_retry_excluded"
+        },
+        {
+          "source": "recovery_resume",
           "objectiveId": "f1_objective_flower_turn_counter",
           "primaryResult": {
             "resultId": null,

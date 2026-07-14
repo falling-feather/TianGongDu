@@ -91,13 +91,14 @@ int main() {
     };
     const auto mooring_load_cue = find_ui_cue("ui.f1.rain.mooring-load");
     const auto action_proof_cue = find_ui_cue("ui.f1.training.action-proof");
+    const auto recovery_cue = find_ui_cue("ui.f1.training.recovery");
     std::size_t attempt_evidence_rule_count = 0;
     for (const auto& cue : definition->quest_ui_cues) {
         attempt_evidence_rule_count += cue.attempt_evidence_rules.size();
     }
     ok &= expect(
         definition->quest_ui_cues.size() == 8 &&
-            attempt_evidence_rule_count == 14 &&
+            attempt_evidence_rule_count == 16 &&
             mooring_load_cue != definition->quest_ui_cues.end() &&
             mooring_load_cue->objective_ids.size() == 1 &&
             mooring_load_cue->result_selectors.size() == 1 &&
@@ -186,6 +187,58 @@ int main() {
                 }
             ),
         "wrong-target flower proof remains exact two-slot Definition-owned evidence"
+    );
+    const auto has_recovery_rule = [recovery_cue, definition](
+                                       std::string_view objective,
+                                       tgd::contracts::QuestUiProjectionSource source,
+                                       tgd::contracts::QuestUiAttemptTimeClassification classification
+                                   ) {
+        if (recovery_cue == definition->quest_ui_cues.end()) {
+            return false;
+        }
+        return std::any_of(
+            recovery_cue->attempt_evidence_rules.begin(),
+            recovery_cue->attempt_evidence_rules.end(),
+            [objective, source, classification](
+                const tgd::contracts::QuestUiAttemptEvidenceRuleDefinition& rule
+            ) {
+                return rule.source == source &&
+                       rule.objective_id.key ==
+                           tgd::contracts::stable_content_key(objective) &&
+                       rule.primary_result.status ==
+                           tgd::contracts::QuestUiResultStatus::not_applicable &&
+                       rule.secondary_result.status ==
+                           tgd::contracts::QuestUiResultStatus::not_applicable &&
+                       rule.classification == classification;
+            }
+        );
+    };
+    ok &= expect(
+        recovery_cue != definition->quest_ui_cues.end() &&
+            recovery_cue->attempt_evidence_rules.size() == 4 &&
+            has_recovery_rule(
+                "f1_objective_eavesguard_counter",
+                tgd::contracts::QuestUiProjectionSource::recovery_offer,
+                tgd::contracts::QuestUiAttemptTimeClassification::failure_retry_excluded
+            ) &&
+            has_recovery_rule(
+                "f1_objective_eavesguard_counter",
+                tgd::contracts::QuestUiProjectionSource::recovery_resume,
+                tgd::contracts::QuestUiAttemptTimeClassification::
+                    resume_no_duplicate_progress
+            ) &&
+            has_recovery_rule(
+                "f1_objective_flower_turn_counter",
+                tgd::contracts::QuestUiProjectionSource::recovery_offer,
+                tgd::contracts::QuestUiAttemptTimeClassification::failure_retry_excluded
+            ) &&
+            has_recovery_rule(
+                "f1_objective_flower_turn_counter",
+                tgd::contracts::QuestUiProjectionSource::recovery_resume,
+                tgd::contracts::QuestUiAttemptTimeClassification::
+                    resume_no_duplicate_progress
+            ),
+        "both training phases own paired recovery offer and resume evidence"
     );
     for (const auto& cue : definition->quest_ui_cues) {
         const auto beat = std::find_if(

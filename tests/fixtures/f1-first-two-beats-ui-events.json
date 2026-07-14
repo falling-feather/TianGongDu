@@ -864,6 +864,115 @@
           }
         }
       }
+    },
+    {
+      "contractVersion": "1.0.0-prototype",
+      "fixtureId": "f1_training_retry_resume_eavesguard",
+      "sequence": 15,
+      "sessionGeneration": "f1-content-ui-fixture-0001",
+      "eventType": "panel_replace",
+      "panel": {
+        "surface": "gameplay",
+        "mode": "f1_training_retry_resume_eavesguard",
+        "inputContext": "gameplay",
+        "title": "檐守训练已恢复",
+        "focus": { "entryTarget": "ui-main", "restoreTarget": null },
+        "announcements": {
+          "polite": "迎风线与取标保持；当前檐守训练架按安全点重建。",
+          "assertive": ""
+        },
+        "model": {
+          "cueId": "ui.f1.training.recovery",
+          "polarity": "recovery",
+          "authority": {
+            "beatId": "f1_beat_shen_yan_training",
+            "objectiveId": "f1_objective_eavesguard_counter",
+            "objectiveState": "active",
+            "questSequence": 115,
+            "selectedOptions": [
+              {
+                "objectiveId": "f1_objective_choose_training_lane",
+                "selectionId": "f1_choice_training_windward_lane"
+              }
+            ],
+            "interactionResult": null,
+            "combatResult": null,
+            "activeActorKeys": [104],
+            "defeatedActorKeys": [],
+            "safePointId": "f1_safe_point_shen_yan_training",
+            "retainedObjectiveIds": [
+              "f1_objective_meet_shen_yan",
+              "f1_objective_choose_training_lane",
+              "f1_objective_take_eavesguard_mark"
+            ],
+            "pendingObjectiveId": "f1_objective_eavesguard_counter",
+            "attemptTimeClassification": "resume_no_duplicate_progress"
+          },
+          "presentation": {
+            "primaryText": "训练架已归位，已完成的对话、选线与取标没有重复提交。",
+            "secondaryText": "从当前檐守来击重新证明，不重放前置步骤。",
+            "shapeToken": "safe_point_resume",
+            "retainedSummary": "对话、选线、取标",
+            "nextStepLabel": "以檐守挡开来击",
+            "canLeave": true
+          }
+        }
+      }
+    },
+    {
+      "contractVersion": "1.0.0-prototype",
+      "fixtureId": "f1_training_failure_retry_offer_flower",
+      "sequence": 16,
+      "sessionGeneration": "f1-content-ui-fixture-0001",
+      "eventType": "panel_replace",
+      "panel": {
+        "surface": "failure",
+        "mode": "f1_training_failure_retry_offer_flower",
+        "inputContext": "menu",
+        "title": "回到沈砚训练点",
+        "focus": { "entryTarget": "training.retry", "restoreTarget": "ui-main" },
+        "announcements": {
+          "polite": "已完成的檐守证明、复盘、切式和越线保留；从翻花反制继续。",
+          "assertive": "本次倒地尝试不计入合格玩法时长。"
+        },
+        "model": {
+          "cueId": "ui.f1.training.recovery",
+          "polarity": "recovery",
+          "authority": {
+            "beatId": "f1_beat_shen_yan_training",
+            "objectiveId": "f1_objective_flower_turn_counter",
+            "objectiveState": "active",
+            "questSequence": 116,
+            "selectedOptions": [
+              {
+                "objectiveId": "f1_objective_choose_training_lane",
+                "selectionId": "f1_choice_training_leeward_lane"
+              }
+            ],
+            "interactionResult": null,
+            "combatResult": null,
+            "activeActorKeys": [108],
+            "defeatedActorKeys": [107],
+            "safePointId": "f1_safe_point_shen_yan_training",
+            "retainedObjectiveIds": [
+              "f1_objective_break_eavesguard_target",
+              "f1_objective_review_eavesguard_with_shen_yan",
+              "f1_objective_enter_flower_turn",
+              "f1_objective_cross_flower_turn_line"
+            ],
+            "pendingObjectiveId": "f1_objective_flower_turn_counter",
+            "attemptTimeClassification": "failure_retry_excluded"
+          },
+          "presentation": {
+            "primaryText": "背风线与已完成的檐守阶段保持，翻花训练架等待重建。",
+            "secondaryText": "可以立即再试或离开；不会借等待、失败次数或重复目标推进。",
+            "shapeToken": "safe_point_resume",
+            "retainedSummary": "檐守证明、复盘、切式与越线",
+            "nextStepLabel": "闪过高位训练架",
+            "canLeave": true
+          }
+        }
+      }
     }
   ]
 }

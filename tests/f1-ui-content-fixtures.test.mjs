@@ -25,7 +25,7 @@ function event(fixtureId) {
 
 test("F1 first-two-beat UI fixtures stay synchronized with the authoritative Definition", () => {
   assert.equal(validateF1UiContentFixtures(fixtures, contract), fixtures);
-  assert.equal(fixtures.events.length, 14);
+  assert.equal(fixtures.events.length, 16);
   assert.deepEqual(
     new Set(fixtures.events.map((entry) => entry.panel.model.cueId)),
     new Set(requiredCuePolarities.keys())
@@ -156,11 +156,33 @@ test("F1 UI projections distinguish phase, accepted action, wrong target, retry,
   assert.deepEqual(returned.panel.model.authority.activeActorKeys, [108]);
   assert.deepEqual(returned.panel.model.authority.defeatedActorKeys, [107]);
   assert.equal(returned.panel.model.presentation.shapeToken, "selected_lane_rebuilt");
+
+  const eavesguardResume = event("f1_training_retry_resume_eavesguard");
+  assert.equal(
+    eavesguardResume.panel.model.authority.objectiveId,
+    "f1_objective_eavesguard_counter"
+  );
+  assert.equal(
+    eavesguardResume.panel.model.authority.attemptTimeClassification,
+    "resume_no_duplicate_progress"
+  );
+  assert.deepEqual(eavesguardResume.panel.model.authority.activeActorKeys, [104]);
+
+  const flowerOffer = event("f1_training_failure_retry_offer_flower");
+  assert.equal(
+    flowerOffer.panel.model.authority.objectiveId,
+    "f1_objective_flower_turn_counter"
+  );
+  assert.equal(
+    flowerOffer.panel.model.authority.attemptTimeClassification,
+    "failure_retry_excluded"
+  );
+  assert.deepEqual(flowerOffer.panel.model.authority.activeActorKeys, [108]);
 });
 
 test("F1 UI negative fixture recipes fail closed for stale or UI-owned authority", () => {
   assert.equal(negativeFixtures.fixtureContractVersion, "1.0.0");
-  assert.equal(negativeFixtures.cases.length, 12);
+  assert.equal(negativeFixtures.cases.length, 14);
   for (const negative of negativeFixtures.cases) {
     const mutated = applyFixtureMutation(fixtures, negative);
     assert.throws(

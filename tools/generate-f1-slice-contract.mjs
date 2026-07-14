@@ -1593,6 +1593,8 @@ export function validateF1SliceContract(contract, catalog) {
     ["ui.f1.training.action-proof", "combat_feedback", "f1_objective_eavesguard_counter", "f1_trigger_eavesguard_counter", "accepted", "none", null, "not_applicable", "none", "qualifying_combat_proof"],
     ["ui.f1.training.action-proof", "combat_feedback", "f1_objective_break_flower_turn_target", "f1_trigger_flower_turn_heavy", "accepted", "none", "f1_outcome_break_flower_turn_target", "rejected", "wrong_target", "qualifying_combat_feedback"],
     ["ui.f1.training.recovery", "recovery_offer", "f1_objective_eavesguard_counter", null, "not_applicable", "none", null, "not_applicable", "none", "failure_retry_excluded"],
+    ["ui.f1.training.recovery", "recovery_resume", "f1_objective_eavesguard_counter", null, "not_applicable", "none", null, "not_applicable", "none", "resume_no_duplicate_progress"],
+    ["ui.f1.training.recovery", "recovery_offer", "f1_objective_flower_turn_counter", null, "not_applicable", "none", null, "not_applicable", "none", "failure_retry_excluded"],
     ["ui.f1.training.recovery", "recovery_resume", "f1_objective_flower_turn_counter", null, "not_applicable", "none", null, "not_applicable", "none", "resume_no_duplicate_progress"]
   ];
   if (!sameValues(actualAttemptEvidence, expectedAttemptEvidence)) {

@@ -94,6 +94,22 @@
       "operation": "remove",
       "path": "panel.model.presentation.options.1",
       "expectedError": "choice options do not exactly cover objective"
+    },
+    {
+      "id": "eavesguard_resume_rejects_offer_classification",
+      "baseFixtureId": "f1_training_retry_resume_eavesguard",
+      "operation": "replace",
+      "path": "panel.model.authority.attemptTimeClassification",
+      "value": "failure_retry_excluded",
+      "expectedError": "attemptTimeClassification does not match the exact Definition rule"
+    },
+    {
+      "id": "flower_offer_rejects_resume_classification",
+      "baseFixtureId": "f1_training_failure_retry_offer_flower",
+      "operation": "replace",
+      "path": "panel.model.authority.attemptTimeClassification",
+      "value": "resume_no_duplicate_progress",
+      "expectedError": "attemptTimeClassification does not match the exact Definition rule"
     }
   ]
 }

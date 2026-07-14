@@ -176,6 +176,82 @@ bool test_chase_attack_tokens_and_determinism() {
     return ok;
 }
 
+bool test_multiple_attack_tokens_respect_occupied_slots() {
+    const auto actor_configs = actors();
+    const auto ability_configs = abilities();
+    auto definition = director_definition();
+    definition.max_simultaneous_attackers = 2;
+    DeterministicEncounterDirector director;
+    bool ok = director.initialize(definition, actor_configs, ability_configs) ==
+              EncounterDirectorError::none;
+    std::array<tgd::contracts::CombatActorSnapshot, 3> snapshots{{
+        {1,
+         actor_configs[0].archetype_id.key,
+         tgd::contracts::CombatFaction::player,
+         {0, 0, 0, 0},
+         actor_configs[0].initial_resources,
+         player_stance,
+         0,
+         false,
+         true},
+        {2,
+         actor_configs[1].archetype_id.key,
+         tgd::contracts::CombatFaction::hostile,
+         {900, 0, 0, 0},
+         actor_configs[1].initial_resources,
+         hostile_stance,
+         0,
+         false,
+         true},
+        {3,
+         actor_configs[2].archetype_id.key,
+         tgd::contracts::CombatFaction::hostile,
+         {636, 636, 0, 0},
+         actor_configs[2].initial_resources,
+         hostile_stance,
+         0,
+         false,
+         true},
+    }};
+
+    const auto first = director.plan_tick(1, snapshots, 10);
+    ok &= expect(first.error == EncounterDirectorError::none, "two-token plan completes");
+    ok &= expect(
+        first.batch.command_count == 2 &&
+            first.batch.commands[0].actor != first.batch.commands[1].actor &&
+            first.batch.commands[0].target == 1 && first.batch.commands[1].target == 1 &&
+            first.batch.commands[0].sequence == 10 &&
+            first.batch.commands[1].sequence == 11,
+        "two available attack tokens select two distinct hostiles with stable sequences"
+    );
+
+    const auto active_ability = ability_configs[0].id.key;
+    snapshots[1].active_ability = active_ability;
+    snapshots[2].active_ability = active_ability;
+    const auto occupied = director.plan_tick(2, snapshots, 20);
+    ok &= expect(
+        occupied.error == EncounterDirectorError::none &&
+            occupied.batch.command_count == 0,
+        "two active hostile abilities occupy both attack tokens"
+    );
+
+    snapshots[1].active_ability = 0;
+    for (tgd::contracts::TickIndex tick = 3; tick < 13; ++tick) {
+        const auto cooldown = director.plan_tick(tick, snapshots, 20);
+        ok &= cooldown.error == EncounterDirectorError::none;
+        ok &= cooldown.batch.command_count == 0;
+    }
+    const auto one_available = director.plan_tick(13, snapshots, 20);
+    ok &= expect(
+        one_available.error == EncounterDirectorError::none &&
+            one_available.batch.command_count == 1 &&
+            one_available.batch.commands[0].actor == 2 &&
+            one_available.batch.commands[0].sequence == 20,
+        "one occupied token leaves exactly one deterministic attacker slot after cooldown"
+    );
+    return ok;
+}
+
 bool test_wrong_tick_and_leash_return() {
     const auto actor_configs = actors();
     const auto ability_configs = abilities();
@@ -221,6 +297,17 @@ bool test_invalid_definition_fails_closed() {
         director.initialize(director_definition(), actor_configs, missing_heavy) ==
             EncounterDirectorError::missing_ability,
         "hostile stance requires light and heavy abilities"
+    );
+    auto excessive_tokens = director_definition();
+    excessive_tokens.max_simultaneous_attackers = 3;
+    DeterministicEncounterDirector excessive_token_director;
+    ok &= expect(
+        excessive_token_director.initialize(
+            excessive_tokens,
+            actor_configs,
+            ability_configs
+        ) == EncounterDirectorError::invalid_definition,
+        "attack token capacity cannot exceed the authored hostile count"
     );
     return ok;
 }
@@ -481,6 +568,7 @@ bool test_multi_actor_reinforcement_is_atomic() {
 int main() {
     bool ok = true;
     ok &= test_chase_attack_tokens_and_determinism();
+    ok &= test_multiple_attack_tokens_respect_occupied_slots();
     ok &= test_wrong_tick_and_leash_return();
     ok &= test_invalid_definition_fails_closed();
     ok &= test_retry_resets_director_boundary();

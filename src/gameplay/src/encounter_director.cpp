@@ -179,6 +179,9 @@ EncounterDirectorError DeterministicEncounterDirector::initialize(
     if (hostile_count_ == 0) {
         return EncounterDirectorError::missing_hostile;
     }
+    if (definition_.max_simultaneous_attackers > hostile_count_) {
+        return EncounterDirectorError::invalid_definition;
+    }
     std::sort(
         hostiles_.begin(),
         hostiles_.begin() + static_cast<std::ptrdiff_t>(hostile_count_),

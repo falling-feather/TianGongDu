@@ -29,7 +29,7 @@ test("F1 one-hour contract and generated C++ stay synchronized", async () => {
   assert.equal(contract.view.primaryGuidance, "douzhanshen");
   assert.equal(contract.beats.length, 7);
   assert.equal(contract.safePoints.length, 7);
-  assert.equal(contract.combatBootstrap.actors.length, 8);
+  assert.equal(contract.combatBootstrap.actors.length, 11);
   const springReturnUmbrella = contract.combatBootstrap.actors.find(
     (actor) => actor.actorKey === 106
   );
@@ -47,14 +47,19 @@ test("F1 one-hour contract and generated C++ stay synchronized", async () => {
     flowerLight.windupTicks + flowerLight.activeTicks + flowerLight.recoveryTicks,
     18
   );
-  assert.equal(contract.questInteractions.length, 23);
+  assert.equal(contract.questInteractions.length, 41);
   assert.deepEqual(
     contract.beats[0].objectiveIds,
     [
       "f1_objective_inspect_travel_writ",
-      "f1_objective_read_flood_marks",
+      "f1_objective_choose_arrival_clue",
+      "f1_objective_read_ferry_condition",
+      "f1_objective_choose_mooring_method",
       "f1_objective_secure_ferry_mooring",
+      "f1_objective_inspect_bilge_counterweight",
+      "f1_objective_release_ferry_bilge",
       "f1_objective_raise_wayfinding_lantern",
+      "f1_objective_read_workshop_bell_code",
       "f1_objective_sound_workshop_bell",
       "f1_objective_reach_ferry_gate"
     ]
@@ -67,25 +72,28 @@ test("F1 one-hour contract and generated C++ stay synchronized", async () => {
     ),
     new Set(contract.beats[0].objectiveIds)
   );
-  assert.deepEqual(
-    new Set(
-      contract.questCombatTriggers
-        .filter((trigger) => contract.beats[1].objectiveIds.includes(trigger.objectiveId))
-        .map((trigger) => trigger.objectiveId)
-    ),
-    new Set(contract.beats[1].objectiveIds.slice(1))
-  );
-  assert.equal(contract.questCombatTriggers.length, 7);
+  const trainingObjectives = new Set([
+    ...contract.questInteractions
+      .filter((interaction) => contract.beats[1].objectiveIds.includes(interaction.objectiveId))
+      .map((interaction) => interaction.objectiveId),
+    ...contract.questCombatTriggers
+      .filter((trigger) => contract.beats[1].objectiveIds.includes(trigger.objectiveId))
+      .map((trigger) => trigger.objectiveId),
+    ...contract.questCombatOutcomes
+      .filter((outcome) => contract.beats[1].objectiveIds.includes(outcome.objectiveId))
+      .map((outcome) => outcome.objectiveId)
+  ]);
+  assert.deepEqual(trainingObjectives, new Set(contract.beats[1].objectiveIds));
+  assert.equal(contract.questCombatTriggers.length, 8);
+  assert.equal(contract.questCombatTriggers[0].requiredAbilityId, null);
+  assert.equal(contract.questCombatTriggers[1].requiredAbilityId, "ability_eavesguard_heavy");
   assert.equal(
-    contract.questCombatTriggers[0].requiredAbilityId,
-    "ability_eavesguard_heavy"
-  );
-  assert.equal(
-    contract.questCombatTriggers[3].requiredAbilityId,
+    contract.questCombatTriggers[4].requiredAbilityId,
     "ability_flower_light"
   );
+  assert.equal(contract.questCombatTriggers[5].requiredAbilityId, "ability_flower_heavy");
   assert.deepEqual(
-    contract.questCombatTriggers.slice(5).map((trigger) => ({
+    contract.questCombatTriggers.slice(6).map((trigger) => ({
       objectiveId: trigger.objectiveId,
       requiredAbilityId: trigger.requiredAbilityId,
       requiredSelectionId: trigger.requiredSelectionId
@@ -104,12 +112,38 @@ test("F1 one-hour contract and generated C++ stay synchronized", async () => {
     ]
   );
   assert.deepEqual(
+    contract.questCombatOutcomes
+      .filter((outcome) => contract.beats[1].objectiveIds.includes(outcome.objectiveId))
+      .map((outcome) => [outcome.objectiveId, outcome.archetypeId, outcome.requiredCount]),
+    [
+      ["f1_objective_break_eavesguard_target", "f1_training_eavesguard_target", 1],
+      ["f1_objective_break_flower_turn_target", "f1_training_flower_turn_target", 1]
+    ]
+  );
+  assert.deepEqual(
     new Set(
       contract.questCombatOutcomes
         .filter((outcome) => contract.beats[2].objectiveIds.includes(outcome.objectiveId))
         .map((outcome) => outcome.objectiveId)
     ),
     new Set([contract.beats[2].objectiveIds[0], contract.beats[2].objectiveIds[4]])
+  );
+  const arrivalClues = contract.questInteractions.filter(
+    (interaction) => interaction.objectiveId === "f1_objective_choose_arrival_clue"
+  );
+  assert.deepEqual(
+    arrivalClues.map((interaction) => interaction.selectionId),
+    [
+      "f1_choice_arrival_high_water_tags",
+      "f1_choice_arrival_drowned_manifest",
+      "f1_choice_arrival_follow_bell"
+    ]
+  );
+  assert.equal(
+    contract.questResolutionRewards.some((reward) =>
+      arrivalClues.some((clue) => clue.selectionId === reward.selectionId)
+    ),
+    false
   );
   const laneRoutes = contract.questInteractions.filter(
     (interaction) => interaction.objectiveId === "f1_objective_choose_lane_route"
@@ -197,7 +231,25 @@ test("F1 opening objectives require valid content-driven scene interactions", as
   ).prerequisiteObjectiveIds = [];
   assert.throws(
     () => validateF1SliceContract(brokenReadinessChain, catalog),
-    /Rain Ferry readiness chain drifted/
+    /Rain Ferry clue, mooring correction, and readiness route drifted/
+  );
+
+  const missingSkipConvergence = structuredClone(await loadF1SliceContract());
+  missingSkipConvergence.questInteractions = missingSkipConvergence.questInteractions.filter(
+    (interaction) => interaction.id !== "f1_interaction_read_main_flood_gauge"
+  );
+  assert.throws(
+    () => validateF1SliceContract(missingSkipConvergence, catalog),
+    /interactions do not cover every authored selection option/
+  );
+
+  const missingErrorRecovery = structuredClone(await loadF1SliceContract());
+  missingErrorRecovery.questInteractions = missingErrorRecovery.questInteractions.filter(
+    (interaction) => interaction.id !== "f1_interaction_correct_overloaded_quick_hitch"
+  );
+  assert.throws(
+    () => validateF1SliceContract(missingErrorRecovery, catalog),
+    /interactions do not cover every authored selection option/
   );
 
   const futurePrerequisite = structuredClone(await loadF1SliceContract());
@@ -219,6 +271,54 @@ test("F1 opening objectives require valid content-driven scene interactions", as
   );
 });
 
+test("F1 Rain Ferry Node fixture covers all clue and mooring route combinations", async () => {
+  const contract = await loadF1SliceContract();
+  const rain = contract.beats[0];
+  const clueObjective = rain.objectiveIds[1];
+  const conditionObjective = rain.objectiveIds[2];
+  const mooringObjective = rain.objectiveIds[3];
+  const securedObjective = rain.objectiveIds[4];
+  const clueChoices = contract.questInteractions.filter(
+    (interaction) => interaction.objectiveId === clueObjective
+  );
+  const mooringChoices = contract.questInteractions.filter(
+    (interaction) => interaction.objectiveId === mooringObjective
+  );
+
+  assert.equal(clueChoices.length, 3);
+  assert.equal(mooringChoices.length, 2);
+  const coveredRoutes = [];
+  for (const clue of clueChoices) {
+    const conditionRoutes = contract.questInteractions.filter(
+      (interaction) =>
+        interaction.objectiveId === conditionObjective &&
+        interaction.requiredSelectionObjectiveId === clueObjective &&
+        interaction.requiredSelectionId === clue.selectionId
+    );
+    assert.equal(conditionRoutes.length, 1, clue.selectionId);
+
+    for (const mooring of mooringChoices) {
+      const securedRoutes = contract.questInteractions.filter(
+        (interaction) =>
+          interaction.objectiveId === securedObjective &&
+          interaction.requiredSelectionObjectiveId === mooringObjective &&
+          interaction.requiredSelectionId === mooring.selectionId
+      );
+      assert.equal(securedRoutes.length, 1, mooring.selectionId);
+      coveredRoutes.push(`${clue.selectionId}|${mooring.selectionId}`);
+    }
+  }
+
+  assert.deepEqual(coveredRoutes, [
+    "f1_choice_arrival_high_water_tags|f1_choice_mooring_cross_belay",
+    "f1_choice_arrival_high_water_tags|f1_choice_mooring_quick_hitch",
+    "f1_choice_arrival_drowned_manifest|f1_choice_mooring_cross_belay",
+    "f1_choice_arrival_drowned_manifest|f1_choice_mooring_quick_hitch",
+    "f1_choice_arrival_follow_bell|f1_choice_mooring_cross_belay",
+    "f1_choice_arrival_follow_bell|f1_choice_mooring_quick_hitch"
+  ]);
+});
+
 test("F1 route owns one ordered content-driven safe point per beat", async () => {
   const contract = await loadF1SliceContract();
   assert.deepEqual(
@@ -230,7 +330,7 @@ test("F1 route owns one ordered content-driven safe point per beat", async () =>
     })),
     [
       ["f1_safe_point_rain_ferry_arrival", -12000, -1600],
-      ["f1_safe_point_shen_yan_training", -10500, -600],
+      ["f1_safe_point_shen_yan_training", -6500, -500],
       ["f1_safe_point_umbrella_lane", -5600, -1200],
       ["f1_safe_point_shared_workbench", -4300, -100],
       ["f1_safe_point_canopy_return", -4300, -100],
@@ -339,7 +439,7 @@ test("F1 combat actions require valid content-driven and selection-gated trigger
   );
 
   const incompatibleAbility = structuredClone(await loadF1SliceContract());
-  incompatibleAbility.questCombatTriggers[0].requiredAbilityId = "ability_flower_light";
+  incompatibleAbility.questCombatTriggers[1].requiredAbilityId = "ability_flower_light";
   assert.throws(
     () => validateF1SliceContract(incompatibleAbility, catalog),
     /incompatible required ability/
@@ -353,16 +453,16 @@ test("F1 combat actions require valid content-driven and selection-gated trigger
   );
 
   const halfSelectionGate = structuredClone(await loadF1SliceContract());
-  halfSelectionGate.questCombatTriggers[5].requiredSelectionId = null;
+  halfSelectionGate.questCombatTriggers[6].requiredSelectionId = null;
   assert.throws(
     () => validateF1SliceContract(halfSelectionGate, catalog),
     /invalid combat trigger selection gate/
   );
 
   const futureSelectionGate = structuredClone(await loadF1SliceContract());
-  futureSelectionGate.questCombatTriggers[5].requiredSelectionObjectiveId =
+  futureSelectionGate.questCombatTriggers[6].requiredSelectionObjectiveId =
     futureSelectionGate.beats[6].objectiveIds[0];
-  futureSelectionGate.questCombatTriggers[5].requiredSelectionId =
+  futureSelectionGate.questCombatTriggers[6].requiredSelectionId =
     "f1_choice_resolution_subdue";
   assert.throws(
     () => validateF1SliceContract(futureSelectionGate, catalog),
@@ -370,7 +470,7 @@ test("F1 combat actions require valid content-driven and selection-gated trigger
   );
 
   const duplicateSelectionGate = structuredClone(await loadF1SliceContract());
-  duplicateSelectionGate.questCombatTriggers[6].requiredSelectionId =
+  duplicateSelectionGate.questCombatTriggers[7].requiredSelectionId =
     "f1_choice_rib_spring_calibration";
   assert.throws(
     () => validateF1SliceContract(duplicateSelectionGate, catalog),
@@ -378,24 +478,24 @@ test("F1 combat actions require valid content-driven and selection-gated trigger
   );
 
   const incompleteSelectionCoverage = structuredClone(await loadF1SliceContract());
-  incompleteSelectionCoverage.questCombatTriggers.splice(6, 1);
+  incompleteSelectionCoverage.questCombatTriggers.splice(7, 1);
   assert.throws(
     () => validateF1SliceContract(incompleteSelectionCoverage, catalog),
     /do not cover every authored selection option/
   );
 });
 
-test("F1 umbrella-lane outcomes require reachable hostile groups", async () => {
+test("F1 combat outcomes require reachable hostile groups", async () => {
   const impossibleCount = structuredClone(await loadF1SliceContract());
-  impossibleCount.questCombatOutcomes[0].requiredCount = 3;
+  impossibleCount.questCombatOutcomes[2].requiredCount = 3;
   assert.throws(
     () => validateF1SliceContract(impossibleCount, catalog),
     /cannot reach its required hostile count/
   );
 
   const duplicateObjective = structuredClone(await loadF1SliceContract());
-  duplicateObjective.questCombatOutcomes[1].objectiveId =
-    duplicateObjective.questCombatOutcomes[0].objectiveId;
+  duplicateObjective.questCombatOutcomes[3].objectiveId =
+    duplicateObjective.questCombatOutcomes[2].objectiveId;
   assert.throws(
     () => validateF1SliceContract(duplicateObjective, catalog),
     /duplicate quest combat outcome objective/
@@ -406,35 +506,103 @@ test("F1 encounters activate authored groups at beat and objective boundaries", 
   const contract = await loadF1SliceContract();
   assert.deepEqual(contract.questEncounterActivations, [
     {
-      id: "f1_activation_shen_yan_training_rigs",
+      id: "f1_activation_training_windward_guard_rig",
       beatId: contract.beats[1].id,
-      triggerObjectiveId: null,
-      requiredSelectionObjectiveId: null,
-      requiredSelectionId: null,
+      triggerObjectiveId: "f1_objective_take_eavesguard_mark",
+      requiredSelectionObjectiveId: "f1_objective_choose_training_lane",
+      requiredSelectionId: "f1_choice_training_windward_lane",
       mode: "replace",
       encounterId: contract.combatBootstrap.id,
       actorKeys: [104],
       actorPlacements: [
         {
           actorKey: 104,
-          poseMm: { x: -5900, y: 2300, height: 0, floorLayer: 0 },
+          poseMm: { x: -4100, y: 2300, height: 0, floorLayer: 0 },
           formationSlot: 0
         }
       ]
     },
     {
-      id: "f1_activation_shen_yan_flower_turn_rig",
+      id: "f1_activation_training_leeward_guard_rig",
       beatId: contract.beats[1].id,
-      triggerObjectiveId: contract.beats[1].objectiveIds[2],
+      triggerObjectiveId: "f1_objective_take_eavesguard_mark",
+      requiredSelectionObjectiveId: "f1_objective_choose_training_lane",
+      requiredSelectionId: "f1_choice_training_leeward_lane",
+      mode: "replace",
+      encounterId: contract.combatBootstrap.id,
+      actorKeys: [104],
+      actorPlacements: [
+        {
+          actorKey: 104,
+          poseMm: { x: -3900, y: -2500, height: 0, floorLayer: 0 },
+          formationSlot: 0
+        }
+      ]
+    },
+    {
+      id: "f1_activation_training_windward_eavesguard_target",
+      beatId: contract.beats[1].id,
+      triggerObjectiveId: "f1_objective_commit_eavesguard_heavy",
+      requiredSelectionObjectiveId: "f1_objective_choose_training_lane",
+      requiredSelectionId: "f1_choice_training_windward_lane",
+      mode: "replace",
+      encounterId: contract.combatBootstrap.id,
+      actorKeys: [107],
+      actorPlacements: [
+        {
+          actorKey: 107,
+          poseMm: { x: -4000, y: 2000, height: 0, floorLayer: 0 },
+          formationSlot: 0
+        }
+      ]
+    },
+    {
+      id: "f1_activation_training_leeward_eavesguard_target",
+      beatId: contract.beats[1].id,
+      triggerObjectiveId: "f1_objective_commit_eavesguard_heavy",
+      requiredSelectionObjectiveId: "f1_objective_choose_training_lane",
+      requiredSelectionId: "f1_choice_training_leeward_lane",
+      mode: "replace",
+      encounterId: contract.combatBootstrap.id,
+      actorKeys: [107],
+      actorPlacements: [
+        {
+          actorKey: 107,
+          poseMm: { x: -3800, y: -2100, height: 0, floorLayer: 0 },
+          formationSlot: 0
+        }
+      ]
+    },
+    {
+      id: "f1_activation_training_flower_turn_rig",
+      beatId: contract.beats[1].id,
+      triggerObjectiveId: "f1_objective_review_eavesguard_with_shen_yan",
       requiredSelectionObjectiveId: null,
       requiredSelectionId: null,
       mode: "replace",
       encounterId: contract.combatBootstrap.id,
-      actorKeys: [105],
+      actorKeys: [108],
       actorPlacements: [
         {
-          actorKey: 105,
-          poseMm: { x: -5200, y: -1600, height: 700, floorLayer: 0 },
+          actorKey: 108,
+          poseMm: { x: -3300, y: 1200, height: 700, floorLayer: 0 },
+          formationSlot: 2
+        }
+      ]
+    },
+    {
+      id: "f1_activation_training_flower_turn_target",
+      beatId: contract.beats[1].id,
+      triggerObjectiveId: "f1_objective_commit_flower_turn_heavy",
+      requiredSelectionObjectiveId: null,
+      requiredSelectionId: null,
+      mode: "replace",
+      encounterId: contract.combatBootstrap.id,
+      actorKeys: [109],
+      actorPlacements: [
+        {
+          actorKey: 109,
+          poseMm: { x: -3000, y: -800, height: 700, floorLayer: 0 },
           formationSlot: 2
         }
       ]
@@ -568,27 +736,27 @@ test("F1 encounters activate authored groups at beat and objective boundaries", 
   wrongBeat.questEncounterActivations[0].beatId = contract.beats[3].id;
   assert.throws(
     () => validateF1SliceContract(wrongBeat, catalog),
-    /training waves, lane waves, choice-driven return reinforcements, and boss beats must own/
+    /references an objective outside its beat/
   );
 
   const stageEntryReinforcement = structuredClone(contract);
-  stageEntryReinforcement.questEncounterActivations[4].mode = "reinforce";
+  stageEntryReinforcement.questEncounterActivations[6].mode = "reinforce";
   assert.throws(
     () => validateF1SliceContract(stageEntryReinforcement, catalog),
     /invalid activation mode or stage-entry reinforcement/
   );
 
   const halfSelectionGate = structuredClone(contract);
-  halfSelectionGate.questEncounterActivations[5].requiredSelectionId = null;
+  halfSelectionGate.questEncounterActivations[9].requiredSelectionId = null;
   assert.throws(
     () => validateF1SliceContract(halfSelectionGate, catalog),
     /invalid selection gate/
   );
 
   const futureSelectionGate = structuredClone(contract);
-  futureSelectionGate.questEncounterActivations[5].requiredSelectionObjectiveId =
+  futureSelectionGate.questEncounterActivations[9].requiredSelectionObjectiveId =
     contract.beats[6].objectiveIds[0];
-  futureSelectionGate.questEncounterActivations[5].requiredSelectionId =
+  futureSelectionGate.questEncounterActivations[9].requiredSelectionId =
     "f1_choice_resolution_subdue";
   assert.throws(
     () => validateF1SliceContract(futureSelectionGate, catalog),
@@ -596,7 +764,7 @@ test("F1 encounters activate authored groups at beat and objective boundaries", 
   );
 
   const duplicateSelectionGate = structuredClone(contract);
-  duplicateSelectionGate.questEncounterActivations[6].requiredSelectionId =
+  duplicateSelectionGate.questEncounterActivations[10].requiredSelectionId =
     "f1_choice_rib_spring_calibration";
   assert.throws(
     () => validateF1SliceContract(duplicateSelectionGate, catalog),
@@ -604,7 +772,7 @@ test("F1 encounters activate authored groups at beat and objective boundaries", 
   );
 
   const incompleteSelectionCoverage = structuredClone(contract);
-  incompleteSelectionCoverage.questEncounterActivations.splice(6, 1);
+  incompleteSelectionCoverage.questEncounterActivations.splice(10, 1);
   assert.throws(
     () => validateF1SliceContract(incompleteSelectionCoverage, catalog),
     /does not cover every authored selection option/
@@ -626,15 +794,15 @@ test("F1 encounters activate authored groups at beat and objective boundaries", 
   );
 
   const duplicateFormationSlot = structuredClone(contract);
-  duplicateFormationSlot.questEncounterActivations[2].actorPlacements[1].formationSlot =
-    duplicateFormationSlot.questEncounterActivations[2].actorPlacements[0].formationSlot;
+  duplicateFormationSlot.questEncounterActivations[6].actorPlacements[1].formationSlot =
+    duplicateFormationSlot.questEncounterActivations[6].actorPlacements[0].formationSlot;
   assert.throws(
     () => validateF1SliceContract(duplicateFormationSlot, catalog),
     /duplicate .* formation slot/
   );
 
   const unreachableReturnReinforcement = structuredClone(contract);
-  unreachableReturnReinforcement.questEncounterActivations[5].actorPlacements[0].poseMm = {
+  unreachableReturnReinforcement.questEncounterActivations[9].actorPlacements[0].poseMm = {
     x: 900,
     y: 2100,
     height: 700,
@@ -779,7 +947,10 @@ test("F1 combat contract requires stance abilities and stance-neutral evade", as
   missingAbility.combatBootstrap.abilities = missingAbility.combatBootstrap.abilities.filter(
     (ability) => ability.id !== "ability_flower_heavy"
   );
-  assert.throws(() => validateF1SliceContract(missingAbility, catalog), /missing heavy_attack/);
+  assert.throws(
+    () => validateF1SliceContract(missingAbility, catalog),
+    /incompatible required ability/
+  );
 
   const stanceBoundEvade = structuredClone(await loadF1SliceContract());
   stanceBoundEvade.combatBootstrap.abilities.at(-1).requiredStanceId = "stance_eavesguard";

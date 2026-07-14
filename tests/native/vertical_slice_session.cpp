@@ -227,8 +227,11 @@ bool test_same_commands_produce_same_composed_checksum() {
 
     const auto& first_beat = definition().beats.front();
     for (const auto& objective : first_beat.objectives) {
-        ok &= left.complete_objective(objective.key).error == VerticalSliceError::none;
-        ok &= right.complete_objective(objective.key).error == VerticalSliceError::none;
+        const auto selection = selection_for_objective(objective.key);
+        ok &= left.complete_objective(objective.key, selection).error ==
+              VerticalSliceError::none;
+        ok &= right.complete_objective(objective.key, selection).error ==
+              VerticalSliceError::none;
     }
     ok &= expect(
         left.current_snapshot().checksum == right.current_snapshot().checksum &&
@@ -253,12 +256,17 @@ bool test_retry_preserves_objective_progress() {
     ok &= session.complete_objective(definition().beats.front().objectives.front().key).error ==
           VerticalSliceError::none;
     for (std::size_t index = 1; index < definition().beats.front().objectives.size(); ++index) {
+        const auto objective = definition().beats.front().objectives[index].key;
         ok &= session.complete_objective(
-                  definition().beats.front().objectives[index].key
+                  objective,
+                  selection_for_objective(objective)
               ).error == VerticalSliceError::none;
     }
     for (const auto& objective : definition().beats[1].objectives) {
-        ok &= session.complete_objective(objective.key).error == VerticalSliceError::none;
+        ok &= session.complete_objective(
+                  objective.key,
+                  selection_for_objective(objective.key)
+              ).error == VerticalSliceError::none;
     }
     ok &= expect(
         session.current_snapshot().beat_index == 2 &&
@@ -296,6 +304,125 @@ bool test_retry_preserves_objective_progress() {
         "retry restores pose and progress while excluding the failed attempt from playtime"
     );
     ok &= expect(session.generation() == 2, "slice generation changes on retry");
+    return ok;
+}
+
+bool test_training_retry_restores_selected_lane_and_partial_progress() {
+    VerticalSliceSession session;
+    bool ok = session.initialize(definition(), empty_world()) == VerticalSliceError::none;
+    ok &= session.start() == VerticalSliceError::none;
+    for (const auto& objective : definition().beats.front().objectives) {
+        ok &= session.complete_objective(
+                          objective.key,
+                          selection_for_objective(objective.key)
+                      ).error == VerticalSliceError::none;
+    }
+
+    const auto& training = definition().beats[1];
+    const auto leeward_lane = tgd::contracts::stable_content_key(
+        "f1_choice_training_leeward_lane"
+    );
+    ok &= expect(
+        session.current_snapshot().beat_index == 1 &&
+            session.current_snapshot().safe_point_id == definition().safe_points[1].id &&
+            session.current_snapshot().safe_point_pose == definition().safe_points[1].pose,
+        "training starts from the authored Shen Yan safe point"
+    );
+    for (std::size_t index = 0; index <= 3; ++index) {
+        const auto selection = index == 1 ? leeward_lane : 0;
+        ok &= session.complete_objective(training.objectives[index].key, selection).error ==
+              VerticalSliceError::none;
+    }
+
+    const std::array failed_attempt_moves{
+        tgd::contracts::SessionCommand{
+            {1,
+             definition().player.actor,
+             1,
+             tgd::contracts::SessionCommandType::move_intent},
+            {tgd::contracts::ground_axis_one, 0},
+        },
+        tgd::contracts::SessionCommand{
+            {2,
+             definition().player.actor,
+             2,
+             tgd::contracts::SessionCommandType::move_intent},
+            {0, tgd::contracts::ground_axis_one},
+        },
+    };
+    ok &= session.submit_movement(failed_attempt_moves) == VerticalSliceError::none;
+    ok &= session.advance(2).error == VerticalSliceError::none;
+    const auto completed_before_retry = session.current_snapshot().completed_objectives;
+    const auto quest_checksum_before_retry = session.quest_snapshot().checksum;
+    const tgd::contracts::SafePointRetryCommand retry{
+        session.current_snapshot().tick,
+        definition().player.actor,
+        1,
+    };
+    ok &= expect(
+        session.retry_from_safe_point(retry) == VerticalSliceError::none,
+        "a failed training attempt returns through the shared safe-point command"
+    );
+    ok &= expect(
+        session.current_snapshot().beat_index == 1 &&
+            session.current_snapshot().beat_id == training.id &&
+            session.current_snapshot().safe_point_id == definition().safe_points[1].id &&
+            session.current_snapshot().player_pose == definition().safe_points[1].pose &&
+            session.current_snapshot().completed_objectives == completed_before_retry &&
+            session.quest_snapshot().checksum == quest_checksum_before_retry &&
+            session.selected_option(training.objectives[1].key) == leeward_lane &&
+            session.current_snapshot().playtime.failure_retry_ticks == 2 &&
+            session.current_snapshot().playtime.eligible_ticks == 0,
+        "training retry restores Shen Yan, preserves the lane and accepted actions, and excludes the failed ticks"
+    );
+
+    const auto restored_guard_rig = session.encounter_activation(
+        training.id.key,
+        training.objectives[2].key
+    );
+    ok &= expect(
+        restored_guard_rig.boundary_defined && restored_guard_rig.activation != nullptr &&
+            !restored_guard_rig.ambiguous &&
+            restored_guard_rig.activation->required_selection_id.key == leeward_lane &&
+            restored_guard_rig.activation->actor_keys.size() == 1 &&
+            restored_guard_rig.activation->actor_keys.front() == 104 &&
+            restored_guard_rig.activation->actor_placements.front().pose.y == -2'500,
+        "retry selection resolves only the leeward guard-rig placement"
+    );
+    const auto repeated_counter = session.complete_objective(training.objectives[3].key);
+    ok &= expect(
+        repeated_counter.error == VerticalSliceError::none && !repeated_counter.accepted &&
+            session.current_snapshot().completed_objectives == completed_before_retry &&
+            session.selected_option(training.objectives[1].key) == leeward_lane &&
+            session.objective_state(training.objectives[3].key) ==
+                tgd::gameplay::QuestObjectiveState::completed,
+        "repeating the accepted counter after retry is idempotent"
+    );
+
+    ok &= session.complete_objective(training.objectives[4].key).error ==
+          VerticalSliceError::none;
+    const auto restored_target = session.encounter_activation(
+        training.id.key,
+        training.objectives[4].key
+    );
+    ok &= expect(
+        restored_target.boundary_defined && restored_target.activation != nullptr &&
+            !restored_target.ambiguous &&
+            restored_target.activation->required_selection_id.key == leeward_lane &&
+            restored_target.activation->actor_keys.size() == 1 &&
+            restored_target.activation->actor_keys.front() == 107 &&
+            restored_target.activation->actor_placements.front().pose.y == -2'100,
+        "continued training resolves only the leeward proof-target placement"
+    );
+    for (std::size_t index = 5; index < training.objectives.size(); ++index) {
+        ok &= session.complete_objective(training.objectives[index].key).error ==
+              VerticalSliceError::none;
+    }
+    ok &= expect(
+        session.current_snapshot().beat_index == 2 &&
+            session.current_snapshot().safe_point_id == definition().safe_points[2].id,
+        "the recovered training route reaches the next beat without a deadlock"
+    );
     return ok;
 }
 
@@ -437,7 +564,7 @@ bool test_objective_driven_encounter_activations_fail_closed() {
             definition().quest_encounter_activations.begin(),
             definition().quest_encounter_activations.end()
         );
-    stage_entry_reinforcement_activations[4].mode =
+    stage_entry_reinforcement_activations[6].mode =
         tgd::contracts::EncounterActivationMode::reinforce;
     stage_entry_reinforcement.quest_encounter_activations =
         stage_entry_reinforcement_activations;
@@ -456,7 +583,7 @@ bool test_objective_driven_encounter_activations_fail_closed() {
             definition().quest_encounter_activations.begin(),
             definition().quest_encounter_activations.end()
         );
-    half_selection_activations[5].required_selection_id = {};
+    half_selection_activations[9].required_selection_id = {};
     half_selection_gate.quest_encounter_activations = half_selection_activations;
     VerticalSliceSession half_selection_session;
     ok &= expect(
@@ -471,8 +598,8 @@ bool test_objective_driven_encounter_activations_fail_closed() {
             definition().quest_encounter_activations.begin(),
             definition().quest_encounter_activations.end()
         );
-    duplicate_selection_activations[6].required_selection_id =
-        duplicate_selection_activations[5].required_selection_id;
+    duplicate_selection_activations[10].required_selection_id =
+        duplicate_selection_activations[9].required_selection_id;
     duplicate_selection_gate.quest_encounter_activations =
         duplicate_selection_activations;
     VerticalSliceSession duplicate_selection_session;
@@ -490,7 +617,7 @@ bool test_objective_driven_encounter_activations_fail_closed() {
             definition().quest_encounter_activations.begin(),
             definition().quest_encounter_activations.end()
         );
-    incomplete_selection_activations.erase(incomplete_selection_activations.begin() + 6);
+    incomplete_selection_activations.erase(incomplete_selection_activations.begin() + 10);
     incomplete_selection_gate.quest_encounter_activations =
         incomplete_selection_activations;
     VerticalSliceSession incomplete_selection_session;
@@ -509,11 +636,11 @@ bool test_objective_driven_encounter_activations_fail_closed() {
             definition().quest_encounter_activations.end()
         );
     std::vector<tgd::contracts::EncounterActorPlacementDefinition> mismatched_placements(
-        mismatched_activations[2].actor_placements.begin(),
-        mismatched_activations[2].actor_placements.end()
+        mismatched_activations[6].actor_placements.begin(),
+        mismatched_activations[6].actor_placements.end()
     );
-    mismatched_placements[0].actor = mismatched_activations[3].actor_keys.front();
-    mismatched_activations[2].actor_placements = mismatched_placements;
+    mismatched_placements[0].actor = mismatched_activations[7].actor_keys.front();
+    mismatched_activations[6].actor_placements = mismatched_placements;
     mismatched_placement.quest_encounter_activations = mismatched_activations;
     VerticalSliceSession mismatched_session;
     ok &= expect(
@@ -528,11 +655,11 @@ bool test_objective_driven_encounter_activations_fail_closed() {
         definition().quest_encounter_activations.end()
     );
     std::vector<tgd::contracts::EncounterActorPlacementDefinition> overlapping_placements(
-        overlapping_activations[2].actor_placements.begin(),
-        overlapping_activations[2].actor_placements.end()
+        overlapping_activations[6].actor_placements.begin(),
+        overlapping_activations[6].actor_placements.end()
     );
     overlapping_placements[1].formation_slot = overlapping_placements[0].formation_slot;
-    overlapping_activations[2].actor_placements = overlapping_placements;
+    overlapping_activations[6].actor_placements = overlapping_placements;
     overlapping_slots.quest_encounter_activations = overlapping_activations;
     VerticalSliceSession overlapping_session;
     ok &= expect(
@@ -550,6 +677,7 @@ int main() {
     ok &= test_objective_driven_progression_and_lifecycle();
     ok &= test_same_commands_produce_same_composed_checksum();
     ok &= test_retry_preserves_objective_progress();
+    ok &= test_training_retry_restores_selected_lane_and_partial_progress();
     ok &= test_every_authored_safe_point_is_collision_checked_before_start();
     ok &= test_idle_simulation_is_visible_but_never_eligible();
     ok &= test_selection_driven_encounter_activation_match();

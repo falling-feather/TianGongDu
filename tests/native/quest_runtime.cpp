@@ -131,7 +131,14 @@ bool test_ordering_idempotency_and_lifecycle() {
     tgd::contracts::TickIndex tick = 11;
     for (const auto& objective : first.objectives.first(first.objectives.size() - 1U)) {
         advanced = quest.apply(
-            {tick++, definition().player.actor, sequence++, {}, objective.key},
+            {
+                tick++,
+                definition().player.actor,
+                sequence++,
+                {},
+                objective.key,
+                selection_for_objective(objective.key),
+            },
             sink
         );
         ok &= expect(
@@ -281,19 +288,67 @@ bool test_scene_interactions_resolve_from_active_objectives() {
               {1, definition().player.actor, 1, {}, initial.objective},
               sink
           ).error == QuestError::none;
+    const auto skip_clue = std::find_if(
+        definition().quest_interactions.begin(),
+        definition().quest_interactions.end(),
+        [](const tgd::contracts::QuestInteractionDefinition& interaction) {
+            return interaction.id.key == tgd::contracts::stable_content_key(
+                                             "f1_interaction_arrival_clue_follow_bell"
+                                         );
+        }
+    );
+    if (skip_clue == definition().quest_interactions.end()) {
+        return false;
+    }
     const auto consumed = interactions.resolve(
         {
             definition().player.actor,
             definition().beats.front().cell_id.key,
-            definition().player.initial_pose,
+            skip_clue->pose,
         },
         quest
     );
     ok &= expect(
         consumed.found && consumed.objective != initial.objective &&
             consumed.objective ==
-                tgd::contracts::stable_content_key("f1_objective_read_flood_marks"),
-        "a completed interaction disappears and exposes the next readiness step"
+                tgd::contracts::stable_content_key("f1_objective_choose_arrival_clue") &&
+            consumed.selection ==
+                tgd::contracts::stable_content_key("f1_choice_arrival_follow_bell"),
+        "the direct route skips optional clues without blocking the readiness path"
+    );
+    ok &= quest.apply(
+              {
+                  2,
+                  definition().player.actor,
+                  2,
+                  {},
+                  consumed.objective,
+                  consumed.selection,
+              },
+              sink
+          ).error == QuestError::none;
+    const auto main_gauge = std::find_if(
+        definition().quest_interactions.begin(),
+        definition().quest_interactions.end(),
+        [](const tgd::contracts::QuestInteractionDefinition& interaction) {
+            return interaction.id.key == tgd::contracts::stable_content_key(
+                                             "f1_interaction_read_main_flood_gauge"
+                                         );
+        }
+    );
+    if (main_gauge == definition().quest_interactions.end()) {
+        return false;
+    }
+    const auto gated_condition = interactions.resolve(
+        {definition().player.actor, main_gauge->cell_id.key, main_gauge->pose},
+        quest
+    );
+    ok &= expect(
+        gated_condition.found && gated_condition.objective ==
+                                     tgd::contracts::stable_content_key(
+                                         "f1_objective_read_ferry_condition"
+                                     ),
+        "the skip option converges on its authored main-gauge condition check"
     );
 
     auto wrong_floor_pose = definition().quest_interactions.back().pose;
@@ -316,6 +371,173 @@ bool test_scene_interactions_resolve_from_active_objectives() {
             QuestInteractionError::invalid_query,
         "invalid actor queries fail closed"
     );
+    return ok;
+}
+
+bool test_rain_ferry_optional_clues_and_error_recovery_converge() {
+    const auto clue_objective =
+        tgd::contracts::stable_content_key("f1_objective_choose_arrival_clue");
+    const auto condition_objective =
+        tgd::contracts::stable_content_key("f1_objective_read_ferry_condition");
+    const auto mooring_objective =
+        tgd::contracts::stable_content_key("f1_objective_choose_mooring_method");
+    const auto secured_objective =
+        tgd::contracts::stable_content_key("f1_objective_secure_ferry_mooring");
+    const std::array clue_routes{
+        std::pair{
+            tgd::contracts::stable_content_key("f1_choice_arrival_high_water_tags"),
+            tgd::contracts::stable_content_key("f1_interaction_read_high_water_repairs")
+        },
+        std::pair{
+            tgd::contracts::stable_content_key("f1_choice_arrival_drowned_manifest"),
+            tgd::contracts::stable_content_key("f1_interaction_read_manifest_waterline")
+        },
+        std::pair{
+            tgd::contracts::stable_content_key("f1_choice_arrival_follow_bell"),
+            tgd::contracts::stable_content_key("f1_interaction_read_main_flood_gauge")
+        },
+    };
+    const std::array mooring_routes{
+        std::pair{
+            tgd::contracts::stable_content_key("f1_choice_mooring_cross_belay"),
+            tgd::contracts::stable_content_key("f1_interaction_lock_cross_belay")
+        },
+        std::pair{
+            tgd::contracts::stable_content_key("f1_choice_mooring_quick_hitch"),
+            tgd::contracts::stable_content_key(
+                "f1_interaction_correct_overloaded_quick_hitch"
+            )
+        },
+    };
+
+    bool ok = true;
+    for (const auto& [clue_selection, expected_condition] : clue_routes) {
+        for (const auto& [mooring_selection, expected_mooring] : mooring_routes) {
+            DeterministicQuestRuntime quest;
+            DeterministicQuestInteractionResolver interactions;
+            CollectingSink sink;
+            ok &= quest.initialize(definition(), definition().player.actor) == QuestError::none;
+            ok &= quest.start() == QuestError::none;
+            ok &= interactions.initialize(definition().quest_interactions) ==
+                  QuestInteractionError::none;
+            tgd::contracts::TickIndex tick = 1;
+            tgd::contracts::CommandSequence sequence = 1;
+            ok &= quest.apply(
+                          {
+                              tick++,
+                              definition().player.actor,
+                              sequence++,
+                              {},
+                              definition().beats[0].objectives[0].key,
+                          },
+                          sink
+                      ).error == QuestError::none;
+            ok &= quest.apply(
+                          {
+                              tick++,
+                              definition().player.actor,
+                              sequence++,
+                              {},
+                              clue_objective,
+                              clue_selection,
+                          },
+                          sink
+                      ).error == QuestError::none;
+
+            const tgd::contracts::QuestInteractionDefinition* condition = nullptr;
+            for (const auto& candidate : definition().quest_interactions) {
+                if (candidate.objective_id.key != condition_objective) {
+                    continue;
+                }
+                const auto resolved = interactions.resolve(
+                    {definition().player.actor, candidate.cell_id.key, candidate.pose},
+                    quest
+                );
+                const bool selected = candidate.id.key == expected_condition;
+                ok &= expect(
+                    selected ? resolved.found && resolved.interaction == expected_condition
+                             : !resolved.found,
+                    "only the committed clue route exposes its condition reading"
+                );
+                if (selected) {
+                    condition = &candidate;
+                }
+            }
+            if (condition == nullptr) {
+                return false;
+            }
+            ok &= quest.apply(
+                          {
+                              tick++,
+                              definition().player.actor,
+                              sequence++,
+                              {},
+                              condition->objective_id.key,
+                          },
+                          sink
+                      ).error == QuestError::none;
+            ok &= quest.apply(
+                          {
+                              tick++,
+                              definition().player.actor,
+                              sequence++,
+                              {},
+                              mooring_objective,
+                              mooring_selection,
+                          },
+                          sink
+                      ).error == QuestError::none;
+
+            const tgd::contracts::QuestInteractionDefinition* mooring = nullptr;
+            for (const auto& candidate : definition().quest_interactions) {
+                if (candidate.objective_id.key != secured_objective) {
+                    continue;
+                }
+                const auto resolved = interactions.resolve(
+                    {definition().player.actor, candidate.cell_id.key, candidate.pose},
+                    quest
+                );
+                const bool selected = candidate.id.key == expected_mooring;
+                ok &= expect(
+                    selected ? resolved.found && resolved.interaction == expected_mooring
+                             : !resolved.found,
+                    "cross-belay and quick-hitch correction remain mutually exclusive"
+                );
+                if (selected) {
+                    mooring = &candidate;
+                }
+            }
+            if (mooring == nullptr) {
+                return false;
+            }
+            const auto secured = quest.apply(
+                {
+                    tick++,
+                    definition().player.actor,
+                    sequence++,
+                    {},
+                    mooring->objective_id.key,
+                },
+                sink
+            );
+            const auto repeated = quest.apply(
+                {
+                    tick++,
+                    definition().player.actor,
+                    sequence++,
+                    {},
+                    mooring->objective_id.key,
+                },
+                sink
+            );
+            ok &= expect(
+                secured.accepted && !repeated.accepted &&
+                    quest.selected_option(clue_objective) == clue_selection &&
+                    quest.selected_option(mooring_objective) == mooring_selection,
+                "each clue/method route converges once and repeated operation is idempotent"
+            );
+        }
+    }
     return ok;
 }
 
@@ -504,6 +726,7 @@ bool test_scene_interaction_selection_gates_follow_lane_route() {
                               sequence++,
                               {},
                               objective.key,
+                              selection_for_objective(objective.key),
                           },
                           sink
                       ).error == QuestError::none;
@@ -575,13 +798,21 @@ bool test_scene_interaction_selection_gates_follow_lane_route() {
 bool test_combat_signals_resolve_training_objectives() {
     DeterministicQuestRuntime quest;
     DeterministicQuestCombatTriggerResolver triggers;
+    DeterministicQuestCombatOutcomeResolver outcomes;
     CollectingSink sink;
     bool ok = quest.initialize(definition(), definition().player.actor) == QuestError::none;
     ok &= quest.start() == QuestError::none;
     tgd::contracts::CommandSequence sequence = 1;
     for (const auto& objective : definition().beats.front().objectives) {
         ok &= quest.apply(
-                  {sequence, definition().player.actor, sequence, {}, objective.key},
+                  {
+                      sequence,
+                      definition().player.actor,
+                      sequence,
+                      {},
+                      objective.key,
+                      selection_for_objective(objective.key),
+                  },
                   sink
               ).error == QuestError::none;
         ++sequence;
@@ -606,6 +837,11 @@ bool test_combat_signals_resolve_training_objectives() {
             QuestCombatTriggerError::none,
         "generated combat-to-quest bindings initialize once"
     );
+    ok &= expect(
+        outcomes.initialize(definition().quest_combat_outcomes) ==
+            QuestCombatOutcomeError::none,
+        "generated target-defeat bindings initialize once"
+    );
 
     const auto premature_guard = triggers.resolve(
         {
@@ -617,8 +853,35 @@ bool test_combat_signals_resolve_training_objectives() {
     );
     ok &= expect(
         !premature_guard.found,
-        "the guard drill stays locked until the eavesguard heavy is committed"
+        "the guard drill stays locked until one practice lane and mark are committed"
     );
+
+    const auto training_lane = tgd::contracts::stable_content_key(
+        "f1_choice_training_windward_lane"
+    );
+    ok &= quest.apply(
+              {
+                  sequence,
+                  definition().player.actor,
+                  sequence,
+                  {},
+                  definition().beats[1].objectives[1].key,
+                  training_lane,
+              },
+              sink
+          ).error == QuestError::none;
+    ++sequence;
+    ok &= quest.apply(
+              {
+                  sequence,
+                  definition().player.actor,
+                  sequence,
+                  {},
+                  definition().beats[1].objectives[2].key,
+              },
+              sink
+          ).error == QuestError::none;
+    ++sequence;
 
     const auto wrong_heavy = triggers.resolve(
         {
@@ -630,7 +893,7 @@ bool test_combat_signals_resolve_training_objectives() {
         quest
     );
     ok &= expect(!wrong_heavy.found, "training abilities require the authored stable ID");
-    const auto heavy = triggers.resolve(
+    const auto premature_heavy = triggers.resolve(
         {
             definition().player.actor,
             tgd::contracts::QuestCombatTriggerKind::player_ability_started,
@@ -640,17 +903,9 @@ bool test_combat_signals_resolve_training_objectives() {
         quest
     );
     ok &= expect(
-        heavy.found && heavy.objective ==
-                           tgd::contracts::stable_content_key(
-                               "f1_objective_commit_eavesguard_heavy"
-                           ),
-        "an accepted eavesguard heavy resolves its authored drill"
+        !premature_heavy.found,
+        "the eavesguard heavy stays locked until a real hostile impact is guarded"
     );
-    ok &= quest.apply(
-              {sequence, definition().player.actor, sequence, {}, heavy.objective},
-              sink
-          ).error == QuestError::none;
-    ++sequence;
 
     const auto wrong_stance = triggers.resolve(
         {
@@ -695,6 +950,92 @@ bool test_combat_signals_resolve_training_objectives() {
         "completed counter objectives no longer consume combat signals"
     );
 
+    const auto heavy = triggers.resolve(
+        {
+            definition().player.actor,
+            tgd::contracts::QuestCombatTriggerKind::player_ability_started,
+            tgd::contracts::stable_content_key("stance_eavesguard"),
+            tgd::contracts::stable_content_key("ability_eavesguard_heavy"),
+        },
+        quest
+    );
+    ok &= expect(
+        heavy.found && heavy.objective ==
+                           tgd::contracts::stable_content_key(
+                               "f1_objective_commit_eavesguard_heavy"
+                           ),
+        "guarding then committing the eavesguard heavy resolves the action chain"
+    );
+    ok &= quest.apply(
+              {sequence, definition().player.actor, sequence, {}, heavy.objective},
+              sink
+          ).error == QuestError::none;
+    ++sequence;
+
+    std::vector<tgd::contracts::CombatActorSnapshot> training_actors(
+        combat_definition().actors.size()
+    );
+    for (std::size_t index = 0; index < combat_definition().actors.size(); ++index) {
+        const auto& config = combat_definition().actors[index];
+        training_actors[index] = {
+            config.actor,
+            config.archetype_id.key,
+            config.faction,
+            config.initial_pose,
+            config.initial_resources,
+            config.initial_stance,
+            0,
+            false,
+            config.initially_active,
+            false,
+        };
+    }
+    ok &= expect(
+        !outcomes.resolve(training_actors, quest).found,
+        "starting the proof target does not complete the eavesguard lesson"
+    );
+    const auto eavesguard_target = std::find_if(
+        training_actors.begin(),
+        training_actors.end(),
+        [](const tgd::contracts::CombatActorSnapshot& actor) { return actor.actor == 107; }
+    );
+    if (eavesguard_target == training_actors.end()) {
+        return false;
+    }
+    eavesguard_target->resources.health = 0;
+    eavesguard_target->active = false;
+    eavesguard_target->defeated = true;
+    const auto eavesguard_clear = outcomes.resolve(training_actors, quest);
+    ok &= expect(
+        eavesguard_clear.found && eavesguard_clear.objective ==
+                                       tgd::contracts::stable_content_key(
+                                           "f1_objective_break_eavesguard_target"
+                                       ),
+        "the dedicated target defeat proves the eavesguard lesson"
+    );
+    ok &= quest.apply(
+              {
+                  sequence,
+                  definition().player.actor,
+                  sequence,
+                  {},
+                  eavesguard_clear.objective,
+              },
+              sink
+          ).error == QuestError::none;
+    ++sequence;
+    ok &= quest.apply(
+              {
+                  sequence,
+                  definition().player.actor,
+                  sequence,
+                  {},
+                  definition().beats[1].objectives[6].key,
+              },
+              sink
+          ).error == QuestError::none;
+    ++sequence;
+
     const auto flower_stance = triggers.resolve(
         {
             definition().player.actor,
@@ -716,7 +1057,19 @@ bool test_combat_signals_resolve_training_objectives() {
           ).error == QuestError::none;
     ++sequence;
 
-    const auto flower_light = triggers.resolve(
+    ok &= quest.apply(
+              {
+                  sequence,
+                  definition().player.actor,
+                  sequence,
+                  {},
+                  definition().beats[1].objectives[8].key,
+              },
+              sink
+          ).error == QuestError::none;
+    ++sequence;
+
+    const auto premature_flower_light = triggers.resolve(
         {
             definition().player.actor,
             tgd::contracts::QuestCombatTriggerKind::player_ability_started,
@@ -726,17 +1079,9 @@ bool test_combat_signals_resolve_training_objectives() {
         quest
     );
     ok &= expect(
-        flower_light.found && flower_light.objective ==
-                                  tgd::contracts::stable_content_key(
-                                      "f1_objective_commit_flower_turn_light"
-                                  ),
-        "an accepted flower light resolves its authored tempo drill"
+        !premature_flower_light.found,
+        "flower attacks stay locked until the active rig is crossed and evaded"
     );
-    ok &= quest.apply(
-              {sequence, definition().player.actor, sequence, {}, flower_light.objective},
-              sink
-          ).error == QuestError::none;
-    ++sequence;
 
     const auto evaded = triggers.resolve(
         {
@@ -753,15 +1098,95 @@ bool test_combat_signals_resolve_training_objectives() {
                             ),
         "an evaded player hit resolves the flower-turn training objective"
     );
-    const auto training_completed = quest.apply(
+    ok &= quest.apply(
         {sequence, definition().player.actor, sequence, {}, evaded.objective},
+        sink
+    ).error == QuestError::none;
+    ++sequence;
+
+    const auto flower_light = triggers.resolve(
+        {
+            definition().player.actor,
+            tgd::contracts::QuestCombatTriggerKind::player_ability_started,
+            tgd::contracts::stable_content_key("stance_flower_turn"),
+            tgd::contracts::stable_content_key("ability_flower_light"),
+        },
+        quest
+    );
+    ok &= expect(
+        flower_light.found && flower_light.objective ==
+                                  tgd::contracts::stable_content_key(
+                                      "f1_objective_commit_flower_turn_light"
+                                  ),
+        "the evasion opens the authored flower-light response"
+    );
+    ok &= quest.apply(
+              {sequence, definition().player.actor, sequence, {}, flower_light.objective},
+              sink
+          ).error == QuestError::none;
+    ++sequence;
+
+    const auto flower_heavy = triggers.resolve(
+        {
+            definition().player.actor,
+            tgd::contracts::QuestCombatTriggerKind::player_ability_started,
+            tgd::contracts::stable_content_key("stance_flower_turn"),
+            tgd::contracts::stable_content_key("ability_flower_heavy"),
+        },
+        quest
+    );
+    ok &= expect(
+        flower_heavy.found && flower_heavy.objective ==
+                                  tgd::contracts::stable_content_key(
+                                      "f1_objective_commit_flower_turn_heavy"
+                                  ),
+        "the flower-light response chains into the committed heavy finish"
+    );
+    ok &= quest.apply(
+              {sequence, definition().player.actor, sequence, {}, flower_heavy.objective},
+              sink
+          ).error == QuestError::none;
+    ++sequence;
+
+    const auto flower_target = std::find_if(
+        training_actors.begin(),
+        training_actors.end(),
+        [](const tgd::contracts::CombatActorSnapshot& actor) { return actor.actor == 109; }
+    );
+    if (flower_target == training_actors.end()) {
+        return false;
+    }
+    flower_target->resources.health = 0;
+    flower_target->active = false;
+    flower_target->defeated = true;
+    const auto flower_clear = outcomes.resolve(training_actors, quest);
+    ok &= expect(
+        flower_clear.found && flower_clear.objective ==
+                                  tgd::contracts::stable_content_key(
+                                      "f1_objective_break_flower_turn_target"
+                                  ),
+        "the dedicated flower target must actually be defeated"
+    );
+    ok &= quest.apply(
+              {sequence, definition().player.actor, sequence, {}, flower_clear.objective},
+              sink
+          ).error == QuestError::none;
+    ++sequence;
+    const auto training_completed = quest.apply(
+        {
+            sequence,
+            definition().player.actor,
+            sequence,
+            {},
+            definition().beats[1].objectives[13].key,
+        },
         sink
     );
     ++sequence;
     ok &= expect(
         training_completed.error == QuestError::none &&
             training_completed.stage_advanced && quest.snapshot().stage_index == 2,
-        "all five authored combat drills advance into the umbrella lane"
+        "dialogue, lane choice, risk signals, action chains, and two clears finish training"
     );
     ok &= expect(
         triggers.resolve({0, {}, 0}, quest).error ==
@@ -786,7 +1211,7 @@ bool test_combat_signals_resolve_training_objectives() {
         definition().quest_combat_triggers.begin(),
         definition().quest_combat_triggers.end()
     );
-    half_selection[5].required_selection_id = {};
+    half_selection[6].required_selection_id = {};
     DeterministicQuestCombatTriggerResolver half_selection_triggers;
     ok &= expect(
         half_selection_triggers.initialize(half_selection) ==
@@ -797,8 +1222,8 @@ bool test_combat_signals_resolve_training_objectives() {
         definition().quest_combat_triggers.begin(),
         definition().quest_combat_triggers.end()
     );
-    duplicate_selection[6].required_selection_id =
-        duplicate_selection[5].required_selection_id;
+    duplicate_selection[7].required_selection_id =
+        duplicate_selection[6].required_selection_id;
     DeterministicQuestCombatTriggerResolver duplicate_selection_triggers;
     ok &= expect(
         duplicate_selection_triggers.initialize(duplicate_selection) ==
@@ -821,7 +1246,14 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
     for (std::size_t stage = 0; stage < 2; ++stage) {
         for (const auto& objective : definition().beats[stage].objectives) {
             ok &= quest.apply(
-                      {tick++, definition().player.actor, sequence++, {}, objective.key},
+                      {
+                          tick++,
+                          definition().player.actor,
+                          sequence++,
+                          {},
+                          objective.key,
+                          selection_for_objective(objective.key),
+                      },
                       sink
                   ).error == QuestError::none;
         }
@@ -856,7 +1288,7 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
         };
     }
     for (const auto& placement :
-         definition().quest_encounter_activations[2].actor_placements) {
+         definition().quest_encounter_activations[6].actor_placements) {
         const auto actor = std::find_if(
             actors.begin(),
             actors.end(),
@@ -995,7 +1427,7 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
         "the completed rainworks chain still waits for the paper-egret answer"
     );
     for (const auto& placement :
-         definition().quest_encounter_activations[3].actor_placements) {
+         definition().quest_encounter_activations[7].actor_placements) {
         const auto actor = std::find_if(
             actors.begin(),
             actors.end(),
@@ -1062,6 +1494,7 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
             quest.snapshot().checksum == checksum_before_missing_selection,
         "choice objectives reject missing selections without mutating state"
     );
+    const auto selections_before_lane = quest.snapshot().selection_count;
     const auto selected = quest.apply(
         {
             tick++,
@@ -1075,7 +1508,7 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
     );
     ok &= expect(
         selected.error == QuestError::none && selected.accepted && selected.stage_advanced &&
-            quest.snapshot().selection_count == 1 &&
+            quest.snapshot().selection_count == selections_before_lane + 1 &&
             quest.selected_option(unlocked_route.objective) == unlocked_route.selection,
         "accepted choices persist one stable option and advance the beat"
     );
@@ -1092,7 +1525,7 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
     );
     ok &= expect(
         duplicate_choice.error == QuestError::none && !duplicate_choice.accepted &&
-            quest.snapshot().selection_count == 1,
+            quest.snapshot().selection_count == selections_before_lane + 1,
         "repeating the same stable choice is idempotent"
     );
 
@@ -1121,6 +1554,7 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
         "f1_choice_rib_winter_calibration"
     );
     const auto calibration_objective = workbench.objectives[3].key;
+    const auto selections_before_calibration = quest.snapshot().selection_count;
     const auto calibrated = quest.apply(
         {
             tick++,
@@ -1134,7 +1568,8 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
     );
     ok &= expect(
         calibrated.error == QuestError::none && calibrated.accepted &&
-            calibrated.stage_advanced && quest.snapshot().selection_count == 2 &&
+            calibrated.stage_advanced &&
+            quest.snapshot().selection_count == selections_before_calibration + 1 &&
             quest.selected_option(calibration_objective) == spring_choice,
         "workbench calibration persists a second stable choice"
     );
@@ -1159,7 +1594,7 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
 
     auto return_actors = actors;
     for (const auto& placement :
-         definition().quest_encounter_activations[4].actor_placements) {
+         definition().quest_encounter_activations[8].actor_placements) {
         for (auto& actor : return_actors) {
             if (actor.actor == placement.actor) {
                 const auto config = std::find_if(
@@ -1218,7 +1653,7 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
                   sink
               ).error == QuestError::none;
     for (const auto& placement :
-         definition().quest_encounter_activations[5].actor_placements) {
+         definition().quest_encounter_activations[9].actor_placements) {
         for (auto& actor : return_actors) {
             if (actor.actor == placement.actor) {
                 const auto config = std::find_if(
@@ -1291,7 +1726,7 @@ bool test_hostile_group_outcomes_unlock_lane_choice() {
               },
               sink
           ).error == QuestError::none;
-    for (const auto activation_index : std::array<std::size_t, 2>{4, 5}) {
+    for (const auto activation_index : std::array<std::size_t, 2>{8, 9}) {
         for (const auto& placement :
              definition().quest_encounter_activations[activation_index].actor_placements) {
         for (auto& actor : return_actors) {
@@ -1711,6 +2146,7 @@ int main() {
     ok &= test_full_resolution_is_deterministic();
     ok &= test_invalid_definition_fails_closed();
     ok &= test_scene_interactions_resolve_from_active_objectives();
+    ok &= test_rain_ferry_optional_clues_and_error_recovery_converge();
     ok &= test_scene_interaction_ties_are_stable();
     ok &= test_scene_interaction_selection_gates_follow_lane_route();
     ok &= test_combat_signals_resolve_training_objectives();

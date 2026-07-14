@@ -125,6 +125,24 @@ add_test(
   COMMAND tgd_native_vertical_slice_session
 )
 
+add_executable(tgd_native_f1_content_replay f1_content_replay.cpp)
+target_compile_features(tgd_native_f1_content_replay PRIVATE cxx_std_20)
+tgd_enable_strict_warnings(tgd_native_f1_content_replay)
+target_link_libraries(
+  tgd_native_f1_content_replay
+  PRIVATE
+    tgd_contracts
+    tgd_runtime
+    tgd_gameplay
+    tgd_content_core
+    tgd_test_f1_content_replay_fixture
+)
+
+add_test(
+  NAME tgd.native.f1-content-replay
+  COMMAND tgd_native_f1_content_replay
+)
+
 add_executable(tgd_native_playtime_audit playtime_audit.cpp)
 target_compile_features(tgd_native_playtime_audit PRIVATE cxx_std_20)
 tgd_enable_strict_warnings(tgd_native_playtime_audit)

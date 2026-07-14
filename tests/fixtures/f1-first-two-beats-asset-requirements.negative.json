@@ -1,0 +1,84 @@
+{
+  "contractVersion": "1.0.0",
+  "cases": [
+    {
+      "id": "unknown_interaction_fails_closed",
+      "baseStableAssetId": "asset_f1_rain_travel_writ",
+      "operation": "replace",
+      "path": "bindings.0.interactionId",
+      "value": "f1_interaction_missing",
+      "expectedError": "unknown interaction"
+    },
+    {
+      "id": "interaction_objective_mismatch_fails_closed",
+      "baseStableAssetId": "asset_f1_rain_workshop_bell",
+      "operation": "replace",
+      "path": "bindings.1.objectiveId",
+      "value": "f1_objective_reach_ferry_gate",
+      "expectedError": "does not belong to objective"
+    },
+    {
+      "id": "unknown_actor_fails_closed",
+      "baseStableAssetId": "asset_f1_training_safety_rig",
+      "operation": "replace",
+      "path": "bindings.0.actorKey",
+      "value": 999,
+      "expectedError": "unknown actor"
+    },
+    {
+      "id": "actor_archetype_mismatch_fails_closed",
+      "baseStableAssetId": "asset_f1_training_proof_target",
+      "operation": "replace",
+      "path": "bindings.1.archetypeId",
+      "value": "f1_training_eavesguard_target",
+      "expectedError": "does not match"
+    },
+    {
+      "id": "missing_actor_form_variant_fails_closed",
+      "baseStableAssetId": "asset_f1_training_safety_rig",
+      "operation": "remove",
+      "path": "bindings.1.formVariant",
+      "expectedError": "actor binding formVariant is missing"
+    },
+    {
+      "id": "presentation_cannot_own_collision",
+      "baseStableAssetId": "asset_f1_rain_mooring_rig",
+      "operation": "replace",
+      "path": "collisionOwner",
+      "value": "presentation",
+      "expectedError": "invalid collision owner"
+    },
+    {
+      "id": "duplicate_anchor_fails_closed",
+      "baseStableAssetId": "asset_f1_rain_wayfinding_lantern",
+      "operation": "replace",
+      "path": "anchors.1",
+      "value": "anchor_crank",
+      "expectedError": "anchors contains duplicate tokens"
+    },
+    {
+      "id": "missing_states_fails_closed",
+      "baseStableAssetId": "asset_f1_rain_drowned_manifest",
+      "operation": "replace",
+      "path": "states",
+      "value": [],
+      "expectedError": "states is incomplete"
+    },
+    {
+      "id": "indistinct_greybox_fails_closed",
+      "baseStableAssetId": "asset_f1_training_lane_markers",
+      "operation": "replace",
+      "path": "greyboxFallback.distinctPerFunction",
+      "value": false,
+      "expectedError": "greybox fallback must stay distinct per function"
+    },
+    {
+      "id": "stable_asset_id_drift_fails_closed",
+      "baseStableAssetId": "asset_f1_rain_bilge_counterweight",
+      "operation": "replace",
+      "path": "stableAssetId",
+      "value": "asset_f1_rain_generic_prop",
+      "expectedError": "unexpected stable asset ID"
+    }
+  ]
+}

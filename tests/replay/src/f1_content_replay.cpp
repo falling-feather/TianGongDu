@@ -153,6 +153,7 @@ F1ContentReplayFixture make_f1_high_water_windward_replay() {
         7,
         0,
         0x70ad65be94540ee2ULL,
+        0x955f3abb832aa33fULL,
         0x42996cbdb4246c7cULL,
     };
 }
@@ -170,6 +171,7 @@ F1ContentReplayFixture make_f1_follow_bell_leeward_retry_replay() {
         1,
         2,
         0x68cc30dc9b72e99eULL,
+        0x45f516efd2d8c92dULL,
         0x13a2d7a427b77175ULL,
     };
 }

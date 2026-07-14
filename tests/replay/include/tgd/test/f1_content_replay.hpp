@@ -35,6 +35,7 @@ struct F1ContentReplayFixture final {
     std::uint64_t expected_eligible_ticks{};
     std::uint64_t expected_failure_retry_ticks{};
     std::uint64_t expected_quest_checksum{};
+    std::uint64_t expected_quest_ui_checksum{};
     std::uint64_t expected_session_checksum{};
 };
 

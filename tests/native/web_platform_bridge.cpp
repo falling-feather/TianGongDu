@@ -16,6 +16,14 @@ namespace {
 
 using tgd::contracts::StableId128;
 using tgd::contracts::PersistentOperationV1;
+using tgd::contracts::QuestUiAttemptTimeClassification;
+using tgd::contracts::QuestUiObjectiveState;
+using tgd::contracts::QuestUiPolarity;
+using tgd::contracts::QuestUiProjectionSnapshot;
+using tgd::contracts::QuestUiProjectionSource;
+using tgd::contracts::QuestUiRejectionReason;
+using tgd::contracts::QuestUiResultStatus;
+using tgd::contracts::QuestUiSurface;
 using tgd::platform::web::WebAbiError;
 using tgd::platform::web::WebPlatformBridge;
 using tgd::runtime::StorageChannel;
@@ -475,6 +483,571 @@ int main() {
     );
     bridge.publish_profile_ui(9, ui_event);
     ok &= expect(bridge.peek_ui_event_size() == 0, "identical UI state is coalesced");
+
+    QuestUiProjectionSnapshot quest_ui_event;
+    quest_ui_event.sequence = 41;
+    quest_ui_event.tick = 97;
+    quest_ui_event.quest_checksum = 0x1111222233334444ULL;
+    quest_ui_event.checksum = 0x5555666677778888ULL;
+    quest_ui_event.cue = 0x101ULL;
+    quest_ui_event.beat = 0x102ULL;
+    quest_ui_event.objective = 0x103ULL;
+    quest_ui_event.safe_point = 0x104ULL;
+    quest_ui_event.pending_objective = 0x103ULL;
+    quest_ui_event.source = QuestUiProjectionSource::choice_available;
+    quest_ui_event.surface = QuestUiSurface::choice;
+    quest_ui_event.polarity = QuestUiPolarity::positive;
+    quest_ui_event.objective_state = QuestUiObjectiveState::active;
+    quest_ui_event.attempt_time_classification =
+        QuestUiAttemptTimeClassification::qualifying_craft_decision;
+    quest_ui_event.choice_options[0] = {0x201ULL, 0x301ULL};
+    quest_ui_event.choice_options[1] = {0x202ULL, 0x302ULL};
+    quest_ui_event.choice_option_count = 2;
+    quest_ui_event.selected_options[0] = {0x99ULL, 0x98ULL};
+    quest_ui_event.selected_option_count = 1;
+    quest_ui_event.active_actor_keys[0] = 104;
+    quest_ui_event.active_actor_count = 1;
+    quest_ui_event.retained_objectives[0] = 0x90ULL;
+    quest_ui_event.retained_objective_count = 1;
+
+    const tgd::platform::web::WebProfileUiEvent saving_ui_event{
+        5,
+        0,
+        true,
+        true,
+        3,
+        12,
+        snapshot_two,
+    };
+    bridge.publish_profile_ui(9, saving_ui_event);
+    ok &= expect(
+        bridge.publish_quest_ui(9, quest_ui_event) == WebAbiError::none &&
+            bridge.peek_ui_event_size() == 80,
+        "profile and Quest UI events keep independent pending slots"
+    );
+    std::vector<std::uint8_t> pending_profile(bridge.peek_ui_event_size());
+    ok &= expect(
+        bridge.poll_ui_event(pending_profile) == 80 &&
+            read_integer<std::uint16_t>(pending_profile, 4) == TGD_WEB_MESSAGE_UI_EVENT &&
+            bridge.peek_ui_event_size() ==
+                WebPlatformBridge::message_header_bytes +
+                    WebPlatformBridge::quest_ui_event_payload_bytes,
+        "profile state drains before the pending Quest projection without replacing it"
+    );
+    std::vector<std::uint8_t> quest_ui_message(bridge.peek_ui_event_size());
+    ok &= expect(
+        bridge.poll_ui_event(quest_ui_message) ==
+                static_cast<std::int32_t>(quest_ui_message.size()) &&
+            quest_ui_message.size() == 1'328 &&
+            read_integer<std::uint16_t>(quest_ui_message, 4) ==
+                TGD_WEB_MESSAGE_QUEST_UI_EVENT &&
+            read_integer<std::uint32_t>(quest_ui_message, 8) ==
+                TGD_WEB_QUEST_UI_EVENT_V1_BYTES &&
+            read_integer<std::uint64_t>(quest_ui_message, 24) ==
+                quest_ui_event.checksum &&
+            read_integer<std::uint64_t>(quest_ui_message, 32) ==
+                quest_ui_event.sequence &&
+            read_integer<std::uint64_t>(quest_ui_message, 40) ==
+                quest_ui_event.sequence &&
+            read_integer<std::uint64_t>(quest_ui_message, 64) ==
+                quest_ui_event.checksum &&
+            read_integer<std::uint16_t>(quest_ui_message, 144) ==
+                static_cast<std::uint16_t>(quest_ui_event.source) &&
+            read_integer<std::uint16_t>(quest_ui_message, 162) == 2 &&
+            read_integer<std::uint64_t>(quest_ui_message, 176) ==
+                quest_ui_event.choice_options[0].interaction &&
+            read_integer<std::uint64_t>(quest_ui_message, 184) ==
+                quest_ui_event.choice_options[0].selection &&
+            bridge.peek_ui_event_size() == 0,
+        "Quest projection uses the fixed explicit little-endian v1 payload"
+    );
+    ok &= expect(
+        bridge.publish_quest_ui(9, quest_ui_event) == WebAbiError::none &&
+            bridge.peek_ui_event_size() == 0,
+        "identical Quest projections are coalesced"
+    );
+
+    auto pending_quest_ui_event = quest_ui_event;
+    pending_quest_ui_event.sequence = 42;
+    pending_quest_ui_event.tick = 98;
+    pending_quest_ui_event.checksum = 0x88889999aaaabbbbULL;
+    ok &= expect(
+        bridge.publish_quest_ui(9, pending_quest_ui_event) == WebAbiError::none,
+        "a newer valid Quest projection enters the outbound slot"
+    );
+    const auto quest_ui_wire_bytes = static_cast<std::uint32_t>(
+        WebPlatformBridge::message_header_bytes +
+        WebPlatformBridge::quest_ui_event_payload_bytes
+    );
+    const auto rejects_without_replacing = [&bridge](
+                                               QuestUiProjectionSnapshot candidate,
+                                               std::string_view label
+                                           ) {
+        candidate.sequence = 43;
+        candidate.tick = 99;
+        candidate.checksum = 0x9999aaaabbbbccccULL;
+        return expect(
+            bridge.publish_quest_ui(9, candidate) == WebAbiError::invalid_message &&
+                bridge.peek_ui_event_size() == quest_ui_wire_bytes,
+            label
+        );
+    };
+    {
+        auto invalid = pending_quest_ui_event;
+        invalid.choice_option_count = 9;
+        ok &= rejects_without_replacing(
+            invalid,
+            "over-capacity choice options fail closed without replacing the pending event"
+        );
+    }
+    {
+        auto invalid = pending_quest_ui_event;
+        invalid.choice_options[2] = {0x203ULL, 0x303ULL};
+        ok &= rejects_without_replacing(
+            invalid,
+            "nonzero choice tail data fails closed without replacing the pending event"
+        );
+    }
+    {
+        auto invalid = pending_quest_ui_event;
+        invalid.choice_options[1].selection = invalid.choice_options[0].selection;
+        ok &= rejects_without_replacing(
+            invalid,
+            "duplicate authored choice targets fail closed without replacing the pending event"
+        );
+    }
+    {
+        auto invalid = pending_quest_ui_event;
+        invalid.selected_options[1] = {0x99ULL, 0x97ULL};
+        invalid.selected_option_count = 2;
+        ok &= rejects_without_replacing(
+            invalid,
+            "duplicate selected Objective entries fail closed without replacing the pending event"
+        );
+    }
+    {
+        auto invalid = pending_quest_ui_event;
+        invalid.selected_options[1] = {0x97ULL, 0x96ULL};
+        ok &= rejects_without_replacing(
+            invalid,
+            "nonzero selected-option tail data fails closed without replacing the pending event"
+        );
+    }
+    {
+        auto invalid = pending_quest_ui_event;
+        invalid.active_actor_keys[1] = 103;
+        invalid.active_actor_count = 2;
+        ok &= rejects_without_replacing(
+            invalid,
+            "unsorted active Actor identities fail closed without replacing the pending event"
+        );
+    }
+    {
+        auto invalid = pending_quest_ui_event;
+        invalid.active_actor_keys[1] = 105;
+        ok &= rejects_without_replacing(
+            invalid,
+            "nonzero active-Actor tail data fails closed without replacing the pending event"
+        );
+    }
+    {
+        auto invalid = pending_quest_ui_event;
+        invalid.defeated_actor_keys[0] = 104;
+        invalid.defeated_actor_count = 1;
+        ok &= rejects_without_replacing(
+            invalid,
+            "an Actor cannot be active and defeated in the same projection"
+        );
+    }
+    {
+        auto invalid = pending_quest_ui_event;
+        invalid.retained_objectives[1] = invalid.retained_objectives[0];
+        invalid.retained_objective_count = 2;
+        ok &= rejects_without_replacing(
+            invalid,
+            "duplicate retained Objectives fail closed without replacing the pending event"
+        );
+    }
+    {
+        auto invalid = pending_quest_ui_event;
+        invalid.attempt_time_classification =
+            QuestUiAttemptTimeClassification::qualifying_combat_proof;
+        ok &= rejects_without_replacing(
+            invalid,
+            "source-incompatible attempt evidence fails closed without replacing the pending event"
+        );
+    }
+    {
+        auto invalid = pending_quest_ui_event;
+        invalid.surface = QuestUiSurface::gameplay;
+        ok &= rejects_without_replacing(
+            invalid,
+            "source-incompatible UI surfaces fail closed without replacing the pending event"
+        );
+    }
+    {
+        auto invalid = pending_quest_ui_event;
+        invalid.pending_objective = 0;
+        ok &= rejects_without_replacing(
+            invalid,
+            "an active projection focus cannot lose its pending Objective identity"
+        );
+    }
+    {
+        auto invalid = pending_quest_ui_event;
+        invalid.primary_result = {
+            0x401ULL,
+            invalid.objective,
+            QuestUiResultStatus::accepted,
+            QuestUiRejectionReason::wrong_target,
+        };
+        ok &= rejects_without_replacing(
+            invalid,
+            "accepted results carrying a rejection reason fail closed"
+        );
+    }
+    {
+        auto invalid = pending_quest_ui_event;
+        invalid.source = QuestUiProjectionSource::interaction_feedback;
+        invalid.surface = QuestUiSurface::gameplay;
+        invalid.polarity = QuestUiPolarity::negative;
+        invalid.attempt_time_classification =
+            QuestUiAttemptTimeClassification::repeat_no_progress;
+        invalid.choice_options = {};
+        invalid.choice_option_count = 0;
+        invalid.primary_result = {
+            0x401ULL,
+            invalid.objective,
+            QuestUiResultStatus::ignored_repeat,
+            QuestUiRejectionReason::wrong_target,
+        };
+        ok &= rejects_without_replacing(
+            invalid,
+            "ignored-repeat results accept only selection_already_committed"
+        );
+    }
+    {
+        auto invalid = pending_quest_ui_event;
+        invalid.source = QuestUiProjectionSource::objective_state;
+        invalid.surface = QuestUiSurface::gameplay;
+        invalid.polarity = QuestUiPolarity::negative;
+        invalid.attempt_time_classification =
+            QuestUiAttemptTimeClassification::qualifying_training_risk;
+        invalid.choice_options = {};
+        invalid.choice_option_count = 0;
+        ok &= rejects_without_replacing(
+            invalid,
+            "objective-state projections cannot override Definition-derived polarity"
+        );
+    }
+    {
+        auto invalid = pending_quest_ui_event;
+        invalid.source = QuestUiProjectionSource::recovery_offer;
+        invalid.surface = QuestUiSurface::failure;
+        invalid.polarity = QuestUiPolarity::positive;
+        invalid.attempt_time_classification =
+            QuestUiAttemptTimeClassification::failure_retry_excluded;
+        invalid.choice_options = {};
+        invalid.choice_option_count = 0;
+        ok &= rejects_without_replacing(
+            invalid,
+            "recovery projections require recovery polarity"
+        );
+    }
+    {
+        auto invalid = pending_quest_ui_event;
+        invalid.source = QuestUiProjectionSource::combat_feedback;
+        invalid.surface = QuestUiSurface::gameplay;
+        invalid.polarity = QuestUiPolarity::negative;
+        invalid.attempt_time_classification =
+            QuestUiAttemptTimeClassification::qualifying_combat_feedback;
+        invalid.choice_options = {};
+        invalid.choice_option_count = 0;
+        invalid.primary_result = {
+            0x401ULL,
+            0x400ULL,
+            QuestUiResultStatus::rejected,
+            QuestUiRejectionReason::wrong_target,
+        };
+        invalid.secondary_result = {
+            0x402ULL,
+            invalid.objective,
+            QuestUiResultStatus::accepted,
+            QuestUiRejectionReason::none,
+        };
+        ok &= rejects_without_replacing(
+            invalid,
+            "combat outcomes cannot apply unless the trigger was accepted"
+        );
+    }
+    std::vector<std::uint8_t> retained_quest_ui_message(bridge.peek_ui_event_size());
+    ok &= expect(
+        bridge.poll_ui_event(retained_quest_ui_message) ==
+                static_cast<std::int32_t>(retained_quest_ui_message.size()) &&
+            read_integer<std::uint64_t>(retained_quest_ui_message, 32) ==
+                pending_quest_ui_event.sequence &&
+            read_integer<std::uint64_t>(retained_quest_ui_message, 40) ==
+                pending_quest_ui_event.sequence &&
+            read_integer<std::uint64_t>(retained_quest_ui_message, 64) ==
+                pending_quest_ui_event.checksum,
+        "all invalid publications preserve the exact prior pending sequence and checksum"
+    );
+    const auto active_choice_message_sequence =
+        read_integer<std::uint64_t>(retained_quest_ui_message, 16);
+
+    const tgd::platform::web::WebQuestUiCloseAck choice_close{
+        pending_quest_ui_event.sequence,
+        pending_quest_ui_event.checksum,
+        TGD_WEB_QUEST_UI_CLOSE_SELECTION_COMMITTED,
+    };
+    ok &= expect(
+        bridge.publish_quest_ui_close(9, choice_close) == WebAbiError::none &&
+            bridge.publish_quest_ui_close(9, choice_close) == WebAbiError::none &&
+            bridge.peek_ui_event_size() ==
+                WebPlatformBridge::message_header_bytes +
+                    WebPlatformBridge::quest_ui_close_ack_payload_bytes,
+        "an exact active-choice close acknowledgement is queued idempotently"
+    );
+    const auto rejects_close_without_replacing = [&bridge](
+                                                     std::uint32_t generation,
+                                                     tgd::platform::web::WebQuestUiCloseAck candidate,
+                                                     std::string_view label
+                                                 ) {
+        return expect(
+            bridge.publish_quest_ui_close(generation, candidate) ==
+                    WebAbiError::invalid_message &&
+                bridge.peek_ui_event_size() ==
+                    WebPlatformBridge::message_header_bytes +
+                        WebPlatformBridge::quest_ui_close_ack_payload_bytes,
+            label
+        );
+    };
+    ok &= rejects_close_without_replacing(
+        10,
+        choice_close,
+        "a wrong-generation close cannot replace the pending valid acknowledgement"
+    );
+    {
+        auto invalid = choice_close;
+        ++invalid.projection_sequence;
+        ok &= rejects_close_without_replacing(
+            9,
+            invalid,
+            "a wrong-sequence close cannot replace the pending valid acknowledgement"
+        );
+    }
+    {
+        auto invalid = choice_close;
+        ++invalid.projection_checksum;
+        ok &= rejects_close_without_replacing(
+            9,
+            invalid,
+            "a wrong-checksum close cannot replace the pending valid acknowledgement"
+        );
+    }
+    {
+        auto invalid = choice_close;
+        invalid.reason = static_cast<tgd_web_quest_ui_close_reason>(0);
+        ok &= rejects_close_without_replacing(
+            9,
+            invalid,
+            "an unknown close reason cannot replace the pending valid acknowledgement"
+        );
+    }
+    std::vector<std::uint8_t> choice_close_message(bridge.peek_ui_event_size());
+    ok &= expect(
+        bridge.poll_ui_event(choice_close_message) ==
+                static_cast<std::int32_t>(choice_close_message.size()) &&
+            read_integer<std::uint16_t>(choice_close_message, 4) ==
+                TGD_WEB_MESSAGE_QUEST_UI_CLOSE_ACK &&
+            read_integer<std::uint32_t>(choice_close_message, 8) ==
+                TGD_WEB_QUEST_UI_CLOSE_ACK_V1_BYTES &&
+            read_integer<std::uint64_t>(choice_close_message, 24) ==
+                choice_close.projection_checksum &&
+            read_integer<std::uint64_t>(choice_close_message, 32) ==
+                choice_close.projection_sequence &&
+            read_integer<std::uint64_t>(choice_close_message, 40) ==
+                choice_close.projection_sequence &&
+            read_integer<std::uint64_t>(choice_close_message, 48) ==
+                choice_close.projection_checksum &&
+            read_integer<std::uint16_t>(choice_close_message, 56) ==
+                TGD_WEB_QUEST_UI_CLOSE_SELECTION_COMMITTED &&
+            read_integer<std::uint64_t>(choice_close_message, 16) >
+                active_choice_message_sequence &&
+            bridge.publish_quest_ui_close(9, choice_close) == WebAbiError::none &&
+            bridge.peek_ui_event_size() == 0,
+        "the fixed close acknowledgement carries exact identity and stays consumed on replay"
+    );
+
+    auto combat_quest_ui_event = pending_quest_ui_event;
+    combat_quest_ui_event.sequence = 43;
+    combat_quest_ui_event.tick = 99;
+    combat_quest_ui_event.checksum = 0xbbbbccccddddeeeeULL;
+    combat_quest_ui_event.source = QuestUiProjectionSource::combat_feedback;
+    combat_quest_ui_event.surface = QuestUiSurface::gameplay;
+    combat_quest_ui_event.polarity = QuestUiPolarity::negative;
+    combat_quest_ui_event.attempt_time_classification =
+        QuestUiAttemptTimeClassification::qualifying_combat_feedback;
+    combat_quest_ui_event.choice_options = {};
+    combat_quest_ui_event.choice_option_count = 0;
+    combat_quest_ui_event.primary_result = {
+        0x401ULL,
+        0x400ULL,
+        QuestUiResultStatus::accepted,
+        QuestUiRejectionReason::none,
+    };
+    combat_quest_ui_event.secondary_result = {
+        0x402ULL,
+        combat_quest_ui_event.objective,
+        QuestUiResultStatus::rejected,
+        QuestUiRejectionReason::wrong_target,
+    };
+    ok &= expect(
+        bridge.publish_quest_ui(9, combat_quest_ui_event) == WebAbiError::none &&
+            bridge.publish_quest_ui_close(
+                9,
+                {
+                    combat_quest_ui_event.sequence,
+                    combat_quest_ui_event.checksum,
+                    TGD_WEB_QUEST_UI_CLOSE_SELECTION_COMMITTED,
+                }
+            ) == WebAbiError::invalid_message &&
+            bridge.peek_ui_event_size() == quest_ui_wire_bytes,
+        "accepted trigger plus rejected outcome remains lossless and cannot pose as a choice close"
+    );
+    std::vector<std::uint8_t> combat_quest_ui_message(bridge.peek_ui_event_size());
+    ok &= expect(
+        bridge.poll_ui_event(combat_quest_ui_message) ==
+                static_cast<std::int32_t>(combat_quest_ui_message.size()) &&
+            read_integer<std::uint16_t>(combat_quest_ui_message, 154) ==
+                static_cast<std::uint16_t>(QuestUiResultStatus::accepted) &&
+            read_integer<std::uint16_t>(combat_quest_ui_message, 158) ==
+                static_cast<std::uint16_t>(QuestUiResultStatus::rejected) &&
+            read_integer<std::uint16_t>(combat_quest_ui_message, 160) ==
+                static_cast<std::uint16_t>(QuestUiRejectionReason::wrong_target),
+        "the Web envelope preserves independent trigger and outcome status/reason slots"
+    );
+
+    auto next_choice = pending_quest_ui_event;
+    next_choice.sequence = 44;
+    next_choice.tick = 100;
+    next_choice.checksum = 0x11119999aaaabbbbULL;
+    const tgd::platform::web::WebQuestUiCloseAck next_choice_close{
+        next_choice.sequence,
+        next_choice.checksum,
+        TGD_WEB_QUEST_UI_CLOSE_SELECTION_COMMITTED,
+    };
+    ok &= expect(
+        bridge.publish_quest_ui(9, next_choice) == WebAbiError::none &&
+            bridge.publish_quest_ui_close(9, next_choice_close) == WebAbiError::none,
+        "a later choice can queue its own exact close acknowledgement"
+    );
+    auto newest_choice = next_choice;
+    newest_choice.sequence = 45;
+    newest_choice.tick = 101;
+    newest_choice.checksum = 0x2222aaaabbbbccccULL;
+    ok &= expect(
+        bridge.publish_quest_ui(9, newest_choice) == WebAbiError::none &&
+            bridge.peek_ui_event_size() == quest_ui_wire_bytes,
+        "a new choice projection discards an older pending close before it can close the new panel"
+    );
+    std::vector<std::uint8_t> newest_choice_message(bridge.peek_ui_event_size());
+    ok &= expect(
+        bridge.poll_ui_event(newest_choice_message) ==
+                static_cast<std::int32_t>(newest_choice_message.size()) &&
+            read_integer<std::uint64_t>(newest_choice_message, 40) ==
+                newest_choice.sequence &&
+            bridge.publish_quest_ui_close(9, next_choice_close) ==
+                WebAbiError::invalid_message &&
+            bridge.peek_ui_event_size() == 0,
+        "an old close identity cannot be replayed after a new choice becomes authoritative"
+    );
+    auto replacement_feedback = combat_quest_ui_event;
+    replacement_feedback.sequence = 46;
+    replacement_feedback.tick = 102;
+    replacement_feedback.checksum = 0x3333bbbbccccddddULL;
+    const tgd::platform::web::WebQuestUiCloseAck newest_choice_close{
+        newest_choice.sequence,
+        newest_choice.checksum,
+        TGD_WEB_QUEST_UI_CLOSE_SELECTION_COMMITTED,
+    };
+    ok &= expect(
+        bridge.publish_quest_ui(9, replacement_feedback) == WebAbiError::none &&
+            bridge.publish_quest_ui_close(9, newest_choice_close) == WebAbiError::none &&
+            bridge.peek_ui_event_size() == quest_ui_wire_bytes,
+        "an authoritative replacement makes the matching close redundant without queuing it"
+    );
+    std::vector<std::uint8_t> replacement_message(bridge.peek_ui_event_size());
+    ok &= expect(
+        bridge.poll_ui_event(replacement_message) ==
+                static_cast<std::int32_t>(replacement_message.size()) &&
+            read_integer<std::uint64_t>(replacement_message, 40) ==
+                replacement_feedback.sequence &&
+            bridge.peek_ui_event_size() == 0,
+        "replace-before-close emits only the newer authoritative projection"
+    );
+
+    std::vector<std::uint8_t> intent_payload;
+    append_integer(intent_payload, quest_ui_event.sequence);
+    append_integer(intent_payload, quest_ui_event.checksum);
+    append_integer(intent_payload, quest_ui_event.objective);
+    append_integer(intent_payload, quest_ui_event.choice_options[1].interaction);
+    append_integer(intent_payload, quest_ui_event.choice_options[1].selection);
+    const auto intent_message = wrap_message(
+        static_cast<std::uint16_t>(TGD_WEB_MESSAGE_QUEST_UI_SELECTION_INTENT),
+        9,
+        {quest_ui_event.checksum, quest_ui_event.sequence},
+        intent_payload
+    );
+    tgd::platform::web::WebQuestUiSelectionIntent decoded_intent;
+    ok &= expect(
+        WebPlatformBridge::decode_quest_ui_selection_intent(
+            intent_message,
+            decoded_intent
+        ) == WebAbiError::none &&
+            decoded_intent.session_generation == 9 &&
+            decoded_intent.intent.projection_sequence == quest_ui_event.sequence &&
+            decoded_intent.intent.projection_checksum == quest_ui_event.checksum &&
+            decoded_intent.intent.objective == quest_ui_event.objective &&
+            decoded_intent.intent.interaction ==
+                quest_ui_event.choice_options[1].interaction &&
+            decoded_intent.intent.selection == quest_ui_event.choice_options[1].selection,
+        "Quest selection intent binds the exact projection and authored option"
+    );
+    auto mismatched_intent_message = intent_message;
+    mismatched_intent_message[24] ^= 1U;
+    const auto accepted_intent = decoded_intent;
+    ok &= expect(
+        WebPlatformBridge::decode_quest_ui_selection_intent(
+            mismatched_intent_message,
+            decoded_intent
+        ) == WebAbiError::invalid_message &&
+            decoded_intent.session_generation == accepted_intent.session_generation &&
+            decoded_intent.intent.projection_sequence ==
+                accepted_intent.intent.projection_sequence &&
+            decoded_intent.intent.projection_checksum ==
+                accepted_intent.intent.projection_checksum &&
+            decoded_intent.intent.objective == accepted_intent.intent.objective &&
+            decoded_intent.intent.interaction == accepted_intent.intent.interaction &&
+            decoded_intent.intent.selection == accepted_intent.intent.selection,
+        "mismatched intent identity fails closed without mutating the prior decoded value"
+    );
+    auto empty_selection_intent_message = intent_message;
+    std::fill(
+        empty_selection_intent_message.begin() +
+            static_cast<std::ptrdiff_t>(WebPlatformBridge::message_header_bytes + 32),
+        empty_selection_intent_message.begin() +
+            static_cast<std::ptrdiff_t>(WebPlatformBridge::message_header_bytes + 40),
+        std::uint8_t{0}
+    );
+    ok &= expect(
+        WebPlatformBridge::decode_quest_ui_selection_intent(
+            empty_selection_intent_message,
+            decoded_intent
+        ) == WebAbiError::invalid_message &&
+            decoded_intent.intent.selection == accepted_intent.intent.selection,
+        "malformed intent payloads fail closed without partially replacing the output"
+    );
 
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

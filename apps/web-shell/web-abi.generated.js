@@ -3,13 +3,20 @@
   "use strict";
   const contract = Object.freeze({
     major: 1,
-    minor: 1,
+    minor: 2,
     headerBytes: 40,
     maxMessageBytes: 262144,
     payload: Object.freeze({
       bootConfigV1Bytes: 52,
       uiCommandV1Bytes: 20,
       uiEventV1Bytes: 40,
+      questUiSelectionIntentV1Bytes: 40,
+      questUiEventV1Bytes: 1288,
+      questUiCloseAckV1Bytes: 24,
+      questUiChoiceOptionCapacity: 8,
+      questUiSelectedOptionCapacity: 16,
+      questUiActorCapacity: 16,
+      questUiRetainedObjectiveCapacity: 64,
       storageRequestV1HeaderBytes: 208,
       storageCompletionV1HeaderBytes: 152,
       maxStorageTransferBytes: 16777392,
@@ -22,6 +29,9 @@
     platform_event_batch: 3,
     ui_command: 4,
     ui_event: 5,
+    quest_ui_selection_intent: 6,
+    quest_ui_event: 7,
+    quest_ui_close_ack: 8,
     storage_request: 100,
     storage_completion: 101,
     storage_cancel: 102,
@@ -30,6 +40,9 @@
     uiCommand: Object.freeze({
     save_guest_checkpoint: 1,
     retry_pending_save: 2
+    }),
+    questUiCloseReason: Object.freeze({
+    selection_committed: 1
     }),
     storageOperation: Object.freeze({
     read: 1,

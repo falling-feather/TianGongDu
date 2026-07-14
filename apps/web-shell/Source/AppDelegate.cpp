@@ -250,6 +250,7 @@ bool AppDelegate::applicationDidFinishLaunching() {
         static_cast<void>(runtime_.shutdown());
         return false;
     }
+    grayboxLayer_->setQuestUiProjectionSink(this);
     director->runWithScene(scene);
     presentationOutputActive_ = true;
     trace("host.ready", "none");
@@ -536,6 +537,45 @@ std::int32_t AppDelegate::webSubmitUiCommand(std::span<const std::uint8_t> messa
     return static_cast<std::int32_t>(toWebError(saved));
 }
 
+std::int32_t AppDelegate::webSubmitQuestUiSelectionIntent(
+    std::span<const std::uint8_t> message
+) noexcept {
+    using tgd::platform::web::WebAbiError;
+    if (!profileBooted_ || grayboxLayer_ == nullptr) {
+        return static_cast<std::int32_t>(WebAbiError::invalid_message);
+    }
+    tgd::platform::web::WebQuestUiSelectionIntent selection;
+    const auto decoded =
+        tgd::platform::web::WebPlatformBridge::decode_quest_ui_selection_intent(
+            message,
+            selection
+        );
+    if (decoded != WebAbiError::none) {
+        return static_cast<std::int32_t>(decoded);
+    }
+    if (selection.session_generation != webBootConfig_.session_generation) {
+        return static_cast<std::int32_t>(WebAbiError::stale_generation);
+    }
+    const auto submitted =
+        grayboxLayer_->submitQuestUiSelectionIntent(selection.intent);
+    if (submitted != tgd::gameplay::QuestUiSelectionIntentError::none) {
+        return static_cast<std::int32_t>(WebAbiError::invalid_message);
+    }
+    const auto closed = webPlatform_.publish_quest_ui_close(
+        webBootConfig_.session_generation,
+        {
+            selection.intent.projection_sequence,
+            selection.intent.projection_checksum,
+            TGD_WEB_QUEST_UI_CLOSE_SELECTION_COMMITTED,
+        }
+    );
+    if (closed != WebAbiError::none) {
+        trace("quest_ui.close", "invalid_acknowledgement");
+        return static_cast<std::int32_t>(WebAbiError::internal);
+    }
+    return static_cast<std::int32_t>(WebAbiError::none);
+}
+
 std::uint32_t AppDelegate::webPeekPlatformRequestSize() const noexcept {
     return webPlatform_.peek_platform_request_size();
 }
@@ -581,6 +621,21 @@ void AppDelegate::publishProfileUi() noexcept {
         event.snapshot_id = profileStorage_.current_head().snapshot_id;
     }
     webPlatform_.publish_profile_ui(webBootConfig_.session_generation, event);
+}
+
+bool AppDelegate::submitF1QuestUiProjection(
+    const tgd::contracts::QuestUiProjectionSnapshot& projection
+) noexcept {
+    if (!profileBooted_) {
+        return false;
+    }
+    const auto published =
+        webPlatform_.publish_quest_ui(webBootConfig_.session_generation, projection);
+    if (published != tgd::platform::web::WebAbiError::none) {
+        trace("quest_ui.publish", "invalid_projection");
+        return false;
+    }
+    return true;
 }
 
 void AppDelegate::synchronizeProfileProgress() noexcept {
@@ -777,6 +832,19 @@ EMSCRIPTEN_KEEPALIVE std::int32_t tgd_web_submit_ui_command(const std::uint8_t* 
     }
     if (auto* app = AppDelegate::active(); app != nullptr) {
         return app->webSubmitUiCommand({bytes, length});
+    }
+    return TGD_WEB_ERROR_INTERNAL;
+}
+
+EMSCRIPTEN_KEEPALIVE std::int32_t tgd_web_submit_quest_ui_selection_intent(
+    const std::uint8_t* bytes,
+    std::uint32_t length
+) {
+    if ((bytes == nullptr && length != 0U) || length > TGD_WEB_ABI_MAX_MESSAGE_BYTES) {
+        return TGD_WEB_ERROR_INVALID_MESSAGE;
+    }
+    if (auto* app = AppDelegate::active(); app != nullptr) {
+        return app->webSubmitQuestUiSelectionIntent({bytes, length});
     }
     return TGD_WEB_ERROR_INTERNAL;
 }

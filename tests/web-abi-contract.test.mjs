@@ -24,6 +24,13 @@ test("Web ABI 的 C/JavaScript/TypeScript 合同保持同步", async () => {
   }
   assert.equal(contract.abi.headerBytes, 40);
   assert.equal(contract.abi.maxMessageBytes, 256 * 1024);
+  assert.equal(contract.payloads.questUiSelectionIntentV1Bytes, 40);
+  assert.equal(contract.payloads.questUiEventV1Bytes, 1288);
+  assert.equal(contract.payloads.questUiCloseAckV1Bytes, 24);
+  assert.equal(contract.payloads.questUiChoiceOptionCapacity, 8);
+  assert.equal(contract.payloads.questUiSelectedOptionCapacity, 16);
+  assert.equal(contract.payloads.questUiActorCapacity, 16);
+  assert.equal(contract.payloads.questUiRetainedObjectiveCapacity, 64);
   assert.equal(contract.payloads.storageRequestV1HeaderBytes, 208);
   assert.equal(contract.payloads.storageCompletionV1HeaderBytes, 152);
   assert.equal(contract.payloads.maxStorageTransferBytes, 16 * 1024 * 1024 + 176);
@@ -36,6 +43,7 @@ test("Web ABI 各 ID 命名空间稳定且不碰撞", async () => {
   for (const entries of [
     contract.messageTypes,
     contract.uiCommands,
+    contract.questUiCloseReasons,
     contract.storageOperations,
     contract.errorCodes
   ]) {
@@ -44,6 +52,13 @@ test("Web ABI 各 ID 命名空间稳定且不碰撞", async () => {
   }
   assert.equal(contract.messageTypes.find((entry) => entry.name === "storage_request")?.id, 100);
   assert.equal(contract.messageTypes.find((entry) => entry.name === "storage_completion")?.id, 101);
+  assert.equal(contract.messageTypes.find((entry) => entry.name === "quest_ui_selection_intent")?.id, 6);
+  assert.equal(contract.messageTypes.find((entry) => entry.name === "quest_ui_event")?.id, 7);
+  assert.equal(contract.messageTypes.find((entry) => entry.name === "quest_ui_close_ack")?.id, 8);
+  assert.equal(
+    contract.questUiCloseReasons.find((entry) => entry.name === "selection_committed")?.id,
+    1
+  );
   assert.equal(contract.uiCommands.find((entry) => entry.name === "save_guest_checkpoint")?.id, 1);
   assert.equal(contract.uiCommands.find((entry) => entry.name === "retry_pending_save")?.id, 2);
 });
@@ -53,8 +68,8 @@ test("Web ABI 对版本、顺序和消息元数据漂移失败关闭", async () 
   const clone = () => structuredClone(source);
 
   const wrongVersion = clone();
-  wrongVersion.abi.minor = 2;
-  assert.throws(() => validateWebAbiContract(wrongVersion), /only supports 1\.1/);
+  wrongVersion.abi.minor = 3;
+  assert.throws(() => validateWebAbiContract(wrongVersion), /only supports 1\.2/);
 
   const wrongPayloadSize = clone();
   wrongPayloadSize.payloads.storageRequestV1HeaderBytes += 1;

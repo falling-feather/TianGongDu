@@ -1,5 +1,6 @@
 #pragma once
 
+#include "F1QuestUiProjection.hpp"
 #include "F1RewardClaim.hpp"
 
 #include <axmol.h>
@@ -8,6 +9,7 @@
 #include <tgd/contracts/input_action.hpp>
 #include <tgd/gameplay/combat_resolver.hpp>
 #include <tgd/gameplay/encounter_director.hpp>
+#include <tgd/gameplay/quest_ui_projection.hpp>
 #include <tgd/gameplay/session_input_state.hpp>
 #include <tgd/gameplay/vertical_slice_session.hpp>
 
@@ -29,6 +31,10 @@ class F1GrayboxLayer final :
     void clearInput(tgd::contracts::InputClearReason reason) noexcept;
     void shutdown() noexcept;
     void setRewardClaimSink(IF1RewardClaimSink* sink) noexcept;
+    void setQuestUiProjectionSink(IF1QuestUiProjectionSink* sink) noexcept;
+    [[nodiscard]] tgd::gameplay::QuestUiSelectionIntentError submitQuestUiSelectionIntent(
+        const tgd::contracts::QuestUiSelectionIntent& intent
+    ) noexcept;
     void notifyRewardClaimCommitted(
         tgd::contracts::StableContentKey reward_dedup_key
     ) noexcept;
@@ -58,6 +64,12 @@ class F1GrayboxLayer final :
     [[nodiscard]] bool qaPlayerBusy() const noexcept;
 
   private:
+    struct QuestUiPublication final {
+        tgd::contracts::QuestUiProjectionSnapshot projection{};
+        bool projected{};
+        bool external_consumer_accepted{};
+    };
+
     struct PendingCombatIntent final {
         tgd::contracts::CombatCommandType type{tgd::contracts::CombatCommandType::light_attack};
         tgd::contracts::StableContentKey stance{};
@@ -88,7 +100,14 @@ class F1GrayboxLayer final :
     void submitQuestCombatOutcome(const tgd::contracts::CombatEvent& event) noexcept;
     void submitQuestBossPhase() noexcept;
     void syncBossStanceForQuest() noexcept;
+    [[nodiscard]] QuestUiPublication publishQuestUiProjection(
+        const tgd::contracts::QuestUiProjectionSignal& signal
+    ) noexcept;
+    void publishAcceptedChoiceFeedback(
+        const tgd::contracts::QuestUiSelectionIntent& intent
+    ) noexcept;
     void submitAxisState() noexcept;
+    void renderNativeQuestUiChoice() noexcept;
     void clearHeldInput(
         tgd::contracts::InputClearReason reason,
         bool release_guard
@@ -112,6 +131,7 @@ class F1GrayboxLayer final :
     [[nodiscard]] ax::Vec2 project(const tgd::contracts::GroundPoseMm& pose) const noexcept;
     [[nodiscard]] int directionalKeyIndex(ax::EventKeyboard::KeyCode key) const noexcept;
     [[nodiscard]] int combatKeyIndex(ax::EventKeyboard::KeyCode key) const noexcept;
+    [[nodiscard]] int nativeChoiceKeyIndex(ax::EventKeyboard::KeyCode key) const noexcept;
     [[nodiscard]] int depthOrder(float screen_y) const noexcept;
     [[nodiscard]] tgd::contracts::StableActorKey nearestActiveHostile() const noexcept;
 
@@ -126,6 +146,7 @@ class F1GrayboxLayer final :
     tgd::gameplay::DeterministicQuestCombatOutcomeResolver quest_combat_outcomes_{};
     tgd::gameplay::DeterministicQuestBossPhaseResolver quest_boss_phases_{};
     tgd::gameplay::DeterministicQuestResolutionRewardResolver quest_resolution_rewards_{};
+    tgd::gameplay::DeterministicQuestUiProjectionProducer quest_ui_projection_{};
     tgd::gameplay::SessionInputState input_{};
     tgd::contracts::PlatformSequence platform_sequence_{};
     tgd::contracts::CommandSequence command_sequence_{1};
@@ -151,6 +172,8 @@ class F1GrayboxLayer final :
     tgd::contracts::StableContentKey resolution_reward_{};
     tgd::contracts::StableContentKey resolution_reward_dedup_key_{};
     IF1RewardClaimSink* reward_claim_sink_{};
+    IF1QuestUiProjectionSink* quest_ui_projection_sink_{};
+    F1QuestUiChoiceState quest_ui_choice_{};
     bool resolution_reward_committed_{};
     float tick_accumulator_{};
 

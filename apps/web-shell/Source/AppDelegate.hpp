@@ -1,5 +1,6 @@
 #pragma once
 
+#include "F1QuestUiProjection.hpp"
 #include "F1RewardClaim.hpp"
 
 #include <axmol.h>
@@ -16,7 +17,10 @@
 
 class F1GrayboxLayer;
 
-class AppDelegate final : private ax::Application, private IF1RewardClaimSink {
+class AppDelegate final :
+    private ax::Application,
+    private IF1RewardClaimSink,
+    private IF1QuestUiProjectionSink {
   public:
     AppDelegate();
     ~AppDelegate() override;
@@ -59,6 +63,8 @@ class AppDelegate final : private ax::Application, private IF1RewardClaimSink {
     [[nodiscard]] int webF1QaPlayerBusy() const noexcept;
     [[nodiscard]] std::int32_t webBoot(std::span<const std::uint8_t> message) noexcept;
     [[nodiscard]] std::int32_t webSubmitUiCommand(std::span<const std::uint8_t> message) noexcept;
+    [[nodiscard]] std::int32_t
+    webSubmitQuestUiSelectionIntent(std::span<const std::uint8_t> message) noexcept;
     [[nodiscard]] std::uint32_t webPeekPlatformRequestSize() const noexcept;
     [[nodiscard]] std::int32_t webPollPlatformRequest(std::span<std::uint8_t> output) noexcept;
     [[nodiscard]] std::int32_t
@@ -78,6 +84,9 @@ class AppDelegate final : private ax::Application, private IF1RewardClaimSink {
     void tryBeginQueuedRewardClaim() noexcept;
     void notifyObservedRewardClaimIfCommitted() noexcept;
     void submitF1RewardClaim(const F1RewardClaim& claim) noexcept override;
+    [[nodiscard]] bool submitF1QuestUiProjection(
+        const tgd::contracts::QuestUiProjectionSnapshot& projection
+    ) noexcept override;
     void trace(std::string_view event, std::string_view result) noexcept;
 
     static AppDelegate* active_;

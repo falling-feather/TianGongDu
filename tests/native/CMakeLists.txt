@@ -229,6 +229,11 @@ target_link_libraries(
     tgd_contracts
     tgd_gameplay
 )
+target_include_directories(
+  tgd_native_quest_ui_projection
+  PRIVATE
+    ${PROJECT_SOURCE_DIR}/apps/web-shell/Source
+)
 
 add_test(
   NAME tgd.native.quest-ui-projection

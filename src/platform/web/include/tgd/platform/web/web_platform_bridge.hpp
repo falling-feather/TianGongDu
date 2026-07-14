@@ -1,5 +1,6 @@
 #pragma once
 
+#include <tgd/contracts/quest_ui.hpp>
 #include <tgd/contracts/save_envelope.hpp>
 #include <tgd/contracts/tgd_web_abi.h>
 #include <tgd/runtime/storage.hpp>
@@ -67,6 +68,22 @@ struct WebProfileUiEvent final {
     ) noexcept = default;
 };
 
+struct WebQuestUiSelectionIntent final {
+    std::uint32_t session_generation{};
+    contracts::QuestUiSelectionIntent intent{};
+};
+
+struct WebQuestUiCloseAck final {
+    std::uint64_t projection_sequence{};
+    contracts::StableContentKey projection_checksum{};
+    tgd_web_quest_ui_close_reason reason{};
+
+    [[nodiscard]] friend constexpr bool operator==(
+        const WebQuestUiCloseAck&,
+        const WebQuestUiCloseAck&
+    ) noexcept = default;
+};
+
 class WebPlatformBridge final : public runtime::IStorage {
   public:
     static constexpr std::size_t message_header_bytes = TGD_WEB_ABI_MESSAGE_HEADER_BYTES;
@@ -74,6 +91,12 @@ class WebPlatformBridge final : public runtime::IStorage {
         TGD_WEB_STORAGE_REQUEST_V1_HEADER_BYTES;
     static constexpr std::size_t completion_payload_header_bytes =
         TGD_WEB_STORAGE_COMPLETION_V1_HEADER_BYTES;
+    static constexpr std::size_t quest_ui_event_payload_bytes =
+        TGD_WEB_QUEST_UI_EVENT_V1_BYTES;
+    static constexpr std::size_t quest_ui_selection_intent_payload_bytes =
+        TGD_WEB_QUEST_UI_SELECTION_INTENT_V1_BYTES;
+    static constexpr std::size_t quest_ui_close_ack_payload_bytes =
+        TGD_WEB_QUEST_UI_CLOSE_ACK_V1_BYTES;
     static constexpr std::size_t max_message_bytes = TGD_WEB_ABI_MAX_MESSAGE_BYTES;
     static constexpr std::size_t max_transfer_bytes = TGD_WEB_MAX_STORAGE_TRANSFER_BYTES;
     static constexpr std::size_t max_request_chunk_bytes =
@@ -116,6 +139,14 @@ class WebPlatformBridge final : public runtime::IStorage {
         std::uint32_t session_generation,
         const WebProfileUiEvent& event
     ) noexcept;
+    [[nodiscard]] WebAbiError publish_quest_ui(
+        std::uint32_t session_generation,
+        const contracts::QuestUiProjectionSnapshot& event
+    ) noexcept;
+    [[nodiscard]] WebAbiError publish_quest_ui_close(
+        std::uint32_t session_generation,
+        const WebQuestUiCloseAck& acknowledgement
+    ) noexcept;
     [[nodiscard]] std::uint32_t peek_ui_event_size() const noexcept;
     [[nodiscard]] std::int32_t poll_ui_event(std::span<std::uint8_t> output) noexcept;
     void reset() noexcept;
@@ -127,6 +158,10 @@ class WebPlatformBridge final : public runtime::IStorage {
     [[nodiscard]] static WebAbiError decode_ui_command(
         std::span<const std::uint8_t> message,
         WebUiCommand& output
+    ) noexcept;
+    [[nodiscard]] static WebAbiError decode_quest_ui_selection_intent(
+        std::span<const std::uint8_t> message,
+        WebQuestUiSelectionIntent& output
     ) noexcept;
 
   private:
@@ -188,6 +223,18 @@ class WebPlatformBridge final : public runtime::IStorage {
     bool ui_dirty_{};
     std::uint32_t ui_session_generation_{};
     WebProfileUiEvent ui_event_{};
+    bool quest_ui_dirty_{};
+    std::uint32_t quest_ui_session_generation_{};
+    contracts::QuestUiProjectionSnapshot quest_ui_event_{};
+    bool quest_ui_close_dirty_{};
+    std::uint32_t quest_ui_close_session_generation_{};
+    WebQuestUiCloseAck quest_ui_close_ack_{};
+    bool quest_ui_choice_identity_valid_{};
+    bool quest_ui_choice_replaced_{};
+    bool quest_ui_choice_closed_{};
+    std::uint32_t quest_ui_choice_session_generation_{};
+    std::uint64_t quest_ui_choice_sequence_{};
+    contracts::StableContentKey quest_ui_choice_checksum_{};
 };
 
 }  // namespace tgd::platform::web

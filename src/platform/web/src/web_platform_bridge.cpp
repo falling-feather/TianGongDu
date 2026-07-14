@@ -22,6 +22,31 @@ static_assert(
     TGD_WEB_PERSISTENT_OPERATION_V1_BYTES == contracts::persistent_operation_v1_bytes
 );
 static_assert(
+    TGD_WEB_QUEST_UI_SELECTION_INTENT_V1_BYTES ==
+    sizeof(std::uint64_t) * 5U
+);
+static_assert(
+    TGD_WEB_QUEST_UI_CLOSE_ACK_V1_BYTES ==
+    sizeof(std::uint64_t) * 2U + sizeof(std::uint16_t) * 4U
+);
+static_assert(
+    TGD_WEB_QUEST_UI_EVENT_V1_BYTES ==
+    sizeof(std::uint64_t) * 13U +
+        sizeof(std::uint16_t) * 16U +
+        contracts::quest_ui_choice_option_capacity * sizeof(std::uint64_t) * 2U +
+        contracts::quest_ui_selected_option_capacity * sizeof(std::uint64_t) * 2U +
+        contracts::quest_ui_actor_capacity * sizeof(std::uint64_t) * 2U +
+        contracts::quest_ui_retained_objective_capacity * sizeof(std::uint64_t)
+);
+static_assert(
+    TGD_WEB_QUEST_UI_CHOICE_OPTION_CAPACITY == contracts::quest_ui_choice_option_capacity &&
+    TGD_WEB_QUEST_UI_SELECTED_OPTION_CAPACITY ==
+        contracts::quest_ui_selected_option_capacity &&
+    TGD_WEB_QUEST_UI_ACTOR_CAPACITY == contracts::quest_ui_actor_capacity &&
+    TGD_WEB_QUEST_UI_RETAINED_OBJECTIVE_CAPACITY ==
+        contracts::quest_ui_retained_objective_capacity
+);
+static_assert(
     static_cast<std::uint16_t>(runtime::StorageOperation::write_atomic) ==
     TGD_WEB_STORAGE_WRITE_ATOMIC
 );
@@ -200,6 +225,383 @@ class ByteReader final {
         }
     }
     return true;
+}
+
+[[nodiscard]] bool valid_quest_ui_result_slot(
+    const contracts::QuestUiResultSlot& slot
+) noexcept {
+    using contracts::QuestUiRejectionReason;
+    using contracts::QuestUiResultStatus;
+
+    if (slot.status < QuestUiResultStatus::not_applicable ||
+        slot.status > QuestUiResultStatus::pending ||
+        slot.rejection_reason < QuestUiRejectionReason::none ||
+        slot.rejection_reason > QuestUiRejectionReason::wrong_target) {
+        return false;
+    }
+    if (slot.status == QuestUiResultStatus::not_applicable) {
+        return slot.id == 0 && slot.objective == 0 &&
+               slot.rejection_reason == QuestUiRejectionReason::none;
+    }
+    if (slot.id == 0 || slot.objective == 0) {
+        return false;
+    }
+    switch (slot.status) {
+        case QuestUiResultStatus::accepted:
+        case QuestUiResultStatus::pending:
+            return slot.rejection_reason == QuestUiRejectionReason::none;
+        case QuestUiResultStatus::rejected:
+            return slot.rejection_reason != QuestUiRejectionReason::none;
+        case QuestUiResultStatus::ignored_repeat:
+            return slot.rejection_reason ==
+                   QuestUiRejectionReason::selection_already_committed;
+        case QuestUiResultStatus::not_applicable:
+            break;
+    }
+    return false;
+}
+
+[[nodiscard]] bool quest_ui_result_not_applicable(
+    const contracts::QuestUiResultSlot& slot
+) noexcept {
+    return slot.status == contracts::QuestUiResultStatus::not_applicable &&
+           slot.id == 0 && slot.objective == 0 &&
+           slot.rejection_reason == contracts::QuestUiRejectionReason::none;
+}
+
+[[nodiscard]] bool quest_ui_result_is_negative(
+    const contracts::QuestUiResultSlot& slot
+) noexcept {
+    return slot.status == contracts::QuestUiResultStatus::rejected ||
+           slot.status == contracts::QuestUiResultStatus::ignored_repeat;
+}
+
+[[nodiscard]] bool quest_ui_classification_matches_source(
+    contracts::QuestUiProjectionSource source,
+    contracts::QuestUiAttemptTimeClassification classification
+) noexcept {
+    using Attempt = contracts::QuestUiAttemptTimeClassification;
+    using Source = contracts::QuestUiProjectionSource;
+    switch (source) {
+        case Source::choice_available:
+            return classification == Attempt::qualifying_first_visit ||
+                   classification == Attempt::qualifying_craft_decision ||
+                   classification == Attempt::qualifying_dialogue_decision;
+        case Source::interaction_feedback:
+            return classification == Attempt::repeat_no_progress ||
+                   classification == Attempt::qualifying_craft_decision ||
+                   classification == Attempt::qualifying_error_feedback ||
+                   classification == Attempt::qualifying_wrong_order_feedback ||
+                   classification == Attempt::qualifying_craft_confirmation;
+        case Source::objective_state:
+            return classification == Attempt::qualifying_first_visit ||
+                   classification == Attempt::qualifying_training_risk;
+        case Source::combat_feedback:
+            return classification == Attempt::qualifying_combat_proof ||
+                   classification == Attempt::qualifying_combat_feedback;
+        case Source::recovery_offer:
+            return classification == Attempt::failure_retry_excluded;
+        case Source::recovery_resume:
+            return classification == Attempt::resume_no_duplicate_progress;
+    }
+    return false;
+}
+
+[[nodiscard]] bool quest_ui_source_shape_valid(
+    const contracts::QuestUiProjectionSnapshot& event
+) noexcept {
+    using Source = contracts::QuestUiProjectionSource;
+    using Status = contracts::QuestUiResultStatus;
+    switch (event.source) {
+        case Source::choice_available:
+        case Source::objective_state:
+        case Source::recovery_offer:
+        case Source::recovery_resume:
+            return quest_ui_result_not_applicable(event.primary_result) &&
+                   quest_ui_result_not_applicable(event.secondary_result);
+        case Source::interaction_feedback:
+            return event.primary_result.status != Status::not_applicable &&
+                   event.primary_result.status != Status::pending &&
+                   quest_ui_result_not_applicable(event.secondary_result);
+        case Source::combat_feedback:
+            if (event.primary_result.status == Status::not_applicable ||
+                event.primary_result.status == Status::ignored_repeat ||
+                event.secondary_result.status == Status::ignored_repeat) {
+                return false;
+            }
+            return quest_ui_result_not_applicable(event.secondary_result) ||
+                   event.primary_result.status == Status::accepted;
+    }
+    return false;
+}
+
+[[nodiscard]] bool quest_ui_surface_and_polarity_valid(
+    const contracts::QuestUiProjectionSnapshot& event
+) noexcept {
+    using Polarity = contracts::QuestUiPolarity;
+    using Source = contracts::QuestUiProjectionSource;
+    using Surface = contracts::QuestUiSurface;
+
+    const auto expected_surface = event.source == Source::choice_available
+                                      ? Surface::choice
+                                  : event.source == Source::recovery_offer
+                                      ? Surface::failure
+                                      : Surface::gameplay;
+    if (event.surface != expected_surface) {
+        return false;
+    }
+    const bool recovery = event.source == Source::recovery_offer ||
+                          event.source == Source::recovery_resume;
+    if (recovery) {
+        return event.polarity == Polarity::recovery;
+    }
+    if (event.polarity == Polarity::recovery) {
+        return false;
+    }
+    if (event.source == Source::choice_available ||
+        event.source == Source::objective_state) {
+        return event.polarity == Polarity::positive;
+    }
+    const auto& effective_result = quest_ui_result_not_applicable(event.secondary_result)
+                                       ? event.primary_result
+                                       : event.secondary_result;
+    return !quest_ui_result_is_negative(effective_result) ||
+           event.polarity == Polarity::negative;
+}
+
+[[nodiscard]] bool quest_ui_choice_options_valid(
+    const contracts::QuestUiProjectionSnapshot& event
+) noexcept {
+    const bool choice =
+        event.source == contracts::QuestUiProjectionSource::choice_available;
+    if ((choice && event.choice_option_count == 0) ||
+        (!choice && event.choice_option_count != 0) ||
+        event.choice_option_count > event.choice_options.size()) {
+        return false;
+    }
+    for (std::size_t index = 0; index < event.choice_options.size(); ++index) {
+        const auto& option = event.choice_options[index];
+        if (index >= event.choice_option_count) {
+            if (option.interaction != 0 || option.selection != 0) {
+                return false;
+            }
+            continue;
+        }
+        if (option.interaction == 0 || option.selection == 0) {
+            return false;
+        }
+        for (std::size_t prior = 0; prior < index; ++prior) {
+            if (event.choice_options[prior].interaction == option.interaction ||
+                event.choice_options[prior].selection == option.selection) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] bool quest_ui_selected_options_valid(
+    const contracts::QuestUiProjectionSnapshot& event
+) noexcept {
+    if (event.selected_option_count > event.selected_options.size()) {
+        return false;
+    }
+    for (std::size_t index = 0; index < event.selected_options.size(); ++index) {
+        const auto& option = event.selected_options[index];
+        if (index >= event.selected_option_count) {
+            if (option.objective != 0 || option.selection != 0) {
+                return false;
+            }
+            continue;
+        }
+        if (option.objective == 0 || option.selection == 0) {
+            return false;
+        }
+        for (std::size_t prior = 0; prior < index; ++prior) {
+            if (event.selected_options[prior].objective == option.objective) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] bool quest_ui_actors_valid(
+    const contracts::QuestUiProjectionSnapshot& event
+) noexcept {
+    if (event.active_actor_count > event.active_actor_keys.size() ||
+        event.defeated_actor_count > event.defeated_actor_keys.size()) {
+        return false;
+    }
+    for (std::size_t index = 0; index < event.active_actor_keys.size(); ++index) {
+        const auto actor = event.active_actor_keys[index];
+        if (index >= event.active_actor_count) {
+            if (actor != 0) {
+                return false;
+            }
+            continue;
+        }
+        if (actor == 0 ||
+            (index != 0 && event.active_actor_keys[index - 1] >= actor)) {
+            return false;
+        }
+        for (std::size_t defeated = 0; defeated < event.defeated_actor_count; ++defeated) {
+            if (event.defeated_actor_keys[defeated] == actor) {
+                return false;
+            }
+        }
+    }
+    for (std::size_t index = 0; index < event.defeated_actor_keys.size(); ++index) {
+        const auto actor = event.defeated_actor_keys[index];
+        if (index >= event.defeated_actor_count) {
+            if (actor != 0) {
+                return false;
+            }
+            continue;
+        }
+        if (actor == 0 ||
+            (index != 0 && event.defeated_actor_keys[index - 1] >= actor)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] bool quest_ui_retained_objectives_valid(
+    const contracts::QuestUiProjectionSnapshot& event
+) noexcept {
+    if (event.retained_objective_count > event.retained_objectives.size()) {
+        return false;
+    }
+    for (std::size_t index = 0; index < event.retained_objectives.size(); ++index) {
+        const auto objective = event.retained_objectives[index];
+        if (index >= event.retained_objective_count) {
+            if (objective != 0) {
+                return false;
+            }
+            continue;
+        }
+        if (objective == 0) {
+            return false;
+        }
+        for (std::size_t prior = 0; prior < index; ++prior) {
+            if (event.retained_objectives[prior] == objective) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] bool valid_quest_ui_event(
+    const contracts::QuestUiProjectionSnapshot& event
+) noexcept {
+    using contracts::QuestUiAttemptTimeClassification;
+    using contracts::QuestUiObjectiveState;
+    using contracts::QuestUiPolarity;
+    using contracts::QuestUiProjectionSource;
+    using contracts::QuestUiSurface;
+
+    const bool pending_focus_valid =
+        event.objective_state == QuestUiObjectiveState::active
+            ? event.pending_objective == event.objective
+            : event.pending_objective == 0;
+    return event.sequence != 0 && event.quest_checksum != 0 && event.checksum != 0 &&
+           event.cue != 0 && event.beat != 0 && event.objective != 0 &&
+           event.safe_point != 0 && pending_focus_valid &&
+           event.source >= QuestUiProjectionSource::choice_available &&
+           event.source <= QuestUiProjectionSource::recovery_resume &&
+           event.surface >= QuestUiSurface::gameplay && event.surface <= QuestUiSurface::failure &&
+           event.polarity >= QuestUiPolarity::positive &&
+           event.polarity <= QuestUiPolarity::recovery &&
+           event.objective_state >= QuestUiObjectiveState::locked &&
+           event.objective_state <= QuestUiObjectiveState::completed &&
+           event.attempt_time_classification > QuestUiAttemptTimeClassification::unspecified &&
+           event.attempt_time_classification <=
+               QuestUiAttemptTimeClassification::resume_no_duplicate_progress &&
+           quest_ui_classification_matches_source(
+               event.source,
+               event.attempt_time_classification
+           ) &&
+           valid_quest_ui_result_slot(event.primary_result) &&
+           valid_quest_ui_result_slot(event.secondary_result) &&
+           quest_ui_source_shape_valid(event) &&
+           quest_ui_surface_and_polarity_valid(event) &&
+           quest_ui_choice_options_valid(event) &&
+           quest_ui_selected_options_valid(event) && quest_ui_actors_valid(event) &&
+           quest_ui_retained_objectives_valid(event);
+}
+
+[[nodiscard]] bool write_quest_ui_event(
+    ByteWriter& writer,
+    const contracts::QuestUiProjectionSnapshot& event
+) noexcept {
+    const auto write_result_identity = [&writer](const contracts::QuestUiResultSlot& result) {
+        return writer.write(result.id) && writer.write(result.objective);
+    };
+    if (!writer.write(event.sequence) || !writer.write(event.tick) ||
+        !writer.write(event.quest_checksum) || !writer.write(event.checksum) ||
+        !writer.write(event.cue) || !writer.write(event.beat) ||
+        !writer.write(event.objective) || !writer.write(event.safe_point) ||
+        !writer.write(event.pending_objective) ||
+        !write_result_identity(event.primary_result) ||
+        !write_result_identity(event.secondary_result) ||
+        !writer.write(static_cast<std::uint16_t>(event.source)) ||
+        !writer.write(static_cast<std::uint16_t>(event.surface)) ||
+        !writer.write(static_cast<std::uint16_t>(event.polarity)) ||
+        !writer.write(static_cast<std::uint16_t>(event.objective_state)) ||
+        !writer.write(static_cast<std::uint16_t>(event.attempt_time_classification)) ||
+        !writer.write(static_cast<std::uint16_t>(event.primary_result.status)) ||
+        !writer.write(static_cast<std::uint16_t>(event.primary_result.rejection_reason)) ||
+        !writer.write(static_cast<std::uint16_t>(event.secondary_result.status)) ||
+        !writer.write(static_cast<std::uint16_t>(event.secondary_result.rejection_reason)) ||
+        !writer.write(static_cast<std::uint16_t>(event.choice_option_count)) ||
+        !writer.write(static_cast<std::uint16_t>(event.selected_option_count)) ||
+        !writer.write(static_cast<std::uint16_t>(event.active_actor_count)) ||
+        !writer.write(static_cast<std::uint16_t>(event.defeated_actor_count)) ||
+        !writer.write(static_cast<std::uint16_t>(event.retained_objective_count)) ||
+        !writer.write(static_cast<std::uint16_t>(0)) ||
+        !writer.write(static_cast<std::uint16_t>(0))) {
+        return false;
+    }
+    for (const auto& option : event.choice_options) {
+        if (!writer.write(option.interaction) || !writer.write(option.selection)) {
+            return false;
+        }
+    }
+    for (const auto& option : event.selected_options) {
+        if (!writer.write(option.objective) || !writer.write(option.selection)) {
+            return false;
+        }
+    }
+    for (const auto actor : event.active_actor_keys) {
+        if (!writer.write(actor)) {
+            return false;
+        }
+    }
+    for (const auto actor : event.defeated_actor_keys) {
+        if (!writer.write(actor)) {
+            return false;
+        }
+    }
+    for (const auto objective : event.retained_objectives) {
+        if (!writer.write(objective)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] bool write_quest_ui_close_ack(
+    ByteWriter& writer,
+    const WebQuestUiCloseAck& acknowledgement
+) noexcept {
+    return writer.write(acknowledgement.projection_sequence) &&
+           writer.write(acknowledgement.projection_checksum) &&
+           writer.write(static_cast<std::uint16_t>(acknowledgement.reason)) &&
+           writer.write(static_cast<std::uint16_t>(0)) &&
+           writer.write(static_cast<std::uint16_t>(0)) &&
+           writer.write(static_cast<std::uint16_t>(0));
 }
 
 [[nodiscard]] bool write_message_header(
@@ -615,9 +1017,106 @@ void WebPlatformBridge::publish_profile_ui(
     }
 }
 
+WebAbiError WebPlatformBridge::publish_quest_ui(
+    std::uint32_t session_generation,
+    const contracts::QuestUiProjectionSnapshot& event
+) noexcept {
+    if (session_generation == 0 || !valid_quest_ui_event(event)) {
+        return WebAbiError::invalid_message;
+    }
+    const bool same_generation = quest_ui_session_generation_ == session_generation;
+    if (same_generation && quest_ui_event_.sequence != 0) {
+        if (event.sequence < quest_ui_event_.sequence ||
+            (event.sequence == quest_ui_event_.sequence && event != quest_ui_event_)) {
+            return WebAbiError::invalid_message;
+        }
+    }
+
+    if (!same_generation) {
+        quest_ui_close_dirty_ = false;
+        quest_ui_close_session_generation_ = 0;
+        quest_ui_close_ack_ = {};
+        quest_ui_choice_identity_valid_ = false;
+        quest_ui_choice_replaced_ = false;
+        quest_ui_choice_closed_ = false;
+        quest_ui_choice_session_generation_ = 0;
+        quest_ui_choice_sequence_ = 0;
+        quest_ui_choice_checksum_ = 0;
+    }
+
+    if (event.source == contracts::QuestUiProjectionSource::choice_available) {
+        const bool same_choice = quest_ui_choice_identity_valid_ &&
+                                 quest_ui_choice_session_generation_ == session_generation &&
+                                 quest_ui_choice_sequence_ == event.sequence &&
+                                 quest_ui_choice_checksum_ == event.checksum;
+        if (!same_choice) {
+            quest_ui_close_dirty_ = false;
+            quest_ui_close_session_generation_ = 0;
+            quest_ui_close_ack_ = {};
+            quest_ui_choice_identity_valid_ = true;
+            quest_ui_choice_replaced_ = false;
+            quest_ui_choice_closed_ = false;
+            quest_ui_choice_session_generation_ = session_generation;
+            quest_ui_choice_sequence_ = event.sequence;
+            quest_ui_choice_checksum_ = event.checksum;
+        }
+    } else if (quest_ui_choice_identity_valid_ &&
+               quest_ui_choice_session_generation_ == session_generation &&
+               event.sequence > quest_ui_choice_sequence_) {
+        quest_ui_choice_replaced_ = true;
+        quest_ui_close_dirty_ = false;
+        quest_ui_close_session_generation_ = 0;
+        quest_ui_close_ack_ = {};
+    }
+
+    if (!same_generation || quest_ui_event_ != event) {
+        quest_ui_session_generation_ = session_generation;
+        quest_ui_event_ = event;
+        quest_ui_dirty_ = true;
+    }
+    return WebAbiError::none;
+}
+
+WebAbiError WebPlatformBridge::publish_quest_ui_close(
+    std::uint32_t session_generation,
+    const WebQuestUiCloseAck& acknowledgement
+) noexcept {
+    if (session_generation == 0 || acknowledgement.projection_sequence == 0 ||
+        acknowledgement.projection_checksum == 0 ||
+        acknowledgement.reason != TGD_WEB_QUEST_UI_CLOSE_SELECTION_COMMITTED) {
+        return WebAbiError::invalid_message;
+    }
+    if (!quest_ui_choice_identity_valid_ ||
+        quest_ui_choice_session_generation_ != session_generation ||
+        quest_ui_choice_sequence_ != acknowledgement.projection_sequence ||
+        quest_ui_choice_checksum_ != acknowledgement.projection_checksum) {
+        return WebAbiError::invalid_message;
+    }
+    if (quest_ui_choice_replaced_ || quest_ui_choice_closed_) {
+        return WebAbiError::none;
+    }
+    if (quest_ui_close_session_generation_ != session_generation ||
+        quest_ui_close_ack_ != acknowledgement) {
+        quest_ui_close_session_generation_ = session_generation;
+        quest_ui_close_ack_ = acknowledgement;
+        quest_ui_close_dirty_ = true;
+    }
+    return WebAbiError::none;
+}
+
 std::uint32_t WebPlatformBridge::peek_ui_event_size() const noexcept {
-    return ui_dirty_
-               ? static_cast<std::uint32_t>(message_header_bytes + TGD_WEB_UI_EVENT_V1_BYTES)
+    if (ui_dirty_) {
+        return static_cast<std::uint32_t>(message_header_bytes + TGD_WEB_UI_EVENT_V1_BYTES);
+    }
+    if (quest_ui_dirty_) {
+        return static_cast<std::uint32_t>(
+            message_header_bytes + TGD_WEB_QUEST_UI_EVENT_V1_BYTES
+        );
+    }
+    return quest_ui_close_dirty_
+               ? static_cast<std::uint32_t>(
+                     message_header_bytes + TGD_WEB_QUEST_UI_CLOSE_ACK_V1_BYTES
+                 )
                : 0;
 }
 
@@ -631,24 +1130,72 @@ std::int32_t WebPlatformBridge::poll_ui_event(std::span<std::uint8_t> output) no
     }
 
     ByteWriter writer(output.first(required));
-    const auto flags = static_cast<std::uint32_t>(ui_event_.has_snapshot ? 1U : 0U) |
-                       static_cast<std::uint32_t>(ui_event_.has_pending_save ? 2U : 0U);
+    if (ui_dirty_) {
+        const auto flags = static_cast<std::uint32_t>(ui_event_.has_snapshot ? 1U : 0U) |
+                           static_cast<std::uint32_t>(ui_event_.has_pending_save ? 2U : 0U);
+        const auto wrote = write_message_header(
+                               writer,
+                               static_cast<std::uint16_t>(TGD_WEB_MESSAGE_UI_EVENT),
+                               TGD_WEB_UI_EVENT_V1_BYTES,
+                               ui_session_generation_,
+                               ++wire_sequence_,
+                               ui_event_.snapshot_id
+                           ) &&
+                           writer.write(ui_event_.state) && writer.write(ui_event_.error) &&
+                           writer.write(flags) && writer.write(ui_event_.committed_save_count) &&
+                           writer.write(ui_event_.logical_sequence) &&
+                           writer.write_id(ui_event_.snapshot_id);
+        if (!wrote || writer.size() != required) {
+            return -static_cast<std::int32_t>(WebAbiError::internal);
+        }
+        ui_dirty_ = false;
+        return static_cast<std::int32_t>(required);
+    }
+
+    if (quest_ui_dirty_) {
+        const contracts::StableId128 projection_identity{
+            quest_ui_event_.checksum,
+            quest_ui_event_.sequence,
+        };
+        const auto wrote = write_message_header(
+                               writer,
+                               static_cast<std::uint16_t>(TGD_WEB_MESSAGE_QUEST_UI_EVENT),
+                               TGD_WEB_QUEST_UI_EVENT_V1_BYTES,
+                               quest_ui_session_generation_,
+                               ++wire_sequence_,
+                               projection_identity
+                           ) &&
+                           write_quest_ui_event(writer, quest_ui_event_);
+        if (!wrote || writer.size() != required) {
+            return -static_cast<std::int32_t>(WebAbiError::internal);
+        }
+        quest_ui_dirty_ = false;
+        return static_cast<std::int32_t>(required);
+    }
+
+    const contracts::StableId128 closed_projection_identity{
+        quest_ui_close_ack_.projection_checksum,
+        quest_ui_close_ack_.projection_sequence,
+    };
     const auto wrote = write_message_header(
                            writer,
-                           static_cast<std::uint16_t>(TGD_WEB_MESSAGE_UI_EVENT),
-                           TGD_WEB_UI_EVENT_V1_BYTES,
-                           ui_session_generation_,
+                           static_cast<std::uint16_t>(TGD_WEB_MESSAGE_QUEST_UI_CLOSE_ACK),
+                           TGD_WEB_QUEST_UI_CLOSE_ACK_V1_BYTES,
+                           quest_ui_close_session_generation_,
                            ++wire_sequence_,
-                           ui_event_.snapshot_id
+                           closed_projection_identity
                        ) &&
-                       writer.write(ui_event_.state) && writer.write(ui_event_.error) &&
-                       writer.write(flags) && writer.write(ui_event_.committed_save_count) &&
-                       writer.write(ui_event_.logical_sequence) &&
-                       writer.write_id(ui_event_.snapshot_id);
+                       write_quest_ui_close_ack(writer, quest_ui_close_ack_);
     if (!wrote || writer.size() != required) {
         return -static_cast<std::int32_t>(WebAbiError::internal);
     }
-    ui_dirty_ = false;
+    quest_ui_close_dirty_ = false;
+    if (quest_ui_choice_identity_valid_ &&
+        quest_ui_choice_session_generation_ == quest_ui_close_session_generation_ &&
+        quest_ui_choice_sequence_ == quest_ui_close_ack_.projection_sequence &&
+        quest_ui_choice_checksum_ == quest_ui_close_ack_.projection_checksum) {
+        quest_ui_choice_closed_ = true;
+    }
     return static_cast<std::int32_t>(required);
 }
 
@@ -660,6 +1207,18 @@ void WebPlatformBridge::reset() noexcept {
     ui_dirty_ = false;
     ui_session_generation_ = 0;
     ui_event_ = {};
+    quest_ui_dirty_ = false;
+    quest_ui_session_generation_ = 0;
+    quest_ui_event_ = {};
+    quest_ui_close_dirty_ = false;
+    quest_ui_close_session_generation_ = 0;
+    quest_ui_close_ack_ = {};
+    quest_ui_choice_identity_valid_ = false;
+    quest_ui_choice_replaced_ = false;
+    quest_ui_choice_closed_ = false;
+    quest_ui_choice_session_generation_ = 0;
+    quest_ui_choice_sequence_ = 0;
+    quest_ui_choice_checksum_ = 0;
 }
 
 WebAbiError WebPlatformBridge::decode_boot_config(
@@ -726,6 +1285,44 @@ WebAbiError WebPlatformBridge::decode_ui_command(
     output.type = static_cast<WebUiCommandType>(command);
     output.checkpoint_kind = static_cast<contracts::CheckpointKind>(checkpoint);
     output.session_generation = header.session_generation;
+    return WebAbiError::none;
+}
+
+WebAbiError WebPlatformBridge::decode_quest_ui_selection_intent(
+    std::span<const std::uint8_t> message,
+    WebQuestUiSelectionIntent& output
+) noexcept {
+    MessageHeader header;
+    std::span<const std::uint8_t> payload;
+    const auto parsed = parse_message(
+        message,
+        static_cast<std::uint16_t>(TGD_WEB_MESSAGE_QUEST_UI_SELECTION_INTENT),
+        header,
+        payload
+    );
+    if (parsed != WebAbiError::none) {
+        return parsed;
+    }
+    if (payload.size() != TGD_WEB_QUEST_UI_SELECTION_INTENT_V1_BYTES) {
+        return WebAbiError::invalid_message;
+    }
+
+    contracts::QuestUiSelectionIntent intent;
+    ByteReader reader(payload);
+    if (!reader.read(intent.projection_sequence) ||
+        !reader.read(intent.projection_checksum) || !reader.read(intent.objective) ||
+        !reader.read(intent.interaction) || !reader.read(intent.selection) ||
+        reader.remaining() != 0 || header.session_generation == 0 ||
+        intent.projection_sequence == 0 || intent.projection_checksum == 0 ||
+        intent.objective == 0 || intent.interaction == 0 || intent.selection == 0 ||
+        header.request_id != contracts::StableId128{
+                                 intent.projection_checksum,
+                                 intent.projection_sequence,
+                             }) {
+        return WebAbiError::invalid_message;
+    }
+    output.session_generation = header.session_generation;
+    output.intent = intent;
     return WebAbiError::none;
 }
 

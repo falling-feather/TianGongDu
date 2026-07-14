@@ -527,6 +527,9 @@ bool F1GrayboxLayer::init() {
         session_.initialize(*definition_, std::move(collision_world)) !=
             tgd::gameplay::VerticalSliceError::none ||
         session_.start() != tgd::gameplay::VerticalSliceError::none ||
+        (!definition_->quest_ui_cues.empty() &&
+         quest_ui_projection_.initialize(*definition_) !=
+             tgd::gameplay::QuestUiProjectionError::none) ||
         quest_interactions_.initialize(definition_->quest_interactions) !=
             tgd::gameplay::QuestInteractionError::none ||
         quest_combat_triggers_.initialize(definition_->quest_combat_triggers) !=
@@ -589,6 +592,119 @@ void F1GrayboxLayer::setRewardClaimSink(IF1RewardClaimSink* sink) noexcept {
     reward_claim_sink_ = sink;
 }
 
+void F1GrayboxLayer::setQuestUiProjectionSink(IF1QuestUiProjectionSink* sink) noexcept {
+    quest_ui_projection_sink_ = sink;
+}
+
+tgd::gameplay::QuestUiSelectionIntentError
+F1GrayboxLayer::submitQuestUiSelectionIntent(
+    const tgd::contracts::QuestUiSelectionIntent& intent
+) noexcept {
+    using tgd::gameplay::QuestUiSelectionIntentError;
+    if (!quest_ui_projection_.initialized()) {
+        return QuestUiSelectionIntentError::invalid_lifecycle;
+    }
+    if (!quest_ui_choice_.matches(intent)) {
+        return QuestUiSelectionIntentError::stale_projection;
+    }
+    const auto validated =
+        quest_ui_projection_.validate_choice_intent(intent, session_.quest_runtime());
+    if (validated != QuestUiSelectionIntentError::none) {
+        return validated;
+    }
+
+    const auto completed = session_.complete_objective(
+        intent.objective,
+        intent.selection,
+        *this
+    );
+    if (completed.error != tgd::gameplay::VerticalSliceError::none ||
+        !completed.accepted) {
+        switch (completed.error) {
+            case tgd::gameplay::VerticalSliceError::objective_not_active:
+                return QuestUiSelectionIntentError::objective_not_active;
+            case tgd::gameplay::VerticalSliceError::invalid_selection:
+                return QuestUiSelectionIntentError::selection_not_authored;
+            case tgd::gameplay::VerticalSliceError::selection_conflict:
+                return QuestUiSelectionIntentError::selection_already_committed;
+            default:
+                return QuestUiSelectionIntentError::quest_context_changed;
+        }
+    }
+    quest_ui_choice_.finish();
+    publishAcceptedChoiceFeedback(intent);
+    return QuestUiSelectionIntentError::none;
+}
+
+F1GrayboxLayer::QuestUiPublication F1GrayboxLayer::publishQuestUiProjection(
+    const tgd::contracts::QuestUiProjectionSignal& signal
+) noexcept {
+    QuestUiPublication publication;
+    if (!quest_ui_projection_.initialized()) {
+        return publication;
+    }
+    const auto projected = quest_ui_projection_.project(
+        signal,
+        session_.quest_runtime(),
+        session_.current_snapshot().safe_point_id.key,
+        combat_.actors()
+    );
+    if (projected.error != tgd::gameplay::QuestUiProjectionError::none) {
+        return publication;
+    }
+    publication.projection = projected.projection;
+    publication.projected = true;
+    publication.external_consumer_accepted =
+        quest_ui_projection_sink_ != nullptr &&
+        quest_ui_projection_sink_->submitF1QuestUiProjection(projected.projection);
+    return publication;
+}
+
+void F1GrayboxLayer::publishAcceptedChoiceFeedback(
+    const tgd::contracts::QuestUiSelectionIntent& intent
+) noexcept {
+    const auto stage = session_.quest_snapshot().stage;
+    const auto beat = std::find_if(
+        definition_->beats.begin(),
+        definition_->beats.end(),
+        [stage](const tgd::contracts::VerticalSliceBeatDefinition& candidate) {
+            return candidate.id.key == stage;
+        }
+    );
+    if (beat == definition_->beats.end()) {
+        return;
+    }
+    const auto origin = std::find_if(
+        beat->objectives.begin(),
+        beat->objectives.end(),
+        [&intent](const tgd::contracts::ContentId& objective) {
+            return objective.key == intent.objective;
+        }
+    );
+    if (origin == beat->objectives.end()) {
+        return;
+    }
+
+    tgd::contracts::QuestUiProjectionSignal signal;
+    signal.source = tgd::contracts::QuestUiProjectionSource::interaction_feedback;
+    signal.primary_result = {
+        intent.interaction,
+        intent.objective,
+        tgd::contracts::QuestUiResultStatus::accepted,
+        tgd::contracts::QuestUiRejectionReason::none,
+    };
+    const auto next = origin + 1;
+    if (next != beat->objectives.end() &&
+        session_.objective_state(next->key) == tgd::gameplay::QuestObjectiveState::active) {
+        signal.objective = next->key;
+        if (publishQuestUiProjection(signal).projected) {
+            return;
+        }
+    }
+    signal.objective = intent.objective;
+    static_cast<void>(publishQuestUiProjection(signal));
+}
+
 void F1GrayboxLayer::notifyRewardClaimCommitted(
     tgd::contracts::StableContentKey reward_dedup_key
 ) noexcept {
@@ -624,6 +740,7 @@ void F1GrayboxLayer::clearHeldInput(
 
 void F1GrayboxLayer::shutdown() noexcept {
     clearInput(tgd::contracts::InputClearReason::pause);
+    quest_ui_choice_.finish();
     const auto lifecycle = session_.lifecycle();
     if (lifecycle != tgd::gameplay::VerticalSliceLifecycle::uninitialized &&
         lifecycle != tgd::gameplay::VerticalSliceLifecycle::destroyed) {
@@ -858,6 +975,28 @@ void F1GrayboxLayer::createHud() {
 void F1GrayboxLayer::createKeyboardInput() {
     auto* listener = ax::EventListenerKeyboard::create();
     listener->onKeyPressed = [this](ax::EventKeyboard::KeyCode key, ax::Event*) {
+        if (quest_ui_choice_.pending()) {
+            if (quest_ui_choice_.native_pending()) {
+                const auto option_index = nativeChoiceKeyIndex(key);
+                if (option_index >= 0) {
+                    const auto selection = quest_ui_choice_.native_intent(
+                        static_cast<std::size_t>(option_index)
+                    );
+                    if (selection.error == F1QuestUiChoiceError::none) {
+                        const auto submitted = submitQuestUiSelectionIntent(selection.intent);
+                        if (combat_event_label_ != nullptr) {
+                            combat_event_label_->setString(
+                                submitted ==
+                                        tgd::gameplay::QuestUiSelectionIntentError::none
+                                    ? "CHOICE ACCEPTED"
+                                    : "CHOICE REJECTED - PRESS A LISTED NUMBER TO RETRY"
+                            );
+                        }
+                    }
+                }
+            }
+            return;
+        }
         if (key == ax::EventKeyboard::KeyCode::KEY_R) {
             retry_requested_ = player_defeated_;
             return;
@@ -879,6 +1018,9 @@ void F1GrayboxLayer::createKeyboardInput() {
         }
     };
     listener->onKeyReleased = [this](ax::EventKeyboard::KeyCode key, ax::Event*) {
+        if (quest_ui_choice_.pending()) {
+            return;
+        }
         if (key == ax::EventKeyboard::KeyCode::KEY_R || player_defeated_) {
             return;
         }
@@ -898,8 +1040,25 @@ void F1GrayboxLayer::createKeyboardInput() {
     _eventDispatcher->addEventListenerWithSceneGraphPriority(listener, this);
 }
 
+void F1GrayboxLayer::renderNativeQuestUiChoice() noexcept {
+    if (combat_event_label_ == nullptr || !quest_ui_choice_.native_pending()) {
+        return;
+    }
+    std::string text = "QUEST CHOICE - PRESS A LISTED NUMBER";
+    for (std::size_t index = 0; index < quest_ui_choice_.option_count(); ++index) {
+        text += "\n";
+        text += std::to_string(index + 1U);
+        text += "  ";
+        text += quest_ui_choice_.option_label(index);
+    }
+    combat_event_label_->setString(text);
+}
+
 void F1GrayboxLayer::simulateTick() noexcept {
     if (session_.lifecycle() != tgd::gameplay::VerticalSliceLifecycle::running) {
+        return;
+    }
+    if (quest_ui_choice_.pending()) {
         return;
     }
     if (retry_requested_ && !retryEncounter()) {
@@ -939,6 +1098,30 @@ void F1GrayboxLayer::simulateTick() noexcept {
         if (!interaction.found) {
             if (combat_event_label_ != nullptr) {
                 combat_event_label_->setString("NO ACTIVE QUEST INTERACTION IN RANGE");
+            }
+        } else if (
+            interaction.kind == tgd::contracts::QuestInteractionKind::choose &&
+            quest_ui_projection_.has_authored_cue(
+                session_.quest_runtime().snapshot().stage,
+                interaction.objective,
+                tgd::contracts::QuestUiProjectionSource::choice_available
+            )
+        ) {
+            tgd::contracts::QuestUiProjectionSignal signal;
+            signal.source = tgd::contracts::QuestUiProjectionSource::choice_available;
+            signal.objective = interaction.objective;
+            const auto publication = publishQuestUiProjection(signal);
+            if (publication.projected &&
+                quest_ui_choice_.begin(
+                    publication.projection,
+                    publication.external_consumer_accepted
+                ) == F1QuestUiChoiceError::none) {
+                clearHeldInput(tgd::contracts::InputClearReason::context_changed, true);
+                if (quest_ui_choice_.native_pending()) {
+                    renderNativeQuestUiChoice();
+                }
+            } else if (combat_event_label_ != nullptr) {
+                combat_event_label_->setString("CHOICE PANEL REJECTED / QUEST UI PROJECTION DRIFT");
             }
         } else {
             const auto completed = session_.complete_objective(
@@ -2271,6 +2454,32 @@ int F1GrayboxLayer::combatKeyIndex(ax::EventKeyboard::KeyCode key) const noexcep
             return 5;
         case KeyCode::KEY_RIGHT_SHIFT:
             return 6;
+        default:
+            return -1;
+    }
+}
+
+int F1GrayboxLayer::nativeChoiceKeyIndex(
+    ax::EventKeyboard::KeyCode key
+) const noexcept {
+    using KeyCode = ax::EventKeyboard::KeyCode;
+    switch (key) {
+        case KeyCode::KEY_1:
+            return 0;
+        case KeyCode::KEY_2:
+            return 1;
+        case KeyCode::KEY_3:
+            return 2;
+        case KeyCode::KEY_4:
+            return 3;
+        case KeyCode::KEY_5:
+            return 4;
+        case KeyCode::KEY_6:
+            return 5;
+        case KeyCode::KEY_7:
+            return 6;
+        case KeyCode::KEY_8:
+            return 7;
         default:
             return -1;
     }

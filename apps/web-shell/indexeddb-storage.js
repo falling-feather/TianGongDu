@@ -67,6 +67,47 @@
     "internal"
   ]);
 
+  const questUiSourceNames = Object.freeze([
+    "invalid",
+    "choice_available",
+    "interaction_feedback",
+    "objective_state",
+    "combat_feedback",
+    "recovery_offer",
+    "recovery_resume"
+  ]);
+  const questUiSurfaceNames = Object.freeze(["gameplay", "choice", "failure"]);
+  const questUiPolarityNames = Object.freeze(["positive", "negative", "recovery"]);
+  const questUiObjectiveStateNames = Object.freeze(["locked", "active", "completed"]);
+  const questUiResultStatusNames = Object.freeze([
+    "not_applicable",
+    "accepted",
+    "rejected",
+    "ignored_repeat",
+    "pending"
+  ]);
+  const questUiRejectionReasonNames = Object.freeze([
+    "none",
+    "prerequisite_incomplete",
+    "selection_already_committed",
+    "wrong_target"
+  ]);
+  const questUiAttemptTimeClassificationNames = Object.freeze([
+    "unspecified",
+    "qualifying_first_visit",
+    "repeat_no_progress",
+    "qualifying_craft_decision",
+    "qualifying_error_feedback",
+    "qualifying_wrong_order_feedback",
+    "qualifying_craft_confirmation",
+    "qualifying_dialogue_decision",
+    "qualifying_training_risk",
+    "qualifying_combat_proof",
+    "qualifying_combat_feedback",
+    "failure_retry_excluded",
+    "resume_no_duplicate_progress"
+  ]);
+
   class WireError extends Error {}
 
   function bytes(value) {
@@ -111,6 +152,40 @@
 
   function idEmpty(id) {
     return id.high === 0n && id.low === 0n;
+  }
+
+  function stableKeyToHex(value) {
+    if (typeof value !== "bigint" || value < 0n || value > MAX_U64) {
+      throw new WireError("StableContentKey must be an unsigned 64-bit bigint");
+    }
+    return value.toString(16).padStart(16, "0");
+  }
+
+  function stableKeyFromHex(value) {
+    if (typeof value !== "string" || !/^[0-9a-f]{16}$/.test(value)) {
+      throw new WireError("StableContentKey must be 16 lowercase hexadecimal characters");
+    }
+    return BigInt(`0x${value}`);
+  }
+
+  function sequenceFromValue(value) {
+    const parsed = typeof value === "bigint"
+      ? value
+      : typeof value === "string" && /^[0-9]+$/.test(value)
+        ? BigInt(value)
+        : -1n;
+    if (parsed <= 0n || parsed > MAX_U64) {
+      throw new WireError("Quest UI sequence must be a nonzero unsigned 64-bit value");
+    }
+    return parsed;
+  }
+
+  function stableKeyFromValue(value) {
+    const parsed = typeof value === "bigint" ? value : stableKeyFromHex(value);
+    if (parsed <= 0n || parsed > MAX_U64) {
+      throw new WireError("Quest UI identity must be a nonzero unsigned 64-bit value");
+    }
+    return parsed;
   }
 
   function idEqual(left, right) {
@@ -378,6 +453,7 @@
     }
     const event = {
       sessionGeneration: header.sessionGeneration,
+      messageSequence: header.sequence,
       state,
       stateName: profileStateNames[state],
       error,
@@ -392,6 +468,412 @@
       throw new WireError("Profile UI event snapshot identity drifted");
     }
     return event;
+  }
+
+  function questUiResultShapeValid(result) {
+    if (
+      result.status < 0 ||
+      result.status >= questUiResultStatusNames.length ||
+      result.rejectionReason < 0 ||
+      result.rejectionReason >= questUiRejectionReasonNames.length
+    ) {
+      return false;
+    }
+    if (result.status === 0) {
+      return result.id === 0n && result.objective === 0n && result.rejectionReason === 0;
+    }
+    if (result.id === 0n || result.objective === 0n) return false;
+    if (result.status === 1 || result.status === 4) return result.rejectionReason === 0;
+    if (result.status === 2) return result.rejectionReason !== 0;
+    if (result.status === 3) return result.rejectionReason === 2;
+    return false;
+  }
+
+  function questUiResultNotApplicable(result) {
+    return result.status === 0 && result.id === 0n && result.objective === 0n &&
+      result.rejectionReason === 0;
+  }
+
+  function questUiClassificationMatchesSource(source, classification) {
+    switch (source) {
+      case 1:
+        return classification === 1 || classification === 3 || classification === 7;
+      case 2:
+        return [2, 3, 4, 5, 6].includes(classification);
+      case 3:
+        return classification === 1 || classification === 8;
+      case 4:
+        return classification === 9 || classification === 10;
+      case 5:
+        return classification === 11;
+      case 6:
+        return classification === 12;
+      default:
+        return false;
+    }
+  }
+
+  function questUiSourceShapeValid(event) {
+    switch (event.source) {
+      case 1:
+      case 3:
+      case 5:
+      case 6:
+        return questUiResultNotApplicable(event.primaryResult) &&
+          questUiResultNotApplicable(event.secondaryResult);
+      case 2:
+        return event.primaryResult.status !== 0 && event.primaryResult.status !== 4 &&
+          questUiResultNotApplicable(event.secondaryResult);
+      case 4:
+        if (
+          event.primaryResult.status === 0 ||
+          event.primaryResult.status === 3 ||
+          event.secondaryResult.status === 3
+        ) {
+          return false;
+        }
+        return questUiResultNotApplicable(event.secondaryResult) ||
+          event.primaryResult.status === 1;
+      default:
+        return false;
+    }
+  }
+
+  function questUiSurfaceAndPolarityValid(event) {
+    const expectedSurface = event.source === 1 ? 1 : event.source === 5 ? 2 : 0;
+    if (event.surface !== expectedSurface) return false;
+    const recovery = event.source === 5 || event.source === 6;
+    if (recovery) return event.polarity === 2;
+    if (event.polarity === 2) return false;
+    if (event.source === 1 || event.source === 3) return event.polarity === 0;
+    const effectiveResult = questUiResultNotApplicable(event.secondaryResult)
+      ? event.primaryResult
+      : event.secondaryResult;
+    return ![2, 3].includes(effectiveResult.status) || event.polarity === 1;
+  }
+
+  function decodeQuestUiEvent(value) {
+    const decoded = decodeHeader(value, abi.messageType.quest_ui_event);
+    const { view, header } = decoded;
+    if (header.payloadLength !== abi.payload.questUiEventV1Bytes) {
+      throw new WireError("Quest UI event has the wrong v1 size");
+    }
+    const offset = abi.headerBytes;
+    const event = {
+      sessionGeneration: header.sessionGeneration,
+      messageSequence: header.sequence,
+      sequence: view.getBigUint64(offset, true),
+      tick: view.getBigUint64(offset + 8, true),
+      questChecksum: view.getBigUint64(offset + 16, true),
+      checksum: view.getBigUint64(offset + 24, true),
+      cue: view.getBigUint64(offset + 32, true),
+      beat: view.getBigUint64(offset + 40, true),
+      objective: view.getBigUint64(offset + 48, true),
+      safePoint: view.getBigUint64(offset + 56, true),
+      pendingObjective: view.getBigUint64(offset + 64, true),
+      primaryResult: {
+        id: view.getBigUint64(offset + 72, true),
+        objective: view.getBigUint64(offset + 80, true),
+        status: view.getUint16(offset + 114, true),
+        rejectionReason: view.getUint16(offset + 116, true)
+      },
+      secondaryResult: {
+        id: view.getBigUint64(offset + 88, true),
+        objective: view.getBigUint64(offset + 96, true),
+        status: view.getUint16(offset + 118, true),
+        rejectionReason: view.getUint16(offset + 120, true)
+      },
+      source: view.getUint16(offset + 104, true),
+      surface: view.getUint16(offset + 106, true),
+      polarity: view.getUint16(offset + 108, true),
+      objectiveState: view.getUint16(offset + 110, true),
+      attemptTimeClassification: view.getUint16(offset + 112, true),
+      choiceOptions: [],
+      selectedOptions: [],
+      activeActorKeys: [],
+      defeatedActorKeys: [],
+      retainedObjectives: []
+    };
+    const choiceOptionCount = view.getUint16(offset + 122, true);
+    const selectedOptionCount = view.getUint16(offset + 124, true);
+    const activeActorCount = view.getUint16(offset + 126, true);
+    const defeatedActorCount = view.getUint16(offset + 128, true);
+    const retainedObjectiveCount = view.getUint16(offset + 130, true);
+    if (
+      event.sequence === 0n || event.questChecksum === 0n || event.checksum === 0n ||
+      event.cue === 0n || event.beat === 0n || event.objective === 0n ||
+      event.safePoint === 0n ||
+      header.requestId.high !== event.checksum || header.requestId.low !== event.sequence ||
+      event.source <= 0 || event.source >= questUiSourceNames.length ||
+      event.surface < 0 || event.surface >= questUiSurfaceNames.length ||
+      event.polarity < 0 || event.polarity >= questUiPolarityNames.length ||
+      event.objectiveState < 0 || event.objectiveState >= questUiObjectiveStateNames.length ||
+      event.attemptTimeClassification <= 0 ||
+      event.attemptTimeClassification >= questUiAttemptTimeClassificationNames.length ||
+      view.getUint16(offset + 132, true) !== 0 ||
+      view.getUint16(offset + 134, true) !== 0 ||
+      choiceOptionCount > abi.payload.questUiChoiceOptionCapacity ||
+      selectedOptionCount > abi.payload.questUiSelectedOptionCapacity ||
+      activeActorCount > abi.payload.questUiActorCapacity ||
+      defeatedActorCount > abi.payload.questUiActorCapacity ||
+      retainedObjectiveCount > abi.payload.questUiRetainedObjectiveCapacity ||
+      (event.objectiveState === 1
+        ? event.pendingObjective !== event.objective
+        : event.pendingObjective !== 0n) ||
+      !questUiResultShapeValid(event.primaryResult) ||
+      !questUiResultShapeValid(event.secondaryResult) ||
+      !questUiClassificationMatchesSource(
+        event.source,
+        event.attemptTimeClassification
+      ) ||
+      !questUiSourceShapeValid(event) ||
+      !questUiSurfaceAndPolarityValid(event)
+    ) {
+      throw new WireError("Quest UI event violates the authoritative projection contract");
+    }
+
+    let cursor = offset + 136;
+    const interactionKeys = new Set();
+    const selectionKeys = new Set();
+    for (let index = 0; index < abi.payload.questUiChoiceOptionCapacity; index += 1) {
+      const interaction = view.getBigUint64(cursor, true);
+      const selection = view.getBigUint64(cursor + 8, true);
+      cursor += 16;
+      if (index >= choiceOptionCount) {
+        if (interaction !== 0n || selection !== 0n) {
+          throw new WireError("Quest UI choice option tail is not canonical");
+        }
+        continue;
+      }
+      const interactionIdentity = interaction.toString();
+      const selectionIdentity = selection.toString();
+      if (
+        interaction === 0n || selection === 0n ||
+        interactionKeys.has(interactionIdentity) || selectionKeys.has(selectionIdentity)
+      ) {
+        throw new WireError("Quest UI choice options are empty or duplicated");
+      }
+      interactionKeys.add(interactionIdentity);
+      selectionKeys.add(selectionIdentity);
+      event.choiceOptions.push({ interaction, selection });
+    }
+    if ((event.source === 1) !== (choiceOptionCount > 0)) {
+      throw new WireError("Quest UI choice options do not match the projection source");
+    }
+
+    const selectedObjectives = new Set();
+    for (let index = 0; index < abi.payload.questUiSelectedOptionCapacity; index += 1) {
+      const objective = view.getBigUint64(cursor, true);
+      const selection = view.getBigUint64(cursor + 8, true);
+      cursor += 16;
+      if (index >= selectedOptionCount) {
+        if (objective !== 0n || selection !== 0n) {
+          throw new WireError("Quest UI selected option tail is not canonical");
+        }
+        continue;
+      }
+      const identity = objective.toString();
+      if (objective === 0n || selection === 0n || selectedObjectives.has(identity)) {
+        throw new WireError("Quest UI selected options are empty or duplicated");
+      }
+      selectedObjectives.add(identity);
+      event.selectedOptions.push({ objective, selection });
+    }
+
+    const activeActors = new Set();
+    let previousActor = 0n;
+    for (let index = 0; index < abi.payload.questUiActorCapacity; index += 1) {
+      const actor = view.getBigUint64(cursor, true);
+      cursor += 8;
+      if (index >= activeActorCount) {
+        if (actor !== 0n) throw new WireError("Quest UI active Actor tail is not canonical");
+        continue;
+      }
+      if (actor === 0n || actor <= previousActor) {
+        throw new WireError("Quest UI active Actors are not canonical");
+      }
+      previousActor = actor;
+      activeActors.add(actor.toString());
+      event.activeActorKeys.push(actor);
+    }
+    previousActor = 0n;
+    for (let index = 0; index < abi.payload.questUiActorCapacity; index += 1) {
+      const actor = view.getBigUint64(cursor, true);
+      cursor += 8;
+      if (index >= defeatedActorCount) {
+        if (actor !== 0n) throw new WireError("Quest UI defeated Actor tail is not canonical");
+        continue;
+      }
+      if (actor === 0n || actor <= previousActor || activeActors.has(actor.toString())) {
+        throw new WireError("Quest UI defeated Actors are not canonical");
+      }
+      previousActor = actor;
+      event.defeatedActorKeys.push(actor);
+    }
+
+    const retainedObjectives = new Set();
+    for (let index = 0; index < abi.payload.questUiRetainedObjectiveCapacity; index += 1) {
+      const objective = view.getBigUint64(cursor, true);
+      cursor += 8;
+      if (index >= retainedObjectiveCount) {
+        if (objective !== 0n) {
+          throw new WireError("Quest UI retained Objective tail is not canonical");
+        }
+        continue;
+      }
+      const identity = objective.toString();
+      if (objective === 0n || retainedObjectives.has(identity)) {
+        throw new WireError("Quest UI retained Objectives are empty or duplicated");
+      }
+      retainedObjectives.add(identity);
+      event.retainedObjectives.push(objective);
+    }
+    if (cursor !== decoded.input.byteLength) {
+      throw new WireError("Quest UI event payload layout drifted");
+    }
+    return event;
+  }
+
+  function publicQuestUiResult(result) {
+    return Object.freeze({
+      id: stableKeyToHex(result.id),
+      objective: stableKeyToHex(result.objective),
+      status: result.status,
+      statusName: questUiResultStatusNames[result.status],
+      rejectionReason: result.rejectionReason,
+      rejectionReasonName: questUiRejectionReasonNames[result.rejectionReason]
+    });
+  }
+
+  function publicQuestUiEvent(event) {
+    if (!event) return null;
+    return Object.freeze({
+      sessionGeneration: event.sessionGeneration,
+      messageSequence: event.messageSequence.toString(),
+      sequence: event.sequence.toString(),
+      tick: event.tick.toString(),
+      questChecksum: stableKeyToHex(event.questChecksum),
+      checksum: stableKeyToHex(event.checksum),
+      cue: stableKeyToHex(event.cue),
+      beat: stableKeyToHex(event.beat),
+      objective: stableKeyToHex(event.objective),
+      safePoint: stableKeyToHex(event.safePoint),
+      pendingObjective: stableKeyToHex(event.pendingObjective),
+      primaryResult: publicQuestUiResult(event.primaryResult),
+      secondaryResult: publicQuestUiResult(event.secondaryResult),
+      source: event.source,
+      sourceName: questUiSourceNames[event.source],
+      surface: event.surface,
+      surfaceName: questUiSurfaceNames[event.surface],
+      polarity: event.polarity,
+      polarityName: questUiPolarityNames[event.polarity],
+      objectiveState: event.objectiveState,
+      objectiveStateName: questUiObjectiveStateNames[event.objectiveState],
+      attemptTimeClassification: event.attemptTimeClassification,
+      attemptTimeClassificationName:
+        questUiAttemptTimeClassificationNames[event.attemptTimeClassification],
+      choiceOptions: Object.freeze(event.choiceOptions.map((option) => Object.freeze({
+        interaction: stableKeyToHex(option.interaction),
+        selection: stableKeyToHex(option.selection)
+      }))),
+      selectedOptions: Object.freeze(event.selectedOptions.map((option) => Object.freeze({
+        objective: stableKeyToHex(option.objective),
+        selection: stableKeyToHex(option.selection)
+      }))),
+      activeActorKeys: Object.freeze(event.activeActorKeys.map(stableKeyToHex)),
+      defeatedActorKeys: Object.freeze(event.defeatedActorKeys.map(stableKeyToHex)),
+      retainedObjectives: Object.freeze(event.retainedObjectives.map(stableKeyToHex))
+    });
+  }
+
+  function decodeQuestUiCloseAck(value) {
+    const decoded = decodeHeader(value, abi.messageType.quest_ui_close_ack);
+    const { view, header } = decoded;
+    if (header.payloadLength !== abi.payload.questUiCloseAckV1Bytes) {
+      throw new WireError("Quest UI close acknowledgement has the wrong v1 size");
+    }
+    const offset = abi.headerBytes;
+    const acknowledgement = {
+      sessionGeneration: header.sessionGeneration,
+      messageSequence: header.sequence,
+      projectionSequence: view.getBigUint64(offset, true),
+      projectionChecksum: view.getBigUint64(offset + 8, true),
+      reason: view.getUint16(offset + 16, true)
+    };
+    if (
+      acknowledgement.sessionGeneration === 0 ||
+      acknowledgement.projectionSequence === 0n ||
+      acknowledgement.projectionChecksum === 0n ||
+      acknowledgement.reason !== abi.questUiCloseReason.selection_committed ||
+      view.getUint16(offset + 18, true) !== 0 ||
+      view.getUint16(offset + 20, true) !== 0 ||
+      view.getUint16(offset + 22, true) !== 0 ||
+      header.requestId.high !== acknowledgement.projectionChecksum ||
+      header.requestId.low !== acknowledgement.projectionSequence
+    ) {
+      throw new WireError("Quest UI close acknowledgement identity drifted");
+    }
+    return acknowledgement;
+  }
+
+  function publicQuestUiCloseAck(acknowledgement) {
+    if (!acknowledgement) return null;
+    return Object.freeze({
+      sessionGeneration: acknowledgement.sessionGeneration,
+      messageSequence: acknowledgement.messageSequence.toString(),
+      projectionSequence: acknowledgement.projectionSequence.toString(),
+      projectionChecksum: stableKeyToHex(acknowledgement.projectionChecksum),
+      reason: acknowledgement.reason,
+      reasonName: "selection_committed"
+    });
+  }
+
+  function encodeQuestUiSelectionIntent({
+    projectionSequence,
+    projectionChecksum,
+    objective,
+    interaction,
+    selection,
+    sessionGeneration,
+    sequence
+  }) {
+    const projectionSequenceValue = sequenceFromValue(projectionSequence);
+    const projectionChecksumValue = stableKeyFromValue(projectionChecksum);
+    const objectiveValue = stableKeyFromValue(objective);
+    const interactionValue = stableKeyFromValue(interaction);
+    const selectionValue = stableKeyFromValue(selection);
+    const wireSequence = sequenceFromValue(sequence);
+    if (!Number.isInteger(sessionGeneration) || sessionGeneration <= 0 ||
+        sessionGeneration > 0xffff_ffff) {
+      throw new WireError("Quest UI intent requires a nonzero uint32 session generation");
+    }
+    const output = new Uint8Array(
+      abi.headerBytes + abi.payload.questUiSelectionIntentV1Bytes
+    );
+    const view = new DataView(output.buffer);
+    encodeHeader(
+      view,
+      abi.messageType.quest_ui_selection_intent,
+      abi.payload.questUiSelectionIntentV1Bytes,
+      sessionGeneration,
+      wireSequence,
+      { high: projectionChecksumValue, low: projectionSequenceValue }
+    );
+    const offset = abi.headerBytes;
+    view.setBigUint64(offset, projectionSequenceValue, true);
+    view.setBigUint64(offset + 8, projectionChecksumValue, true);
+    view.setBigUint64(offset + 16, objectiveValue, true);
+    view.setBigUint64(offset + 24, interactionValue, true);
+    view.setBigUint64(offset + 32, selectionValue, true);
+    return output;
+  }
+
+  function uiMessageType(value) {
+    const input = bytes(value);
+    if (input.byteLength < abi.headerBytes) {
+      throw new WireError("UI event message is truncated");
+    }
+    return new DataView(input.buffer, input.byteOffset, input.byteLength).getUint16(4, true);
   }
 
   function encodeCompletionMessages(completion, nextSequence) {
@@ -1105,6 +1587,7 @@
     if (!event) return null;
     return Object.freeze({
       sessionGeneration: event.sessionGeneration,
+      messageSequence: event.messageSequence.toString(),
       state: event.state,
       stateName: event.stateName,
       error: event.error,
@@ -1115,6 +1598,14 @@
       logicalSequence: event.logicalSequence.toString(),
       snapshotId: idToHex(event.snapshotId)
     });
+  }
+
+  function advanceUiMessageSequence(current, event, expectedGeneration) {
+    if (event.sessionGeneration !== expectedGeneration) return current;
+    if (event.messageSequence <= current) {
+      throw new WireError("UI event message sequence is stale or duplicated");
+    }
+    return event.messageSequence;
   }
 
   function createBridge(module, options = {}) {
@@ -1132,6 +1623,9 @@
     let outboundSequence = 0n;
     let completionSequence = 0n;
     let latestProfileEvent = null;
+    let latestQuestUiEvent = null;
+    let latestQuestUiCloseAck = null;
+    let latestUiMessageSequence = 0n;
     let activeDrain = null;
     let drainAgain = false;
 
@@ -1167,19 +1661,49 @@
       }
     }
 
-    function publishProfileEvents() {
+    function publishUiEvents() {
       while (true) {
         const message = pollBytes("tgd_web_peek_ui_event_size", "tgd_web_poll_ui_event");
         if (!message) break;
-        const event = decodeProfileUiEvent(message);
-        if (event.sessionGeneration !== sessionGeneration) continue;
-        latestProfileEvent = event;
-        options.onProfileState?.(publicProfileState(event));
+        const messageType = uiMessageType(message);
+        if (messageType === abi.messageType.ui_event) {
+          const event = decodeProfileUiEvent(message);
+          if (event.sessionGeneration !== sessionGeneration) continue;
+          latestUiMessageSequence = advanceUiMessageSequence(
+            latestUiMessageSequence,
+            event,
+            sessionGeneration
+          );
+          latestProfileEvent = event;
+          options.onProfileState?.(publicProfileState(event));
+        } else if (messageType === abi.messageType.quest_ui_event) {
+          const event = decodeQuestUiEvent(message);
+          if (event.sessionGeneration !== sessionGeneration) continue;
+          latestUiMessageSequence = advanceUiMessageSequence(
+            latestUiMessageSequence,
+            event,
+            sessionGeneration
+          );
+          latestQuestUiEvent = event;
+          options.onQuestUiEvent?.(publicQuestUiEvent(event));
+        } else if (messageType === abi.messageType.quest_ui_close_ack) {
+          const acknowledgement = decodeQuestUiCloseAck(message);
+          if (acknowledgement.sessionGeneration !== sessionGeneration) continue;
+          latestUiMessageSequence = advanceUiMessageSequence(
+            latestUiMessageSequence,
+            acknowledgement,
+            sessionGeneration
+          );
+          latestQuestUiCloseAck = acknowledgement;
+          options.onQuestUiClose?.(publicQuestUiCloseAck(acknowledgement));
+        } else {
+          throw new WireError(`WASM emitted unknown UI message type ${messageType}`);
+        }
       }
     }
 
     async function drainOnce() {
-      publishProfileEvents();
+      publishUiEvents();
       while (true) {
         const message = pollBytes(
           "tgd_web_peek_platform_request_size",
@@ -1199,9 +1723,9 @@
             }
           }
         }
-        publishProfileEvents();
+        publishUiEvents();
       }
-      publishProfileEvents();
+      publishUiEvents();
     }
 
     function drain() {
@@ -1263,7 +1787,7 @@
       if (result !== abi.errorCode.none) {
         throw new Error(`Guest checkpoint request failed with Web ABI error ${result}`);
       }
-      publishProfileEvents();
+      publishUiEvents();
       await drain();
       return publicProfileState(latestProfileEvent);
     }
@@ -1287,9 +1811,24 @@
       if (result !== abi.errorCode.none) {
         throw new Error(`Guest checkpoint retry failed with Web ABI error ${result}`);
       }
-      publishProfileEvents();
+      publishUiEvents();
       await drain();
       return publicProfileState(latestProfileEvent);
+    }
+
+    async function submitQuestUiSelection(intent) {
+      const message = encodeQuestUiSelectionIntent({
+        ...intent,
+        sessionGeneration,
+        sequence: ++outboundSequence
+      });
+      const result = callWithBytes("tgd_web_submit_quest_ui_selection_intent", message);
+      if (result !== abi.errorCode.none) {
+        throw new Error(`Quest UI selection failed with Web ABI error ${result}`);
+      }
+      publishUiEvents();
+      await drain();
+      return publicQuestUiEvent(latestQuestUiEvent);
     }
 
     function exportProfile() {
@@ -1307,8 +1846,11 @@
       exportProfile,
       retryPendingSave,
       saveGuestCheckpoint,
+      submitQuestUiSelection,
       shutdown,
       getProfileState: () => publicProfileState(latestProfileEvent),
+      getQuestUiState: () => publicQuestUiEvent(latestQuestUiEvent),
+      getQuestUiCloseState: () => publicQuestUiCloseAck(latestQuestUiCloseAck),
       inspectSchema: () => backend.inspectSchema(),
       identity: Object.freeze({
         channel: CHANNEL,
@@ -1333,14 +1875,22 @@
       decodeStorageRequest,
       decodeAtomicOperations,
       decodeProfileUiEvent,
+      decodeQuestUiEvent,
+      decodeQuestUiCloseAck,
+      advanceUiMessageSequence,
       encodeBootMessage,
+      encodeQuestUiSelectionIntent,
       encodeRetryCommand,
       encodeSaveCommand,
       encodeCompletionMessages,
       idFromHex,
       idToHex,
+      publicQuestUiCloseAck,
+      publicQuestUiEvent,
       randomId,
       rewardOperationId,
+      stableKeyFromHex,
+      stableKeyToHex,
       storageError
     })
   });

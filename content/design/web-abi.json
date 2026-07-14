@@ -3,7 +3,7 @@
   "schemaVersion": "1.0.0",
   "abi": {
     "major": 1,
-    "minor": 1,
+    "minor": 2,
     "endianness": "little",
     "maxMessageBytes": 262144,
     "headerBytes": 40
@@ -12,6 +12,13 @@
     "bootConfigV1Bytes": 52,
     "uiCommandV1Bytes": 20,
     "uiEventV1Bytes": 40,
+    "questUiSelectionIntentV1Bytes": 40,
+    "questUiEventV1Bytes": 1288,
+    "questUiCloseAckV1Bytes": 24,
+    "questUiChoiceOptionCapacity": 8,
+    "questUiSelectedOptionCapacity": 16,
+    "questUiActorCapacity": 16,
+    "questUiRetainedObjectiveCapacity": 64,
     "storageRequestV1HeaderBytes": 208,
     "storageCompletionV1HeaderBytes": 152,
     "maxStorageTransferBytes": 16777392,
@@ -24,6 +31,9 @@
     { "id": 3, "name": "platform_event_batch", "direction": "js_to_cpp", "payloadVersion": 1, "critical": true },
     { "id": 4, "name": "ui_command", "direction": "js_to_cpp", "payloadVersion": 1, "critical": true },
     { "id": 5, "name": "ui_event", "direction": "cpp_to_js", "payloadVersion": 1, "critical": true },
+    { "id": 6, "name": "quest_ui_selection_intent", "direction": "js_to_cpp", "payloadVersion": 1, "critical": true },
+    { "id": 7, "name": "quest_ui_event", "direction": "cpp_to_js", "payloadVersion": 1, "critical": true },
+    { "id": 8, "name": "quest_ui_close_ack", "direction": "cpp_to_js", "payloadVersion": 1, "critical": true },
     { "id": 100, "name": "storage_request", "direction": "cpp_to_js", "payloadVersion": 1, "critical": true },
     { "id": 101, "name": "storage_completion", "direction": "js_to_cpp", "payloadVersion": 1, "critical": true },
     { "id": 102, "name": "storage_cancel", "direction": "cpp_to_js", "payloadVersion": 1, "critical": true },
@@ -32,6 +42,9 @@
   "uiCommands": [
     { "id": 1, "name": "save_guest_checkpoint" },
     { "id": 2, "name": "retry_pending_save" }
+  ],
+  "questUiCloseReasons": [
+    { "id": 1, "name": "selection_committed" }
   ],
   "storageOperations": [
     { "id": 1, "name": "read" },

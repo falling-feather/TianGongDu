@@ -93,6 +93,96 @@ function storageWriteMessage(abi, { withOperation = false } = {}) {
   return output;
 }
 
+function questUiEventMessage(abi, { combat = false } = {}) {
+  const output = new Uint8Array(abi.headerBytes + abi.payload.questUiEventV1Bytes);
+  const view = new DataView(output.buffer);
+  const projectionSequence = 41n;
+  const projectionChecksum = 0x5555666677778888n;
+  const beat = 0x101n;
+  const objective = 0x102n;
+  view.setUint16(0, abi.major, true);
+  view.setUint16(2, abi.minor, true);
+  view.setUint16(4, abi.messageType.quest_ui_event, true);
+  view.setUint16(6, 1, true);
+  view.setUint32(8, abi.payload.questUiEventV1Bytes, true);
+  view.setUint32(12, 17, true);
+  view.setBigUint64(16, 5n, true);
+  writeId(view, 24, projectionChecksum, projectionSequence);
+  const offset = abi.headerBytes;
+  const identities = [
+    projectionSequence,
+    97n,
+    0x1111222233334444n,
+    projectionChecksum,
+    0x100n,
+    beat,
+    objective,
+    0x103n,
+    objective,
+    combat ? 0x201n : 0n,
+    combat ? 0x200n : 0n,
+    combat ? 0x202n : 0n,
+    combat ? objective : 0n
+  ];
+  identities.forEach((identity, index) => view.setBigUint64(offset + index * 8, identity, true));
+  view.setUint16(offset + 104, combat ? 4 : 1, true);
+  view.setUint16(offset + 106, combat ? 0 : 1, true);
+  view.setUint16(offset + 108, combat ? 1 : 0, true);
+  view.setUint16(offset + 110, 1, true);
+  view.setUint16(offset + 112, combat ? 10 : 3, true);
+  view.setUint16(offset + 114, combat ? 1 : 0, true);
+  view.setUint16(offset + 116, 0, true);
+  view.setUint16(offset + 118, combat ? 2 : 0, true);
+  view.setUint16(offset + 120, combat ? 3 : 0, true);
+  view.setUint16(offset + 122, combat ? 0 : 2, true);
+  view.setUint16(offset + 124, 1, true);
+  view.setUint16(offset + 126, 1, true);
+  view.setUint16(offset + 128, 1, true);
+  view.setUint16(offset + 130, 2, true);
+  let cursor = offset + 136;
+  if (!combat) {
+    view.setBigUint64(cursor, 0x301n, true);
+    view.setBigUint64(cursor + 8, 0x401n, true);
+    view.setBigUint64(cursor + 16, 0x302n, true);
+    view.setBigUint64(cursor + 24, 0x402n, true);
+  }
+  cursor += abi.payload.questUiChoiceOptionCapacity * 16;
+  view.setBigUint64(cursor, 0x501n, true);
+  view.setBigUint64(cursor + 8, 0x601n, true);
+  cursor += abi.payload.questUiSelectedOptionCapacity * 16;
+  view.setBigUint64(cursor, 0x701n, true);
+  cursor += abi.payload.questUiActorCapacity * 8;
+  view.setBigUint64(cursor, 0x702n, true);
+  cursor += abi.payload.questUiActorCapacity * 8;
+  view.setBigUint64(cursor, 0x801n, true);
+  view.setBigUint64(cursor + 8, 0x802n, true);
+  return output;
+}
+
+function questUiCloseAckMessage(abi, overrides = {}) {
+  const projectionSequence = overrides.projectionSequence ?? 41n;
+  const projectionChecksum = overrides.projectionChecksum ?? 0x5555666677778888n;
+  const output = new Uint8Array(abi.headerBytes + abi.payload.questUiCloseAckV1Bytes);
+  const view = new DataView(output.buffer);
+  view.setUint16(0, abi.major, true);
+  view.setUint16(2, abi.minor, true);
+  view.setUint16(4, abi.messageType.quest_ui_close_ack, true);
+  view.setUint16(6, 1, true);
+  view.setUint32(8, abi.payload.questUiCloseAckV1Bytes, true);
+  view.setUint32(12, overrides.sessionGeneration ?? 17, true);
+  view.setBigUint64(16, 6n, true);
+  writeId(view, 24, projectionChecksum, projectionSequence);
+  const offset = abi.headerBytes;
+  view.setBigUint64(offset, projectionSequence, true);
+  view.setBigUint64(offset + 8, projectionChecksum, true);
+  view.setUint16(
+    offset + 16,
+    overrides.reason ?? abi.questUiCloseReason.selection_committed,
+    true
+  );
+  return output;
+}
+
 test("IndexedDB v1 机器合同与浏览器生成物保持同步", async () => {
   const contract = validateIndexedDbContract(JSON.parse(await readFile(contractPath, "utf8")));
   assert.equal(await readFile(generatedPath, "utf8"), renderIndexedDbContract(contract));
@@ -107,6 +197,132 @@ test("IndexedDB v1 机器合同与浏览器生成物保持同步", async () => {
       [6, "migration_workspace"]
     ]
   );
+});
+
+test("Quest UI Web 信封无损解码双结果槽并精确编码选择意图", async () => {
+  const { abi, storage } = await loadBrowserContract();
+  const choice = storage.test.decodeQuestUiEvent(questUiEventMessage(abi));
+  assert.equal(choice.sequence, 41n);
+  assert.equal(choice.checksum, 0x5555666677778888n);
+  assert.equal(choice.source, 1);
+  assert.equal(choice.choiceOptions.length, 2);
+  assert.deepEqual(
+    Array.from(choice.choiceOptions, ({ interaction, selection }) => [interaction, selection]),
+    [[0x301n, 0x401n], [0x302n, 0x402n]]
+  );
+  const publicChoice = storage.test.publicQuestUiEvent(choice);
+  assert.equal(publicChoice.messageSequence, "5");
+  assert.equal(publicChoice.sequence, "41");
+  assert.equal(publicChoice.checksum, "5555666677778888");
+  assert.equal(publicChoice.sourceName, "choice_available");
+  assert.equal(publicChoice.choiceOptions[1].interaction, "0000000000000302");
+
+  const intent = storage.test.encodeQuestUiSelectionIntent({
+    projectionSequence: publicChoice.sequence,
+    projectionChecksum: publicChoice.checksum,
+    objective: publicChoice.objective,
+    interaction: publicChoice.choiceOptions[1].interaction,
+    selection: publicChoice.choiceOptions[1].selection,
+    sessionGeneration: 17,
+    sequence: 6n
+  });
+  const intentView = new DataView(intent.buffer);
+  assert.equal(intent.byteLength, abi.headerBytes + abi.payload.questUiSelectionIntentV1Bytes);
+  assert.equal(intentView.getUint16(4, true), abi.messageType.quest_ui_selection_intent);
+  assert.equal(intentView.getBigUint64(24, true), choice.checksum);
+  assert.equal(intentView.getBigUint64(32, true), choice.sequence);
+  assert.equal(intentView.getBigUint64(40, true), choice.sequence);
+  assert.equal(intentView.getBigUint64(48, true), choice.checksum);
+  assert.equal(intentView.getBigUint64(64, true), choice.choiceOptions[1].interaction);
+  assert.equal(intentView.getBigUint64(72, true), choice.choiceOptions[1].selection);
+
+  const combat = storage.test.decodeQuestUiEvent(questUiEventMessage(abi, { combat: true }));
+  assert.equal(combat.primaryResult.status, 1);
+  assert.equal(combat.primaryResult.rejectionReason, 0);
+  assert.equal(combat.secondaryResult.status, 2);
+  assert.equal(combat.secondaryResult.rejectionReason, 3);
+  assert.equal(storage.test.publicQuestUiEvent(combat).polarityName, "negative");
+});
+
+test("Quest UI Web 解码对身份、分类、结果形态和非零尾部失败关闭", async () => {
+  const { abi, storage } = await loadBrowserContract();
+  const canonical = questUiEventMessage(abi);
+  const offset = abi.headerBytes;
+
+  const mismatchedIdentity = canonical.slice();
+  new DataView(mismatchedIdentity.buffer).setBigUint64(24, 1n, true);
+  assert.throws(() => storage.test.decodeQuestUiEvent(mismatchedIdentity));
+
+  const incompatibleClassification = canonical.slice();
+  new DataView(incompatibleClassification.buffer).setUint16(offset + 112, 9, true);
+  assert.throws(() => storage.test.decodeQuestUiEvent(incompatibleClassification));
+
+  const nonzeroReserved = canonical.slice();
+  new DataView(nonzeroReserved.buffer).setUint16(offset + 132, 1, true);
+  assert.throws(() => storage.test.decodeQuestUiEvent(nonzeroReserved));
+
+  const nonzeroChoiceTail = canonical.slice();
+  new DataView(nonzeroChoiceTail.buffer).setBigUint64(offset + 136 + 32, 0x303n, true);
+  assert.throws(() => storage.test.decodeQuestUiEvent(nonzeroChoiceTail));
+
+  const invalidCombatReason = questUiEventMessage(abi, { combat: true });
+  new DataView(invalidCombatReason.buffer).setUint16(offset + 116, 3, true);
+  assert.throws(() => storage.test.decodeQuestUiEvent(invalidCombatReason));
+});
+
+test("Quest UI close acknowledgement 只接受精确投影身份和零预留字段", async () => {
+  const { abi, storage } = await loadBrowserContract();
+  const canonical = questUiCloseAckMessage(abi);
+  const acknowledgement = storage.test.decodeQuestUiCloseAck(canonical);
+  assert.equal(acknowledgement.sessionGeneration, 17);
+  assert.equal(acknowledgement.projectionSequence, 41n);
+  assert.equal(acknowledgement.projectionChecksum, 0x5555666677778888n);
+  assert.equal(acknowledgement.reason, abi.questUiCloseReason.selection_committed);
+  assert.deepEqual(
+    { ...storage.test.publicQuestUiCloseAck(acknowledgement) },
+    {
+      sessionGeneration: 17,
+      messageSequence: "6",
+      projectionSequence: "41",
+      projectionChecksum: "5555666677778888",
+      reason: 1,
+      reasonName: "selection_committed"
+    }
+  );
+
+  const wrongChecksum = canonical.slice();
+  new DataView(wrongChecksum.buffer).setBigUint64(24, 1n, true);
+  assert.throws(() => storage.test.decodeQuestUiCloseAck(wrongChecksum));
+
+  const wrongSequence = canonical.slice();
+  new DataView(wrongSequence.buffer).setBigUint64(32, 1n, true);
+  assert.throws(() => storage.test.decodeQuestUiCloseAck(wrongSequence));
+
+  assert.throws(() => storage.test.decodeQuestUiCloseAck(
+    questUiCloseAckMessage(abi, { sessionGeneration: 0 })
+  ));
+  assert.throws(() => storage.test.decodeQuestUiCloseAck(
+    questUiCloseAckMessage(abi, { reason: 2 })
+  ));
+
+  const nonzeroReserved = canonical.slice();
+  new DataView(nonzeroReserved.buffer).setUint16(abi.headerBytes + 18, 1, true);
+  assert.throws(() => storage.test.decodeQuestUiCloseAck(nonzeroReserved));
+
+  const projection = storage.test.decodeQuestUiEvent(questUiEventMessage(abi));
+  const afterProjection = storage.test.advanceUiMessageSequence(0n, projection, 17);
+  assert.equal(afterProjection, 5n);
+  assert.equal(
+    storage.test.advanceUiMessageSequence(afterProjection, acknowledgement, 17),
+    6n
+  );
+  assert.throws(() => storage.test.advanceUiMessageSequence(6n, acknowledgement, 17));
+  assert.throws(() => storage.test.advanceUiMessageSequence(6n, projection, 17));
+  assert.equal(storage.test.advanceUiMessageSequence(6n, {
+    ...acknowledgement,
+    sessionGeneration: 18,
+    messageSequence: 7n
+  }, 17), 6n);
 });
 
 test("浏览器存储桥按显式小端编码 Boot 与保存命令", async () => {

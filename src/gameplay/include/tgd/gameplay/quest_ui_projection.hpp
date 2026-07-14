@@ -58,6 +58,11 @@ class DeterministicQuestUiProjectionProducer final {
         const contracts::QuestUiSelectionIntent& intent,
         const IQuestRuntime& quest
     ) const noexcept;
+    [[nodiscard]] bool has_authored_cue(
+        contracts::StableContentKey beat,
+        contracts::StableContentKey objective,
+        contracts::QuestUiProjectionSource source
+    ) const noexcept;
 
     [[nodiscard]] bool initialized() const noexcept;
     [[nodiscard]] bool has_projection() const noexcept;

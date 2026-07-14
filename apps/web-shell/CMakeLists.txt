@@ -10,6 +10,7 @@ add_executable(
   Source/AppDelegate.hpp
   Source/F1GrayboxLayer.cpp
   Source/F1GrayboxLayer.hpp
+  Source/F1QuestUiProjection.hpp
   Source/F1RewardClaim.hpp
   Source/main.cpp
 )
@@ -36,6 +37,7 @@ target_link_options(
     "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web-abi.generated.js"
     "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/indexeddb-v1.generated.js"
     "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/indexeddb-storage.js"
+    "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/quest-ui-renderer.js"
 )
 set_property(
   TARGET ${TGD_WEB_APP}
@@ -44,6 +46,7 @@ set_property(
     "${CMAKE_CURRENT_SOURCE_DIR}/web-abi.generated.js"
     "${CMAKE_CURRENT_SOURCE_DIR}/indexeddb-v1.generated.js"
     "${CMAKE_CURRENT_SOURCE_DIR}/indexeddb-storage.js"
+    "${CMAKE_CURRENT_SOURCE_DIR}/quest-ui-renderer.js"
     "${CMAKE_CURRENT_SOURCE_DIR}/service-worker.js"
 )
 
@@ -59,7 +62,7 @@ set(
 )
 set(
   AX_WASM_EXPORTS
-  "${AX_WASM_EXPORTS},_malloc,_free,_tgd_web_abi_version,_tgd_web_boot,_tgd_web_submit_platform_event,_tgd_web_submit_ui_command,_tgd_web_peek_platform_request_size,_tgd_web_poll_platform_request,_tgd_web_complete_async_request,_tgd_web_peek_ui_event_size,_tgd_web_poll_ui_event,_tgd_web_request_shutdown,_tgd_web_visibility_changed,_tgd_web_focus_changed,_tgd_web_context_lost,_tgd_web_context_restored,_tgd_web_presentation_state,_tgd_web_f1_qa_player_health,_tgd_web_f1_qa_player_active,_tgd_web_f1_qa_active_hostiles,_tgd_web_f1_qa_retry_count,_tgd_web_f1_qa_quest_beat_index,_tgd_web_f1_qa_quest_completed_objectives,_tgd_web_f1_qa_quest_required_objectives,_tgd_web_f1_qa_quest_selected_choices,_tgd_web_f1_qa_reward_claim_committed,_tgd_web_f1_qa_profile_operation_count,_tgd_web_f1_qa_replay_reward_claim,_tgd_web_f1_qa_submit_invalid_reward_claim,_tgd_web_f1_qa_player_pose_x,_tgd_web_f1_qa_player_pose_y,_tgd_web_f1_qa_incoming_attack_ticks,_tgd_web_f1_qa_player_busy"
+  "${AX_WASM_EXPORTS},_malloc,_free,_tgd_web_abi_version,_tgd_web_boot,_tgd_web_submit_platform_event,_tgd_web_submit_ui_command,_tgd_web_submit_quest_ui_selection_intent,_tgd_web_peek_platform_request_size,_tgd_web_poll_platform_request,_tgd_web_complete_async_request,_tgd_web_peek_ui_event_size,_tgd_web_poll_ui_event,_tgd_web_request_shutdown,_tgd_web_visibility_changed,_tgd_web_focus_changed,_tgd_web_context_lost,_tgd_web_context_restored,_tgd_web_presentation_state,_tgd_web_f1_qa_player_health,_tgd_web_f1_qa_player_active,_tgd_web_f1_qa_active_hostiles,_tgd_web_f1_qa_retry_count,_tgd_web_f1_qa_quest_beat_index,_tgd_web_f1_qa_quest_completed_objectives,_tgd_web_f1_qa_quest_required_objectives,_tgd_web_f1_qa_quest_selected_choices,_tgd_web_f1_qa_reward_claim_committed,_tgd_web_f1_qa_profile_operation_count,_tgd_web_f1_qa_replay_reward_claim,_tgd_web_f1_qa_submit_invalid_reward_claim,_tgd_web_f1_qa_player_pose_x,_tgd_web_f1_qa_player_pose_y,_tgd_web_f1_qa_incoming_attack_ticks,_tgd_web_f1_qa_player_busy"
   CACHE STRING
   "TianGongDu and Axmol WASM exports"
   FORCE

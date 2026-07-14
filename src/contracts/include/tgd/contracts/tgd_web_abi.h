@@ -5,12 +5,19 @@
 #include <stdint.h>
 
 #define TGD_WEB_ABI_MAJOR UINT16_C(1)
-#define TGD_WEB_ABI_MINOR UINT16_C(1)
+#define TGD_WEB_ABI_MINOR UINT16_C(2)
 #define TGD_WEB_ABI_MESSAGE_HEADER_BYTES UINT32_C(40)
 #define TGD_WEB_ABI_MAX_MESSAGE_BYTES UINT32_C(262144)
 #define TGD_WEB_BOOT_CONFIG_V1_BYTES UINT32_C(52)
 #define TGD_WEB_UI_COMMAND_V1_BYTES UINT32_C(20)
 #define TGD_WEB_UI_EVENT_V1_BYTES UINT32_C(40)
+#define TGD_WEB_QUEST_UI_SELECTION_INTENT_V1_BYTES UINT32_C(40)
+#define TGD_WEB_QUEST_UI_EVENT_V1_BYTES UINT32_C(1288)
+#define TGD_WEB_QUEST_UI_CLOSE_ACK_V1_BYTES UINT32_C(24)
+#define TGD_WEB_QUEST_UI_CHOICE_OPTION_CAPACITY UINT16_C(8)
+#define TGD_WEB_QUEST_UI_SELECTED_OPTION_CAPACITY UINT16_C(16)
+#define TGD_WEB_QUEST_UI_ACTOR_CAPACITY UINT16_C(16)
+#define TGD_WEB_QUEST_UI_RETAINED_OBJECTIVE_CAPACITY UINT16_C(64)
 #define TGD_WEB_STORAGE_REQUEST_V1_HEADER_BYTES UINT32_C(208)
 #define TGD_WEB_STORAGE_COMPLETION_V1_HEADER_BYTES UINT32_C(152)
 #define TGD_WEB_MAX_STORAGE_TRANSFER_BYTES UINT32_C(16777392)
@@ -23,6 +30,9 @@ typedef enum tgd_web_message_type {
     TGD_WEB_MESSAGE_PLATFORM_EVENT_BATCH = 3,
     TGD_WEB_MESSAGE_UI_COMMAND = 4,
     TGD_WEB_MESSAGE_UI_EVENT = 5,
+    TGD_WEB_MESSAGE_QUEST_UI_SELECTION_INTENT = 6,
+    TGD_WEB_MESSAGE_QUEST_UI_EVENT = 7,
+    TGD_WEB_MESSAGE_QUEST_UI_CLOSE_ACK = 8,
     TGD_WEB_MESSAGE_STORAGE_REQUEST = 100,
     TGD_WEB_MESSAGE_STORAGE_COMPLETION = 101,
     TGD_WEB_MESSAGE_STORAGE_CANCEL = 102,
@@ -33,6 +43,10 @@ typedef enum tgd_web_ui_command {
     TGD_WEB_UI_COMMAND_SAVE_GUEST_CHECKPOINT = 1,
     TGD_WEB_UI_COMMAND_RETRY_PENDING_SAVE = 2
 } tgd_web_ui_command;
+
+typedef enum tgd_web_quest_ui_close_reason {
+    TGD_WEB_QUEST_UI_CLOSE_SELECTION_COMMITTED = 1
+} tgd_web_quest_ui_close_reason;
 
 typedef enum tgd_web_storage_operation {
     TGD_WEB_STORAGE_READ = 1,
@@ -86,6 +100,7 @@ uint32_t tgd_web_abi_version(void);
 int32_t tgd_web_boot(const uint8_t* bytes, uint32_t length);
 int32_t tgd_web_submit_platform_event(const uint8_t* bytes, uint32_t length);
 int32_t tgd_web_submit_ui_command(const uint8_t* bytes, uint32_t length);
+int32_t tgd_web_submit_quest_ui_selection_intent(const uint8_t* bytes, uint32_t length);
 uint32_t tgd_web_peek_platform_request_size(void);
 int32_t tgd_web_poll_platform_request(uint8_t* output, uint32_t capacity);
 int32_t tgd_web_complete_async_request(const uint8_t* bytes, uint32_t length);

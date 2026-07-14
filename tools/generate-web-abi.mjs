@@ -43,8 +43,8 @@ function assertIdList(entries, label) {
 
 export function validateWebAbiContract(contract) {
   if (contract.schemaVersion !== "1.0.0") throw new Error("Unsupported Web ABI schema.");
-  if (contract.abi.major !== 1 || contract.abi.minor !== 1) {
-    throw new Error("Web ABI generator only supports 1.1.");
+  if (contract.abi.major !== 1 || contract.abi.minor !== 2) {
+    throw new Error("Web ABI generator only supports 1.2.");
   }
   if (contract.abi.endianness !== "little" || contract.abi.headerBytes !== 40) {
     throw new Error("Web ABI v1 requires a 40-byte explicit little-endian header.");
@@ -56,6 +56,13 @@ export function validateWebAbiContract(contract) {
     bootConfigV1Bytes: 52,
     uiCommandV1Bytes: 20,
     uiEventV1Bytes: 40,
+    questUiSelectionIntentV1Bytes: 40,
+    questUiEventV1Bytes: 1288,
+    questUiCloseAckV1Bytes: 24,
+    questUiChoiceOptionCapacity: 8,
+    questUiSelectedOptionCapacity: 16,
+    questUiActorCapacity: 16,
+    questUiRetainedObjectiveCapacity: 64,
     storageRequestV1HeaderBytes: 208,
     storageCompletionV1HeaderBytes: 152,
     maxStorageTransferBytes: 16 * 1024 * 1024 + 176,
@@ -69,6 +76,7 @@ export function validateWebAbiContract(contract) {
   }
   assertIdList(contract.messageTypes, "messageTypes");
   assertIdList(contract.uiCommands, "uiCommands");
+  assertIdList(contract.questUiCloseReasons, "questUiCloseReasons");
   assertIdList(contract.storageOperations, "storageOperations");
   assertIdList(contract.errorCodes, "errorCodes");
   for (const message of contract.messageTypes) {
@@ -92,6 +100,10 @@ function renderEnum(entries, prefix) {
 export function renderCHeader(contract) {
   const messageEnum = renderEnum(contract.messageTypes, "TGD_WEB_MESSAGE");
   const uiCommandEnum = renderEnum(contract.uiCommands, "TGD_WEB_UI_COMMAND");
+  const questUiCloseReasonEnum = renderEnum(
+    contract.questUiCloseReasons,
+    "TGD_WEB_QUEST_UI_CLOSE"
+  );
   const storageEnum = renderEnum(
     contract.storageOperations,
     "TGD_WEB_STORAGE"
@@ -110,6 +122,13 @@ export function renderCHeader(contract) {
 #define TGD_WEB_BOOT_CONFIG_V1_BYTES UINT32_C(${contract.payloads.bootConfigV1Bytes})
 #define TGD_WEB_UI_COMMAND_V1_BYTES UINT32_C(${contract.payloads.uiCommandV1Bytes})
 #define TGD_WEB_UI_EVENT_V1_BYTES UINT32_C(${contract.payloads.uiEventV1Bytes})
+#define TGD_WEB_QUEST_UI_SELECTION_INTENT_V1_BYTES UINT32_C(${contract.payloads.questUiSelectionIntentV1Bytes})
+#define TGD_WEB_QUEST_UI_EVENT_V1_BYTES UINT32_C(${contract.payloads.questUiEventV1Bytes})
+#define TGD_WEB_QUEST_UI_CLOSE_ACK_V1_BYTES UINT32_C(${contract.payloads.questUiCloseAckV1Bytes})
+#define TGD_WEB_QUEST_UI_CHOICE_OPTION_CAPACITY UINT16_C(${contract.payloads.questUiChoiceOptionCapacity})
+#define TGD_WEB_QUEST_UI_SELECTED_OPTION_CAPACITY UINT16_C(${contract.payloads.questUiSelectedOptionCapacity})
+#define TGD_WEB_QUEST_UI_ACTOR_CAPACITY UINT16_C(${contract.payloads.questUiActorCapacity})
+#define TGD_WEB_QUEST_UI_RETAINED_OBJECTIVE_CAPACITY UINT16_C(${contract.payloads.questUiRetainedObjectiveCapacity})
 #define TGD_WEB_STORAGE_REQUEST_V1_HEADER_BYTES UINT32_C(${contract.payloads.storageRequestV1HeaderBytes})
 #define TGD_WEB_STORAGE_COMPLETION_V1_HEADER_BYTES UINT32_C(${contract.payloads.storageCompletionV1HeaderBytes})
 #define TGD_WEB_MAX_STORAGE_TRANSFER_BYTES UINT32_C(${contract.payloads.maxStorageTransferBytes})
@@ -123,6 +142,10 @@ ${messageEnum}
 typedef enum tgd_web_ui_command {
 ${uiCommandEnum}
 } tgd_web_ui_command;
+
+typedef enum tgd_web_quest_ui_close_reason {
+${questUiCloseReasonEnum}
+} tgd_web_quest_ui_close_reason;
 
 typedef enum tgd_web_storage_operation {
 ${storageEnum}
@@ -152,6 +175,7 @@ uint32_t tgd_web_abi_version(void);
 int32_t tgd_web_boot(const uint8_t* bytes, uint32_t length);
 int32_t tgd_web_submit_platform_event(const uint8_t* bytes, uint32_t length);
 int32_t tgd_web_submit_ui_command(const uint8_t* bytes, uint32_t length);
+int32_t tgd_web_submit_quest_ui_selection_intent(const uint8_t* bytes, uint32_t length);
 uint32_t tgd_web_peek_platform_request_size(void);
 int32_t tgd_web_poll_platform_request(uint8_t* output, uint32_t capacity);
 int32_t tgd_web_complete_async_request(const uint8_t* bytes, uint32_t length);
@@ -184,6 +208,13 @@ export function renderJavaScript(contract) {
       bootConfigV1Bytes: ${contract.payloads.bootConfigV1Bytes},
       uiCommandV1Bytes: ${contract.payloads.uiCommandV1Bytes},
       uiEventV1Bytes: ${contract.payloads.uiEventV1Bytes},
+      questUiSelectionIntentV1Bytes: ${contract.payloads.questUiSelectionIntentV1Bytes},
+      questUiEventV1Bytes: ${contract.payloads.questUiEventV1Bytes},
+      questUiCloseAckV1Bytes: ${contract.payloads.questUiCloseAckV1Bytes},
+      questUiChoiceOptionCapacity: ${contract.payloads.questUiChoiceOptionCapacity},
+      questUiSelectedOptionCapacity: ${contract.payloads.questUiSelectedOptionCapacity},
+      questUiActorCapacity: ${contract.payloads.questUiActorCapacity},
+      questUiRetainedObjectiveCapacity: ${contract.payloads.questUiRetainedObjectiveCapacity},
       storageRequestV1HeaderBytes: ${contract.payloads.storageRequestV1HeaderBytes},
       storageCompletionV1HeaderBytes: ${contract.payloads.storageCompletionV1HeaderBytes},
       maxStorageTransferBytes: ${contract.payloads.maxStorageTransferBytes},
@@ -195,6 +226,9 @@ ${objectEntries(contract.messageTypes)}
     }),
     uiCommand: Object.freeze({
 ${objectEntries(contract.uiCommands)}
+    }),
+    questUiCloseReason: Object.freeze({
+${objectEntries(contract.questUiCloseReasons)}
     }),
     storageOperation: Object.freeze({
 ${objectEntries(contract.storageOperations)}
@@ -215,6 +249,7 @@ function typeUnion(entries) {
 export function renderTypeScript(contract) {
   const messageKeys = contract.messageTypes.map((entry) => `    readonly ${entry.name}: ${entry.id};`).join("\n");
   const uiCommandKeys = contract.uiCommands.map((entry) => `    readonly ${entry.name}: ${entry.id};`).join("\n");
+  const questUiCloseReasonKeys = contract.questUiCloseReasons.map((entry) => `    readonly ${entry.name}: ${entry.id};`).join("\n");
   const storageKeys = contract.storageOperations.map((entry) => `    readonly ${entry.name}: ${entry.id};`).join("\n");
   const errorKeys = contract.errorCodes.map((entry) => `    readonly ${entry.name}: ${entry.id};`).join("\n");
   return `// Generated from content/design/web-abi.json. Do not edit by hand.
@@ -223,6 +258,9 @@ ${typeUnion(contract.messageTypes)};
 
 export type TgdWebUiCommandName =
 ${typeUnion(contract.uiCommands)};
+
+export type TgdWebQuestUiCloseReasonName =
+${typeUnion(contract.questUiCloseReasons)};
 
 export type TgdWebStorageOperationName =
 ${typeUnion(contract.storageOperations)};
@@ -239,6 +277,13 @@ export interface TgdWebAbiContract {
     readonly bootConfigV1Bytes: ${contract.payloads.bootConfigV1Bytes};
     readonly uiCommandV1Bytes: ${contract.payloads.uiCommandV1Bytes};
     readonly uiEventV1Bytes: ${contract.payloads.uiEventV1Bytes};
+    readonly questUiSelectionIntentV1Bytes: ${contract.payloads.questUiSelectionIntentV1Bytes};
+    readonly questUiEventV1Bytes: ${contract.payloads.questUiEventV1Bytes};
+    readonly questUiCloseAckV1Bytes: ${contract.payloads.questUiCloseAckV1Bytes};
+    readonly questUiChoiceOptionCapacity: ${contract.payloads.questUiChoiceOptionCapacity};
+    readonly questUiSelectedOptionCapacity: ${contract.payloads.questUiSelectedOptionCapacity};
+    readonly questUiActorCapacity: ${contract.payloads.questUiActorCapacity};
+    readonly questUiRetainedObjectiveCapacity: ${contract.payloads.questUiRetainedObjectiveCapacity};
     readonly storageRequestV1HeaderBytes: ${contract.payloads.storageRequestV1HeaderBytes};
     readonly storageCompletionV1HeaderBytes: ${contract.payloads.storageCompletionV1HeaderBytes};
     readonly maxStorageTransferBytes: ${contract.payloads.maxStorageTransferBytes};
@@ -250,6 +295,9 @@ ${messageKeys}
   };
   readonly uiCommand: {
 ${uiCommandKeys}
+  };
+  readonly questUiCloseReason: {
+${questUiCloseReasonKeys}
   };
   readonly storageOperation: {
 ${storageKeys}

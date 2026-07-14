@@ -5,6 +5,9 @@ export type TgdWebMessageName =
   | "platform_event_batch"
   | "ui_command"
   | "ui_event"
+  | "quest_ui_selection_intent"
+  | "quest_ui_event"
+  | "quest_ui_close_ack"
   | "storage_request"
   | "storage_completion"
   | "storage_cancel"
@@ -13,6 +16,9 @@ export type TgdWebMessageName =
 export type TgdWebUiCommandName =
   | "save_guest_checkpoint"
   | "retry_pending_save";
+
+export type TgdWebQuestUiCloseReasonName =
+  | "selection_committed";
 
 export type TgdWebStorageOperationName =
   | "read"
@@ -46,13 +52,20 @@ export type TgdWebErrorName =
 
 export interface TgdWebAbiContract {
   readonly major: 1;
-  readonly minor: 1;
+  readonly minor: 2;
   readonly headerBytes: 40;
   readonly maxMessageBytes: 262144;
   readonly payload: {
     readonly bootConfigV1Bytes: 52;
     readonly uiCommandV1Bytes: 20;
     readonly uiEventV1Bytes: 40;
+    readonly questUiSelectionIntentV1Bytes: 40;
+    readonly questUiEventV1Bytes: 1288;
+    readonly questUiCloseAckV1Bytes: 24;
+    readonly questUiChoiceOptionCapacity: 8;
+    readonly questUiSelectedOptionCapacity: 16;
+    readonly questUiActorCapacity: 16;
+    readonly questUiRetainedObjectiveCapacity: 64;
     readonly storageRequestV1HeaderBytes: 208;
     readonly storageCompletionV1HeaderBytes: 152;
     readonly maxStorageTransferBytes: 16777392;
@@ -65,6 +78,9 @@ export interface TgdWebAbiContract {
     readonly platform_event_batch: 3;
     readonly ui_command: 4;
     readonly ui_event: 5;
+    readonly quest_ui_selection_intent: 6;
+    readonly quest_ui_event: 7;
+    readonly quest_ui_close_ack: 8;
     readonly storage_request: 100;
     readonly storage_completion: 101;
     readonly storage_cancel: 102;
@@ -73,6 +89,9 @@ export interface TgdWebAbiContract {
   readonly uiCommand: {
     readonly save_guest_checkpoint: 1;
     readonly retry_pending_save: 2;
+  };
+  readonly questUiCloseReason: {
+    readonly selection_committed: 1;
   };
   readonly storageOperation: {
     readonly read: 1;

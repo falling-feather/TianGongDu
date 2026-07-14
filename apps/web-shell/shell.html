@@ -12,6 +12,11 @@
         font-family: ui-sans-serif, system-ui, "Microsoft YaHei", sans-serif;
         background: #081118;
         color: #e7e0cf;
+        --quest-panel: rgba(7, 19, 24, 0.94);
+        --quest-edge: rgba(208, 157, 85, 0.64);
+        --quest-accent: #d09d55;
+        --quest-text: #f0e6d0;
+        --quest-muted: #aab9b7;
       }
 
       * { box-sizing: border-box; }
@@ -53,6 +58,7 @@
       }
 
       .playfield {
+        position: relative;
         overflow: hidden;
         border: 1px solid rgba(208, 157, 85, 0.45);
         border-radius: 12px;
@@ -68,6 +74,114 @@
       }
 
       canvas:focus-visible { box-shadow: inset 0 0 0 3px #d09d55; }
+
+      .quest-ui-layer {
+        position: absolute;
+        inset: 0;
+        z-index: 20;
+        display: flex;
+        align-items: flex-start;
+        justify-content: flex-end;
+        padding: clamp(8px, 1.8vw, 20px);
+        pointer-events: none;
+      }
+
+      .quest-ui-layer[hidden] { display: none; }
+
+      .quest-ui-layer[data-surface="choice"] {
+        align-items: center;
+        justify-content: center;
+        background: rgba(3, 9, 12, 0.48);
+        pointer-events: auto;
+      }
+
+      .quest-ui-panel {
+        width: min(100%, 440px);
+        max-height: calc(100% - 4px);
+        min-width: 0;
+        overflow: auto;
+        padding: clamp(12px, 2.2vw, 22px);
+        border: 1px solid var(--quest-edge);
+        border-radius: 12px;
+        background: var(--quest-panel);
+        box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
+        color: var(--quest-text);
+        pointer-events: none;
+        scrollbar-width: thin;
+      }
+
+      .quest-ui-layer[data-surface="choice"] .quest-ui-panel { pointer-events: auto; }
+
+      .quest-ui-eyebrow,
+      .quest-ui-prompt,
+      .quest-ui-detail {
+        margin: 0;
+        overflow-wrap: anywhere;
+      }
+
+      .quest-ui-eyebrow {
+        color: var(--quest-accent);
+        font: 11px/1.35 ui-monospace, "Cascadia Mono", monospace;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .quest-ui-title {
+        margin: 6px 0 4px;
+        font-size: clamp(18px, 2.2vw, 26px);
+        line-height: 1.2;
+      }
+
+      .quest-ui-prompt,
+      .quest-ui-detail {
+        color: var(--quest-muted);
+        font-size: clamp(12px, 1.45vw, 15px);
+        line-height: 1.5;
+      }
+
+      .quest-ui-detail { margin-top: 10px; }
+
+      .quest-ui-choices {
+        display: grid;
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .quest-ui-choices:empty { display: none; }
+
+      .quest-ui-choices button {
+        display: grid;
+        gap: 3px;
+        width: 100%;
+        min-width: 0;
+        padding: 10px 12px;
+        border: 1px solid rgba(170, 185, 183, 0.38);
+        border-radius: 8px;
+        background: rgba(23, 37, 43, 0.94);
+        color: var(--quest-text);
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .quest-ui-choices button:hover { border-color: var(--quest-edge); }
+      .quest-ui-choices button[aria-disabled="true"] { cursor: wait; opacity: 0.56; }
+      .quest-ui-choices button:focus-visible {
+        outline: 2px solid var(--quest-accent);
+        outline-offset: 2px;
+      }
+
+      .quest-ui-choices strong,
+      .quest-ui-choices span { overflow-wrap: anywhere; }
+      .quest-ui-choices strong { font-size: 15px; }
+      .quest-ui-choices span { color: var(--quest-muted); font-size: 12px; }
+
+      @media (prefers-reduced-motion: no-preference) {
+        .quest-ui-panel { animation: quest-panel-in 140ms ease-out; }
+        @keyframes quest-panel-in {
+          from { opacity: 0; transform: translateY(5px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      }
 
       footer {
         display: flex;
@@ -145,6 +259,13 @@
       @media (max-width: 640px) {
         .profile-controls { grid-template-columns: 1fr auto; }
         #profile-state { grid-column: 1 / -1; }
+        .quest-ui-layer { padding: 6px; }
+        .quest-ui-panel { border-radius: 9px; padding: 10px; }
+        .quest-ui-title { font-size: 17px; }
+        .quest-ui-prompt,
+        .quest-ui-detail { font-size: 12px; line-height: 1.35; }
+        .quest-ui-choices { gap: 6px; margin-top: 8px; }
+        .quest-ui-choices button { padding: 7px 9px; }
       }
     </style>
   </head>
@@ -156,6 +277,7 @@
       </header>
       <div class="playfield">
         <canvas id="canvas" width="1280" height="720" tabindex="0" aria-label="天工渡 F1 游戏画面"></canvas>
+        <div id="quest-ui" class="quest-ui-layer" data-testid="quest-ui" hidden></div>
       </div>
       <footer>
         <p id="last-event" aria-live="polite">等待生命周期事件</p>
@@ -184,6 +306,7 @@
       const statusElement = document.getElementById("status");
       const lastEventElement = document.getElementById("last-event");
       const canvasElement = document.getElementById("canvas");
+      const questUiElement = document.getElementById("quest-ui");
       const saveProfileButton = document.getElementById("save-profile");
       const exportProfileButton = document.getElementById("export-profile");
       const profileStateElement = document.getElementById("profile-state");
@@ -193,6 +316,7 @@
       const lifecycleTrace = [];
       let contextLossExtension = null;
       let profileBridge = null;
+      let questUiRenderer = null;
       let profilePumpTimer = null;
       let profilePumpStopped = false;
       const presentationStateNames = Object.freeze({
@@ -266,6 +390,46 @@
         });
       }
 
+      function renderQuestUiEvent(event) {
+        try {
+          if (!questUiRenderer?.render(event)) {
+            recordLifecycle("quest_ui.rejected", {
+              sequence: event?.sequence ?? null,
+              checksum: event?.checksum ?? null
+            });
+            return;
+          }
+          recordLifecycle("quest_ui.rendered", {
+            sequence: event.sequence,
+            checksum: event.checksum,
+            cue: event.cue,
+            source: event.sourceName,
+            surface: event.surfaceName
+          });
+        } catch (error) {
+          recordLifecycle("quest_ui.render_failed", { message: String(error) });
+        }
+      }
+
+      function acknowledgeQuestUiClose(acknowledgement) {
+        try {
+          if (!questUiRenderer?.acknowledgeClose(acknowledgement)) {
+            recordLifecycle("quest_ui.close_rejected", {
+              sequence: acknowledgement?.projectionSequence ?? null,
+              checksum: acknowledgement?.projectionChecksum ?? null
+            });
+            return;
+          }
+          recordLifecycle("quest_ui.closed", {
+            sequence: acknowledgement.projectionSequence,
+            checksum: acknowledgement.projectionChecksum,
+            reason: acknowledgement.reasonName
+          });
+        } catch (error) {
+          recordLifecycle("quest_ui.close_failed", { message: String(error) });
+        }
+      }
+
       async function initializeProfile() {
         if (!globalThis.TgdIndexedDbStorage) {
           throw new Error("IndexedDB storage bridge was not linked into the Web host");
@@ -275,11 +439,24 @@
             ? pageParameters.get("storageFault")
             : null,
           onProfileState: renderProfileState,
+          onQuestUiEvent: renderQuestUiEvent,
+          onQuestUiClose: acknowledgeQuestUiClose,
           onFatal: (error) => {
             profileStateElement.dataset.saveState = "fatal";
             profileStateElement.textContent = "本地档桥发生致命错误";
             recordLifecycle("profile.fatal", { message: String(error) });
           }
+        });
+        if (!globalThis.TgdQuestUiRenderer) {
+          throw new Error("Quest UI renderer was not linked into the Web host");
+        }
+        questUiRenderer = globalThis.TgdQuestUiRenderer.createRenderer(questUiElement, {
+          submitIntent: (intent) => profileBridge.submitQuestUiSelection(intent),
+          restoreFocus: () => canvasElement.focus({ preventScroll: true }),
+          onDiagnostic: (diagnostic) => recordLifecycle(
+            `quest_ui.${diagnostic.event}`,
+            { error: diagnostic.error }
+          )
         });
         window.__tgdProfile = Object.freeze({
           getState: profileBridge.getProfileState,
@@ -288,6 +465,12 @@
           save: profileBridge.saveGuestCheckpoint,
           inspectSchema: profileBridge.inspectSchema,
           identity: profileBridge.identity
+        });
+        window.__tgdQuestUi = Object.freeze({
+          dispatchAction: questUiRenderer.dispatchAction,
+          getModel: questUiRenderer.getModel,
+          getState: profileBridge.getQuestUiState,
+          getCloseState: profileBridge.getQuestUiCloseState
         });
         await profileBridge.boot();
         scheduleProfilePump();
@@ -395,6 +578,7 @@
         profilePumpStopped = true;
         if (profilePumpTimer !== null) window.clearTimeout(profilePumpTimer);
         profilePumpTimer = null;
+        questUiRenderer?.dispose();
         profileBridge?.shutdown();
       }, { once: true });
 

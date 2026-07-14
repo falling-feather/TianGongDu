@@ -1465,4 +1465,17 @@ const contracts::QuestUiCueDefinition* DeterministicQuestUiProjectionProducer::f
     return found;
 }
 
+bool DeterministicQuestUiProjectionProducer::has_authored_cue(
+    contracts::StableContentKey beat,
+    contracts::StableContentKey objective,
+    contracts::QuestUiProjectionSource source
+) const noexcept {
+    if (!initialized_ || beat == 0 || objective == 0 ||
+        contracts::quest_ui_projection_source_bit(source) == 0) {
+        return false;
+    }
+    bool ambiguous{};
+    return find_cue(beat, objective, source, ambiguous) != nullptr && !ambiguous;
+}
+
 }  // namespace tgd::gameplay

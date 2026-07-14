@@ -1,3 +1,5 @@
+#include "F1QuestUiProjection.hpp"
+
 #include <tgd/gameplay/quest_ui_projection.hpp>
 
 #include <array>
@@ -1058,6 +1060,40 @@ void test_choice_order_intent_and_sequence() {
         QuestUiProjectionSource::choice_available,
         arrival_choice
     );
+    expect(
+        producer.has_authored_cue(
+            alpha_beat.key,
+            arrival_choice.key,
+            QuestUiProjectionSource::choice_available
+        ),
+        "an authored choice cue requires projection and Action intent"
+    );
+    expect(
+        !producer.has_authored_cue(
+            beta_beat.key,
+            arrival_choice.key,
+            QuestUiProjectionSource::choice_available
+        ) &&
+            !producer.has_authored_cue(
+                alpha_beat.key,
+                secure_mooring.key,
+                QuestUiProjectionSource::choice_available
+            ),
+        "a cross-beat or unprojected world interaction does not enter choice UI mode"
+    );
+
+    auto legacy_definition = definition;
+    legacy_definition.quest_ui_cues = definition.quest_ui_cues.subspan(1);
+    DeterministicQuestUiProjectionProducer legacy_producer;
+    expect(
+        legacy_producer.initialize(legacy_definition) == QuestUiProjectionError::none &&
+            !legacy_producer.has_authored_cue(
+                alpha_beat.key,
+                arrival_choice.key,
+                QuestUiProjectionSource::choice_available
+            ),
+        "an authored world choose interaction without a UI cue stays on the explicit world path"
+    );
     const auto first = producer.project(choice_signal, quest, alpha_safe.key, {});
     expect(first.error == QuestUiProjectionError::none, "choice first projection");
     expect(first.projection.choice_option_count == 3, "choice exact option count");
@@ -1071,6 +1107,67 @@ void test_choice_order_intent_and_sequence() {
         "choice authored order"
     );
 
+    auto native_projection = first.projection;
+    native_projection.choice_options[0].selection =
+        contracts::stable_content_key("f1_choice_arrival_high_water_tags");
+    native_projection.choice_options[1].selection =
+        contracts::stable_content_key("f1_choice_arrival_drowned_manifest");
+    native_projection.choice_options[2].selection =
+        contracts::stable_content_key("f1_choice_arrival_follow_bell");
+    F1QuestUiChoiceState native_choice;
+    expect(
+        native_choice.begin(native_projection, false) == F1QuestUiChoiceError::none &&
+            native_choice.pending() && native_choice.native_pending() &&
+            native_choice.option_count() == 3,
+        "native choice enters an explicit input-gated mode"
+    );
+    expect(
+        native_choice.option_label(0) == "High-water marks" &&
+            native_choice.option_label(1) == "Drowned manifest" &&
+            native_choice.option_label(2) == "Follow the bell",
+        "native choice Presentation preserves authored projection order"
+    );
+    const auto out_of_range = native_choice.native_intent(3);
+    expect(
+        out_of_range.error == F1QuestUiChoiceError::option_out_of_range &&
+            native_choice.pending() && native_choice.option_count() == 3,
+        "an out-of-range native key leaves the active choice unchanged"
+    );
+    const auto native_second = native_choice.native_intent(1);
+    expect(
+        native_second.error == F1QuestUiChoiceError::none &&
+            native_second.intent.projection_sequence == native_projection.sequence &&
+            native_second.intent.projection_checksum == native_projection.checksum &&
+            native_second.intent.interaction ==
+                native_projection.choice_options[1].interaction &&
+            native_second.intent.selection == native_projection.choice_options[1].selection &&
+            native_choice.matches(native_second.intent),
+        "native numeric selection submits the option displayed at the same index"
+    );
+    auto old_native_intent = native_second.intent;
+    --old_native_intent.projection_sequence;
+    expect(
+        !native_choice.matches(old_native_intent) && native_choice.pending(),
+        "an old native intent cannot exit the active choice mode"
+    );
+    native_choice.finish();
+    expect(
+        !native_choice.pending() &&
+            native_choice.native_intent(1).error ==
+                F1QuestUiChoiceError::unavailable_in_mode &&
+            !native_choice.matches(native_second.intent),
+        "accepted native selection exits choice mode and repeat input cannot replay it"
+    );
+    auto unknown_native_projection = native_projection;
+    unknown_native_projection.choice_options[1].selection =
+        contracts::stable_content_key("unknown_native_presentation");
+    expect(
+        native_choice.begin(unknown_native_projection, false) ==
+                F1QuestUiChoiceError::missing_presentation &&
+            !native_choice.pending(),
+        "native choice fails closed instead of displaying an internal Stable ID"
+    );
+
     const contracts::QuestUiSelectionIntent valid_intent{
         first.projection.sequence,
         first.projection.checksum,
@@ -1082,6 +1179,15 @@ void test_choice_order_intent_and_sequence() {
         producer.validate_choice_intent(valid_intent, quest) ==
             QuestUiSelectionIntentError::none,
         "choice intent valid"
+    );
+    F1QuestUiChoiceState external_choice;
+    expect(
+        external_choice.begin(first.projection, true) == F1QuestUiChoiceError::none &&
+            external_choice.mode() == F1QuestUiChoiceMode::external &&
+            external_choice.matches(valid_intent) &&
+            external_choice.native_intent(0).error ==
+                F1QuestUiChoiceError::unavailable_in_mode,
+        "external consumer and Native fallback share the exact projection intent identity"
     );
     const auto stable = producer.snapshot();
     const auto expect_intent_failure = [&](

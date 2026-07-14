@@ -1,11 +1,15 @@
 #include <tgd/content/content_definition_provider.hpp>
 #include <tgd/contracts/content_definition.hpp>
+#include <tgd/gameplay/quest_ui_projection.hpp>
 #include <tgd/gameplay/vertical_slice_session.hpp>
 #include <tgd/runtime/collision_world.hpp>
 #include <tgd/test/f1_content_replay.hpp>
 
+#include <algorithm>
+#include <cstddef>
 #include <cstdlib>
 #include <iostream>
+#include <span>
 #include <memory>
 #include <string_view>
 
@@ -13,6 +17,17 @@ namespace {
 
 using tgd::gameplay::VerticalSliceError;
 using tgd::gameplay::VerticalSliceSession;
+
+constexpr std::uint64_t replay_ui_checksum_offset = 14695981039346656037ULL;
+constexpr std::uint64_t replay_ui_checksum_prime = 1099511628211ULL;
+
+void hash_projection(std::uint64_t& hash, std::uint64_t value) noexcept {
+    for (std::size_t byte = 0; byte < sizeof(value); ++byte) {
+        hash ^= static_cast<std::uint8_t>(value & 0xffU);
+        hash *= replay_ui_checksum_prime;
+        value >>= 8U;
+    }
+}
 
 bool expect(bool condition, std::string_view message) {
     if (!condition) {
@@ -44,6 +59,7 @@ struct ReplayRun final {
     bool ok{};
     tgd::gameplay::VerticalSliceSnapshot snapshot{};
     std::uint64_t quest_checksum{};
+    std::uint64_t quest_ui_checksum{};
     tgd::contracts::StableContentKey arrival_clue{};
     tgd::contracts::StableContentKey mooring_method{};
     tgd::contracts::StableContentKey training_lane{};
@@ -56,12 +72,113 @@ struct ReplayRun final {
         "fixture initializes"
     );
     ok &= expect(session.start() == VerticalSliceError::none, "fixture starts");
+    tgd::gameplay::DeterministicQuestUiProjectionProducer quest_ui;
+    ok &= expect(
+        quest_ui.initialize(definition()) ==
+            tgd::gameplay::QuestUiProjectionError::none,
+        "the F1 1.6 generated cue set initializes the generic projection producer"
+    );
 
     std::uint64_t completed_steps = 0;
+    std::uint64_t quest_ui_checksum = replay_ui_checksum_offset;
+    std::uint8_t quest_ui_projection_count = 0;
     std::uint32_t retry_sequence = 1;
     for (const auto& step : replay.steps) {
         switch (step.type) {
             case tgd::test::F1ContentReplayStepType::complete_objective: {
+                tgd::contracts::StableContentKey expected_cue{};
+                auto expected_classification =
+                    tgd::contracts::QuestUiAttemptTimeClassification::unspecified;
+                std::uint8_t expected_option_count = 0;
+                if (step.objective == tgd::contracts::stable_content_key(
+                                          "f1_objective_choose_arrival_clue"
+                                      )) {
+                    expected_cue = tgd::contracts::stable_content_key(
+                        "ui.f1.rain.choice.arrival-clue"
+                    );
+                    expected_classification = tgd::contracts::QuestUiAttemptTimeClassification::
+                        qualifying_first_visit;
+                    expected_option_count = 3;
+                } else if (step.objective == tgd::contracts::stable_content_key(
+                                                 "f1_objective_choose_mooring_method"
+                                             )) {
+                    expected_cue = tgd::contracts::stable_content_key(
+                        "ui.f1.rain.choice.mooring-method"
+                    );
+                    expected_classification = tgd::contracts::QuestUiAttemptTimeClassification::
+                        qualifying_craft_decision;
+                    expected_option_count = 2;
+                } else if (step.objective == tgd::contracts::stable_content_key(
+                                                 "f1_objective_choose_training_lane"
+                                             )) {
+                    expected_cue = tgd::contracts::stable_content_key(
+                        "ui.f1.training.choice.lane"
+                    );
+                    expected_classification = tgd::contracts::QuestUiAttemptTimeClassification::
+                        qualifying_dialogue_decision;
+                    expected_option_count = 2;
+                }
+                if (expected_cue != 0) {
+                    const auto quest_checksum_before = session.quest_snapshot().checksum;
+                    const auto safe_point_before =
+                        session.current_snapshot().safe_point_id.key;
+                    const tgd::contracts::QuestUiProjectionSignal signal{
+                        .source = tgd::contracts::QuestUiProjectionSource::choice_available,
+                        .objective = step.objective,
+                    };
+                    const auto projected = quest_ui.project(
+                        signal,
+                        session.quest_runtime(),
+                        safe_point_before,
+                        std::span<const tgd::contracts::CombatActorSnapshot>{}
+                    );
+                    ok &= expect(
+                        projected.error == tgd::gameplay::QuestUiProjectionError::none &&
+                            projected.projection.cue == expected_cue &&
+                            projected.projection.objective == step.objective &&
+                            projected.projection.surface ==
+                                tgd::contracts::QuestUiSurface::choice &&
+                            projected.projection.choice_option_count ==
+                                expected_option_count &&
+                            projected.projection.attempt_time_classification ==
+                                expected_classification &&
+                            projected.projection.safe_point == safe_point_before &&
+                            projected.projection.quest_checksum == quest_checksum_before &&
+                            session.quest_snapshot().checksum == quest_checksum_before,
+                        "choice projection derives F1 1.6 attempt evidence without mutating quest truth"
+                    );
+                    const auto option_end =
+                        projected.projection.choice_options.begin() +
+                        projected.projection.choice_option_count;
+                    const auto selected_option = std::find_if(
+                        projected.projection.choice_options.begin(),
+                        option_end,
+                        [&step](const tgd::contracts::QuestUiChoiceOption& option) {
+                            return option.selection == step.selection;
+                        }
+                    );
+                    ok &= expect(
+                        selected_option != option_end &&
+                            quest_ui.validate_choice_intent(
+                                {
+                                    projected.projection.sequence,
+                                    projected.projection.checksum,
+                                    step.objective,
+                                    selected_option != option_end
+                                        ? selected_option->interaction
+                                        : 0,
+                                    step.selection,
+                                },
+                                session.quest_runtime()
+                            ) == tgd::gameplay::QuestUiSelectionIntentError::none,
+                        "replay choice is a complete authored option in the current projection"
+                    );
+                    if (projected.error == tgd::gameplay::QuestUiProjectionError::none) {
+                        hash_projection(quest_ui_checksum, projected.projection.sequence);
+                        hash_projection(quest_ui_checksum, projected.projection.checksum);
+                        ++quest_ui_projection_count;
+                    }
+                }
                 const auto result = session.complete_objective(step.objective, step.selection);
                 ok &= expect(
                     result.error == VerticalSliceError::none && result.accepted,
@@ -154,6 +271,10 @@ struct ReplayRun final {
         "all 25 objectives replay"
     );
     ok &= expect(
+        quest_ui_projection_count == 3 && quest_ui.snapshot().sequence == 3,
+        "each fixed route consumes the three authored first-two-beat choice projections"
+    );
+    ok &= expect(
         session.quest_snapshot().completed_total == replay.expected_completed_objectives &&
             session.current_snapshot().completed_objectives == 0 &&
             session.current_snapshot().beat_index == replay.expected_beat_index &&
@@ -207,6 +328,12 @@ struct ReplayRun final {
             "quest checksum matches the frozen fixture"
         );
     }
+    if (replay.expected_quest_ui_checksum != 0) {
+        ok &= expect(
+            quest_ui_checksum == replay.expected_quest_ui_checksum,
+            "quest UI projection checksum matches the frozen fixture"
+        );
+    }
     if (replay.expected_session_checksum != 0) {
         ok &= expect(
             session.current_snapshot().checksum == replay.expected_session_checksum,
@@ -218,6 +345,7 @@ struct ReplayRun final {
         ok,
         session.current_snapshot(),
         session.quest_snapshot().checksum,
+        quest_ui_checksum,
         arrival_clue,
         mooring_method,
         training_lane,
@@ -225,12 +353,19 @@ struct ReplayRun final {
 }
 
 bool test_fixture_is_canonical(const tgd::test::F1ContentReplayFixture& replay) {
+    bool ok = expect(
+        replay.expected_quest_checksum != 0 &&
+            replay.expected_quest_ui_checksum != 0 &&
+            replay.expected_session_checksum != 0,
+        "the canonical fixture freezes quest, UI, and session checksums"
+    );
     const auto left = run_replay(replay);
     const auto right = run_replay(replay);
-    bool ok = left.ok && right.ok;
+    ok &= left.ok && right.ok;
     ok &= expect(
         left.snapshot.checksum == right.snapshot.checksum &&
             left.quest_checksum == right.quest_checksum &&
+            left.quest_ui_checksum == right.quest_ui_checksum &&
             left.snapshot.player_pose == right.snapshot.player_pose &&
             left.snapshot.playtime.checksum == right.snapshot.playtime.checksum &&
             left.arrival_clue == right.arrival_clue &&
@@ -239,6 +374,7 @@ bool test_fixture_is_canonical(const tgd::test::F1ContentReplayFixture& replay) 
         "the same fixed content commands produce the same composed result"
     );
     std::cout << replay.id << " quest=0x" << std::hex << left.quest_checksum
+              << " ui=0x" << left.quest_ui_checksum
               << " session=0x" << left.snapshot.checksum << std::dec << '\n';
     return ok;
 }
@@ -255,7 +391,8 @@ int main() {
     const auto retry_result = run_replay(retry);
     ok &= expect(
         high_water_result.snapshot.checksum != retry_result.snapshot.checksum &&
-            high_water_result.quest_checksum != retry_result.quest_checksum,
+            high_water_result.quest_checksum != retry_result.quest_checksum &&
+            high_water_result.quest_ui_checksum != retry_result.quest_ui_checksum,
         "different choices and retry history remain distinguishable"
     );
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;

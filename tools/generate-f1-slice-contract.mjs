@@ -46,7 +46,7 @@ function sameValues(left, right) {
 }
 
 export function validateF1SliceContract(contract, catalog) {
-  if (contract.schemaVersion !== "1.4.0") fail("unsupported schemaVersion");
+  if (contract.schemaVersion !== "1.6.0") fail("unsupported schemaVersion");
   const catalogSlice = catalog.f1VerticalSlice;
   if (contract.id !== catalogSlice.id) fail("slice id drifted from the 1.0 catalog");
   const expectedView = {
@@ -1185,6 +1185,419 @@ export function validateF1SliceContract(contract, catalog) {
   if (returnCombatOutcome?.kind !== "all_hostiles_defeated") {
     fail("the canopy return validation must require all active hostiles defeated");
   }
+
+  const uiCues = contract.questUiCues;
+  const allowedUiSources = new Set([
+    "choice_available",
+    "interaction_feedback",
+    "objective_state",
+    "combat_feedback",
+    "recovery_offer",
+    "recovery_resume"
+  ]);
+  const allowedAttemptClassificationsBySource = new Map([
+    ["choice_available", new Set([
+      "qualifying_first_visit",
+      "qualifying_craft_decision",
+      "qualifying_dialogue_decision"
+    ])],
+    ["interaction_feedback", new Set([
+      "repeat_no_progress",
+      "qualifying_craft_decision",
+      "qualifying_error_feedback",
+      "qualifying_wrong_order_feedback",
+      "qualifying_craft_confirmation"
+    ])],
+    ["objective_state", new Set([
+      "qualifying_first_visit",
+      "qualifying_training_risk"
+    ])],
+    ["combat_feedback", new Set([
+      "qualifying_combat_proof",
+      "qualifying_combat_feedback"
+    ])],
+    ["recovery_offer", new Set(["failure_retry_excluded"])],
+    ["recovery_resume", new Set(["resume_no_duplicate_progress"])]
+  ]);
+  const allowedAttemptStatuses = new Set([
+    "not_applicable",
+    "accepted",
+    "rejected",
+    "ignored_repeat",
+    "pending"
+  ]);
+  const allowedAttemptRejectionReasons = new Set([
+    "none",
+    "prerequisite_incomplete",
+    "selection_already_committed",
+    "wrong_target"
+  ]);
+  const attemptResultIsNotApplicable = (result) =>
+    result?.resultId === null && result?.status === "not_applicable" &&
+    result?.rejectionReason === "none";
+  const attemptResultShapeValid = (result) => {
+    if (!result || typeof result !== "object" ||
+        !allowedAttemptStatuses.has(result.status) ||
+        !allowedAttemptRejectionReasons.has(result.rejectionReason)) {
+      return false;
+    }
+    if (result.status === "not_applicable") return attemptResultIsNotApplicable(result);
+    if (typeof result.resultId !== "string" || result.resultId.length === 0) return false;
+    if (["accepted", "pending"].includes(result.status)) {
+      return result.rejectionReason === "none";
+    }
+    if (result.status === "rejected") return result.rejectionReason !== "none";
+    return result.status === "ignored_repeat" &&
+      result.rejectionReason === "selection_already_committed";
+  };
+  if (!Array.isArray(uiCues) || uiCues.length !== 8) {
+    fail("the first-two-beat UI projection contract requires exactly eight cues");
+  }
+  assertUnique(uiCues.map((cue) => cue.id), "quest UI cue id");
+  const occupiedCueDomains = new Set();
+  for (const cue of uiCues) {
+    const beatIndex = contract.beats.findIndex((beat) => beat.id === cue.beatId);
+    if (typeof cue.id !== "string" || cue.id.length === 0 ||
+        beatIndex < 0 || beatIndex > 1) {
+      fail(`${cue.id ?? "quest UI cue"} must belong to one of the first two beats`);
+    }
+    if (!Array.isArray(cue.sources) || cue.sources.length === 0 || cue.sources.length > 6 ||
+        cue.sources.some((source) => !allowedUiSources.has(source))) {
+      fail(`${cue.id} has invalid projection sources`);
+    }
+    assertUnique(cue.sources, `${cue.id} projection source`);
+    if (!Array.isArray(cue.objectiveIds) || cue.objectiveIds.length === 0 ||
+        cue.objectiveIds.length > 8) {
+      fail(`${cue.id} has invalid projection objectives`);
+    }
+    assertUnique(cue.objectiveIds, `${cue.id} projection objective`);
+    for (const objectiveId of cue.objectiveIds) {
+      if (objectiveStages.get(objectiveId) !== beatIndex) {
+        fail(`${cue.id} references an objective outside its beat`);
+      }
+      for (const source of cue.sources) {
+        const domain = `${cue.beatId}:${source}:${objectiveId}`;
+        if (occupiedCueDomains.has(domain)) {
+          fail(`${cue.id} overlaps another quest UI cue domain`);
+        }
+        occupiedCueDomains.add(domain);
+      }
+    }
+    if (cue.sources.includes("choice_available")) {
+      for (const objectiveId of cue.objectiveIds) {
+        const choices = interactions.filter(
+          (interaction) => interaction.kind === "choose" &&
+            interaction.objectiveId === objectiveId && interaction.selectionId !== null
+        );
+        if (choices.length === 0 || choices.length > 8) {
+          fail(`${cue.id} choice source has no bounded authored options`);
+        }
+      }
+    }
+    if (!Array.isArray(cue.resultSelectors) || cue.resultSelectors.length > 8) {
+      fail(`${cue.id} has invalid result selectors`);
+    }
+    const selectorKeys = [];
+    for (const selector of cue.resultSelectors) {
+      if (!cue.sources.includes(selector.source) ||
+          !["interaction_feedback", "combat_feedback"].includes(selector.source) ||
+          !cue.objectiveIds.includes(selector.objectiveId) ||
+          !["none", "negative"].includes(selector.polarityOverride)) {
+        fail(`${cue.id} has an invalid result selector domain`);
+      }
+      if (selector.source === "interaction_feedback") {
+        const interaction = interactions.find(
+          (candidate) => candidate.id === selector.primaryResultId
+        );
+        if (!interaction || selector.secondaryResultId !== null ||
+            objectiveStages.get(interaction.objectiveId) !== beatIndex) {
+          fail(`${cue.id} interaction selector references an invalid result`);
+        }
+        if (interaction.objectiveId !== selector.objectiveId) {
+          const objectives = contract.beats[beatIndex].objectiveIds;
+          if (interaction.kind !== "choose" ||
+              objectives.indexOf(interaction.objectiveId) + 1 !==
+                objectives.indexOf(selector.objectiveId)) {
+            fail(`${cue.id} interaction selector is not an authored next-objective transition`);
+          }
+        }
+      } else {
+        const trigger = combatTriggers.find(
+          (candidate) => candidate.id === selector.primaryResultId
+        );
+        if (!trigger || objectiveStages.get(trigger.objectiveId) !== beatIndex) {
+          fail(`${cue.id} combat selector references an invalid trigger`);
+        }
+        if (selector.secondaryResultId === null) {
+          if (trigger.objectiveId !== selector.objectiveId) {
+            fail(`${cue.id} trigger-only selector must retain its objective`);
+          }
+        } else {
+          const outcome = combatOutcomes.find(
+            (candidate) => candidate.id === selector.secondaryResultId
+          );
+          const objectives = contract.beats[beatIndex].objectiveIds;
+          if (!outcome || outcome.objectiveId !== selector.objectiveId ||
+              objectiveStages.get(outcome.objectiveId) !== beatIndex ||
+              (trigger.objectiveId !== selector.objectiveId &&
+               objectives.indexOf(trigger.objectiveId) + 1 !==
+                 objectives.indexOf(selector.objectiveId))) {
+            fail(`${cue.id} combat selector is not an authored trigger-to-outcome transition`);
+          }
+        }
+      }
+      selectorKeys.push([
+        selector.source,
+        selector.objectiveId,
+        selector.primaryResultId,
+        selector.secondaryResultId
+      ].join(":"));
+    }
+    assertUnique(selectorKeys, `${cue.id} result selector`);
+
+    if (!Array.isArray(cue.attemptEvidenceRules) ||
+        cue.attemptEvidenceRules.length === 0 || cue.attemptEvidenceRules.length > 16) {
+      fail(`${cue.id} has invalid attempt evidence rules`);
+    }
+    const attemptRuleKeys = [];
+    const attemptRuleSources = new Set();
+    for (const rule of cue.attemptEvidenceRules) {
+      if (!cue.sources.includes(rule.source) ||
+          !cue.objectiveIds.includes(rule.objectiveId) ||
+          !allowedAttemptClassificationsBySource
+            .get(rule.source)
+            ?.has(rule.classification) ||
+          !attemptResultShapeValid(rule.primaryResult) ||
+          !attemptResultShapeValid(rule.secondaryResult)) {
+        fail(`${cue.id} has an invalid attempt evidence rule domain`);
+      }
+      const repeat = rule.classification === "repeat_no_progress";
+      if ((rule.primaryResult.status === "ignored_repeat") !== repeat) {
+        fail(`${cue.id} repeat classification does not match its primary result`);
+      }
+      if ([
+        "choice_available",
+        "objective_state",
+        "recovery_offer",
+        "recovery_resume"
+      ].includes(rule.source)) {
+        if (!attemptResultIsNotApplicable(rule.primaryResult) ||
+            !attemptResultIsNotApplicable(rule.secondaryResult)) {
+          fail(`${cue.id} source requires exact not_applicable result sentinels`);
+        }
+      } else if (rule.source === "interaction_feedback") {
+        if (["not_applicable", "pending"].includes(rule.primaryResult.status) ||
+            !attemptResultIsNotApplicable(rule.secondaryResult)) {
+          fail(`${cue.id} interaction attempt evidence has an invalid result shape`);
+        }
+        const interaction = interactions.find(
+          (candidate) => candidate.id === rule.primaryResult.resultId
+        );
+        if (!interaction || objectiveStages.get(interaction.objectiveId) !== beatIndex ||
+            (repeat && interaction.kind !== "choose")) {
+          fail(`${cue.id} interaction attempt evidence references an invalid result`);
+        }
+        if (interaction.objectiveId !== rule.objectiveId) {
+          const objectives = contract.beats[beatIndex].objectiveIds;
+          const selector = cue.resultSelectors.find(
+            (candidate) => candidate.source === rule.source &&
+              candidate.objectiveId === rule.objectiveId &&
+              candidate.primaryResultId === rule.primaryResult.resultId &&
+              candidate.secondaryResultId === null
+          );
+          if (rule.primaryResult.status !== "accepted" || interaction.kind !== "choose" ||
+              interaction.selectionId === null ||
+              objectives.indexOf(interaction.objectiveId) + 1 !==
+                objectives.indexOf(rule.objectiveId) || !selector) {
+            fail(`${cue.id} interaction attempt evidence is not an authored transition`);
+          }
+        }
+      } else {
+        if (rule.primaryResult.status === "not_applicable" ||
+            rule.primaryResult.status === "ignored_repeat" ||
+            rule.secondaryResult.status === "ignored_repeat" ||
+            (!attemptResultIsNotApplicable(rule.secondaryResult) &&
+             rule.primaryResult.status !== "accepted")) {
+          fail(`${cue.id} combat attempt evidence has an invalid result shape`);
+        }
+        const trigger = combatTriggers.find(
+          (candidate) => candidate.id === rule.primaryResult.resultId
+        );
+        if (!trigger || objectiveStages.get(trigger.objectiveId) !== beatIndex) {
+          fail(`${cue.id} combat attempt evidence references an invalid trigger`);
+        }
+        if (attemptResultIsNotApplicable(rule.secondaryResult)) {
+          if (trigger.objectiveId !== rule.objectiveId) {
+            fail(`${cue.id} trigger-only attempt evidence must retain its objective`);
+          }
+        } else {
+          const outcome = combatOutcomes.find(
+            (candidate) => candidate.id === rule.secondaryResult.resultId
+          );
+          const objectives = contract.beats[beatIndex].objectiveIds;
+          const selector = cue.resultSelectors.find(
+            (candidate) => candidate.source === rule.source &&
+              candidate.objectiveId === rule.objectiveId &&
+              candidate.primaryResultId === rule.primaryResult.resultId &&
+              candidate.secondaryResultId === rule.secondaryResult.resultId
+          );
+          if (!outcome || outcome.objectiveId !== rule.objectiveId ||
+              objectiveStages.get(outcome.objectiveId) !== beatIndex ||
+              (trigger.objectiveId !== rule.objectiveId &&
+               (objectives.indexOf(trigger.objectiveId) + 1 !==
+                  objectives.indexOf(rule.objectiveId) || !selector))) {
+            fail(`${cue.id} combat attempt evidence is not an authored transition`);
+          }
+        }
+      }
+      attemptRuleSources.add(rule.source);
+      attemptRuleKeys.push(JSON.stringify([
+        rule.source,
+        rule.objectiveId,
+        rule.primaryResult.resultId,
+        rule.primaryResult.status,
+        rule.primaryResult.rejectionReason,
+        rule.secondaryResult.resultId,
+        rule.secondaryResult.status,
+        rule.secondaryResult.rejectionReason
+      ]));
+    }
+    assertUnique(attemptRuleKeys, `${cue.id} attempt evidence selector`);
+    if (cue.sources.some((source) => !attemptRuleSources.has(source))) {
+      fail(`${cue.id} is missing attempt evidence for an authored source`);
+    }
+  }
+  const expectedQuestUiCues = [
+    {
+      id: "ui.f1.rain.choice.arrival-clue",
+      beatId: "f1_beat_rain_ferry_arrival",
+      sources: ["choice_available", "interaction_feedback"],
+      objectiveIds: ["f1_objective_choose_arrival_clue"],
+      resultSelectors: []
+    },
+    {
+      id: "ui.f1.rain.choice.mooring-method",
+      beatId: "f1_beat_rain_ferry_arrival",
+      sources: ["choice_available"],
+      objectiveIds: ["f1_objective_choose_mooring_method"],
+      resultSelectors: []
+    },
+    {
+      id: "ui.f1.rain.mooring-load",
+      beatId: "f1_beat_rain_ferry_arrival",
+      sources: ["interaction_feedback"],
+      objectiveIds: ["f1_objective_secure_ferry_mooring"],
+      resultSelectors: [{
+        source: "interaction_feedback",
+        objectiveId: "f1_objective_secure_ferry_mooring",
+        primaryResultId: "f1_interaction_choose_quick_hitch",
+        secondaryResultId: null,
+        polarityOverride: "negative"
+      }]
+    },
+    {
+      id: "ui.f1.rain.bell-feedback",
+      beatId: "f1_beat_rain_ferry_arrival",
+      sources: ["interaction_feedback"],
+      objectiveIds: ["f1_objective_sound_workshop_bell"],
+      resultSelectors: []
+    },
+    {
+      id: "ui.f1.training.choice.lane",
+      beatId: "f1_beat_shen_yan_training",
+      sources: ["choice_available"],
+      objectiveIds: ["f1_objective_choose_training_lane"],
+      resultSelectors: []
+    },
+    {
+      id: "ui.f1.training.phase",
+      beatId: "f1_beat_shen_yan_training",
+      sources: ["objective_state"],
+      objectiveIds: [
+        "f1_objective_eavesguard_counter",
+        "f1_objective_flower_turn_counter"
+      ],
+      resultSelectors: []
+    },
+    {
+      id: "ui.f1.training.action-proof",
+      beatId: "f1_beat_shen_yan_training",
+      sources: ["combat_feedback"],
+      objectiveIds: [
+        "f1_objective_eavesguard_counter",
+        "f1_objective_commit_eavesguard_heavy",
+        "f1_objective_break_eavesguard_target",
+        "f1_objective_enter_flower_turn",
+        "f1_objective_flower_turn_counter",
+        "f1_objective_commit_flower_turn_light",
+        "f1_objective_commit_flower_turn_heavy",
+        "f1_objective_break_flower_turn_target"
+      ],
+      resultSelectors: [
+        {
+          source: "combat_feedback",
+          objectiveId: "f1_objective_break_eavesguard_target",
+          primaryResultId: "f1_trigger_eavesguard_heavy",
+          secondaryResultId: "f1_outcome_break_eavesguard_target",
+          polarityOverride: "none"
+        },
+        {
+          source: "combat_feedback",
+          objectiveId: "f1_objective_break_flower_turn_target",
+          primaryResultId: "f1_trigger_flower_turn_heavy",
+          secondaryResultId: "f1_outcome_break_flower_turn_target",
+          polarityOverride: "none"
+        }
+      ]
+    },
+    {
+      id: "ui.f1.training.recovery",
+      beatId: "f1_beat_shen_yan_training",
+      sources: ["recovery_offer", "recovery_resume"],
+      objectiveIds: [
+        "f1_objective_eavesguard_counter",
+        "f1_objective_flower_turn_counter"
+      ],
+      resultSelectors: []
+    }
+  ];
+  const questUiCueShape = uiCues.map(({ attemptEvidenceRules, ...cue }) => cue);
+  if (!sameValues(questUiCueShape, expectedQuestUiCues)) {
+    fail("the first-two-beat quest UI cue contract drifted");
+  }
+  const actualAttemptEvidence = uiCues.flatMap((cue) =>
+    cue.attemptEvidenceRules.map((rule) => [
+      cue.id,
+      rule.source,
+      rule.objectiveId,
+      rule.primaryResult.resultId,
+      rule.primaryResult.status,
+      rule.primaryResult.rejectionReason,
+      rule.secondaryResult.resultId,
+      rule.secondaryResult.status,
+      rule.secondaryResult.rejectionReason,
+      rule.classification
+    ])
+  );
+  const expectedAttemptEvidence = [
+    ["ui.f1.rain.choice.arrival-clue", "choice_available", "f1_objective_choose_arrival_clue", null, "not_applicable", "none", null, "not_applicable", "none", "qualifying_first_visit"],
+    ["ui.f1.rain.choice.arrival-clue", "interaction_feedback", "f1_objective_choose_arrival_clue", "f1_interaction_arrival_clue_drowned_manifest", "ignored_repeat", "selection_already_committed", null, "not_applicable", "none", "repeat_no_progress"],
+    ["ui.f1.rain.choice.mooring-method", "choice_available", "f1_objective_choose_mooring_method", null, "not_applicable", "none", null, "not_applicable", "none", "qualifying_craft_decision"],
+    ["ui.f1.rain.mooring-load", "interaction_feedback", "f1_objective_secure_ferry_mooring", "f1_interaction_lock_cross_belay", "accepted", "none", null, "not_applicable", "none", "qualifying_craft_decision"],
+    ["ui.f1.rain.mooring-load", "interaction_feedback", "f1_objective_secure_ferry_mooring", "f1_interaction_choose_quick_hitch", "accepted", "none", null, "not_applicable", "none", "qualifying_error_feedback"],
+    ["ui.f1.rain.bell-feedback", "interaction_feedback", "f1_objective_sound_workshop_bell", "f1_interaction_sound_workshop_bell", "rejected", "prerequisite_incomplete", null, "not_applicable", "none", "qualifying_wrong_order_feedback"],
+    ["ui.f1.rain.bell-feedback", "interaction_feedback", "f1_objective_sound_workshop_bell", "f1_interaction_sound_workshop_bell", "accepted", "none", null, "not_applicable", "none", "qualifying_craft_confirmation"],
+    ["ui.f1.training.choice.lane", "choice_available", "f1_objective_choose_training_lane", null, "not_applicable", "none", null, "not_applicable", "none", "qualifying_dialogue_decision"],
+    ["ui.f1.training.phase", "objective_state", "f1_objective_eavesguard_counter", null, "not_applicable", "none", null, "not_applicable", "none", "qualifying_training_risk"],
+    ["ui.f1.training.phase", "objective_state", "f1_objective_flower_turn_counter", null, "not_applicable", "none", null, "not_applicable", "none", "qualifying_training_risk"],
+    ["ui.f1.training.action-proof", "combat_feedback", "f1_objective_eavesguard_counter", "f1_trigger_eavesguard_counter", "accepted", "none", null, "not_applicable", "none", "qualifying_combat_proof"],
+    ["ui.f1.training.action-proof", "combat_feedback", "f1_objective_break_flower_turn_target", "f1_trigger_flower_turn_heavy", "accepted", "none", "f1_outcome_break_flower_turn_target", "rejected", "wrong_target", "qualifying_combat_feedback"],
+    ["ui.f1.training.recovery", "recovery_offer", "f1_objective_eavesguard_counter", null, "not_applicable", "none", null, "not_applicable", "none", "failure_retry_excluded"],
+    ["ui.f1.training.recovery", "recovery_resume", "f1_objective_flower_turn_counter", null, "not_applicable", "none", null, "not_applicable", "none", "resume_no_duplicate_progress"]
+  ];
+  if (!sameValues(actualAttemptEvidence, expectedAttemptEvidence)) {
+    fail("the first-two-beat attempt evidence contract drifted");
+  }
   if (
     contract.paddingPolicy?.repeatableCombatCountsTowardTarget !== false ||
     contract.paddingPolicy?.forcedWaitingCountsTowardTarget !== false ||
@@ -1519,6 +1932,7 @@ export function validateF1SliceContract(contract, catalog) {
     ]),
     ...combatTriggers.map((trigger) => trigger.id),
     ...combatOutcomes.map((outcome) => outcome.id),
+    ...uiCues.map((cue) => cue.id),
     combat.id,
     ...combat.actors.map((actor) => actor.archetypeId),
     ...stanceIds,
@@ -1617,6 +2031,42 @@ function questResolutionRewardRow(reward) {
   return `    {${contentId(reward.id)}, ${contentId(reward.objectiveId)}, ${contentId(reward.selectionId)}, ${contentId(reward.rewardId)}, ${contentId(reward.rewardDedupKey)}},`;
 }
 
+function questUiSourceMask(sources) {
+  return sources
+    .map(
+      (source) =>
+        `contracts::quest_ui_projection_source_bit(contracts::QuestUiProjectionSource::${source})`
+    )
+    .join(" | ");
+}
+
+function questUiResultSelectorRow(selector) {
+  const secondary = selector.secondaryResultId === null
+    ? "contracts::ContentId{}"
+    : contentId(selector.secondaryResultId);
+  return `    {contracts::QuestUiProjectionSource::${selector.source}, ${contentId(selector.objectiveId)}, ${contentId(selector.primaryResultId)}, ${secondary}, contracts::QuestUiPolarityOverride::${selector.polarityOverride}},`;
+}
+
+function questUiAttemptEvidenceResultRow(result) {
+  const resultId = result.resultId === null
+    ? "contracts::ContentId{}"
+    : contentId(result.resultId);
+  return `{${resultId}, contracts::QuestUiResultStatus::${result.status}, contracts::QuestUiRejectionReason::${result.rejectionReason}}`;
+}
+
+function questUiAttemptEvidenceRuleRow(rule) {
+  return `    {contracts::QuestUiProjectionSource::${rule.source}, ${contentId(rule.objectiveId)}, ${questUiAttemptEvidenceResultRow(rule.primaryResult)}, ${questUiAttemptEvidenceResultRow(rule.secondaryResult)}, contracts::QuestUiAttemptTimeClassification::${rule.classification}},`;
+}
+
+function questUiCueRow(cue, index) {
+  const selectors = cue.resultSelectors.length === 0
+    ? "std::span<const contracts::QuestUiResultSelectorDefinition>{}"
+    : `std::span<const contracts::QuestUiResultSelectorDefinition>{quest_ui_cue_${index}_selectors}`;
+  const attemptEvidence =
+    `std::span<const contracts::QuestUiAttemptEvidenceRuleDefinition>{quest_ui_cue_${index}_attempt_evidence}`;
+  return `    {${contentId(cue.id)}, ${contentId(cue.beatId)}, ${questUiSourceMask(cue.sources)}, std::span<const contracts::ContentId>{quest_ui_cue_${index}_objectives}, ${selectors}, ${attemptEvidence}},`;
+}
+
 export function renderF1SliceContract(contract) {
   const refs = contract.catalogReferences;
   const seed = contract.playerSeed;
@@ -1680,6 +2130,30 @@ ${arrayRows(trigger.prerequisiteObjectiveIds)}
   const questResolutionRewardRows = contract.questResolutionRewards
     .map(questResolutionRewardRow)
     .join("\n");
+  const questUiCueObjectiveArrays = contract.questUiCues
+    .map(
+      (cue, index) => `inline constexpr std::array<contracts::ContentId, ${cue.objectiveIds.length}> quest_ui_cue_${index}_objectives{{
+${arrayRows(cue.objectiveIds)}
+}};`
+    )
+    .join("\n\n");
+  const questUiCueSelectorArrays = contract.questUiCues
+    .map((cue, index) => ({ cue, index }))
+    .filter(({ cue }) => cue.resultSelectors.length !== 0)
+    .map(
+      ({ cue, index }) => `inline constexpr std::array<contracts::QuestUiResultSelectorDefinition, ${cue.resultSelectors.length}> quest_ui_cue_${index}_selectors{{
+${cue.resultSelectors.map(questUiResultSelectorRow).join("\n")}
+}};`
+    )
+    .join("\n\n");
+  const questUiCueAttemptEvidenceArrays = contract.questUiCues
+    .map(
+      (cue, index) => `inline constexpr std::array<contracts::QuestUiAttemptEvidenceRuleDefinition, ${cue.attemptEvidenceRules.length}> quest_ui_cue_${index}_attempt_evidence{{
+${cue.attemptEvidenceRules.map(questUiAttemptEvidenceRuleRow).join("\n")}
+}};`
+    )
+    .join("\n\n");
+  const questUiCueRows = contract.questUiCues.map(questUiCueRow).join("\n");
 
   return `// Generated from content/design/f1-vertical-slice.json. Do not edit by hand.
 #pragma once
@@ -1701,6 +2175,12 @@ ${combatTriggerPrerequisiteArrays}
 ${questEncounterActivationActorArrays}
 
 ${questEncounterActivationPlacementArrays}
+
+${questUiCueObjectiveArrays}
+
+${questUiCueSelectorArrays}
+
+${questUiCueAttemptEvidenceArrays}
 
 inline constexpr std::array<contracts::VerticalSliceBeatDefinition, ${contract.beats.length}> f1_beats{{
 ${beatRows}
@@ -1748,6 +2228,10 @@ ${questBossPhaseRows}
 
 inline constexpr std::array<contracts::QuestResolutionRewardDefinition, ${contract.questResolutionRewards.length}> f1_quest_resolution_rewards{{
 ${questResolutionRewardRows}
+}};
+
+inline constexpr std::array<contracts::QuestUiCueDefinition, ${contract.questUiCues.length}> f1_quest_ui_cues{{
+${questUiCueRows}
 }};
 
 inline constexpr std::array<contracts::CombatActorConfig, ${combat.actors.length}> f1_combat_actors{{
@@ -1803,6 +2287,7 @@ inline constexpr contracts::VerticalSliceDefinition f1_vertical_slice_definition
     std::span<const contracts::QuestEncounterActivationDefinition>{f1_quest_encounter_activations},
     std::span<const contracts::QuestBossPhaseDefinition>{f1_quest_boss_phases},
     std::span<const contracts::QuestResolutionRewardDefinition>{f1_quest_resolution_rewards},
+    std::span<const contracts::QuestUiCueDefinition>{f1_quest_ui_cues},
 };
 
 }  // namespace tgd::content::generated

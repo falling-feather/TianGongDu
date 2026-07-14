@@ -34,10 +34,28 @@ const allowedPolarities = new Set(["positive", "negative", "recovery"]);
 const allowedInteractionStatuses = new Set([
   "accepted",
   "rejected",
-  "ignored_repeat",
-  "required"
+  "ignored_repeat"
 ]);
 const allowedCombatStatuses = new Set(["accepted", "rejected", "pending", "not_applicable"]);
+const allowedRejectionReasons = new Set([
+  "prerequisite_incomplete",
+  "selection_already_committed",
+  "wrong_target"
+]);
+const allowedAttemptTimeClassifications = new Set([
+  "qualifying_first_visit",
+  "repeat_no_progress",
+  "qualifying_craft_decision",
+  "qualifying_error_feedback",
+  "qualifying_wrong_order_feedback",
+  "qualifying_craft_confirmation",
+  "qualifying_dialogue_decision",
+  "qualifying_training_risk",
+  "qualifying_combat_proof",
+  "qualifying_combat_feedback",
+  "failure_retry_excluded",
+  "resume_no_duplicate_progress"
+]);
 const forbiddenUiAuthorityFields = new Set([
   "advanceObjective",
   "animationComplete",
@@ -101,9 +119,170 @@ function buildIndexes(contract) {
     selectionsByObjective,
     triggerById: new Map(contract.questCombatTriggers.map((trigger) => [trigger.id, trigger])),
     outcomeById: new Map(contract.questCombatOutcomes.map((outcome) => [outcome.id, outcome])),
+    cueById: new Map(contract.questUiCues.map((cue) => [cue.id, cue])),
     safePointById: new Map(contract.safePoints.map((safePoint) => [safePoint.id, safePoint])),
-    actorKeys: new Set(contract.combatBootstrap.actors.map((actor) => actor.actorKey))
+    hostileActorKeys: new Set(
+      contract.combatBootstrap.actors
+        .filter((actor) => actor.faction === "hostile")
+        .map((actor) => actor.actorKey)
+    )
   };
+}
+
+function projectionSource(event) {
+  const { panel } = event;
+  const authority = panel.model.authority;
+  if (panel.surface === "choice") return "choice_available";
+  if (panel.surface === "failure") return "recovery_offer";
+  if (panel.model.polarity === "recovery") return "recovery_resume";
+  if (authority.interactionResult !== null) return "interaction_feedback";
+  if (authority.combatResult !== null) return "combat_feedback";
+  return "objective_state";
+}
+
+function resultSelectorFor(cue, source, authority) {
+  const primaryResultId = source === "interaction_feedback"
+    ? authority.interactionResult?.interactionId ?? null
+    : authority.combatResult?.triggerId ?? null;
+  const secondaryResultId = source === "combat_feedback"
+    ? authority.combatResult?.outcomeId ?? null
+    : null;
+  return cue.resultSelectors.find(
+    (selector) =>
+      selector.source === source &&
+      selector.objectiveId === authority.objectiveId &&
+      selector.primaryResultId === primaryResultId &&
+      selector.secondaryResultId === secondaryResultId
+  ) ?? null;
+}
+
+function notApplicableAttemptResult() {
+  return {
+    resultId: null,
+    status: "not_applicable",
+    rejectionReason: "none"
+  };
+}
+
+function attemptEvidenceResults(source, authority) {
+  if (source === "interaction_feedback") {
+    const result = authority.interactionResult;
+    return {
+      primaryResult: {
+        resultId: result.interactionId,
+        status: result.status,
+        rejectionReason: result.rejectionReason ?? "none"
+      },
+      secondaryResult: notApplicableAttemptResult()
+    };
+  }
+  if (source === "combat_feedback") {
+    const result = authority.combatResult;
+    return {
+      primaryResult: {
+        resultId: result.triggerId,
+        status: result.triggerStatus,
+        rejectionReason: result.triggerStatus === "rejected"
+          ? result.rejectionReason
+          : "none"
+      },
+      secondaryResult: result.outcomeId === null
+        ? notApplicableAttemptResult()
+        : {
+            resultId: result.outcomeId,
+            status: result.outcomeStatus,
+            rejectionReason: result.outcomeStatus === "rejected"
+              ? result.rejectionReason
+              : "none"
+          }
+    };
+  }
+  return {
+    primaryResult: notApplicableAttemptResult(),
+    secondaryResult: notApplicableAttemptResult()
+  };
+}
+
+function sameAttemptResult(actual, expected) {
+  return actual.resultId === expected.resultId &&
+    actual.status === expected.status &&
+    actual.rejectionReason === expected.rejectionReason;
+}
+
+function validateAttemptEvidenceProjection(event, indexes) {
+  const model = event.panel.model;
+  const authority = model.authority;
+  const source = projectionSource(event);
+  const cue = indexes.cueById.get(model.cueId);
+  const expected = attemptEvidenceResults(source, authority);
+  const matches = cue.attemptEvidenceRules.filter(
+    (rule) => rule.source === source &&
+      rule.objectiveId === authority.objectiveId &&
+      sameAttemptResult(rule.primaryResult, expected.primaryResult) &&
+      sameAttemptResult(rule.secondaryResult, expected.secondaryResult)
+  );
+  assert(
+    matches.length > 0,
+    `cue ${model.cueId} has no exact Definition attempt evidence rule`
+  );
+  assert(
+    matches.length === 1,
+    `cue ${model.cueId} has ambiguous Definition attempt evidence rules`
+  );
+  assert(
+    authority.attemptTimeClassification === matches[0].classification,
+    `attemptTimeClassification does not match the exact Definition rule`
+  );
+}
+
+function validateCueProjection(event, indexes) {
+  const model = event.panel.model;
+  const authority = model.authority;
+  const cue = indexes.cueById.get(model.cueId);
+  assert(cue, `unknown cue ${model.cueId}`);
+  const source = projectionSource(event);
+  assert(cue.beatId === authority.beatId, `cue ${model.cueId} belongs to another beat`);
+  assert(cue.sources.includes(source), `cue ${model.cueId} does not accept source ${source}`);
+  assert(
+    cue.objectiveIds.includes(authority.objectiveId),
+    `cue ${model.cueId} does not own objective ${authority.objectiveId}`
+  );
+
+  const selector = resultSelectorFor(cue, source, authority);
+  if (source === "interaction_feedback") {
+    const result = authority.interactionResult;
+    if (result.objectiveId !== authority.objectiveId) {
+      assert(selector, `cue ${model.cueId} lacks an interaction transition selector`);
+    }
+  }
+  if (source === "combat_feedback") {
+    const result = authority.combatResult;
+    if (result.triggerObjectiveId !== authority.objectiveId ||
+        (result.outcomeId !== null && result.outcomeObjectiveId !== result.triggerObjectiveId)) {
+      assert(selector, `cue ${model.cueId} lacks a combat transition selector`);
+    }
+  }
+
+  let expectedPolarity = "positive";
+  if (source === "recovery_offer" || source === "recovery_resume") {
+    expectedPolarity = "recovery";
+  } else {
+    const effectiveStatus = source === "interaction_feedback"
+      ? authority.interactionResult.status
+      : source === "combat_feedback"
+        ? authority.combatResult.outcomeStatus === "not_applicable"
+          ? authority.combatResult.triggerStatus
+          : authority.combatResult.outcomeStatus
+        : null;
+    if (["rejected", "ignored_repeat"].includes(effectiveStatus) ||
+        selector?.polarityOverride === "negative") {
+      expectedPolarity = "negative";
+    }
+  }
+  assert(
+    model.polarity === expectedPolarity,
+    `cue ${model.cueId} expected ${expectedPolarity} polarity`
+  );
 }
 
 function validateObjective(objectiveId, indexes, label) {
@@ -145,7 +324,20 @@ function validateInteractionResult(result, indexes) {
     allowedInteractionStatuses.has(result.status),
     `invalid interaction status ${result.status}`
   );
-  if (result.rejectionReason !== null) assertString(result.rejectionReason, "invalid rejection reason");
+  if (result.status === "accepted") {
+    assert(result.rejectionReason === null, "accepted interaction cannot have a rejection reason");
+  } else {
+    assert(
+      allowedRejectionReasons.has(result.rejectionReason),
+      "rejected or repeated interaction requires a known rejection reason"
+    );
+  }
+  if (result.status === "ignored_repeat") {
+    assert(
+      result.rejectionReason === "selection_already_committed",
+      "ignored repeat must report selection_already_committed"
+    );
+  }
 }
 
 function validateCombatResult(result, indexes) {
@@ -153,16 +345,19 @@ function validateCombatResult(result, indexes) {
   assert(result && typeof result === "object", "combat result must be null or an object");
   assert(allowedCombatStatuses.has(result.triggerStatus), "invalid combat trigger status");
   assert(allowedCombatStatuses.has(result.outcomeStatus), "invalid combat outcome status");
-  if (result.triggerId !== null) {
-    const trigger = indexes.triggerById.get(result.triggerId);
-    assert(trigger, `unknown combat trigger ${result.triggerId}`);
-    validateObjective(result.triggerObjectiveId, indexes, "combat trigger objective");
-    assert(
-      trigger.objectiveId === result.triggerObjectiveId,
-      `combat trigger ${result.triggerId} does not belong to objective ${result.triggerObjectiveId}`
-    );
-  }
-  if (result.outcomeId !== null) {
+  assert(result.triggerId !== null, "combat feedback requires a trigger result");
+  assert(result.triggerStatus !== "not_applicable", "combat trigger cannot be not_applicable");
+  const trigger = indexes.triggerById.get(result.triggerId);
+  assert(trigger, `unknown combat trigger ${result.triggerId}`);
+  validateObjective(result.triggerObjectiveId, indexes, "combat trigger objective");
+  assert(
+    trigger.objectiveId === result.triggerObjectiveId,
+    `combat trigger ${result.triggerId} does not belong to objective ${result.triggerObjectiveId}`
+  );
+  if (result.outcomeId === null) {
+    assert(result.outcomeObjectiveId === null, "missing outcome cannot have an objective");
+    assert(result.outcomeStatus === "not_applicable", "missing outcome must be not_applicable");
+  } else {
     const outcome = indexes.outcomeById.get(result.outcomeId);
     assert(outcome, `unknown combat outcome ${result.outcomeId}`);
     validateObjective(result.outcomeObjectiveId, indexes, "combat outcome objective");
@@ -170,8 +365,20 @@ function validateCombatResult(result, indexes) {
       outcome.objectiveId === result.outcomeObjectiveId,
       `combat outcome ${result.outcomeId} does not belong to objective ${result.outcomeObjectiveId}`
     );
+    assert(result.outcomeStatus !== "not_applicable", "authored outcome needs a result status");
+    assert(result.triggerStatus === "accepted", "combat outcome requires an accepted trigger");
   }
-  if (result.rejectionReason !== null) assertString(result.rejectionReason, "invalid combat rejection reason");
+  const effectiveStatus = result.outcomeId === null
+    ? result.triggerStatus
+    : result.outcomeStatus;
+  if (effectiveStatus === "rejected") {
+    assert(
+      allowedRejectionReasons.has(result.rejectionReason),
+      "rejected combat result requires a known rejection reason"
+    );
+  } else {
+    assert(result.rejectionReason === null, "non-rejected combat result cannot have a rejection reason");
+  }
 }
 
 function validateActorKeys(keys, indexes, label) {
@@ -179,7 +386,10 @@ function validateActorKeys(keys, indexes, label) {
   assert(new Set(keys).size === keys.length, `${label} contains duplicate actor keys`);
   for (const actorKey of keys) {
     assert(Number.isInteger(actorKey) && actorKey > 0, `${label} contains an invalid actor key`);
-    assert(indexes.actorKeys.has(actorKey), `unknown actor ${actorKey}`);
+    assert(
+      indexes.hostileActorKeys.has(actorKey),
+      `unknown actor ${actorKey} for hostile projection`
+    );
   }
 }
 
@@ -297,7 +507,12 @@ export function validateF1UiContentEvent(event, contract, indexes = buildIndexes
       `safe point ${authority.safePointId} does not belong to beat ${authority.beatId}`
     );
   }
-  assertString(authority.attemptTimeClassification, "attemptTimeClassification is missing");
+  assert(
+    allowedAttemptTimeClassifications.has(authority.attemptTimeClassification),
+    "attemptTimeClassification is invalid"
+  );
+  validateCueProjection(event, indexes);
+  validateAttemptEvidenceProjection(event, indexes);
   validatePresentation(model.presentation, indexes, authority.objectiveId, panel.surface);
   return event;
 }
@@ -312,6 +527,11 @@ export function validateF1UiContentFixtures(document, contract) {
     "authoritative Definition path drifted"
   );
   assert(Array.isArray(document.events) && document.events.length > 0, "events are missing");
+  assert(
+    contract.questUiCues.length === requiredCuePolarities.size &&
+      contract.questUiCues.every((cue) => requiredCuePolarities.has(cue.id)),
+    "fixture cue catalog drifted from the authoritative Definition"
+  );
 
   const indexes = buildIndexes(contract);
   const fixtureIds = new Set();

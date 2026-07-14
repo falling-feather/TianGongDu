@@ -180,4 +180,130 @@ test("F1 UI negative fixture recipes fail closed for stale or UI-owned authority
     () => validateF1UiContentFixtures(missingNegativeCoverage, contract),
     /cue ui\.f1\.rain\.bell-feedback is missing negative coverage/
   );
+
+  const wrongKnownCue = structuredClone(
+    event("f1_rain_mooring_quick_hitch_overloaded")
+  );
+  wrongKnownCue.panel.model.cueId = "ui.f1.rain.bell-feedback";
+  assert.throws(
+    () => validateF1UiContentEvent(wrongKnownCue, contract),
+    /does not own objective/
+  );
+
+  const falsePositive = structuredClone(
+    event("f1_rain_mooring_quick_hitch_overloaded")
+  );
+  falsePositive.panel.model.polarity = "positive";
+  assert.throws(
+    () => validateF1UiContentEvent(falsePositive, contract),
+    /expected negative polarity/
+  );
+
+  const invalidTimeClass = structuredClone(event("f1_training_flower_phase"));
+  invalidTimeClass.panel.model.authority.attemptTimeClassification =
+    "qualifying_magic_wait";
+  assert.throws(
+    () => validateF1UiContentEvent(invalidTimeClass, contract),
+    /attemptTimeClassification is invalid/
+  );
+
+  const wrongTimeSource = structuredClone(event("f1_training_flower_phase"));
+  wrongTimeSource.panel.model.authority.attemptTimeClassification =
+    "qualifying_combat_proof";
+  assert.throws(
+    () => validateF1UiContentEvent(wrongTimeSource, contract),
+    /attemptTimeClassification does not match the exact Definition rule/
+  );
+
+  const acceptedWithRejection = structuredClone(event("f1_rain_bell_answered"));
+  acceptedWithRejection.panel.model.authority.interactionResult.rejectionReason =
+    "prerequisite_incomplete";
+  assert.throws(
+    () => validateF1UiContentEvent(acceptedWithRejection, contract),
+    /accepted interaction cannot have a rejection reason/
+  );
+
+  const playerAsHostile = structuredClone(event("f1_training_guard_phase_windward"));
+  playerAsHostile.panel.model.authority.activeActorKeys[0] = 1;
+  assert.throws(
+    () => validateF1UiContentEvent(playerAsHostile, contract),
+    /unknown actor 1 for hostile projection/
+  );
+
+  const rejectedWithoutReason = structuredClone(
+    event("f1_training_flower_proof_wrong_target")
+  );
+  rejectedWithoutReason.panel.model.authority.combatResult.rejectionReason = null;
+  assert.throws(
+    () => validateF1UiContentEvent(rejectedWithoutReason, contract),
+    /rejected combat result requires a known rejection reason/
+  );
+
+  const missingTransitionSelector = structuredClone(contract);
+  missingTransitionSelector.questUiCues.find(
+    (cue) => cue.id === "ui.f1.rain.mooring-load"
+  ).resultSelectors = [];
+  assert.throws(
+    () => validateF1UiContentEvent(
+      event("f1_rain_mooring_quick_hitch_overloaded"),
+      missingTransitionSelector
+    ),
+    /lacks an interaction transition selector/
+  );
+
+  const missingAttemptRule = structuredClone(contract);
+  const phaseCue = missingAttemptRule.questUiCues.find(
+    (cue) => cue.id === "ui.f1.training.phase"
+  );
+  phaseCue.attemptEvidenceRules = phaseCue.attemptEvidenceRules.filter(
+    (rule) => rule.objectiveId !== "f1_objective_flower_turn_counter"
+  );
+  assert.throws(
+    () => validateF1UiContentEvent(
+      event("f1_training_flower_phase"),
+      missingAttemptRule
+    ),
+    /has no exact Definition attempt evidence rule/
+  );
+
+  const ambiguousAttemptRule = structuredClone(contract);
+  const recoveryCue = ambiguousAttemptRule.questUiCues.find(
+    (cue) => cue.id === "ui.f1.training.recovery"
+  );
+  recoveryCue.attemptEvidenceRules.push(
+    structuredClone(recoveryCue.attemptEvidenceRules[0])
+  );
+  assert.throws(
+    () => validateF1UiContentEvent(
+      event("f1_training_failure_retry_offer"),
+      ambiguousAttemptRule
+    ),
+    /has ambiguous Definition attempt evidence rules/
+  );
+
+  const driftedRuleClassification = structuredClone(contract);
+  driftedRuleClassification.questUiCues.find(
+    (cue) => cue.id === "ui.f1.training.phase"
+  ).attemptEvidenceRules.find(
+    (rule) => rule.objectiveId === "f1_objective_flower_turn_counter"
+  ).classification = "qualifying_first_visit";
+  assert.throws(
+    () => validateF1UiContentEvent(
+      event("f1_training_flower_phase"),
+      driftedRuleClassification
+    ),
+    /attemptTimeClassification does not match the exact Definition rule/
+  );
+
+  const driftedRuleSentinel = structuredClone(contract);
+  driftedRuleSentinel.questUiCues.find(
+    (cue) => cue.id === "ui.f1.training.choice.lane"
+  ).attemptEvidenceRules[0].primaryResult.resultId = "f1_trigger_missing";
+  assert.throws(
+    () => validateF1UiContentEvent(
+      event("f1_training_lane_choice_available"),
+      driftedRuleSentinel
+    ),
+    /has no exact Definition attempt evidence rule/
+  );
 });

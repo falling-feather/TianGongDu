@@ -349,6 +349,94 @@ inline constexpr std::array<contracts::EncounterActorPlacementDefinition, 1> enc
     {201ULL, {4000, 1900, 0, 0}, 4U},
 }};
 
+inline constexpr std::array<contracts::ContentId, 1> quest_ui_cue_0_objectives{{
+    contracts::content_id("f1_objective_choose_arrival_clue"),
+}};
+
+inline constexpr std::array<contracts::ContentId, 1> quest_ui_cue_1_objectives{{
+    contracts::content_id("f1_objective_choose_mooring_method"),
+}};
+
+inline constexpr std::array<contracts::ContentId, 1> quest_ui_cue_2_objectives{{
+    contracts::content_id("f1_objective_secure_ferry_mooring"),
+}};
+
+inline constexpr std::array<contracts::ContentId, 1> quest_ui_cue_3_objectives{{
+    contracts::content_id("f1_objective_sound_workshop_bell"),
+}};
+
+inline constexpr std::array<contracts::ContentId, 1> quest_ui_cue_4_objectives{{
+    contracts::content_id("f1_objective_choose_training_lane"),
+}};
+
+inline constexpr std::array<contracts::ContentId, 2> quest_ui_cue_5_objectives{{
+    contracts::content_id("f1_objective_eavesguard_counter"),
+    contracts::content_id("f1_objective_flower_turn_counter"),
+}};
+
+inline constexpr std::array<contracts::ContentId, 8> quest_ui_cue_6_objectives{{
+    contracts::content_id("f1_objective_eavesguard_counter"),
+    contracts::content_id("f1_objective_commit_eavesguard_heavy"),
+    contracts::content_id("f1_objective_break_eavesguard_target"),
+    contracts::content_id("f1_objective_enter_flower_turn"),
+    contracts::content_id("f1_objective_flower_turn_counter"),
+    contracts::content_id("f1_objective_commit_flower_turn_light"),
+    contracts::content_id("f1_objective_commit_flower_turn_heavy"),
+    contracts::content_id("f1_objective_break_flower_turn_target"),
+}};
+
+inline constexpr std::array<contracts::ContentId, 2> quest_ui_cue_7_objectives{{
+    contracts::content_id("f1_objective_eavesguard_counter"),
+    contracts::content_id("f1_objective_flower_turn_counter"),
+}};
+
+inline constexpr std::array<contracts::QuestUiResultSelectorDefinition, 1> quest_ui_cue_2_selectors{{
+    {contracts::QuestUiProjectionSource::interaction_feedback, contracts::content_id("f1_objective_secure_ferry_mooring"), contracts::content_id("f1_interaction_choose_quick_hitch"), contracts::ContentId{}, contracts::QuestUiPolarityOverride::negative},
+}};
+
+inline constexpr std::array<contracts::QuestUiResultSelectorDefinition, 2> quest_ui_cue_6_selectors{{
+    {contracts::QuestUiProjectionSource::combat_feedback, contracts::content_id("f1_objective_break_eavesguard_target"), contracts::content_id("f1_trigger_eavesguard_heavy"), contracts::content_id("f1_outcome_break_eavesguard_target"), contracts::QuestUiPolarityOverride::none},
+    {contracts::QuestUiProjectionSource::combat_feedback, contracts::content_id("f1_objective_break_flower_turn_target"), contracts::content_id("f1_trigger_flower_turn_heavy"), contracts::content_id("f1_outcome_break_flower_turn_target"), contracts::QuestUiPolarityOverride::none},
+}};
+
+inline constexpr std::array<contracts::QuestUiAttemptEvidenceRuleDefinition, 2> quest_ui_cue_0_attempt_evidence{{
+    {contracts::QuestUiProjectionSource::choice_available, contracts::content_id("f1_objective_choose_arrival_clue"), {contracts::ContentId{}, contracts::QuestUiResultStatus::not_applicable, contracts::QuestUiRejectionReason::none}, {contracts::ContentId{}, contracts::QuestUiResultStatus::not_applicable, contracts::QuestUiRejectionReason::none}, contracts::QuestUiAttemptTimeClassification::qualifying_first_visit},
+    {contracts::QuestUiProjectionSource::interaction_feedback, contracts::content_id("f1_objective_choose_arrival_clue"), {contracts::content_id("f1_interaction_arrival_clue_drowned_manifest"), contracts::QuestUiResultStatus::ignored_repeat, contracts::QuestUiRejectionReason::selection_already_committed}, {contracts::ContentId{}, contracts::QuestUiResultStatus::not_applicable, contracts::QuestUiRejectionReason::none}, contracts::QuestUiAttemptTimeClassification::repeat_no_progress},
+}};
+
+inline constexpr std::array<contracts::QuestUiAttemptEvidenceRuleDefinition, 1> quest_ui_cue_1_attempt_evidence{{
+    {contracts::QuestUiProjectionSource::choice_available, contracts::content_id("f1_objective_choose_mooring_method"), {contracts::ContentId{}, contracts::QuestUiResultStatus::not_applicable, contracts::QuestUiRejectionReason::none}, {contracts::ContentId{}, contracts::QuestUiResultStatus::not_applicable, contracts::QuestUiRejectionReason::none}, contracts::QuestUiAttemptTimeClassification::qualifying_craft_decision},
+}};
+
+inline constexpr std::array<contracts::QuestUiAttemptEvidenceRuleDefinition, 2> quest_ui_cue_2_attempt_evidence{{
+    {contracts::QuestUiProjectionSource::interaction_feedback, contracts::content_id("f1_objective_secure_ferry_mooring"), {contracts::content_id("f1_interaction_lock_cross_belay"), contracts::QuestUiResultStatus::accepted, contracts::QuestUiRejectionReason::none}, {contracts::ContentId{}, contracts::QuestUiResultStatus::not_applicable, contracts::QuestUiRejectionReason::none}, contracts::QuestUiAttemptTimeClassification::qualifying_craft_decision},
+    {contracts::QuestUiProjectionSource::interaction_feedback, contracts::content_id("f1_objective_secure_ferry_mooring"), {contracts::content_id("f1_interaction_choose_quick_hitch"), contracts::QuestUiResultStatus::accepted, contracts::QuestUiRejectionReason::none}, {contracts::ContentId{}, contracts::QuestUiResultStatus::not_applicable, contracts::QuestUiRejectionReason::none}, contracts::QuestUiAttemptTimeClassification::qualifying_error_feedback},
+}};
+
+inline constexpr std::array<contracts::QuestUiAttemptEvidenceRuleDefinition, 2> quest_ui_cue_3_attempt_evidence{{
+    {contracts::QuestUiProjectionSource::interaction_feedback, contracts::content_id("f1_objective_sound_workshop_bell"), {contracts::content_id("f1_interaction_sound_workshop_bell"), contracts::QuestUiResultStatus::rejected, contracts::QuestUiRejectionReason::prerequisite_incomplete}, {contracts::ContentId{}, contracts::QuestUiResultStatus::not_applicable, contracts::QuestUiRejectionReason::none}, contracts::QuestUiAttemptTimeClassification::qualifying_wrong_order_feedback},
+    {contracts::QuestUiProjectionSource::interaction_feedback, contracts::content_id("f1_objective_sound_workshop_bell"), {contracts::content_id("f1_interaction_sound_workshop_bell"), contracts::QuestUiResultStatus::accepted, contracts::QuestUiRejectionReason::none}, {contracts::ContentId{}, contracts::QuestUiResultStatus::not_applicable, contracts::QuestUiRejectionReason::none}, contracts::QuestUiAttemptTimeClassification::qualifying_craft_confirmation},
+}};
+
+inline constexpr std::array<contracts::QuestUiAttemptEvidenceRuleDefinition, 1> quest_ui_cue_4_attempt_evidence{{
+    {contracts::QuestUiProjectionSource::choice_available, contracts::content_id("f1_objective_choose_training_lane"), {contracts::ContentId{}, contracts::QuestUiResultStatus::not_applicable, contracts::QuestUiRejectionReason::none}, {contracts::ContentId{}, contracts::QuestUiResultStatus::not_applicable, contracts::QuestUiRejectionReason::none}, contracts::QuestUiAttemptTimeClassification::qualifying_dialogue_decision},
+}};
+
+inline constexpr std::array<contracts::QuestUiAttemptEvidenceRuleDefinition, 2> quest_ui_cue_5_attempt_evidence{{
+    {contracts::QuestUiProjectionSource::objective_state, contracts::content_id("f1_objective_eavesguard_counter"), {contracts::ContentId{}, contracts::QuestUiResultStatus::not_applicable, contracts::QuestUiRejectionReason::none}, {contracts::ContentId{}, contracts::QuestUiResultStatus::not_applicable, contracts::QuestUiRejectionReason::none}, contracts::QuestUiAttemptTimeClassification::qualifying_training_risk},
+    {contracts::QuestUiProjectionSource::objective_state, contracts::content_id("f1_objective_flower_turn_counter"), {contracts::ContentId{}, contracts::QuestUiResultStatus::not_applicable, contracts::QuestUiRejectionReason::none}, {contracts::ContentId{}, contracts::QuestUiResultStatus::not_applicable, contracts::QuestUiRejectionReason::none}, contracts::QuestUiAttemptTimeClassification::qualifying_training_risk},
+}};
+
+inline constexpr std::array<contracts::QuestUiAttemptEvidenceRuleDefinition, 2> quest_ui_cue_6_attempt_evidence{{
+    {contracts::QuestUiProjectionSource::combat_feedback, contracts::content_id("f1_objective_eavesguard_counter"), {contracts::content_id("f1_trigger_eavesguard_counter"), contracts::QuestUiResultStatus::accepted, contracts::QuestUiRejectionReason::none}, {contracts::ContentId{}, contracts::QuestUiResultStatus::not_applicable, contracts::QuestUiRejectionReason::none}, contracts::QuestUiAttemptTimeClassification::qualifying_combat_proof},
+    {contracts::QuestUiProjectionSource::combat_feedback, contracts::content_id("f1_objective_break_flower_turn_target"), {contracts::content_id("f1_trigger_flower_turn_heavy"), contracts::QuestUiResultStatus::accepted, contracts::QuestUiRejectionReason::none}, {contracts::content_id("f1_outcome_break_flower_turn_target"), contracts::QuestUiResultStatus::rejected, contracts::QuestUiRejectionReason::wrong_target}, contracts::QuestUiAttemptTimeClassification::qualifying_combat_feedback},
+}};
+
+inline constexpr std::array<contracts::QuestUiAttemptEvidenceRuleDefinition, 2> quest_ui_cue_7_attempt_evidence{{
+    {contracts::QuestUiProjectionSource::recovery_offer, contracts::content_id("f1_objective_eavesguard_counter"), {contracts::ContentId{}, contracts::QuestUiResultStatus::not_applicable, contracts::QuestUiRejectionReason::none}, {contracts::ContentId{}, contracts::QuestUiResultStatus::not_applicable, contracts::QuestUiRejectionReason::none}, contracts::QuestUiAttemptTimeClassification::failure_retry_excluded},
+    {contracts::QuestUiProjectionSource::recovery_resume, contracts::content_id("f1_objective_flower_turn_counter"), {contracts::ContentId{}, contracts::QuestUiResultStatus::not_applicable, contracts::QuestUiRejectionReason::none}, {contracts::ContentId{}, contracts::QuestUiResultStatus::not_applicable, contracts::QuestUiRejectionReason::none}, contracts::QuestUiAttemptTimeClassification::resume_no_duplicate_progress},
+}};
+
 inline constexpr std::array<contracts::VerticalSliceBeatDefinition, 7> f1_beats{{
     {contracts::content_id("f1_beat_rain_ferry_arrival"), contracts::VerticalSliceBeatKind::exploration, 9, contracts::content_id("f1_cell_rain_ferry"), std::span<const contracts::ContentId>{beat_0_objectives}},
     {contracts::content_id("f1_beat_shen_yan_training"), contracts::VerticalSliceBeatKind::training, 8, contracts::content_id("f1_cell_rain_ferry"), std::span<const contracts::ContentId>{beat_1_objectives}},
@@ -481,6 +569,17 @@ inline constexpr std::array<contracts::QuestResolutionRewardDefinition, 2> f1_qu
     {contracts::content_id("f1_resolution_reward_restore_shared_mark"), contracts::content_id("f1_objective_choose_resolution"), contracts::content_id("f1_choice_resolution_restore_shared_mark"), contracts::content_id("f1_reward_joint_workshop_formula"), contracts::content_id("f1_claim_resolution_restore_shared_mark")},
 }};
 
+inline constexpr std::array<contracts::QuestUiCueDefinition, 8> f1_quest_ui_cues{{
+    {contracts::content_id("ui.f1.rain.choice.arrival-clue"), contracts::content_id("f1_beat_rain_ferry_arrival"), contracts::quest_ui_projection_source_bit(contracts::QuestUiProjectionSource::choice_available) | contracts::quest_ui_projection_source_bit(contracts::QuestUiProjectionSource::interaction_feedback), std::span<const contracts::ContentId>{quest_ui_cue_0_objectives}, std::span<const contracts::QuestUiResultSelectorDefinition>{}, std::span<const contracts::QuestUiAttemptEvidenceRuleDefinition>{quest_ui_cue_0_attempt_evidence}},
+    {contracts::content_id("ui.f1.rain.choice.mooring-method"), contracts::content_id("f1_beat_rain_ferry_arrival"), contracts::quest_ui_projection_source_bit(contracts::QuestUiProjectionSource::choice_available), std::span<const contracts::ContentId>{quest_ui_cue_1_objectives}, std::span<const contracts::QuestUiResultSelectorDefinition>{}, std::span<const contracts::QuestUiAttemptEvidenceRuleDefinition>{quest_ui_cue_1_attempt_evidence}},
+    {contracts::content_id("ui.f1.rain.mooring-load"), contracts::content_id("f1_beat_rain_ferry_arrival"), contracts::quest_ui_projection_source_bit(contracts::QuestUiProjectionSource::interaction_feedback), std::span<const contracts::ContentId>{quest_ui_cue_2_objectives}, std::span<const contracts::QuestUiResultSelectorDefinition>{quest_ui_cue_2_selectors}, std::span<const contracts::QuestUiAttemptEvidenceRuleDefinition>{quest_ui_cue_2_attempt_evidence}},
+    {contracts::content_id("ui.f1.rain.bell-feedback"), contracts::content_id("f1_beat_rain_ferry_arrival"), contracts::quest_ui_projection_source_bit(contracts::QuestUiProjectionSource::interaction_feedback), std::span<const contracts::ContentId>{quest_ui_cue_3_objectives}, std::span<const contracts::QuestUiResultSelectorDefinition>{}, std::span<const contracts::QuestUiAttemptEvidenceRuleDefinition>{quest_ui_cue_3_attempt_evidence}},
+    {contracts::content_id("ui.f1.training.choice.lane"), contracts::content_id("f1_beat_shen_yan_training"), contracts::quest_ui_projection_source_bit(contracts::QuestUiProjectionSource::choice_available), std::span<const contracts::ContentId>{quest_ui_cue_4_objectives}, std::span<const contracts::QuestUiResultSelectorDefinition>{}, std::span<const contracts::QuestUiAttemptEvidenceRuleDefinition>{quest_ui_cue_4_attempt_evidence}},
+    {contracts::content_id("ui.f1.training.phase"), contracts::content_id("f1_beat_shen_yan_training"), contracts::quest_ui_projection_source_bit(contracts::QuestUiProjectionSource::objective_state), std::span<const contracts::ContentId>{quest_ui_cue_5_objectives}, std::span<const contracts::QuestUiResultSelectorDefinition>{}, std::span<const contracts::QuestUiAttemptEvidenceRuleDefinition>{quest_ui_cue_5_attempt_evidence}},
+    {contracts::content_id("ui.f1.training.action-proof"), contracts::content_id("f1_beat_shen_yan_training"), contracts::quest_ui_projection_source_bit(contracts::QuestUiProjectionSource::combat_feedback), std::span<const contracts::ContentId>{quest_ui_cue_6_objectives}, std::span<const contracts::QuestUiResultSelectorDefinition>{quest_ui_cue_6_selectors}, std::span<const contracts::QuestUiAttemptEvidenceRuleDefinition>{quest_ui_cue_6_attempt_evidence}},
+    {contracts::content_id("ui.f1.training.recovery"), contracts::content_id("f1_beat_shen_yan_training"), contracts::quest_ui_projection_source_bit(contracts::QuestUiProjectionSource::recovery_offer) | contracts::quest_ui_projection_source_bit(contracts::QuestUiProjectionSource::recovery_resume), std::span<const contracts::ContentId>{quest_ui_cue_7_objectives}, std::span<const contracts::QuestUiResultSelectorDefinition>{}, std::span<const contracts::QuestUiAttemptEvidenceRuleDefinition>{quest_ui_cue_7_attempt_evidence}},
+}};
+
 inline constexpr std::array<contracts::CombatActorConfig, 11> f1_combat_actors{{
     {1ULL, contracts::content_id("actor_f1_player"), contracts::CombatFaction::player, {-12000, -1600, 0, 0}, {120, 120, 100, 100, 80, 80, 30, 30, 0}, {contracts::stable_content_key("stance_eavesguard"), contracts::stable_content_key("stance_flower_turn"), 0, 0}, 2U, contracts::stable_content_key("stance_eavesguard"), {30, 6, 2, 120, 12, 4}, true},
     {101ULL, contracts::content_id("jn_enemy_leaking_umbrella_doll"), contracts::CombatFaction::hostile, {-4000, -2600, 0, 0}, {90, 90, 80, 80, 40, 40, 0, 0, 0}, {contracts::stable_content_key("stance_umbrella_rust"), 0, 0, 0}, 1U, contracts::stable_content_key("stance_umbrella_rust"), {45, 10, 2, 150, 15, 3}, false},
@@ -560,6 +659,7 @@ inline constexpr contracts::VerticalSliceDefinition f1_vertical_slice_definition
     std::span<const contracts::QuestEncounterActivationDefinition>{f1_quest_encounter_activations},
     std::span<const contracts::QuestBossPhaseDefinition>{f1_quest_boss_phases},
     std::span<const contracts::QuestResolutionRewardDefinition>{f1_quest_resolution_rewards},
+    std::span<const contracts::QuestUiCueDefinition>{f1_quest_ui_cues},
 };
 
 }  // namespace tgd::content::generated

@@ -23,6 +23,7 @@ test("F1 one-hour contract and generated C++ stay synchronized", async () => {
   const contract = await loadF1SliceContract();
   const generated = await readFile(generatedPath, "utf8");
   assert.equal(generated, renderF1SliceContract(contract));
+  assert.equal(contract.schemaVersion, "1.6.0");
   assert.equal(contract.beats.reduce((sum, beat) => sum + beat.targetMinutes, 0), 60);
   assert.equal(contract.timing.endToEndTestBudgetMinutes, 70);
   assert.equal(contract.timing.activityGraceTicks, 180);
@@ -48,6 +49,32 @@ test("F1 one-hour contract and generated C++ stay synchronized", async () => {
     18
   );
   assert.equal(contract.questInteractions.length, 41);
+  assert.deepEqual(
+    contract.questUiCues.map((cue) => cue.id),
+    [
+      "ui.f1.rain.choice.arrival-clue",
+      "ui.f1.rain.choice.mooring-method",
+      "ui.f1.rain.mooring-load",
+      "ui.f1.rain.bell-feedback",
+      "ui.f1.training.choice.lane",
+      "ui.f1.training.phase",
+      "ui.f1.training.action-proof",
+      "ui.f1.training.recovery"
+    ]
+  );
+  assert.equal(
+    contract.questUiCues.reduce(
+      (count, cue) => count + cue.attemptEvidenceRules.length,
+      0
+    ),
+    14
+  );
+  assert(
+    contract.questUiCues.every(
+      (cue) => cue.attemptEvidenceRules.length >= 1 &&
+        cue.attemptEvidenceRules.length <= 16
+    )
+  );
   assert.deepEqual(
     contract.beats[0].objectiveIds,
     [
@@ -203,9 +230,211 @@ test("F1 stable content IDs have unique 64-bit keys", async () => {
       reward.rewardId,
       reward.rewardDedupKey
     ]),
+    ...contract.questUiCues.map((cue) => cue.id),
     ...contract.questInteractions.map((interaction) => interaction.selectionId).filter(Boolean)
   ];
   assert.equal(new Set(ids.map((id) => fnv1a64(id))).size, ids.length);
+});
+
+test("F1 quest UI cues authorize first-two-beat projections without Objective-specific Runtime", async () => {
+  const contract = await loadF1SliceContract();
+  const mooring = contract.questUiCues.find(
+    (cue) => cue.id === "ui.f1.rain.mooring-load"
+  );
+  assert.deepEqual(mooring.resultSelectors, [
+    {
+      source: "interaction_feedback",
+      objectiveId: "f1_objective_secure_ferry_mooring",
+      primaryResultId: "f1_interaction_choose_quick_hitch",
+      secondaryResultId: null,
+      polarityOverride: "negative"
+    }
+  ]);
+  assert.deepEqual(
+    mooring.attemptEvidenceRules.find(
+      (rule) => rule.classification === "qualifying_error_feedback"
+    ),
+    {
+      source: "interaction_feedback",
+      objectiveId: "f1_objective_secure_ferry_mooring",
+      primaryResult: {
+        resultId: "f1_interaction_choose_quick_hitch",
+        status: "accepted",
+        rejectionReason: "none"
+      },
+      secondaryResult: {
+        resultId: null,
+        status: "not_applicable",
+        rejectionReason: "none"
+      },
+      classification: "qualifying_error_feedback"
+    }
+  );
+
+  const proof = contract.questUiCues.find(
+    (cue) => cue.id === "ui.f1.training.action-proof"
+  );
+  assert.equal(proof.objectiveIds.length, 8);
+  assert.deepEqual(
+    proof.resultSelectors.map((selector) => ({
+      primaryResultId: selector.primaryResultId,
+      secondaryResultId: selector.secondaryResultId,
+      polarityOverride: selector.polarityOverride
+    })),
+    [
+      {
+        primaryResultId: "f1_trigger_eavesguard_heavy",
+        secondaryResultId: "f1_outcome_break_eavesguard_target",
+        polarityOverride: "none"
+      },
+      {
+        primaryResultId: "f1_trigger_flower_turn_heavy",
+        secondaryResultId: "f1_outcome_break_flower_turn_target",
+        polarityOverride: "none"
+      }
+    ]
+  );
+  assert.deepEqual(
+    proof.attemptEvidenceRules.find(
+      (rule) => rule.classification === "qualifying_combat_feedback"
+    ),
+    {
+      source: "combat_feedback",
+      objectiveId: "f1_objective_break_flower_turn_target",
+      primaryResult: {
+        resultId: "f1_trigger_flower_turn_heavy",
+        status: "accepted",
+        rejectionReason: "none"
+      },
+      secondaryResult: {
+        resultId: "f1_outcome_break_flower_turn_target",
+        status: "rejected",
+        rejectionReason: "wrong_target"
+      },
+      classification: "qualifying_combat_feedback"
+    }
+  );
+
+  const duplicateAttemptRule = structuredClone(contract);
+  duplicateAttemptRule.questUiCues[0].attemptEvidenceRules.push(
+    structuredClone(duplicateAttemptRule.questUiCues[0].attemptEvidenceRules[0])
+  );
+  assert.throws(
+    () => validateF1SliceContract(duplicateAttemptRule, catalog),
+    /duplicate .* attempt evidence selector/
+  );
+
+  const missingSourceRule = structuredClone(contract);
+  missingSourceRule.questUiCues[0].attemptEvidenceRules =
+    missingSourceRule.questUiCues[0].attemptEvidenceRules.filter(
+      (rule) => rule.source !== "interaction_feedback"
+    );
+  assert.throws(
+    () => validateF1SliceContract(missingSourceRule, catalog),
+    /missing attempt evidence for an authored source/
+  );
+
+  const invalidNotApplicableSentinel = structuredClone(contract);
+  invalidNotApplicableSentinel.questUiCues[0]
+    .attemptEvidenceRules[0].primaryResult.resultId = "f1_interaction_missing";
+  assert.throws(
+    () => validateF1SliceContract(invalidNotApplicableSentinel, catalog),
+    /invalid attempt evidence rule domain/
+  );
+
+  const invalidSourceClassification = structuredClone(contract);
+  invalidSourceClassification.questUiCues[0]
+    .attemptEvidenceRules[0].classification = "qualifying_combat_proof";
+  assert.throws(
+    () => validateF1SliceContract(invalidSourceClassification, catalog),
+    /invalid attempt evidence rule domain/
+  );
+
+  const unknownAttemptInteraction = structuredClone(contract);
+  unknownAttemptInteraction.questUiCues[0]
+    .attemptEvidenceRules[1].primaryResult.resultId = "f1_interaction_missing";
+  assert.throws(
+    () => validateF1SliceContract(unknownAttemptInteraction, catalog),
+    /attempt evidence references an invalid result/
+  );
+
+  const tooManyAttemptRules = structuredClone(contract);
+  while (tooManyAttemptRules.questUiCues[0].attemptEvidenceRules.length < 17) {
+    tooManyAttemptRules.questUiCues[0].attemptEvidenceRules.push(
+      structuredClone(tooManyAttemptRules.questUiCues[0].attemptEvidenceRules[0])
+    );
+  }
+  assert.throws(
+    () => validateF1SliceContract(tooManyAttemptRules, catalog),
+    /invalid attempt evidence rules/
+  );
+
+  const crossBeatObjective = structuredClone(contract);
+  crossBeatObjective.questUiCues[5].objectiveIds[0] =
+    crossBeatObjective.beats[0].objectiveIds[0];
+  assert.throws(
+    () => validateF1SliceContract(crossBeatObjective, catalog),
+    /references an objective outside its beat/
+  );
+
+  const overlappingDomain = structuredClone(contract);
+  overlappingDomain.questUiCues[3].objectiveIds[0] =
+    "f1_objective_secure_ferry_mooring";
+  assert.throws(
+    () => validateF1SliceContract(overlappingDomain, catalog),
+    /overlaps another quest UI cue domain/
+  );
+
+  const unknownInteractionSelector = structuredClone(contract);
+  unknownInteractionSelector.questUiCues[2].resultSelectors[0].primaryResultId =
+    "f1_interaction_missing";
+  assert.throws(
+    () => validateF1SliceContract(unknownInteractionSelector, catalog),
+    /interaction selector references an invalid result/
+  );
+
+  const crossObjectiveWithoutSelector = structuredClone(contract);
+  crossObjectiveWithoutSelector.questUiCues[2].resultSelectors = [];
+  assert.throws(
+    () => validateF1SliceContract(crossObjectiveWithoutSelector, catalog),
+    /interaction attempt evidence is not an authored transition/
+  );
+
+  const mismatchedCombatOutcome = structuredClone(contract);
+  mismatchedCombatOutcome.questUiCues[6].resultSelectors[1].secondaryResultId =
+    "f1_outcome_break_eavesguard_target";
+  assert.throws(
+    () => validateF1SliceContract(mismatchedCombatOutcome, catalog),
+    /combat selector is not an authored trigger-to-outcome transition/
+  );
+
+  const tooManyCueObjectives = structuredClone(contract);
+  tooManyCueObjectives.questUiCues[6].objectiveIds.push(
+    "f1_objective_choose_training_lane"
+  );
+  assert.throws(
+    () => validateF1SliceContract(tooManyCueObjectives, catalog),
+    /invalid projection objectives/
+  );
+
+  const tooManyResultSelectors = structuredClone(contract);
+  while (tooManyResultSelectors.questUiCues[6].resultSelectors.length < 9) {
+    tooManyResultSelectors.questUiCues[6].resultSelectors.push(
+      structuredClone(tooManyResultSelectors.questUiCues[6].resultSelectors[0])
+    );
+  }
+  assert.throws(
+    () => validateF1SliceContract(tooManyResultSelectors, catalog),
+    /invalid result selectors/
+  );
+
+  const unsupportedPolarityOverride = structuredClone(contract);
+  unsupportedPolarityOverride.questUiCues[2].resultSelectors[0].polarityOverride =
+    "positive";
+  assert.throws(
+    () => validateF1SliceContract(unsupportedPolarityOverride, catalog),
+    /invalid result selector domain/
+  );
 });
 
 test("F1 opening objectives require valid content-driven scene interactions", async () => {

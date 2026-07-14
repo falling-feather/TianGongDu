@@ -21,12 +21,13 @@
     "questCombatOutcomes",
     "questBossPhases",
     "questResolutionRewards",
+    "questUiCues",
     "paddingPolicy",
     "ports"
   ],
   "properties": {
     "$schema": { "type": "string" },
-    "schemaVersion": { "const": "1.4.0" },
+    "schemaVersion": { "const": "1.6.0" },
     "id": { "const": "f1_rainy_umbrella_trial" },
     "view": {
       "type": "object",
@@ -162,6 +163,14 @@
       "minItems": 2,
       "maxItems": 16,
       "items": { "$ref": "#/$defs/questResolutionReward" }
+    },
+    "questUiCues": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 16,
+      "uniqueItems": true,
+      "description": "Definition-owned projection routing and exact attempt-evidence classification for the first two beats. These cues select presentation models but never advance Quest state.",
+      "items": { "$ref": "#/$defs/questUiCue" }
     },
     "paddingPolicy": {
       "type": "object",
@@ -613,6 +622,183 @@
         "selectionId": { "$ref": "#/$defs/id" },
         "rewardId": { "$ref": "#/$defs/id" },
         "rewardDedupKey": { "$ref": "#/$defs/id" }
+      }
+    },
+    "questUiResultSelector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "objectiveId",
+        "primaryResultId",
+        "secondaryResultId",
+        "polarityOverride"
+      ],
+      "properties": {
+        "source": { "enum": ["interaction_feedback", "combat_feedback"] },
+        "objectiveId": { "$ref": "#/$defs/id" },
+        "primaryResultId": { "$ref": "#/$defs/id" },
+        "secondaryResultId": {
+          "anyOf": [
+            { "$ref": "#/$defs/id" },
+            { "type": "null" }
+          ]
+        },
+        "polarityOverride": { "enum": ["none", "negative"] }
+      }
+    },
+    "questUiAttemptEvidenceResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["resultId", "status", "rejectionReason"],
+      "properties": {
+        "resultId": {
+          "anyOf": [
+            { "$ref": "#/$defs/id" },
+            { "type": "null" }
+          ]
+        },
+        "status": {
+          "enum": ["not_applicable", "accepted", "rejected", "ignored_repeat", "pending"]
+        },
+        "rejectionReason": {
+          "enum": [
+            "none",
+            "prerequisite_incomplete",
+            "selection_already_committed",
+            "wrong_target"
+          ]
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "resultId": { "type": "null" },
+            "status": { "const": "not_applicable" },
+            "rejectionReason": { "const": "none" }
+          }
+        },
+        {
+          "properties": {
+            "resultId": { "$ref": "#/$defs/id" },
+            "status": { "enum": ["accepted", "pending"] },
+            "rejectionReason": { "const": "none" }
+          }
+        },
+        {
+          "properties": {
+            "resultId": { "$ref": "#/$defs/id" },
+            "status": { "const": "rejected" },
+            "rejectionReason": {
+              "enum": [
+                "prerequisite_incomplete",
+                "selection_already_committed",
+                "wrong_target"
+              ]
+            }
+          }
+        },
+        {
+          "properties": {
+            "resultId": { "$ref": "#/$defs/id" },
+            "status": { "const": "ignored_repeat" },
+            "rejectionReason": { "const": "selection_already_committed" }
+          }
+        }
+      ]
+    },
+    "questUiAttemptEvidenceRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "objectiveId",
+        "primaryResult",
+        "secondaryResult",
+        "classification"
+      ],
+      "properties": {
+        "source": {
+          "enum": [
+            "choice_available",
+            "interaction_feedback",
+            "objective_state",
+            "combat_feedback",
+            "recovery_offer",
+            "recovery_resume"
+          ]
+        },
+        "objectiveId": { "$ref": "#/$defs/id" },
+        "primaryResult": { "$ref": "#/$defs/questUiAttemptEvidenceResult" },
+        "secondaryResult": { "$ref": "#/$defs/questUiAttemptEvidenceResult" },
+        "classification": {
+          "enum": [
+            "qualifying_first_visit",
+            "repeat_no_progress",
+            "qualifying_craft_decision",
+            "qualifying_error_feedback",
+            "qualifying_wrong_order_feedback",
+            "qualifying_craft_confirmation",
+            "qualifying_dialogue_decision",
+            "qualifying_training_risk",
+            "qualifying_combat_proof",
+            "qualifying_combat_feedback",
+            "failure_retry_excluded",
+            "resume_no_duplicate_progress"
+          ]
+        }
+      }
+    },
+    "questUiCue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "beatId",
+        "sources",
+        "objectiveIds",
+        "resultSelectors",
+        "attemptEvidenceRules"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "beatId": { "$ref": "#/$defs/id" },
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "choice_available",
+              "interaction_feedback",
+              "objective_state",
+              "combat_feedback",
+              "recovery_offer",
+              "recovery_resume"
+            ]
+          }
+        },
+        "objectiveIds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/id" }
+        },
+        "resultSelectors": {
+          "type": "array",
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/questUiResultSelector" }
+        },
+        "attemptEvidenceRules": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/questUiAttemptEvidenceRule" }
+        }
       }
     },
     "port": {

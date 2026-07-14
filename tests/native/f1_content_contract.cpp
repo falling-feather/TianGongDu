@@ -2,6 +2,7 @@
 #include <tgd/contracts/content_definition.hpp>
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
@@ -79,6 +80,162 @@ int main() {
                 tgd::contracts::stable_content_key("f1_objective_inspect_travel_writ"),
         "the expanded opening scene interactions are generated content, not presentation rules"
     );
+    const auto find_ui_cue = [definition](std::string_view id) {
+        return std::find_if(
+            definition->quest_ui_cues.begin(),
+            definition->quest_ui_cues.end(),
+            [id](const tgd::contracts::QuestUiCueDefinition& cue) {
+                return cue.cue_id.key == tgd::contracts::stable_content_key(id);
+            }
+        );
+    };
+    const auto mooring_load_cue = find_ui_cue("ui.f1.rain.mooring-load");
+    const auto action_proof_cue = find_ui_cue("ui.f1.training.action-proof");
+    std::size_t attempt_evidence_rule_count = 0;
+    for (const auto& cue : definition->quest_ui_cues) {
+        attempt_evidence_rule_count += cue.attempt_evidence_rules.size();
+    }
+    ok &= expect(
+        definition->quest_ui_cues.size() == 8 &&
+            attempt_evidence_rule_count == 14 &&
+            mooring_load_cue != definition->quest_ui_cues.end() &&
+            mooring_load_cue->objective_ids.size() == 1 &&
+            mooring_load_cue->result_selectors.size() == 1 &&
+            mooring_load_cue->result_selectors.front().primary_result_id.key ==
+                tgd::contracts::stable_content_key(
+                    "f1_interaction_choose_quick_hitch"
+                ) &&
+            mooring_load_cue->result_selectors.front().polarity_override ==
+                tgd::contracts::QuestUiPolarityOverride::negative,
+        "the generated rain-ferry cue preserves accepted-but-negative craft feedback"
+    );
+    ok &= expect(
+        mooring_load_cue != definition->quest_ui_cues.end() &&
+            std::any_of(
+                mooring_load_cue->attempt_evidence_rules.begin(),
+                mooring_load_cue->attempt_evidence_rules.end(),
+                [](const tgd::contracts::QuestUiAttemptEvidenceRuleDefinition& rule) {
+                    return rule.source ==
+                               tgd::contracts::QuestUiProjectionSource::interaction_feedback &&
+                           rule.objective_id.key == tgd::contracts::stable_content_key(
+                                                        "f1_objective_secure_ferry_mooring"
+                                                    ) &&
+                           rule.primary_result.result_id.key ==
+                               tgd::contracts::stable_content_key(
+                                   "f1_interaction_choose_quick_hitch"
+                               ) &&
+                           rule.primary_result.status ==
+                               tgd::contracts::QuestUiResultStatus::accepted &&
+                           rule.primary_result.rejection_reason ==
+                               tgd::contracts::QuestUiRejectionReason::none &&
+                           rule.secondary_result.status ==
+                               tgd::contracts::QuestUiResultStatus::not_applicable &&
+                           rule.classification ==
+                               tgd::contracts::QuestUiAttemptTimeClassification::
+                                   qualifying_error_feedback;
+                }
+            ),
+        "quick-hitch overload feedback is exact Definition-owned attempt evidence"
+    );
+    ok &= expect(
+        action_proof_cue != definition->quest_ui_cues.end() &&
+            action_proof_cue->objective_ids.size() == 8 &&
+            action_proof_cue->result_selectors.size() == 2 &&
+            action_proof_cue->result_selectors[0].primary_result_id.key ==
+                tgd::contracts::stable_content_key("f1_trigger_eavesguard_heavy") &&
+            action_proof_cue->result_selectors[0].secondary_result_id.key ==
+                tgd::contracts::stable_content_key(
+                    "f1_outcome_break_eavesguard_target"
+                ) &&
+            action_proof_cue->result_selectors[1].primary_result_id.key ==
+                tgd::contracts::stable_content_key("f1_trigger_flower_turn_heavy") &&
+            action_proof_cue->result_selectors[1].secondary_result_id.key ==
+                tgd::contracts::stable_content_key(
+                    "f1_outcome_break_flower_turn_target"
+                ),
+        "the generated training cue keeps action and world outcomes in separate result slots"
+    );
+    ok &= expect(
+        action_proof_cue != definition->quest_ui_cues.end() &&
+            std::any_of(
+                action_proof_cue->attempt_evidence_rules.begin(),
+                action_proof_cue->attempt_evidence_rules.end(),
+                [](const tgd::contracts::QuestUiAttemptEvidenceRuleDefinition& rule) {
+                    return rule.source ==
+                               tgd::contracts::QuestUiProjectionSource::combat_feedback &&
+                           rule.objective_id.key == tgd::contracts::stable_content_key(
+                                                        "f1_objective_break_flower_turn_target"
+                                                    ) &&
+                           rule.primary_result.result_id.key ==
+                               tgd::contracts::stable_content_key(
+                                   "f1_trigger_flower_turn_heavy"
+                               ) &&
+                           rule.primary_result.status ==
+                               tgd::contracts::QuestUiResultStatus::accepted &&
+                           rule.secondary_result.result_id.key ==
+                               tgd::contracts::stable_content_key(
+                                   "f1_outcome_break_flower_turn_target"
+                               ) &&
+                           rule.secondary_result.status ==
+                               tgd::contracts::QuestUiResultStatus::rejected &&
+                           rule.secondary_result.rejection_reason ==
+                               tgd::contracts::QuestUiRejectionReason::wrong_target &&
+                           rule.classification ==
+                               tgd::contracts::QuestUiAttemptTimeClassification::
+                                   qualifying_combat_feedback;
+                }
+            ),
+        "wrong-target flower proof remains exact two-slot Definition-owned evidence"
+    );
+    for (const auto& cue : definition->quest_ui_cues) {
+        const auto beat = std::find_if(
+            definition->beats.begin(),
+            definition->beats.end(),
+            [&cue](const tgd::contracts::VerticalSliceBeatDefinition& candidate) {
+                return candidate.id.key == cue.beat_id.key;
+            }
+        );
+        ok &= expect(
+            beat != definition->beats.end() &&
+                static_cast<std::size_t>(beat - definition->beats.begin()) < 2,
+            "F1 1.6 task UI cues remain scoped to the first two authored beats"
+        );
+        if (beat == definition->beats.end()) {
+            continue;
+        }
+        for (const auto& objective : cue.objective_ids) {
+            ok &= expect(
+                std::find_if(
+                    beat->objectives.begin(),
+                    beat->objectives.end(),
+                    [&objective](const tgd::contracts::ContentId& candidate) {
+                        return candidate.key == objective.key;
+                    }
+                ) != beat->objectives.end(),
+                "every task UI objective is authored by its declared beat"
+            );
+        }
+        ok &= expect(
+            !cue.attempt_evidence_rules.empty() &&
+                cue.attempt_evidence_rules.size() <=
+                    tgd::contracts::quest_ui_attempt_evidence_rule_capacity,
+            "every task UI cue owns a bounded attempt-evidence rule set"
+        );
+        for (const auto& rule : cue.attempt_evidence_rules) {
+            ok &= expect(
+                (cue.source_mask &
+                 tgd::contracts::quest_ui_projection_source_bit(rule.source)) != 0 &&
+                    std::find_if(
+                        cue.objective_ids.begin(),
+                        cue.objective_ids.end(),
+                        [&rule](const tgd::contracts::ContentId& objective) {
+                            return objective.key == rule.objective_id.key;
+                        }
+                    ) != cue.objective_ids.end(),
+                "every attempt-evidence rule stays inside its cue source/objective domain"
+            );
+        }
+    }
     ok &= expect(
         definition->quest_combat_triggers.size() == 8 &&
             definition->quest_combat_triggers.front().required_stance ==

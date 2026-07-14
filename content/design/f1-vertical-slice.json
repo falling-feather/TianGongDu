@@ -1,6 +1,6 @@
 {
   "$schema": "../schemas/f1-vertical-slice.schema.json",
-  "schemaVersion": "1.4.0",
+  "schemaVersion": "1.6.0",
   "id": "f1_rainy_umbrella_trial",
   "view": {
     "model": "2.5d-oblique-panoramic",
@@ -1742,6 +1742,328 @@
       "objectiveId": "f1_objective_validate_calibration",
       "archetypeId": null,
       "requiredCount": 0
+    }
+  ],
+  "questUiCues": [
+    {
+      "id": "ui.f1.rain.choice.arrival-clue",
+      "beatId": "f1_beat_rain_ferry_arrival",
+      "sources": ["choice_available", "interaction_feedback"],
+      "objectiveIds": ["f1_objective_choose_arrival_clue"],
+      "resultSelectors": [],
+      "attemptEvidenceRules": [
+        {
+          "source": "choice_available",
+          "objectiveId": "f1_objective_choose_arrival_clue",
+          "primaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "secondaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "classification": "qualifying_first_visit"
+        },
+        {
+          "source": "interaction_feedback",
+          "objectiveId": "f1_objective_choose_arrival_clue",
+          "primaryResult": {
+            "resultId": "f1_interaction_arrival_clue_drowned_manifest",
+            "status": "ignored_repeat",
+            "rejectionReason": "selection_already_committed"
+          },
+          "secondaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "classification": "repeat_no_progress"
+        }
+      ]
+    },
+    {
+      "id": "ui.f1.rain.choice.mooring-method",
+      "beatId": "f1_beat_rain_ferry_arrival",
+      "sources": ["choice_available"],
+      "objectiveIds": ["f1_objective_choose_mooring_method"],
+      "resultSelectors": [],
+      "attemptEvidenceRules": [
+        {
+          "source": "choice_available",
+          "objectiveId": "f1_objective_choose_mooring_method",
+          "primaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "secondaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "classification": "qualifying_craft_decision"
+        }
+      ]
+    },
+    {
+      "id": "ui.f1.rain.mooring-load",
+      "beatId": "f1_beat_rain_ferry_arrival",
+      "sources": ["interaction_feedback"],
+      "objectiveIds": ["f1_objective_secure_ferry_mooring"],
+      "resultSelectors": [
+        {
+          "source": "interaction_feedback",
+          "objectiveId": "f1_objective_secure_ferry_mooring",
+          "primaryResultId": "f1_interaction_choose_quick_hitch",
+          "secondaryResultId": null,
+          "polarityOverride": "negative"
+        }
+      ],
+      "attemptEvidenceRules": [
+        {
+          "source": "interaction_feedback",
+          "objectiveId": "f1_objective_secure_ferry_mooring",
+          "primaryResult": {
+            "resultId": "f1_interaction_lock_cross_belay",
+            "status": "accepted",
+            "rejectionReason": "none"
+          },
+          "secondaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "classification": "qualifying_craft_decision"
+        },
+        {
+          "source": "interaction_feedback",
+          "objectiveId": "f1_objective_secure_ferry_mooring",
+          "primaryResult": {
+            "resultId": "f1_interaction_choose_quick_hitch",
+            "status": "accepted",
+            "rejectionReason": "none"
+          },
+          "secondaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "classification": "qualifying_error_feedback"
+        }
+      ]
+    },
+    {
+      "id": "ui.f1.rain.bell-feedback",
+      "beatId": "f1_beat_rain_ferry_arrival",
+      "sources": ["interaction_feedback"],
+      "objectiveIds": ["f1_objective_sound_workshop_bell"],
+      "resultSelectors": [],
+      "attemptEvidenceRules": [
+        {
+          "source": "interaction_feedback",
+          "objectiveId": "f1_objective_sound_workshop_bell",
+          "primaryResult": {
+            "resultId": "f1_interaction_sound_workshop_bell",
+            "status": "rejected",
+            "rejectionReason": "prerequisite_incomplete"
+          },
+          "secondaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "classification": "qualifying_wrong_order_feedback"
+        },
+        {
+          "source": "interaction_feedback",
+          "objectiveId": "f1_objective_sound_workshop_bell",
+          "primaryResult": {
+            "resultId": "f1_interaction_sound_workshop_bell",
+            "status": "accepted",
+            "rejectionReason": "none"
+          },
+          "secondaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "classification": "qualifying_craft_confirmation"
+        }
+      ]
+    },
+    {
+      "id": "ui.f1.training.choice.lane",
+      "beatId": "f1_beat_shen_yan_training",
+      "sources": ["choice_available"],
+      "objectiveIds": ["f1_objective_choose_training_lane"],
+      "resultSelectors": [],
+      "attemptEvidenceRules": [
+        {
+          "source": "choice_available",
+          "objectiveId": "f1_objective_choose_training_lane",
+          "primaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "secondaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "classification": "qualifying_dialogue_decision"
+        }
+      ]
+    },
+    {
+      "id": "ui.f1.training.phase",
+      "beatId": "f1_beat_shen_yan_training",
+      "sources": ["objective_state"],
+      "objectiveIds": [
+        "f1_objective_eavesguard_counter",
+        "f1_objective_flower_turn_counter"
+      ],
+      "resultSelectors": [],
+      "attemptEvidenceRules": [
+        {
+          "source": "objective_state",
+          "objectiveId": "f1_objective_eavesguard_counter",
+          "primaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "secondaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "classification": "qualifying_training_risk"
+        },
+        {
+          "source": "objective_state",
+          "objectiveId": "f1_objective_flower_turn_counter",
+          "primaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "secondaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "classification": "qualifying_training_risk"
+        }
+      ]
+    },
+    {
+      "id": "ui.f1.training.action-proof",
+      "beatId": "f1_beat_shen_yan_training",
+      "sources": ["combat_feedback"],
+      "objectiveIds": [
+        "f1_objective_eavesguard_counter",
+        "f1_objective_commit_eavesguard_heavy",
+        "f1_objective_break_eavesguard_target",
+        "f1_objective_enter_flower_turn",
+        "f1_objective_flower_turn_counter",
+        "f1_objective_commit_flower_turn_light",
+        "f1_objective_commit_flower_turn_heavy",
+        "f1_objective_break_flower_turn_target"
+      ],
+      "resultSelectors": [
+        {
+          "source": "combat_feedback",
+          "objectiveId": "f1_objective_break_eavesguard_target",
+          "primaryResultId": "f1_trigger_eavesguard_heavy",
+          "secondaryResultId": "f1_outcome_break_eavesguard_target",
+          "polarityOverride": "none"
+        },
+        {
+          "source": "combat_feedback",
+          "objectiveId": "f1_objective_break_flower_turn_target",
+          "primaryResultId": "f1_trigger_flower_turn_heavy",
+          "secondaryResultId": "f1_outcome_break_flower_turn_target",
+          "polarityOverride": "none"
+        }
+      ],
+      "attemptEvidenceRules": [
+        {
+          "source": "combat_feedback",
+          "objectiveId": "f1_objective_eavesguard_counter",
+          "primaryResult": {
+            "resultId": "f1_trigger_eavesguard_counter",
+            "status": "accepted",
+            "rejectionReason": "none"
+          },
+          "secondaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "classification": "qualifying_combat_proof"
+        },
+        {
+          "source": "combat_feedback",
+          "objectiveId": "f1_objective_break_flower_turn_target",
+          "primaryResult": {
+            "resultId": "f1_trigger_flower_turn_heavy",
+            "status": "accepted",
+            "rejectionReason": "none"
+          },
+          "secondaryResult": {
+            "resultId": "f1_outcome_break_flower_turn_target",
+            "status": "rejected",
+            "rejectionReason": "wrong_target"
+          },
+          "classification": "qualifying_combat_feedback"
+        }
+      ]
+    },
+    {
+      "id": "ui.f1.training.recovery",
+      "beatId": "f1_beat_shen_yan_training",
+      "sources": ["recovery_offer", "recovery_resume"],
+      "objectiveIds": [
+        "f1_objective_eavesguard_counter",
+        "f1_objective_flower_turn_counter"
+      ],
+      "resultSelectors": [],
+      "attemptEvidenceRules": [
+        {
+          "source": "recovery_offer",
+          "objectiveId": "f1_objective_eavesguard_counter",
+          "primaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "secondaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "classification": "failure_retry_excluded"
+        },
+        {
+          "source": "recovery_resume",
+          "objectiveId": "f1_objective_flower_turn_counter",
+          "primaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "secondaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "classification": "resume_no_duplicate_progress"
+        }
+      ]
     }
   ],
   "paddingPolicy": {

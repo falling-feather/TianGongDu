@@ -220,6 +220,21 @@ add_test(
   COMMAND tgd_native_quest_condition
 )
 
+add_executable(tgd_native_quest_ui_projection quest_ui_projection.cpp)
+target_compile_features(tgd_native_quest_ui_projection PRIVATE cxx_std_20)
+tgd_enable_strict_warnings(tgd_native_quest_ui_projection)
+target_link_libraries(
+  tgd_native_quest_ui_projection
+  PRIVATE
+    tgd_contracts
+    tgd_gameplay
+)
+
+add_test(
+  NAME tgd.native.quest-ui-projection
+  COMMAND tgd_native_quest_ui_projection
+)
+
 add_test(
   NAME tgd.architecture.reject-reverse-link
   COMMAND

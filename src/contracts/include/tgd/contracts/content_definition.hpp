@@ -2,6 +2,7 @@
 
 #include <tgd/contracts/session_types.hpp>
 
+#include <cstddef>
 #include <cstdint>
 #include <span>
 #include <string_view>
@@ -170,6 +171,61 @@ struct QuestResolutionRewardDefinition final {
     ContentId reward_dedup_key{};
 };
 
+enum class QuestUiProjectionSource : std::uint8_t {
+    choice_available = 1,
+    interaction_feedback = 2,
+    objective_state = 3,
+    combat_feedback = 4,
+    recovery_offer = 5,
+    recovery_resume = 6,
+};
+
+enum class QuestUiPolarity : std::uint8_t {
+    positive,
+    negative,
+    recovery,
+};
+
+enum class QuestUiPolarityOverride : std::uint8_t {
+    none,
+    negative,
+};
+
+[[nodiscard]] constexpr std::uint16_t quest_ui_projection_source_bit(
+    QuestUiProjectionSource source
+) noexcept {
+    const auto value = static_cast<std::uint8_t>(source);
+    return value == 0 || value > 16
+               ? 0
+               : static_cast<std::uint16_t>(1U << static_cast<unsigned>(value - 1U));
+}
+
+struct QuestUiResultSelectorDefinition final {
+    QuestUiProjectionSource source{QuestUiProjectionSource::interaction_feedback};
+    ContentId objective_id{};
+    ContentId primary_result_id{};
+    ContentId secondary_result_id{};
+    // Status normally determines polarity. This override is reserved for authored
+    // accepted-but-negative feedback; rejected/ignored results stay negative.
+    QuestUiPolarityOverride polarity_override{QuestUiPolarityOverride::none};
+};
+
+inline constexpr std::size_t quest_ui_cue_objective_capacity = 8;
+inline constexpr std::size_t quest_ui_result_selector_capacity = 8;
+
+struct QuestUiCueDefinition final {
+    ContentId cue_id{};
+    ContentId beat_id{};
+    std::uint16_t source_mask{};
+    // An empty list is a beat-local wildcard. Non-empty lists must contain only objectives
+    // authored by beat_id. Runtime rejects overlapping cue domains.
+    std::span<const ContentId> objective_ids{};
+    // Exact result selectors authorize exceptional authored semantics such as an
+    // accepted choose interaction transitioning to the next active objective with
+    // negative feedback. Empty secondary_result_id means a single-result selector.
+    std::span<const QuestUiResultSelectorDefinition> result_selectors{};
+};
+
 struct VerticalSliceDefinition final {
     ContentId id{};
     std::string_view view_model{};
@@ -195,6 +251,9 @@ struct VerticalSliceDefinition final {
     std::span<const QuestEncounterActivationDefinition> quest_encounter_activations{};
     std::span<const QuestBossPhaseDefinition> quest_boss_phases{};
     std::span<const QuestResolutionRewardDefinition> quest_resolution_rewards{};
+    // Optional for pre-1.5 generated definitions. A non-empty span enables the generic,
+    // Definition-driven Quest UI projection producer.
+    std::span<const QuestUiCueDefinition> quest_ui_cues{};
 };
 
 }  // namespace tgd::contracts

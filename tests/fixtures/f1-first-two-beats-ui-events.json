@@ -770,7 +770,7 @@
         "focus": { "entryTarget": "training.retry", "restoreTarget": "ui-main" },
         "announcements": {
           "polite": "已完成的对话、选线和取标保留；从檐守格挡继续。",
-          "assertive": "本次倒地尝试不计入合格玩法时长。"
+          "assertive": "可以立即再试或离开；失败次数不会推进训练。"
         },
         "model": {
           "cueId": "ui.f1.training.recovery",
@@ -933,7 +933,7 @@
         "focus": { "entryTarget": "training.retry", "restoreTarget": "ui-main" },
         "announcements": {
           "polite": "已完成的檐守证明、复盘、切式和越线保留；从翻花反制继续。",
-          "assertive": "本次倒地尝试不计入合格玩法时长。"
+          "assertive": "可以立即再试或离开；失败次数不会推进训练。"
         },
         "model": {
           "cueId": "ui.f1.training.recovery",

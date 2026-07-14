@@ -23,6 +23,17 @@ function event(fixtureId) {
   return found;
 }
 
+function collectStrings(value, output = []) {
+  if (typeof value === "string") {
+    output.push(value);
+  } else if (Array.isArray(value)) {
+    for (const entry of value) collectStrings(entry, output);
+  } else if (value && typeof value === "object") {
+    for (const entry of Object.values(value)) collectStrings(entry, output);
+  }
+  return output;
+}
+
 test("F1 first-two-beat UI fixtures stay synchronized with the authoritative Definition", () => {
   assert.equal(validateF1UiContentFixtures(fixtures, contract), fixtures);
   assert.equal(fixtures.events.length, 16);
@@ -178,6 +189,30 @@ test("F1 UI projections distinguish phase, accepted action, wrong target, retry,
     "failure_retry_excluded"
   );
   assert.deepEqual(flowerOffer.panel.model.authority.activeActorKeys, [108]);
+});
+
+test("F1 player-facing copy never exposes qualifying-time audit terminology", () => {
+  for (const entry of fixtures.events) {
+    const playerFacingStrings = collectStrings({
+      title: entry.panel.title,
+      announcements: entry.panel.announcements,
+      presentation: entry.panel.model.presentation
+    });
+    assert.doesNotMatch(
+      playerFacingStrings.join("\n"),
+      /合格玩法时长|失败重试排除|计入[^\n]*时长/,
+      `${entry.fixtureId} leaks QA time-accounting language into player-facing copy`
+    );
+  }
+
+  assert.equal(
+    event("f1_training_failure_retry_offer").panel.announcements.assertive,
+    "可以立即再试或离开；失败次数不会推进训练。"
+  );
+  assert.equal(
+    event("f1_training_failure_retry_offer_flower").panel.announcements.assertive,
+    "可以立即再试或离开；失败次数不会推进训练。"
+  );
 });
 
 test("F1 UI negative fixture recipes fail closed for stale or UI-owned authority", () => {

@@ -271,6 +271,54 @@ test("F1 opening objectives require valid content-driven scene interactions", as
   );
 });
 
+test("F1 Rain Ferry Node fixture covers all clue and mooring route combinations", async () => {
+  const contract = await loadF1SliceContract();
+  const rain = contract.beats[0];
+  const clueObjective = rain.objectiveIds[1];
+  const conditionObjective = rain.objectiveIds[2];
+  const mooringObjective = rain.objectiveIds[3];
+  const securedObjective = rain.objectiveIds[4];
+  const clueChoices = contract.questInteractions.filter(
+    (interaction) => interaction.objectiveId === clueObjective
+  );
+  const mooringChoices = contract.questInteractions.filter(
+    (interaction) => interaction.objectiveId === mooringObjective
+  );
+
+  assert.equal(clueChoices.length, 3);
+  assert.equal(mooringChoices.length, 2);
+  const coveredRoutes = [];
+  for (const clue of clueChoices) {
+    const conditionRoutes = contract.questInteractions.filter(
+      (interaction) =>
+        interaction.objectiveId === conditionObjective &&
+        interaction.requiredSelectionObjectiveId === clueObjective &&
+        interaction.requiredSelectionId === clue.selectionId
+    );
+    assert.equal(conditionRoutes.length, 1, clue.selectionId);
+
+    for (const mooring of mooringChoices) {
+      const securedRoutes = contract.questInteractions.filter(
+        (interaction) =>
+          interaction.objectiveId === securedObjective &&
+          interaction.requiredSelectionObjectiveId === mooringObjective &&
+          interaction.requiredSelectionId === mooring.selectionId
+      );
+      assert.equal(securedRoutes.length, 1, mooring.selectionId);
+      coveredRoutes.push(`${clue.selectionId}|${mooring.selectionId}`);
+    }
+  }
+
+  assert.deepEqual(coveredRoutes, [
+    "f1_choice_arrival_high_water_tags|f1_choice_mooring_cross_belay",
+    "f1_choice_arrival_high_water_tags|f1_choice_mooring_quick_hitch",
+    "f1_choice_arrival_drowned_manifest|f1_choice_mooring_cross_belay",
+    "f1_choice_arrival_drowned_manifest|f1_choice_mooring_quick_hitch",
+    "f1_choice_arrival_follow_bell|f1_choice_mooring_cross_belay",
+    "f1_choice_arrival_follow_bell|f1_choice_mooring_quick_hitch"
+  ]);
+});
+
 test("F1 route owns one ordered content-driven safe point per beat", async () => {
   const contract = await loadF1SliceContract();
   assert.deepEqual(

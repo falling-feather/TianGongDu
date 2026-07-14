@@ -1,0 +1,84 @@
+{
+  "fixtureContractVersion": "1.0.0",
+  "cases": [
+    {
+      "id": "unknown_objective_fails_closed",
+      "baseFixtureId": "f1_rain_arrival_clue_available",
+      "operation": "replace",
+      "path": "panel.model.authority.objectiveId",
+      "value": "f1_objective_missing",
+      "expectedError": "unknown objective"
+    },
+    {
+      "id": "selection_owner_mismatch_fails_closed",
+      "baseFixtureId": "f1_rain_arrival_clue_repeat_locked",
+      "operation": "replace",
+      "path": "panel.model.authority.selectedOptions.0.selectionId",
+      "value": "f1_choice_mooring_cross_belay",
+      "expectedError": "does not belong to objective"
+    },
+    {
+      "id": "unknown_interaction_fails_closed",
+      "baseFixtureId": "f1_rain_bell_rejected_unread_code",
+      "operation": "replace",
+      "path": "panel.model.authority.interactionResult.interactionId",
+      "value": "f1_interaction_missing",
+      "expectedError": "unknown interaction"
+    },
+    {
+      "id": "wrong_beat_safe_point_fails_closed",
+      "baseFixtureId": "f1_training_failure_retry_offer",
+      "operation": "replace",
+      "path": "panel.model.authority.safePointId",
+      "value": "f1_safe_point_rain_ferry_arrival",
+      "expectedError": "safe point .* does not belong to beat"
+    },
+    {
+      "id": "unknown_actor_fails_closed",
+      "baseFixtureId": "f1_training_guard_phase_windward",
+      "operation": "replace",
+      "path": "panel.model.authority.activeActorKeys.0",
+      "value": 999,
+      "expectedError": "unknown actor"
+    },
+    {
+      "id": "unknown_combat_trigger_fails_closed",
+      "baseFixtureId": "f1_training_eavesguard_proof_accepted",
+      "operation": "replace",
+      "path": "panel.model.authority.combatResult.triggerId",
+      "value": "f1_trigger_missing",
+      "expectedError": "unknown combat trigger"
+    },
+    {
+      "id": "ui_cannot_advance_objective",
+      "baseFixtureId": "f1_rain_bell_answered",
+      "operation": "add",
+      "path": "panel.model.advanceObjective",
+      "value": true,
+      "expectedError": "forbidden UI authority field"
+    },
+    {
+      "id": "event_version_drift_fails_closed",
+      "baseFixtureId": "f1_training_flower_phase",
+      "operation": "replace",
+      "path": "contractVersion",
+      "value": "1.1.0-prototype",
+      "expectedError": "event contract version drifted"
+    },
+    {
+      "id": "unknown_cue_fails_closed",
+      "baseFixtureId": "f1_training_flower_proof_wrong_target",
+      "operation": "replace",
+      "path": "panel.model.cueId",
+      "value": "ui.f1.training.magic-success",
+      "expectedError": "unknown cue"
+    },
+    {
+      "id": "missing_quest_sequence_fails_closed",
+      "baseFixtureId": "f1_training_return_resume_selected_lane",
+      "operation": "remove",
+      "path": "panel.model.authority.questSequence",
+      "expectedError": "invalid quest sequence"
+    }
+  ]
+}

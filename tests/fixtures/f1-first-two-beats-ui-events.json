@@ -1,0 +1,736 @@
+{
+  "fixtureContractVersion": "1.0.0",
+  "source": {
+    "taskId": "F1-GAME-01-CONTENT-A",
+    "sliceId": "f1_rainy_umbrella_trial",
+    "authoritative": false,
+    "authoritativeDefinition": "content/design/f1-vertical-slice.json",
+    "uiEnvelopeContractVersion": "1.0.0-prototype",
+    "uiPrototypeCommit": "673f67b",
+    "purpose": "Content-owned positive, rejection, retry, and return projections for UI integration. These fixtures never advance Quest state."
+  },
+  "events": [
+    {
+      "contractVersion": "1.0.0-prototype",
+      "fixtureId": "f1_rain_arrival_clue_available",
+      "sequence": 1,
+      "sessionGeneration": "f1-content-ui-fixture-0001",
+      "eventType": "panel_replace",
+      "panel": {
+        "surface": "choice",
+        "mode": "f1_rain_arrival_clue_available",
+        "inputContext": "menu",
+        "title": "先看哪一处",
+        "focus": { "entryTarget": "f1.arrival.high-water", "restoreTarget": "ui-main" },
+        "announcements": {
+          "polite": "可从高处水痕、低处货单或直接循钟声中选择一条抵达观察路线。",
+          "assertive": ""
+        },
+        "model": {
+          "cueId": "ui.f1.rain.choice.arrival-clue",
+          "polarity": "positive",
+          "authority": {
+            "beatId": "f1_beat_rain_ferry_arrival",
+            "objectiveId": "f1_objective_choose_arrival_clue",
+            "objectiveState": "active",
+            "questSequence": 101,
+            "selectedOptions": [],
+            "interactionResult": null,
+            "combatResult": null,
+            "activeActorKeys": [],
+            "defeatedActorKeys": [],
+            "safePointId": "f1_safe_point_rain_ferry_arrival",
+            "retainedObjectiveIds": ["f1_objective_inspect_travel_writ"],
+            "pendingObjectiveId": "f1_objective_choose_arrival_clue",
+            "attemptTimeClassification": "qualifying_first_visit"
+          },
+          "presentation": {
+            "primaryText": "三条路都回到渡船主线；循钟声会跳过旁支观察。",
+            "secondaryText": "不显示奖励差异，也不替玩家判断哪条更优。",
+            "shapeToken": "three_way_depth_fan",
+            "options": [
+              {
+                "selectionId": "f1_choice_arrival_high_water_tags",
+                "label": "上探高水痕",
+                "spatialHint": "高侧补丁与水签",
+                "optionalObservation": true,
+                "explicitSkip": false,
+                "rewardDelta": false,
+                "convergesToObjectiveId": "f1_objective_read_ferry_condition"
+              },
+              {
+                "selectionId": "f1_choice_arrival_drowned_manifest",
+                "label": "下探溺水货单",
+                "spatialHint": "低侧积水与漂浮货单",
+                "optionalObservation": true,
+                "explicitSkip": false,
+                "rewardDelta": false,
+                "convergesToObjectiveId": "f1_objective_read_ferry_condition"
+              },
+              {
+                "selectionId": "f1_choice_arrival_follow_bell",
+                "label": "循钟声前行",
+                "spatialHint": "留在中轴并读取主水尺",
+                "optionalObservation": false,
+                "explicitSkip": true,
+                "rewardDelta": false,
+                "convergesToObjectiveId": "f1_objective_read_ferry_condition"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "contractVersion": "1.0.0-prototype",
+      "fixtureId": "f1_rain_arrival_clue_repeat_locked",
+      "sequence": 2,
+      "sessionGeneration": "f1-content-ui-fixture-0001",
+      "eventType": "panel_replace",
+      "panel": {
+        "surface": "gameplay",
+        "mode": "f1_rain_arrival_clue_repeat_locked",
+        "inputContext": "gameplay",
+        "title": "抵达线索已记下",
+        "focus": { "entryTarget": "ui-main", "restoreTarget": null },
+        "announcements": {
+          "polite": "已经选择高处水痕；再次查看货单不会改写路线或推进任务。",
+          "assertive": ""
+        },
+        "model": {
+          "cueId": "ui.f1.rain.choice.arrival-clue",
+          "polarity": "negative",
+          "authority": {
+            "beatId": "f1_beat_rain_ferry_arrival",
+            "objectiveId": "f1_objective_choose_arrival_clue",
+            "objectiveState": "completed",
+            "questSequence": 102,
+            "selectedOptions": [
+              {
+                "objectiveId": "f1_objective_choose_arrival_clue",
+                "selectionId": "f1_choice_arrival_high_water_tags"
+              }
+            ],
+            "interactionResult": {
+              "interactionId": "f1_interaction_arrival_clue_drowned_manifest",
+              "objectiveId": "f1_objective_choose_arrival_clue",
+              "status": "ignored_repeat",
+              "rejectionReason": "selection_already_committed"
+            },
+            "combatResult": null,
+            "activeActorKeys": [],
+            "defeatedActorKeys": [],
+            "safePointId": "f1_safe_point_rain_ferry_arrival",
+            "retainedObjectiveIds": [
+              "f1_objective_inspect_travel_writ",
+              "f1_objective_choose_arrival_clue"
+            ],
+            "pendingObjectiveId": "f1_objective_read_ferry_condition",
+            "attemptTimeClassification": "repeat_no_progress"
+          },
+          "presentation": {
+            "primaryText": "原选择保持；这里现在只提供回看。",
+            "secondaryText": "不重复推进，不改变选择，不发奖励。",
+            "shapeToken": "committed_branch_lock",
+            "selectedLabel": "上探高水痕",
+            "repeatEffect": "no_progress_no_reward"
+          }
+        }
+      }
+    },
+    {
+      "contractVersion": "1.0.0-prototype",
+      "fixtureId": "f1_rain_mooring_cross_belay_stable",
+      "sequence": 3,
+      "sessionGeneration": "f1-content-ui-fixture-0001",
+      "eventType": "panel_replace",
+      "panel": {
+        "surface": "gameplay",
+        "mode": "f1_rain_mooring_cross_belay_stable",
+        "inputContext": "gameplay",
+        "title": "系缆负载稳定",
+        "focus": { "entryTarget": "ui-main", "restoreTarget": null },
+        "announcements": {
+          "polite": "交叉系缆已经锁定，高低锚之间的负载保持稳定。",
+          "assertive": ""
+        },
+        "model": {
+          "cueId": "ui.f1.rain.mooring-load",
+          "polarity": "positive",
+          "authority": {
+            "beatId": "f1_beat_rain_ferry_arrival",
+            "objectiveId": "f1_objective_secure_ferry_mooring",
+            "objectiveState": "completed",
+            "questSequence": 103,
+            "selectedOptions": [
+              {
+                "objectiveId": "f1_objective_choose_arrival_clue",
+                "selectionId": "f1_choice_arrival_high_water_tags"
+              },
+              {
+                "objectiveId": "f1_objective_choose_mooring_method",
+                "selectionId": "f1_choice_mooring_cross_belay"
+              }
+            ],
+            "interactionResult": {
+              "interactionId": "f1_interaction_lock_cross_belay",
+              "objectiveId": "f1_objective_secure_ferry_mooring",
+              "status": "accepted",
+              "rejectionReason": null
+            },
+            "combatResult": null,
+            "activeActorKeys": [],
+            "defeatedActorKeys": [],
+            "safePointId": "f1_safe_point_rain_ferry_arrival",
+            "retainedObjectiveIds": [
+              "f1_objective_inspect_travel_writ",
+              "f1_objective_choose_arrival_clue",
+              "f1_objective_read_ferry_condition",
+              "f1_objective_choose_mooring_method",
+              "f1_objective_secure_ferry_mooring"
+            ],
+            "pendingObjectiveId": "f1_objective_inspect_bilge_counterweight",
+            "attemptTimeClassification": "qualifying_craft_decision"
+          },
+          "presentation": {
+            "primaryText": "两道受力线同时绷直，渡船不再向低侧滑移。",
+            "secondaryText": "反馈必须同时使用绳线形状、文字和受力声音。",
+            "shapeToken": "crossed_tension_stable",
+            "deviceState": "cross-belay-stable"
+          }
+        }
+      }
+    },
+    {
+      "contractVersion": "1.0.0-prototype",
+      "fixtureId": "f1_rain_mooring_quick_hitch_overloaded",
+      "sequence": 4,
+      "sessionGeneration": "f1-content-ui-fixture-0001",
+      "eventType": "panel_replace",
+      "panel": {
+        "surface": "gameplay",
+        "mode": "f1_rain_mooring_quick_hitch_overloaded",
+        "inputContext": "gameplay",
+        "title": "快结正在滑移",
+        "focus": { "entryTarget": "f1.mooring.correct", "restoreTarget": "ui-main" },
+        "announcements": {
+          "polite": "快结把负载压向低锚；可以在原地纠正，不会回档。",
+          "assertive": "低锚负载过高。"
+        },
+        "model": {
+          "cueId": "ui.f1.rain.mooring-load",
+          "polarity": "negative",
+          "authority": {
+            "beatId": "f1_beat_rain_ferry_arrival",
+            "objectiveId": "f1_objective_secure_ferry_mooring",
+            "objectiveState": "active",
+            "questSequence": 104,
+            "selectedOptions": [
+              {
+                "objectiveId": "f1_objective_choose_arrival_clue",
+                "selectionId": "f1_choice_arrival_follow_bell"
+              },
+              {
+                "objectiveId": "f1_objective_choose_mooring_method",
+                "selectionId": "f1_choice_mooring_quick_hitch"
+              }
+            ],
+            "interactionResult": {
+              "interactionId": "f1_interaction_choose_quick_hitch",
+              "objectiveId": "f1_objective_choose_mooring_method",
+              "status": "accepted",
+              "rejectionReason": null
+            },
+            "combatResult": null,
+            "activeActorKeys": [],
+            "defeatedActorKeys": [],
+            "safePointId": "f1_safe_point_rain_ferry_arrival",
+            "retainedObjectiveIds": [
+              "f1_objective_inspect_travel_writ",
+              "f1_objective_choose_arrival_clue",
+              "f1_objective_read_ferry_condition",
+              "f1_objective_choose_mooring_method"
+            ],
+            "pendingObjectiveId": "f1_objective_secure_ferry_mooring",
+            "attemptTimeClassification": "qualifying_error_feedback"
+          },
+          "presentation": {
+            "primaryText": "低锚绳线变粗并向下偏，提示把负载重新分给高锚。",
+            "secondaryText": "错误可就地修正；不显示失败倒计时。",
+            "shapeToken": "low_anchor_overload",
+            "deviceState": "quick-hitch-overloaded",
+            "correctionInteractionId": "f1_interaction_correct_overloaded_quick_hitch",
+            "correctionLabel": "回拉高锚并锁紧"
+          }
+        }
+      }
+    },
+    {
+      "contractVersion": "1.0.0-prototype",
+      "fixtureId": "f1_rain_bell_rejected_unread_code",
+      "sequence": 5,
+      "sessionGeneration": "f1-content-ui-fixture-0001",
+      "eventType": "panel_replace",
+      "panel": {
+        "surface": "gameplay",
+        "mode": "f1_rain_bell_rejected_unread_code",
+        "inputContext": "gameplay",
+        "title": "钟声没有回应",
+        "focus": { "entryTarget": "ui-main", "restoreTarget": null },
+        "announcements": {
+          "polite": "门楼没有回应；先读钟架上的工位钟码。",
+          "assertive": "当前鸣钟顺序无效。"
+        },
+        "model": {
+          "cueId": "ui.f1.rain.bell-feedback",
+          "polarity": "negative",
+          "authority": {
+            "beatId": "f1_beat_rain_ferry_arrival",
+            "objectiveId": "f1_objective_sound_workshop_bell",
+            "objectiveState": "locked",
+            "questSequence": 105,
+            "selectedOptions": [
+              {
+                "objectiveId": "f1_objective_choose_arrival_clue",
+                "selectionId": "f1_choice_arrival_drowned_manifest"
+              },
+              {
+                "objectiveId": "f1_objective_choose_mooring_method",
+                "selectionId": "f1_choice_mooring_cross_belay"
+              }
+            ],
+            "interactionResult": {
+              "interactionId": "f1_interaction_sound_workshop_bell",
+              "objectiveId": "f1_objective_sound_workshop_bell",
+              "status": "rejected",
+              "rejectionReason": "prerequisite_incomplete"
+            },
+            "combatResult": null,
+            "activeActorKeys": [],
+            "defeatedActorKeys": [],
+            "safePointId": "f1_safe_point_rain_ferry_arrival",
+            "retainedObjectiveIds": [
+              "f1_objective_inspect_travel_writ",
+              "f1_objective_choose_arrival_clue",
+              "f1_objective_read_ferry_condition",
+              "f1_objective_choose_mooring_method",
+              "f1_objective_secure_ferry_mooring",
+              "f1_objective_inspect_bilge_counterweight",
+              "f1_objective_release_ferry_bilge",
+              "f1_objective_raise_wayfinding_lantern"
+            ],
+            "pendingObjectiveId": "f1_objective_read_workshop_bell_code",
+            "attemptTimeClassification": "qualifying_wrong_order_feedback"
+          },
+          "presentation": {
+            "primaryText": "钟架刻纹仍未读，门楼轮廓保持暗色。",
+            "secondaryText": "用文字、断开的形状和短促回声共同表达错序。",
+            "shapeToken": "broken_bell_pattern",
+            "feedbackState": "wrong-order",
+            "nextStepLabel": "读取钟架刻纹"
+          }
+        }
+      }
+    },
+    {
+      "contractVersion": "1.0.0-prototype",
+      "fixtureId": "f1_rain_bell_answered",
+      "sequence": 6,
+      "sessionGeneration": "f1-content-ui-fixture-0001",
+      "eventType": "panel_replace",
+      "panel": {
+        "surface": "gameplay",
+        "mode": "f1_rain_bell_answered",
+        "inputContext": "gameplay",
+        "title": "门楼回应",
+        "focus": { "entryTarget": "ui-main", "restoreTarget": null },
+        "announcements": {
+          "polite": "钟码正确，门楼灯火依次亮起。",
+          "assertive": ""
+        },
+        "model": {
+          "cueId": "ui.f1.rain.bell-feedback",
+          "polarity": "positive",
+          "authority": {
+            "beatId": "f1_beat_rain_ferry_arrival",
+            "objectiveId": "f1_objective_sound_workshop_bell",
+            "objectiveState": "completed",
+            "questSequence": 106,
+            "selectedOptions": [
+              {
+                "objectiveId": "f1_objective_choose_arrival_clue",
+                "selectionId": "f1_choice_arrival_drowned_manifest"
+              },
+              {
+                "objectiveId": "f1_objective_choose_mooring_method",
+                "selectionId": "f1_choice_mooring_cross_belay"
+              }
+            ],
+            "interactionResult": {
+              "interactionId": "f1_interaction_sound_workshop_bell",
+              "objectiveId": "f1_objective_sound_workshop_bell",
+              "status": "accepted",
+              "rejectionReason": null
+            },
+            "combatResult": null,
+            "activeActorKeys": [],
+            "defeatedActorKeys": [],
+            "safePointId": "f1_safe_point_rain_ferry_arrival",
+            "retainedObjectiveIds": [
+              "f1_objective_read_workshop_bell_code",
+              "f1_objective_sound_workshop_bell"
+            ],
+            "pendingObjectiveId": "f1_objective_reach_ferry_gate",
+            "attemptTimeClassification": "qualifying_craft_confirmation"
+          },
+          "presentation": {
+            "primaryText": "连续三格灯形从渡船延伸到门楼。",
+            "secondaryText": "即使静音，也能从灯形与文字读懂回应。",
+            "shapeToken": "three_step_bell_answer",
+            "feedbackState": "answered",
+            "nextStepLabel": "进入门楼"
+          }
+        }
+      }
+    },
+    {
+      "contractVersion": "1.0.0-prototype",
+      "fixtureId": "f1_training_guard_phase_windward",
+      "sequence": 7,
+      "sessionGeneration": "f1-content-ui-fixture-0001",
+      "eventType": "panel_replace",
+      "panel": {
+        "surface": "gameplay",
+        "mode": "f1_training_guard_phase_windward",
+        "inputContext": "gameplay",
+        "title": "檐守 · 迎风线",
+        "focus": { "entryTarget": "ui-main", "restoreTarget": null },
+        "announcements": {
+          "polite": "迎风线伞架从正前方蓄力；先以檐守接住冲击。",
+          "assertive": ""
+        },
+        "model": {
+          "cueId": "ui.f1.training.phase",
+          "polarity": "positive",
+          "authority": {
+            "beatId": "f1_beat_shen_yan_training",
+            "objectiveId": "f1_objective_eavesguard_counter",
+            "objectiveState": "active",
+            "questSequence": 107,
+            "selectedOptions": [
+              {
+                "objectiveId": "f1_objective_choose_training_lane",
+                "selectionId": "f1_choice_training_windward_lane"
+              }
+            ],
+            "interactionResult": null,
+            "combatResult": null,
+            "activeActorKeys": [104],
+            "defeatedActorKeys": [],
+            "safePointId": "f1_safe_point_shen_yan_training",
+            "retainedObjectiveIds": [
+              "f1_objective_meet_shen_yan",
+              "f1_objective_choose_training_lane",
+              "f1_objective_take_eavesguard_mark"
+            ],
+            "pendingObjectiveId": "f1_objective_eavesguard_counter",
+            "attemptTimeClassification": "qualifying_training_risk"
+          },
+          "presentation": {
+            "primaryText": "檐守用途：承受正面冲击并保住站位。",
+            "secondaryText": "伞架来击方向、当前架势和下一项证明同时可见。",
+            "shapeToken": "front_wedge_guard",
+            "stanceId": "stance_eavesguard",
+            "laneLabel": "迎风线",
+            "incomingDirection": "front",
+            "nextActionLabel": "格挡来击"
+          }
+        }
+      }
+    },
+    {
+      "contractVersion": "1.0.0-prototype",
+      "fixtureId": "f1_training_flower_phase",
+      "sequence": 8,
+      "sessionGeneration": "f1-content-ui-fixture-0001",
+      "eventType": "panel_replace",
+      "panel": {
+        "surface": "gameplay",
+        "mode": "f1_training_flower_phase",
+        "inputContext": "gameplay",
+        "title": "翻花 · 斜向穿位",
+        "focus": { "entryTarget": "ui-main", "restoreTarget": null },
+        "announcements": {
+          "polite": "高位训练架从右后方掠过；越线后以翻花闪避。",
+          "assertive": ""
+        },
+        "model": {
+          "cueId": "ui.f1.training.phase",
+          "polarity": "positive",
+          "authority": {
+            "beatId": "f1_beat_shen_yan_training",
+            "objectiveId": "f1_objective_flower_turn_counter",
+            "objectiveState": "active",
+            "questSequence": 108,
+            "selectedOptions": [
+              {
+                "objectiveId": "f1_objective_choose_training_lane",
+                "selectionId": "f1_choice_training_leeward_lane"
+              }
+            ],
+            "interactionResult": null,
+            "combatResult": null,
+            "activeActorKeys": [108],
+            "defeatedActorKeys": [],
+            "safePointId": "f1_safe_point_shen_yan_training",
+            "retainedObjectiveIds": [
+              "f1_objective_review_eavesguard_with_shen_yan",
+              "f1_objective_enter_flower_turn",
+              "f1_objective_cross_flower_turn_line"
+            ],
+            "pendingObjectiveId": "f1_objective_flower_turn_counter",
+            "attemptTimeClassification": "qualifying_training_risk"
+          },
+          "presentation": {
+            "primaryText": "翻花用途：穿过斜向威胁并抢到侧后位置。",
+            "secondaryText": "显示越线形状、来击扇面和下一项闪避证明。",
+            "shapeToken": "diagonal_cross_evade",
+            "stanceId": "stance_flower_turn",
+            "laneLabel": "背风线后段",
+            "incomingDirection": "right_rear",
+            "nextActionLabel": "闪过俯冲"
+          }
+        }
+      }
+    },
+    {
+      "contractVersion": "1.0.0-prototype",
+      "fixtureId": "f1_training_eavesguard_proof_accepted",
+      "sequence": 9,
+      "sessionGeneration": "f1-content-ui-fixture-0001",
+      "eventType": "panel_replace",
+      "panel": {
+        "surface": "gameplay",
+        "mode": "f1_training_eavesguard_proof_accepted",
+        "inputContext": "gameplay",
+        "title": "檐守反制成立",
+        "focus": { "entryTarget": "ui-main", "restoreTarget": null },
+        "announcements": {
+          "polite": "檐守成功接住伞架冲击；下一步用重击把力量送回去。",
+          "assertive": ""
+        },
+        "model": {
+          "cueId": "ui.f1.training.action-proof",
+          "polarity": "positive",
+          "authority": {
+            "beatId": "f1_beat_shen_yan_training",
+            "objectiveId": "f1_objective_eavesguard_counter",
+            "objectiveState": "completed",
+            "questSequence": 109,
+            "selectedOptions": [
+              {
+                "objectiveId": "f1_objective_choose_training_lane",
+                "selectionId": "f1_choice_training_windward_lane"
+              }
+            ],
+            "interactionResult": null,
+            "combatResult": {
+              "triggerId": "f1_trigger_eavesguard_counter",
+              "triggerObjectiveId": "f1_objective_eavesguard_counter",
+              "triggerStatus": "accepted",
+              "outcomeId": null,
+              "outcomeObjectiveId": null,
+              "outcomeStatus": "not_applicable",
+              "rejectionReason": null
+            },
+            "activeActorKeys": [104],
+            "defeatedActorKeys": [],
+            "safePointId": "f1_safe_point_shen_yan_training",
+            "retainedObjectiveIds": ["f1_objective_eavesguard_counter"],
+            "pendingObjectiveId": "f1_objective_commit_eavesguard_heavy",
+            "attemptTimeClassification": "qualifying_combat_proof"
+          },
+          "presentation": {
+            "primaryText": "格挡接触点与定力反馈同时确认动作有效。",
+            "secondaryText": "不是按键按下或动画播完；只显示战斗解析器已接受的结果。",
+            "shapeToken": "guard_contact_confirmed",
+            "proofState": "accepted",
+            "actionLabel": "檐守格挡",
+            "nextActionLabel": "檐守重击"
+          }
+        }
+      }
+    },
+    {
+      "contractVersion": "1.0.0-prototype",
+      "fixtureId": "f1_training_flower_proof_wrong_target",
+      "sequence": 10,
+      "sessionGeneration": "f1-content-ui-fixture-0001",
+      "eventType": "panel_replace",
+      "panel": {
+        "surface": "gameplay",
+        "mode": "f1_training_flower_proof_wrong_target",
+        "inputContext": "gameplay",
+        "title": "动作成立，目标未破",
+        "focus": { "entryTarget": "ui-main", "restoreTarget": null },
+        "announcements": {
+          "polite": "翻花重击已经起手，但没有命中指定证明靶。",
+          "assertive": "证明尚未完成。"
+        },
+        "model": {
+          "cueId": "ui.f1.training.action-proof",
+          "polarity": "negative",
+          "authority": {
+            "beatId": "f1_beat_shen_yan_training",
+            "objectiveId": "f1_objective_break_flower_turn_target",
+            "objectiveState": "active",
+            "questSequence": 110,
+            "selectedOptions": [
+              {
+                "objectiveId": "f1_objective_choose_training_lane",
+                "selectionId": "f1_choice_training_leeward_lane"
+              }
+            ],
+            "interactionResult": null,
+            "combatResult": {
+              "triggerId": "f1_trigger_flower_turn_heavy",
+              "triggerObjectiveId": "f1_objective_commit_flower_turn_heavy",
+              "triggerStatus": "accepted",
+              "outcomeId": "f1_outcome_break_flower_turn_target",
+              "outcomeObjectiveId": "f1_objective_break_flower_turn_target",
+              "outcomeStatus": "rejected",
+              "rejectionReason": "wrong_target"
+            },
+            "activeActorKeys": [109],
+            "defeatedActorKeys": [],
+            "safePointId": "f1_safe_point_shen_yan_training",
+            "retainedObjectiveIds": [
+              "f1_objective_commit_flower_turn_light",
+              "f1_objective_commit_flower_turn_heavy"
+            ],
+            "pendingObjectiveId": "f1_objective_break_flower_turn_target",
+            "attemptTimeClassification": "qualifying_combat_feedback"
+          },
+          "presentation": {
+            "primaryText": "起手有效，但证明靶轮廓没有破裂。",
+            "secondaryText": "保留已完成的轻重击组合，只要求重新命中正确目标。",
+            "shapeToken": "valid_action_wrong_target",
+            "proofState": "rejected",
+            "actionLabel": "翻花重击",
+            "targetLabel": "高位证明靶",
+            "rejectionLabel": "打错对象"
+          }
+        }
+      }
+    },
+    {
+      "contractVersion": "1.0.0-prototype",
+      "fixtureId": "f1_training_failure_retry_offer",
+      "sequence": 11,
+      "sessionGeneration": "f1-content-ui-fixture-0001",
+      "eventType": "panel_replace",
+      "panel": {
+        "surface": "failure",
+        "mode": "f1_training_failure_retry_offer",
+        "inputContext": "menu",
+        "title": "回到沈砚训练点",
+        "focus": { "entryTarget": "training.retry", "restoreTarget": "ui-main" },
+        "announcements": {
+          "polite": "已完成的对话、选线和取标保留；从檐守格挡继续。",
+          "assertive": "本次倒地尝试不计入合格玩法时长。"
+        },
+        "model": {
+          "cueId": "ui.f1.training.recovery",
+          "polarity": "recovery",
+          "authority": {
+            "beatId": "f1_beat_shen_yan_training",
+            "objectiveId": "f1_objective_eavesguard_counter",
+            "objectiveState": "active",
+            "questSequence": 111,
+            "selectedOptions": [
+              {
+                "objectiveId": "f1_objective_choose_training_lane",
+                "selectionId": "f1_choice_training_windward_lane"
+              }
+            ],
+            "interactionResult": null,
+            "combatResult": null,
+            "activeActorKeys": [104],
+            "defeatedActorKeys": [],
+            "safePointId": "f1_safe_point_shen_yan_training",
+            "retainedObjectiveIds": [
+              "f1_objective_meet_shen_yan",
+              "f1_objective_choose_training_lane",
+              "f1_objective_take_eavesguard_mark"
+            ],
+            "pendingObjectiveId": "f1_objective_eavesguard_counter",
+            "attemptTimeClassification": "failure_retry_excluded"
+          },
+          "presentation": {
+            "primaryText": "迎风线保持，训练伞架重新归位。",
+            "secondaryText": "可以立即再试、离开，或查看已学动作；不提供等待替代节点。",
+            "shapeToken": "safe_point_resume",
+            "retainedSummary": "对话、选线、取标",
+            "nextStepLabel": "以檐守挡开来击",
+            "canLeave": true
+          }
+        }
+      }
+    },
+    {
+      "contractVersion": "1.0.0-prototype",
+      "fixtureId": "f1_training_return_resume_selected_lane",
+      "sequence": 12,
+      "sessionGeneration": "f1-content-ui-fixture-0001",
+      "eventType": "panel_replace",
+      "panel": {
+        "surface": "gameplay",
+        "mode": "f1_training_return_resume_selected_lane",
+        "inputContext": "gameplay",
+        "title": "训练进度已恢复",
+        "focus": { "entryTarget": "ui-main", "restoreTarget": null },
+        "announcements": {
+          "polite": "只重建已选背风线和当前翻花训练架；另一条线保持休眠。",
+          "assertive": ""
+        },
+        "model": {
+          "cueId": "ui.f1.training.recovery",
+          "polarity": "recovery",
+          "authority": {
+            "beatId": "f1_beat_shen_yan_training",
+            "objectiveId": "f1_objective_flower_turn_counter",
+            "objectiveState": "active",
+            "questSequence": 112,
+            "selectedOptions": [
+              {
+                "objectiveId": "f1_objective_choose_training_lane",
+                "selectionId": "f1_choice_training_leeward_lane"
+              }
+            ],
+            "interactionResult": null,
+            "combatResult": null,
+            "activeActorKeys": [108],
+            "defeatedActorKeys": [107],
+            "safePointId": "f1_safe_point_shen_yan_training",
+            "retainedObjectiveIds": [
+              "f1_objective_break_eavesguard_target",
+              "f1_objective_review_eavesguard_with_shen_yan",
+              "f1_objective_enter_flower_turn",
+              "f1_objective_cross_flower_turn_line"
+            ],
+            "pendingObjectiveId": "f1_objective_flower_turn_counter",
+            "attemptTimeClassification": "resume_no_duplicate_progress"
+          },
+          "presentation": {
+            "primaryText": "背风线标记仍亮，翻花越线保持完成。",
+            "secondaryText": "重返不重放对话、不改线、不复活已破证明靶。",
+            "shapeToken": "selected_lane_rebuilt",
+            "retainedSummary": "檐守证明、复盘、切式与越线",
+            "nextStepLabel": "闪过高位训练架",
+            "canLeave": true
+          }
+        }
+      }
+    }
+  ]
+}

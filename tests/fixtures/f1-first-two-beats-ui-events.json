@@ -140,8 +140,79 @@
     },
     {
       "contractVersion": "1.0.0-prototype",
-      "fixtureId": "f1_rain_mooring_cross_belay_stable",
+      "fixtureId": "f1_rain_mooring_choice_available",
       "sequence": 3,
+      "sessionGeneration": "f1-content-ui-fixture-0001",
+      "eventType": "panel_replace",
+      "panel": {
+        "surface": "choice",
+        "mode": "f1_rain_mooring_choice_available",
+        "inputContext": "menu",
+        "title": "如何稳住渡船",
+        "focus": { "entryTarget": "f1.mooring.cross-belay", "restoreTarget": "ui-main" },
+        "announcements": {
+          "polite": "可选择交叉系缆分担高低锚负载，或先打快速结再观察受力。",
+          "assertive": ""
+        },
+        "model": {
+          "cueId": "ui.f1.rain.choice.mooring-method",
+          "polarity": "positive",
+          "authority": {
+            "beatId": "f1_beat_rain_ferry_arrival",
+            "objectiveId": "f1_objective_choose_mooring_method",
+            "objectiveState": "active",
+            "questSequence": 103,
+            "selectedOptions": [
+              {
+                "objectiveId": "f1_objective_choose_arrival_clue",
+                "selectionId": "f1_choice_arrival_high_water_tags"
+              }
+            ],
+            "interactionResult": null,
+            "combatResult": null,
+            "activeActorKeys": [],
+            "defeatedActorKeys": [],
+            "safePointId": "f1_safe_point_rain_ferry_arrival",
+            "retainedObjectiveIds": [
+              "f1_objective_inspect_travel_writ",
+              "f1_objective_choose_arrival_clue",
+              "f1_objective_read_ferry_condition"
+            ],
+            "pendingObjectiveId": "f1_objective_choose_mooring_method",
+            "attemptTimeClassification": "qualifying_craft_decision"
+          },
+          "presentation": {
+            "primaryText": "两种做法都推进主线；快速结会立即给出可纠正的负载反馈。",
+            "secondaryText": "不显示奖励差异，也不把风险较高的做法伪装成错误按钮。",
+            "shapeToken": "cross_belay_or_quick_hitch",
+            "options": [
+              {
+                "selectionId": "f1_choice_mooring_cross_belay",
+                "label": "交叉系缆",
+                "spatialHint": "连接高低锚，分担两侧负载",
+                "optionalObservation": false,
+                "explicitSkip": false,
+                "rewardDelta": false,
+                "convergesToObjectiveId": "f1_objective_secure_ferry_mooring"
+              },
+              {
+                "selectionId": "f1_choice_mooring_quick_hitch",
+                "label": "快速结",
+                "spatialHint": "先固定低锚，再读取并纠正受力",
+                "optionalObservation": false,
+                "explicitSkip": false,
+                "rewardDelta": false,
+                "convergesToObjectiveId": "f1_objective_secure_ferry_mooring"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "contractVersion": "1.0.0-prototype",
+      "fixtureId": "f1_rain_mooring_cross_belay_stable",
+      "sequence": 4,
       "sessionGeneration": "f1-content-ui-fixture-0001",
       "eventType": "panel_replace",
       "panel": {
@@ -161,7 +232,7 @@
             "beatId": "f1_beat_rain_ferry_arrival",
             "objectiveId": "f1_objective_secure_ferry_mooring",
             "objectiveState": "completed",
-            "questSequence": 103,
+            "questSequence": 104,
             "selectedOptions": [
               {
                 "objectiveId": "f1_objective_choose_arrival_clue",
@@ -204,7 +275,7 @@
     {
       "contractVersion": "1.0.0-prototype",
       "fixtureId": "f1_rain_mooring_quick_hitch_overloaded",
-      "sequence": 4,
+      "sequence": 5,
       "sessionGeneration": "f1-content-ui-fixture-0001",
       "eventType": "panel_replace",
       "panel": {
@@ -224,7 +295,7 @@
             "beatId": "f1_beat_rain_ferry_arrival",
             "objectiveId": "f1_objective_secure_ferry_mooring",
             "objectiveState": "active",
-            "questSequence": 104,
+            "questSequence": 105,
             "selectedOptions": [
               {
                 "objectiveId": "f1_objective_choose_arrival_clue",
@@ -268,7 +339,7 @@
     {
       "contractVersion": "1.0.0-prototype",
       "fixtureId": "f1_rain_bell_rejected_unread_code",
-      "sequence": 5,
+      "sequence": 6,
       "sessionGeneration": "f1-content-ui-fixture-0001",
       "eventType": "panel_replace",
       "panel": {
@@ -288,7 +359,7 @@
             "beatId": "f1_beat_rain_ferry_arrival",
             "objectiveId": "f1_objective_sound_workshop_bell",
             "objectiveState": "locked",
-            "questSequence": 105,
+            "questSequence": 106,
             "selectedOptions": [
               {
                 "objectiveId": "f1_objective_choose_arrival_clue",
@@ -335,7 +406,7 @@
     {
       "contractVersion": "1.0.0-prototype",
       "fixtureId": "f1_rain_bell_answered",
-      "sequence": 6,
+      "sequence": 7,
       "sessionGeneration": "f1-content-ui-fixture-0001",
       "eventType": "panel_replace",
       "panel": {
@@ -355,7 +426,7 @@
             "beatId": "f1_beat_rain_ferry_arrival",
             "objectiveId": "f1_objective_sound_workshop_bell",
             "objectiveState": "completed",
-            "questSequence": 106,
+            "questSequence": 107,
             "selectedOptions": [
               {
                 "objectiveId": "f1_objective_choose_arrival_clue",
@@ -395,8 +466,70 @@
     },
     {
       "contractVersion": "1.0.0-prototype",
+      "fixtureId": "f1_training_lane_choice_available",
+      "sequence": 8,
+      "sessionGeneration": "f1-content-ui-fixture-0001",
+      "eventType": "panel_replace",
+      "panel": {
+        "surface": "choice",
+        "mode": "f1_training_lane_choice_available",
+        "inputContext": "menu",
+        "title": "选一条训练线",
+        "focus": { "entryTarget": "f1.training.windward", "restoreTarget": "ui-main" },
+        "announcements": {
+          "polite": "迎风线从正面施压，背风线从侧后施压；两条线都要完成檐守与翻花证明。",
+          "assertive": ""
+        },
+        "model": {
+          "cueId": "ui.f1.training.choice.lane",
+          "polarity": "positive",
+          "authority": {
+            "beatId": "f1_beat_shen_yan_training",
+            "objectiveId": "f1_objective_choose_training_lane",
+            "objectiveState": "active",
+            "questSequence": 108,
+            "selectedOptions": [],
+            "interactionResult": null,
+            "combatResult": null,
+            "activeActorKeys": [],
+            "defeatedActorKeys": [],
+            "safePointId": "f1_safe_point_shen_yan_training",
+            "retainedObjectiveIds": ["f1_objective_meet_shen_yan"],
+            "pendingObjectiveId": "f1_objective_choose_training_lane",
+            "attemptTimeClassification": "qualifying_dialogue_decision"
+          },
+          "presentation": {
+            "primaryText": "路线改变来击方向与取标空间，不改变必须掌握的两种架势。",
+            "secondaryText": "不以难度星级替玩家作决定；线标形状和文字同时提示方向。",
+            "shapeToken": "windward_wedge_or_leeward_arc",
+            "options": [
+              {
+                "selectionId": "f1_choice_training_windward_lane",
+                "label": "迎风线",
+                "spatialHint": "正面来击；沿楔形标记守住中线",
+                "optionalObservation": false,
+                "explicitSkip": false,
+                "rewardDelta": false,
+                "convergesToObjectiveId": "f1_objective_take_eavesguard_mark"
+              },
+              {
+                "selectionId": "f1_choice_training_leeward_lane",
+                "label": "背风线",
+                "spatialHint": "侧后来击；沿弧形标记调整站位",
+                "optionalObservation": false,
+                "explicitSkip": false,
+                "rewardDelta": false,
+                "convergesToObjectiveId": "f1_objective_take_eavesguard_mark"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "contractVersion": "1.0.0-prototype",
       "fixtureId": "f1_training_guard_phase_windward",
-      "sequence": 7,
+      "sequence": 9,
       "sessionGeneration": "f1-content-ui-fixture-0001",
       "eventType": "panel_replace",
       "panel": {
@@ -416,7 +549,7 @@
             "beatId": "f1_beat_shen_yan_training",
             "objectiveId": "f1_objective_eavesguard_counter",
             "objectiveState": "active",
-            "questSequence": 107,
+            "questSequence": 109,
             "selectedOptions": [
               {
                 "objectiveId": "f1_objective_choose_training_lane",
@@ -451,7 +584,7 @@
     {
       "contractVersion": "1.0.0-prototype",
       "fixtureId": "f1_training_flower_phase",
-      "sequence": 8,
+      "sequence": 10,
       "sessionGeneration": "f1-content-ui-fixture-0001",
       "eventType": "panel_replace",
       "panel": {
@@ -471,7 +604,7 @@
             "beatId": "f1_beat_shen_yan_training",
             "objectiveId": "f1_objective_flower_turn_counter",
             "objectiveState": "active",
-            "questSequence": 108,
+            "questSequence": 110,
             "selectedOptions": [
               {
                 "objectiveId": "f1_objective_choose_training_lane",
@@ -506,7 +639,7 @@
     {
       "contractVersion": "1.0.0-prototype",
       "fixtureId": "f1_training_eavesguard_proof_accepted",
-      "sequence": 9,
+      "sequence": 11,
       "sessionGeneration": "f1-content-ui-fixture-0001",
       "eventType": "panel_replace",
       "panel": {
@@ -526,7 +659,7 @@
             "beatId": "f1_beat_shen_yan_training",
             "objectiveId": "f1_objective_eavesguard_counter",
             "objectiveState": "completed",
-            "questSequence": 109,
+            "questSequence": 111,
             "selectedOptions": [
               {
                 "objectiveId": "f1_objective_choose_training_lane",
@@ -564,7 +697,7 @@
     {
       "contractVersion": "1.0.0-prototype",
       "fixtureId": "f1_training_flower_proof_wrong_target",
-      "sequence": 10,
+      "sequence": 12,
       "sessionGeneration": "f1-content-ui-fixture-0001",
       "eventType": "panel_replace",
       "panel": {
@@ -584,7 +717,7 @@
             "beatId": "f1_beat_shen_yan_training",
             "objectiveId": "f1_objective_break_flower_turn_target",
             "objectiveState": "active",
-            "questSequence": 110,
+            "questSequence": 112,
             "selectedOptions": [
               {
                 "objectiveId": "f1_objective_choose_training_lane",
@@ -626,7 +759,7 @@
     {
       "contractVersion": "1.0.0-prototype",
       "fixtureId": "f1_training_failure_retry_offer",
-      "sequence": 11,
+      "sequence": 13,
       "sessionGeneration": "f1-content-ui-fixture-0001",
       "eventType": "panel_replace",
       "panel": {
@@ -646,7 +779,7 @@
             "beatId": "f1_beat_shen_yan_training",
             "objectiveId": "f1_objective_eavesguard_counter",
             "objectiveState": "active",
-            "questSequence": 111,
+            "questSequence": 113,
             "selectedOptions": [
               {
                 "objectiveId": "f1_objective_choose_training_lane",
@@ -680,7 +813,7 @@
     {
       "contractVersion": "1.0.0-prototype",
       "fixtureId": "f1_training_return_resume_selected_lane",
-      "sequence": 12,
+      "sequence": 14,
       "sessionGeneration": "f1-content-ui-fixture-0001",
       "eventType": "panel_replace",
       "panel": {
@@ -700,7 +833,7 @@
             "beatId": "f1_beat_shen_yan_training",
             "objectiveId": "f1_objective_flower_turn_counter",
             "objectiveState": "active",
-            "questSequence": 112,
+            "questSequence": 114,
             "selectedOptions": [
               {
                 "objectiveId": "f1_objective_choose_training_lane",

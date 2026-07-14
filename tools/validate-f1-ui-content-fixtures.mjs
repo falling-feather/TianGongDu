@@ -12,8 +12,10 @@ const negativeFixturePath = resolve(
 
 export const requiredCuePolarities = new Map([
   ["ui.f1.rain.choice.arrival-clue", new Set(["positive", "negative"])],
+  ["ui.f1.rain.choice.mooring-method", new Set(["positive"])],
   ["ui.f1.rain.mooring-load", new Set(["positive", "negative"])],
   ["ui.f1.rain.bell-feedback", new Set(["positive", "negative"])],
+  ["ui.f1.training.choice.lane", new Set(["positive"])],
   ["ui.f1.training.phase", new Set(["positive"])],
   ["ui.f1.training.action-proof", new Set(["positive", "negative"])],
   ["ui.f1.training.recovery", new Set(["recovery"])]
@@ -82,16 +84,21 @@ function buildIndexes(contract) {
   const interactionById = new Map(
     contract.questInteractions.map((interaction) => [interaction.id, interaction])
   );
-  const selectionToObjective = new Map(
-    contract.questInteractions
-      .filter((interaction) => interaction.selectionId)
-      .map((interaction) => [interaction.selectionId, interaction.objectiveId])
-  );
+  const selectionToObjective = new Map();
+  const selectionsByObjective = new Map();
+  for (const interaction of contract.questInteractions) {
+    if (!interaction.selectionId) continue;
+    selectionToObjective.set(interaction.selectionId, interaction.objectiveId);
+    const selections = selectionsByObjective.get(interaction.objectiveId) ?? new Set();
+    selections.add(interaction.selectionId);
+    selectionsByObjective.set(interaction.objectiveId, selections);
+  }
   return {
     firstTwoBeatIds: new Set(contract.beats.slice(0, 2).map((beat) => beat.id)),
     objectiveToBeat,
     interactionById,
     selectionToObjective,
+    selectionsByObjective,
     triggerById: new Map(contract.questCombatTriggers.map((trigger) => [trigger.id, trigger])),
     outcomeById: new Map(contract.questCombatOutcomes.map((outcome) => [outcome.id, outcome])),
     safePointById: new Map(contract.safePoints.map((safePoint) => [safePoint.id, safePoint])),
@@ -176,10 +183,13 @@ function validateActorKeys(keys, indexes, label) {
   }
 }
 
-function validatePresentation(presentation, indexes) {
+function validatePresentation(presentation, indexes, objectiveId, surface) {
   assert(presentation && typeof presentation === "object", "presentation is missing");
   assertString(presentation.primaryText, "presentation primaryText is missing");
   assertString(presentation.shapeToken, "presentation shapeToken is missing");
+  if (surface === "choice") {
+    assert(Array.isArray(presentation.options), "choice presentation options must be an array");
+  }
   if (presentation.options !== undefined) {
     assert(Array.isArray(presentation.options), "presentation options must be an array");
     const seenSelections = new Set();
@@ -187,11 +197,27 @@ function validatePresentation(presentation, indexes) {
       assertString(option.selectionId, "presentation option selectionId is missing");
       assert(!seenSelections.has(option.selectionId), `duplicate presentation option ${option.selectionId}`);
       seenSelections.add(option.selectionId);
-      assert(indexes.selectionToObjective.has(option.selectionId), `unknown selection ${option.selectionId}`);
+      const owner = indexes.selectionToObjective.get(option.selectionId);
+      assert(owner, `unknown selection ${option.selectionId}`);
+      assert(
+        owner === objectiveId,
+        `presentation selection ${option.selectionId} does not belong to objective ${objectiveId}`
+      );
       assertString(option.label, "presentation option label is missing");
       if (option.convergesToObjectiveId !== undefined) {
         validateObjective(option.convergesToObjectiveId, indexes, "option convergence objective");
       }
+    }
+    if (surface === "choice") {
+      const authoredSelections = indexes.selectionsByObjective.get(objectiveId) ?? new Set();
+      const exactlyCoversObjective =
+        authoredSelections.size > 0 &&
+        authoredSelections.size === seenSelections.size &&
+        [...authoredSelections].every((selectionId) => seenSelections.has(selectionId));
+      assert(
+        exactlyCoversObjective,
+        `choice options do not exactly cover objective ${objectiveId}`
+      );
     }
   }
   if (presentation.correctionInteractionId !== undefined) {
@@ -272,7 +298,7 @@ export function validateF1UiContentEvent(event, contract, indexes = buildIndexes
     );
   }
   assertString(authority.attemptTimeClassification, "attemptTimeClassification is missing");
-  validatePresentation(model.presentation, indexes);
+  validatePresentation(model.presentation, indexes, authority.objectiveId, panel.surface);
   return event;
 }
 

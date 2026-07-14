@@ -79,6 +79,21 @@
       "operation": "remove",
       "path": "panel.model.authority.questSequence",
       "expectedError": "invalid quest sequence"
+    },
+    {
+      "id": "mooring_choice_rejects_foreign_selection",
+      "baseFixtureId": "f1_rain_mooring_choice_available",
+      "operation": "replace",
+      "path": "panel.model.presentation.options.0.selectionId",
+      "value": "f1_choice_training_windward_lane",
+      "expectedError": "presentation selection .* does not belong to objective"
+    },
+    {
+      "id": "training_choice_requires_complete_options",
+      "baseFixtureId": "f1_training_lane_choice_available",
+      "operation": "remove",
+      "path": "panel.model.presentation.options.1",
+      "expectedError": "choice options do not exactly cover objective"
     }
   ]
 }

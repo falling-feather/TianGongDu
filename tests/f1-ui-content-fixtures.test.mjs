@@ -25,11 +25,18 @@ function event(fixtureId) {
 
 test("F1 first-two-beat UI fixtures stay synchronized with the authoritative Definition", () => {
   assert.equal(validateF1UiContentFixtures(fixtures, contract), fixtures);
-  assert.equal(fixtures.events.length, 12);
+  assert.equal(fixtures.events.length, 14);
   assert.deepEqual(
     new Set(fixtures.events.map((entry) => entry.panel.model.cueId)),
     new Set(requiredCuePolarities.keys())
   );
+
+  const mooring = event("f1_rain_mooring_choice_available");
+  assert.deepEqual(
+    mooring.panel.model.presentation.options.map((option) => option.selectionId),
+    ["f1_choice_mooring_cross_belay", "f1_choice_mooring_quick_hitch"]
+  );
+  assert.equal(mooring.panel.model.authority.objectiveId, "f1_objective_choose_mooring_method");
   assert.equal(fixtures.source.authoritative, false);
   assert.equal(fixtures.source.authoritativeDefinition, "content/design/f1-vertical-slice.json");
   assert.equal(Object.hasOwn(fixtures, "flow"), false);
@@ -114,6 +121,13 @@ test("F1 UI projections express branch choice, recoverable craft error, and bell
 });
 
 test("F1 UI projections distinguish phase, accepted action, wrong target, retry, and return", () => {
+  const laneChoice = event("f1_training_lane_choice_available");
+  assert.deepEqual(
+    laneChoice.panel.model.presentation.options.map((option) => option.selectionId),
+    ["f1_choice_training_windward_lane", "f1_choice_training_leeward_lane"]
+  );
+  assert.equal(laneChoice.panel.model.authority.objectiveId, "f1_objective_choose_training_lane");
+
   assert.deepEqual(
     event("f1_training_guard_phase_windward").panel.model.authority.activeActorKeys,
     [104]
@@ -146,7 +160,7 @@ test("F1 UI projections distinguish phase, accepted action, wrong target, retry,
 
 test("F1 UI negative fixture recipes fail closed for stale or UI-owned authority", () => {
   assert.equal(negativeFixtures.fixtureContractVersion, "1.0.0");
-  assert.equal(negativeFixtures.cases.length, 10);
+  assert.equal(negativeFixtures.cases.length, 12);
   for (const negative of negativeFixtures.cases) {
     const mutated = applyFixtureMutation(fixtures, negative);
     assert.throws(

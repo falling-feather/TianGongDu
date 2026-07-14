@@ -180,6 +180,37 @@ enum class QuestUiProjectionSource : std::uint8_t {
     recovery_resume = 6,
 };
 
+enum class QuestUiResultStatus : std::uint8_t {
+    not_applicable,
+    accepted,
+    rejected,
+    ignored_repeat,
+    pending,
+};
+
+enum class QuestUiRejectionReason : std::uint8_t {
+    none,
+    prerequisite_incomplete,
+    selection_already_committed,
+    wrong_target,
+};
+
+enum class QuestUiAttemptTimeClassification : std::uint8_t {
+    unspecified,
+    qualifying_first_visit,
+    repeat_no_progress,
+    qualifying_craft_decision,
+    qualifying_error_feedback,
+    qualifying_wrong_order_feedback,
+    qualifying_craft_confirmation,
+    qualifying_dialogue_decision,
+    qualifying_training_risk,
+    qualifying_combat_proof,
+    qualifying_combat_feedback,
+    failure_retry_excluded,
+    resume_no_duplicate_progress,
+};
+
 enum class QuestUiPolarity : std::uint8_t {
     positive,
     negative,
@@ -210,8 +241,30 @@ struct QuestUiResultSelectorDefinition final {
     QuestUiPolarityOverride polarity_override{QuestUiPolarityOverride::none};
 };
 
+struct QuestUiAttemptEvidenceResultSelectorDefinition final {
+    ContentId result_id{};
+    QuestUiResultStatus status{QuestUiResultStatus::not_applicable};
+    QuestUiRejectionReason rejection_reason{QuestUiRejectionReason::none};
+
+    [[nodiscard]] friend constexpr bool operator==(
+        const QuestUiAttemptEvidenceResultSelectorDefinition&,
+        const QuestUiAttemptEvidenceResultSelectorDefinition&
+    ) noexcept = default;
+};
+
+struct QuestUiAttemptEvidenceRuleDefinition final {
+    QuestUiProjectionSource source{QuestUiProjectionSource::objective_state};
+    ContentId objective_id{};
+    QuestUiAttemptEvidenceResultSelectorDefinition primary_result{};
+    QuestUiAttemptEvidenceResultSelectorDefinition secondary_result{};
+    QuestUiAttemptTimeClassification classification{
+        QuestUiAttemptTimeClassification::unspecified
+    };
+};
+
 inline constexpr std::size_t quest_ui_cue_objective_capacity = 8;
 inline constexpr std::size_t quest_ui_result_selector_capacity = 8;
+inline constexpr std::size_t quest_ui_attempt_evidence_rule_capacity = 16;
 
 struct QuestUiCueDefinition final {
     ContentId cue_id{};
@@ -224,6 +277,9 @@ struct QuestUiCueDefinition final {
     // accepted choose interaction transitioning to the next active objective with
     // negative feedback. Empty secondary_result_id means a single-result selector.
     std::span<const QuestUiResultSelectorDefinition> result_selectors{};
+    // Exact, Definition-owned signal/result selectors derive qualified-attempt evidence.
+    // Runtime callers may not supply or override the resulting classification.
+    std::span<const QuestUiAttemptEvidenceRuleDefinition> attempt_evidence_rules{};
 };
 
 struct VerticalSliceDefinition final {

@@ -25,37 +25,6 @@ enum class QuestUiObjectiveState : std::uint8_t {
     completed,
 };
 
-enum class QuestUiResultStatus : std::uint8_t {
-    not_applicable,
-    accepted,
-    rejected,
-    ignored_repeat,
-    pending,
-};
-
-enum class QuestUiRejectionReason : std::uint8_t {
-    none,
-    prerequisite_incomplete,
-    selection_already_committed,
-    wrong_target,
-};
-
-enum class QuestUiAttemptTimeClassification : std::uint8_t {
-    unspecified,
-    qualifying_first_visit,
-    repeat_no_progress,
-    qualifying_craft_decision,
-    qualifying_error_feedback,
-    qualifying_wrong_order_feedback,
-    qualifying_craft_confirmation,
-    qualifying_dialogue_decision,
-    qualifying_training_risk,
-    qualifying_combat_proof,
-    qualifying_combat_feedback,
-    failure_retry_excluded,
-    resume_no_duplicate_progress,
-};
-
 struct QuestUiChoiceOption final {
     StableContentKey interaction{};
     StableContentKey selection{};
@@ -95,9 +64,6 @@ struct QuestUiProjectionSignal final {
     StableContentKey objective{};
     QuestUiResultSlot primary_result{};
     QuestUiResultSlot secondary_result{};
-    QuestUiAttemptTimeClassification attempt_time_classification{
-        QuestUiAttemptTimeClassification::unspecified
-    };
 };
 
 struct QuestUiProjectionSnapshot final {

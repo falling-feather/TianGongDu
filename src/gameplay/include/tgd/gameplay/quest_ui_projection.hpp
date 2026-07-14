@@ -20,6 +20,7 @@ enum class QuestUiProjectionError : std::uint8_t {
     ambiguous_cue,
     capacity_exceeded,
     sequence_overflow,
+    missing_attempt_evidence,
 };
 
 enum class QuestUiSelectionIntentError : std::uint8_t {

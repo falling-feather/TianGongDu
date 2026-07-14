@@ -28,6 +28,13 @@ using gameplay::QuestObjectiveState;
 using gameplay::QuestUiProjectionError;
 using gameplay::QuestUiSelectionIntentError;
 
+template <typename Signal>
+concept HasAttemptTimeClassificationOverride = requires(Signal value) {
+    value.attempt_time_classification;
+};
+
+static_assert(!HasAttemptTimeClassificationOverride<QuestUiProjectionSignal>);
+
 int failures{};
 
 void expect(bool condition, std::string_view label) {
@@ -171,6 +178,25 @@ inline constexpr auto cue_recovery = contracts::content_id("ui.test.training.rec
     };
 }
 
+[[nodiscard]] constexpr contracts::QuestUiAttemptEvidenceResultSelectorDefinition
+attempt_result(
+    ContentId id,
+    QuestUiResultStatus status,
+    QuestUiRejectionReason reason = QuestUiRejectionReason::none
+) noexcept {
+    return {id, status, reason};
+}
+
+[[nodiscard]] constexpr contracts::QuestUiAttemptEvidenceRuleDefinition attempt_rule(
+    QuestUiProjectionSource source,
+    ContentId objective,
+    QuestUiAttemptTimeClassification classification,
+    contracts::QuestUiAttemptEvidenceResultSelectorDefinition primary = {},
+    contracts::QuestUiAttemptEvidenceResultSelectorDefinition secondary = {}
+) noexcept {
+    return {source, objective, primary, secondary, classification};
+}
+
 struct ProjectionFixture final {
     std::array<ContentId, 7> alpha_objectives{{
         alpha_inspect,
@@ -241,6 +267,128 @@ struct ProjectionFixture final {
             contracts::QuestUiPolarityOverride::none,
         },
     }};
+    std::array<contracts::QuestUiAttemptEvidenceRuleDefinition, 2> arrival_attempt_rules{{
+        attempt_rule(
+            QuestUiProjectionSource::choice_available,
+            arrival_choice,
+            QuestUiAttemptTimeClassification::qualifying_first_visit
+        ),
+        attempt_rule(
+            QuestUiProjectionSource::interaction_feedback,
+            arrival_choice,
+            QuestUiAttemptTimeClassification::repeat_no_progress,
+            attempt_result(
+                arrival_low_interaction,
+                QuestUiResultStatus::ignored_repeat,
+                QuestUiRejectionReason::selection_already_committed
+            )
+        ),
+    }};
+    std::array<contracts::QuestUiAttemptEvidenceRuleDefinition, 1>
+        mooring_choice_attempt_rules{{
+            attempt_rule(
+                QuestUiProjectionSource::choice_available,
+                mooring_choice,
+                QuestUiAttemptTimeClassification::qualifying_craft_decision
+            ),
+        }};
+    std::array<contracts::QuestUiAttemptEvidenceRuleDefinition, 2>
+        mooring_load_attempt_rules{{
+            attempt_rule(
+                QuestUiProjectionSource::interaction_feedback,
+                secure_mooring,
+                QuestUiAttemptTimeClassification::qualifying_craft_decision,
+                attempt_result(
+                    lock_cross_interaction,
+                    QuestUiResultStatus::accepted
+                )
+            ),
+            attempt_rule(
+                QuestUiProjectionSource::interaction_feedback,
+                secure_mooring,
+                QuestUiAttemptTimeClassification::qualifying_error_feedback,
+                attempt_result(
+                    mooring_quick_interaction,
+                    QuestUiResultStatus::accepted
+                )
+            ),
+        }};
+    std::array<contracts::QuestUiAttemptEvidenceRuleDefinition, 2> bell_attempt_rules{{
+        attempt_rule(
+            QuestUiProjectionSource::interaction_feedback,
+            sound_bell,
+            QuestUiAttemptTimeClassification::qualifying_wrong_order_feedback,
+            attempt_result(
+                bell_interaction,
+                QuestUiResultStatus::rejected,
+                QuestUiRejectionReason::prerequisite_incomplete
+            )
+        ),
+        attempt_rule(
+            QuestUiProjectionSource::interaction_feedback,
+            sound_bell,
+            QuestUiAttemptTimeClassification::qualifying_craft_confirmation,
+            attempt_result(bell_interaction, QuestUiResultStatus::accepted)
+        ),
+    }};
+    std::array<contracts::QuestUiAttemptEvidenceRuleDefinition, 1>
+        training_choice_attempt_rules{{
+            attempt_rule(
+                QuestUiProjectionSource::choice_available,
+                training_choice,
+                QuestUiAttemptTimeClassification::qualifying_dialogue_decision
+            ),
+        }};
+    std::array<contracts::QuestUiAttemptEvidenceRuleDefinition, 2> phase_attempt_rules{{
+        attempt_rule(
+            QuestUiProjectionSource::objective_state,
+            guard_counter,
+            QuestUiAttemptTimeClassification::qualifying_training_risk
+        ),
+        attempt_rule(
+            QuestUiProjectionSource::objective_state,
+            flower_counter,
+            QuestUiAttemptTimeClassification::qualifying_training_risk
+        ),
+    }};
+    std::array<contracts::QuestUiAttemptEvidenceRuleDefinition, 3> action_attempt_rules{{
+        attempt_rule(
+            QuestUiProjectionSource::combat_feedback,
+            guard_counter,
+            QuestUiAttemptTimeClassification::qualifying_combat_proof,
+            attempt_result(guard_trigger, QuestUiResultStatus::accepted)
+        ),
+        attempt_rule(
+            QuestUiProjectionSource::combat_feedback,
+            break_target,
+            QuestUiAttemptTimeClassification::qualifying_combat_feedback,
+            attempt_result(flower_heavy_trigger, QuestUiResultStatus::accepted),
+            attempt_result(
+                break_target_outcome,
+                QuestUiResultStatus::rejected,
+                QuestUiRejectionReason::wrong_target
+            )
+        ),
+        attempt_rule(
+            QuestUiProjectionSource::combat_feedback,
+            break_target,
+            QuestUiAttemptTimeClassification::qualifying_combat_feedback,
+            attempt_result(flower_heavy_trigger, QuestUiResultStatus::accepted),
+            attempt_result(break_target_outcome, QuestUiResultStatus::accepted)
+        ),
+    }};
+    std::array<contracts::QuestUiAttemptEvidenceRuleDefinition, 2> recovery_attempt_rules{{
+        attempt_rule(
+            QuestUiProjectionSource::recovery_offer,
+            guard_counter,
+            QuestUiAttemptTimeClassification::failure_retry_excluded
+        ),
+        attempt_rule(
+            QuestUiProjectionSource::recovery_resume,
+            flower_counter,
+            QuestUiAttemptTimeClassification::resume_no_duplicate_progress
+        ),
+    }};
     std::array<contracts::QuestUiCueDefinition, 8> cues{};
 
     ProjectionFixture() {
@@ -278,6 +426,9 @@ struct ProjectionFixture final {
                 ),
                 std::span<const ContentId>{arrival_cue_objectives},
                 {},
+                std::span<const contracts::QuestUiAttemptEvidenceRuleDefinition>{
+                    arrival_attempt_rules
+                },
             },
             {
                 cue_mooring_choice,
@@ -285,6 +436,9 @@ struct ProjectionFixture final {
                 source_bit(QuestUiProjectionSource::choice_available),
                 std::span<const ContentId>{mooring_choice_cue_objectives},
                 {},
+                std::span<const contracts::QuestUiAttemptEvidenceRuleDefinition>{
+                    mooring_choice_attempt_rules
+                },
             },
             {
                 cue_mooring_load,
@@ -292,6 +446,9 @@ struct ProjectionFixture final {
                 source_bit(QuestUiProjectionSource::interaction_feedback),
                 std::span<const ContentId>{mooring_load_cue_objectives},
                 std::span<const contracts::QuestUiResultSelectorDefinition>{mooring_selectors},
+                std::span<const contracts::QuestUiAttemptEvidenceRuleDefinition>{
+                    mooring_load_attempt_rules
+                },
             },
             {
                 cue_bell,
@@ -299,6 +456,9 @@ struct ProjectionFixture final {
                 source_bit(QuestUiProjectionSource::interaction_feedback),
                 std::span<const ContentId>{bell_cue_objectives},
                 {},
+                std::span<const contracts::QuestUiAttemptEvidenceRuleDefinition>{
+                    bell_attempt_rules
+                },
             },
             {
                 cue_training_choice,
@@ -306,6 +466,9 @@ struct ProjectionFixture final {
                 source_bit(QuestUiProjectionSource::choice_available),
                 std::span<const ContentId>{training_choice_cue_objectives},
                 {},
+                std::span<const contracts::QuestUiAttemptEvidenceRuleDefinition>{
+                    training_choice_attempt_rules
+                },
             },
             {
                 cue_training_phase,
@@ -313,6 +476,9 @@ struct ProjectionFixture final {
                 source_bit(QuestUiProjectionSource::objective_state),
                 std::span<const ContentId>{phase_cue_objectives},
                 {},
+                std::span<const contracts::QuestUiAttemptEvidenceRuleDefinition>{
+                    phase_attempt_rules
+                },
             },
             {
                 cue_action_proof,
@@ -320,6 +486,9 @@ struct ProjectionFixture final {
                 source_bit(QuestUiProjectionSource::combat_feedback),
                 std::span<const ContentId>{action_cue_objectives},
                 std::span<const contracts::QuestUiResultSelectorDefinition>{action_selectors},
+                std::span<const contracts::QuestUiAttemptEvidenceRuleDefinition>{
+                    action_attempt_rules
+                },
             },
             {
                 cue_recovery,
@@ -330,6 +499,9 @@ struct ProjectionFixture final {
                 ),
                 {},
                 {},
+                std::span<const contracts::QuestUiAttemptEvidenceRuleDefinition>{
+                    recovery_attempt_rules
+                },
             },
         }};
     }
@@ -487,11 +659,15 @@ class StubQuestRuntime final : public gameplay::IQuestRuntime {
 [[nodiscard]] constexpr QuestUiProjectionSignal signal(
     QuestUiProjectionSource source,
     ContentId objective,
-    QuestUiAttemptTimeClassification attempt,
     QuestUiResultSlot primary = {},
     QuestUiResultSlot secondary = {}
 ) noexcept {
-    return {source, objective.key, primary, secondary, attempt};
+    return {
+        source,
+        objective.key,
+        primary,
+        secondary,
+    };
 }
 
 [[nodiscard]] contracts::CombatActorSnapshot actor(
@@ -525,6 +701,9 @@ struct ProjectionCase final {
     std::vector<StateChange> states{};
     std::vector<SelectionChange> selections{};
     std::vector<contracts::CombatActorSnapshot> actors{};
+    QuestUiAttemptTimeClassification expected_attempt{
+        QuestUiAttemptTimeClassification::unspecified
+    };
     ContentId expected_cue{};
     QuestUiPolarity expected_polarity{QuestUiPolarity::positive};
     std::uint8_t expected_choice_count{};
@@ -540,12 +719,12 @@ void test_authoritative_projection_catalog() {
             alpha_safe,
             signal(
                 QuestUiProjectionSource::choice_available,
-                arrival_choice,
-                QuestUiAttemptTimeClassification::qualifying_first_visit
+                arrival_choice
             ),
             {{arrival_choice, QuestObjectiveState::active}},
             {},
             {},
+            QuestUiAttemptTimeClassification::qualifying_first_visit,
             cue_arrival,
             QuestUiPolarity::positive,
             3,
@@ -557,7 +736,6 @@ void test_authoritative_projection_catalog() {
             signal(
                 QuestUiProjectionSource::interaction_feedback,
                 arrival_choice,
-                QuestUiAttemptTimeClassification::repeat_no_progress,
                 result(
                     arrival_low_interaction,
                     arrival_choice,
@@ -571,6 +749,7 @@ void test_authoritative_projection_catalog() {
             },
             {{arrival_choice, arrival_high}},
             {},
+            QuestUiAttemptTimeClassification::repeat_no_progress,
             cue_arrival,
             QuestUiPolarity::negative,
             0,
@@ -581,12 +760,12 @@ void test_authoritative_projection_catalog() {
             alpha_safe,
             signal(
                 QuestUiProjectionSource::choice_available,
-                mooring_choice,
-                QuestUiAttemptTimeClassification::qualifying_craft_decision
+                mooring_choice
             ),
             {{mooring_choice, QuestObjectiveState::active}},
             {},
             {},
+            QuestUiAttemptTimeClassification::qualifying_craft_decision,
             cue_mooring_choice,
             QuestUiPolarity::positive,
             2,
@@ -598,7 +777,6 @@ void test_authoritative_projection_catalog() {
             signal(
                 QuestUiProjectionSource::interaction_feedback,
                 secure_mooring,
-                QuestUiAttemptTimeClassification::qualifying_craft_decision,
                 result(
                     lock_cross_interaction,
                     secure_mooring,
@@ -612,6 +790,7 @@ void test_authoritative_projection_catalog() {
             },
             {{mooring_choice, mooring_cross}},
             {},
+            QuestUiAttemptTimeClassification::qualifying_craft_decision,
             cue_mooring_load,
             QuestUiPolarity::positive,
             0,
@@ -623,7 +802,6 @@ void test_authoritative_projection_catalog() {
             signal(
                 QuestUiProjectionSource::interaction_feedback,
                 secure_mooring,
-                QuestUiAttemptTimeClassification::qualifying_error_feedback,
                 result(
                     mooring_quick_interaction,
                     mooring_choice,
@@ -636,6 +814,7 @@ void test_authoritative_projection_catalog() {
             },
             {{mooring_choice, mooring_quick}},
             {},
+            QuestUiAttemptTimeClassification::qualifying_error_feedback,
             cue_mooring_load,
             QuestUiPolarity::negative,
             0,
@@ -647,7 +826,6 @@ void test_authoritative_projection_catalog() {
             signal(
                 QuestUiProjectionSource::interaction_feedback,
                 sound_bell,
-                QuestUiAttemptTimeClassification::qualifying_wrong_order_feedback,
                 result(
                     bell_interaction,
                     sound_bell,
@@ -661,6 +839,7 @@ void test_authoritative_projection_catalog() {
             },
             {},
             {},
+            QuestUiAttemptTimeClassification::qualifying_wrong_order_feedback,
             cue_bell,
             QuestUiPolarity::negative,
             0,
@@ -672,7 +851,6 @@ void test_authoritative_projection_catalog() {
             signal(
                 QuestUiProjectionSource::interaction_feedback,
                 sound_bell,
-                QuestUiAttemptTimeClassification::qualifying_craft_confirmation,
                 result(bell_interaction, sound_bell, QuestUiResultStatus::accepted)
             ),
             {
@@ -681,6 +859,7 @@ void test_authoritative_projection_catalog() {
             },
             {},
             {},
+            QuestUiAttemptTimeClassification::qualifying_craft_confirmation,
             cue_bell,
             QuestUiPolarity::positive,
             0,
@@ -691,12 +870,12 @@ void test_authoritative_projection_catalog() {
             beta_safe,
             signal(
                 QuestUiProjectionSource::choice_available,
-                training_choice,
-                QuestUiAttemptTimeClassification::qualifying_dialogue_decision
+                training_choice
             ),
             {{training_choice, QuestObjectiveState::active}},
             {},
             {},
+            QuestUiAttemptTimeClassification::qualifying_dialogue_decision,
             cue_training_choice,
             QuestUiPolarity::positive,
             2,
@@ -707,8 +886,7 @@ void test_authoritative_projection_catalog() {
             beta_safe,
             signal(
                 QuestUiProjectionSource::objective_state,
-                guard_counter,
-                QuestUiAttemptTimeClassification::qualifying_training_risk
+                guard_counter
             ),
             {
                 {training_choice, QuestObjectiveState::completed},
@@ -716,6 +894,7 @@ void test_authoritative_projection_catalog() {
             },
             {{training_choice, training_windward}},
             {actor(101, true, false)},
+            QuestUiAttemptTimeClassification::qualifying_training_risk,
             cue_training_phase,
             QuestUiPolarity::positive,
             0,
@@ -726,12 +905,12 @@ void test_authoritative_projection_catalog() {
             beta_safe,
             signal(
                 QuestUiProjectionSource::objective_state,
-                flower_counter,
-                QuestUiAttemptTimeClassification::qualifying_training_risk
+                flower_counter
             ),
             {{flower_counter, QuestObjectiveState::active}},
             {},
             {actor(102, true, false)},
+            QuestUiAttemptTimeClassification::qualifying_training_risk,
             cue_training_phase,
             QuestUiPolarity::positive,
             0,
@@ -743,7 +922,6 @@ void test_authoritative_projection_catalog() {
             signal(
                 QuestUiProjectionSource::combat_feedback,
                 guard_counter,
-                QuestUiAttemptTimeClassification::qualifying_combat_proof,
                 result(guard_trigger, guard_counter, QuestUiResultStatus::accepted)
             ),
             {
@@ -752,6 +930,7 @@ void test_authoritative_projection_catalog() {
             },
             {},
             {actor(101, true, false)},
+            QuestUiAttemptTimeClassification::qualifying_combat_proof,
             cue_action_proof,
             QuestUiPolarity::positive,
             0,
@@ -763,7 +942,6 @@ void test_authoritative_projection_catalog() {
             signal(
                 QuestUiProjectionSource::combat_feedback,
                 break_target,
-                QuestUiAttemptTimeClassification::qualifying_combat_feedback,
                 result(
                     flower_heavy_trigger,
                     flower_heavy,
@@ -782,6 +960,7 @@ void test_authoritative_projection_catalog() {
             },
             {},
             {actor(103, true, false)},
+            QuestUiAttemptTimeClassification::qualifying_combat_feedback,
             cue_action_proof,
             QuestUiPolarity::negative,
             0,
@@ -792,12 +971,12 @@ void test_authoritative_projection_catalog() {
             beta_safe,
             signal(
                 QuestUiProjectionSource::recovery_offer,
-                guard_counter,
-                QuestUiAttemptTimeClassification::failure_retry_excluded
+                guard_counter
             ),
             {{guard_counter, QuestObjectiveState::active}},
             {},
             {actor(101, true, false)},
+            QuestUiAttemptTimeClassification::failure_retry_excluded,
             cue_recovery,
             QuestUiPolarity::recovery,
             0,
@@ -808,12 +987,12 @@ void test_authoritative_projection_catalog() {
             beta_safe,
             signal(
                 QuestUiProjectionSource::recovery_resume,
-                flower_counter,
-                QuestUiAttemptTimeClassification::resume_no_duplicate_progress
+                flower_counter
             ),
             {{flower_counter, QuestObjectiveState::active}},
             {},
             {actor(102, true, false), actor(103, false, true)},
+            QuestUiAttemptTimeClassification::resume_no_duplicate_progress,
             cue_recovery,
             QuestUiPolarity::recovery,
             0,
@@ -856,6 +1035,11 @@ void test_authoritative_projection_catalog() {
                 projection_case.expected_choice_count,
             projection_case.name
         );
+        expect(
+            projected.projection.attempt_time_classification ==
+                projection_case.expected_attempt,
+            projection_case.name
+        );
         expect(projected.projection.quest_checksum == quest.snapshot().checksum, projection_case.name);
         expect(projected.projection.checksum != 0, projection_case.name);
         expect(producer.snapshot() == projected.projection, projection_case.name);
@@ -872,8 +1056,7 @@ void test_choice_order_intent_and_sequence() {
     expect(producer.initialize(definition) == QuestUiProjectionError::none, "choice init");
     const auto choice_signal = signal(
         QuestUiProjectionSource::choice_available,
-        arrival_choice,
-        QuestUiAttemptTimeClassification::qualifying_first_visit
+        arrival_choice
     );
     const auto first = producer.project(choice_signal, quest, alpha_safe.key, {});
     expect(first.error == QuestUiProjectionError::none, "choice first projection");
@@ -1040,8 +1223,7 @@ void test_same_beat_stage_active_focus() {
     const auto choice = choice_producer.project(
         signal(
             QuestUiProjectionSource::choice_available,
-            arrival_choice,
-            QuestUiAttemptTimeClassification::qualifying_first_visit
+            arrival_choice
         ),
         real_quest,
         alpha_safe.key,
@@ -1081,8 +1263,7 @@ void test_same_beat_stage_active_focus() {
     const auto objective = gameplay_producer.project(
         signal(
             QuestUiProjectionSource::objective_state,
-            guard_counter,
-            QuestUiAttemptTimeClassification::qualifying_training_risk
+            guard_counter
         ),
         gameplay_quest,
         beta_safe.key,
@@ -1099,7 +1280,6 @@ void test_same_beat_stage_active_focus() {
         signal(
             QuestUiProjectionSource::combat_feedback,
             guard_counter,
-            QuestUiAttemptTimeClassification::qualifying_combat_proof,
             result(guard_trigger, guard_counter, QuestUiResultStatus::accepted)
         ),
         gameplay_quest,
@@ -1126,7 +1306,6 @@ void test_same_beat_stage_active_focus() {
         signal(
             QuestUiProjectionSource::interaction_feedback,
             sound_bell,
-            QuestUiAttemptTimeClassification::qualifying_craft_confirmation,
             result(bell_interaction, sound_bell, QuestUiResultStatus::accepted)
         ),
         completed_focus,
@@ -1242,6 +1421,56 @@ void test_definition_fail_closed() {
     }
     {
         ProjectionFixture fixture;
+        fixture.cues[0].attempt_evidence_rules = {};
+        expect_initialize_invalid(fixture, "definition empty attempt evidence rules");
+    }
+    {
+        ProjectionFixture fixture;
+        fixture.cues[0].attempt_evidence_rules =
+            std::span<const contracts::QuestUiAttemptEvidenceRuleDefinition>{
+                &fixture.arrival_attempt_rules[0],
+                1
+            };
+        expect_initialize_invalid(fixture, "definition attempt evidence misses cue source");
+    }
+    {
+        ProjectionFixture fixture;
+        std::array<contracts::QuestUiAttemptEvidenceRuleDefinition, 2> duplicate{{
+            fixture.mooring_choice_attempt_rules[0],
+            fixture.mooring_choice_attempt_rules[0],
+        }};
+        duplicate[1].classification =
+            QuestUiAttemptTimeClassification::qualifying_first_visit;
+        fixture.cues[1].attempt_evidence_rules =
+            std::span<const contracts::QuestUiAttemptEvidenceRuleDefinition>{duplicate};
+        expect_initialize_invalid(fixture, "definition ambiguous attempt evidence selector");
+    }
+    {
+        ProjectionFixture fixture;
+        fixture.mooring_load_attempt_rules[0].primary_result.result_id =
+            contracts::content_id("unknown_attempt_result");
+        expect_initialize_invalid(fixture, "definition unknown attempt evidence result");
+    }
+    {
+        ProjectionFixture fixture;
+        fixture.arrival_attempt_rules[0].primary_result.result_id =
+            arrival_high_interaction;
+        expect_initialize_invalid(fixture, "definition nonempty attempt evidence sentinel");
+    }
+    {
+        ProjectionFixture fixture;
+        fixture.arrival_attempt_rules[0].classification =
+            static_cast<QuestUiAttemptTimeClassification>(255);
+        expect_initialize_invalid(fixture, "definition unknown attempt evidence classification");
+    }
+    {
+        ProjectionFixture fixture;
+        fixture.arrival_attempt_rules[0].classification =
+            QuestUiAttemptTimeClassification::qualifying_combat_proof;
+        expect_initialize_invalid(fixture, "definition source classification mismatch");
+    }
+    {
+        ProjectionFixture fixture;
         const auto legacy = fixture.definition();
         auto pre_1_5 = legacy;
         pre_1_5.quest_ui_cues = {};
@@ -1271,6 +1500,53 @@ void expect_projection_failure_unchanged(
     expect(producer.snapshot().checksum == before.checksum, label);
 }
 
+void test_missing_attempt_evidence_fails_without_state_change() {
+    ProjectionFixture fixture;
+    fixture.cues[3].attempt_evidence_rules =
+        std::span<const contracts::QuestUiAttemptEvidenceRuleDefinition>{
+            &fixture.bell_attempt_rules[0],
+            1
+        };
+    const auto definition = fixture.definition();
+    DeterministicQuestUiProjectionProducer producer;
+    expect(
+        producer.initialize(definition) == QuestUiProjectionError::none,
+        "missing attempt evidence producer init"
+    );
+
+    StubQuestRuntime baseline_quest;
+    baseline_quest.configure(definition, alpha_beat.key, 8'900);
+    baseline_quest.set_state(arrival_choice.key, QuestObjectiveState::active);
+    const auto baseline = producer.project(
+        signal(
+            QuestUiProjectionSource::choice_available,
+            arrival_choice
+        ),
+        baseline_quest,
+        alpha_safe.key,
+        {}
+    );
+    expect(baseline.error == QuestUiProjectionError::none, "missing evidence baseline");
+
+    StubQuestRuntime bell_quest;
+    bell_quest.configure(definition, alpha_beat.key, 8'901);
+    bell_quest.set_state(sound_bell.key, QuestObjectiveState::completed);
+    bell_quest.set_state(alpha_finish.key, QuestObjectiveState::active);
+    expect_projection_failure_unchanged(
+        producer,
+        signal(
+            QuestUiProjectionSource::interaction_feedback,
+            sound_bell,
+            result(bell_interaction, sound_bell, QuestUiResultStatus::accepted)
+        ),
+        bell_quest,
+        alpha_safe.key,
+        {},
+        QuestUiProjectionError::missing_attempt_evidence,
+        "missing attempt evidence"
+    );
+}
+
 void test_runtime_fail_closed_and_snapshot_invariance() {
     ProjectionFixture fixture;
     const auto definition = fixture.definition();
@@ -1282,8 +1558,7 @@ void test_runtime_fail_closed_and_snapshot_invariance() {
     const auto baseline = producer.project(
         signal(
             QuestUiProjectionSource::choice_available,
-            arrival_choice,
-            QuestUiAttemptTimeClassification::qualifying_first_visit
+            arrival_choice
         ),
         baseline_quest,
         alpha_safe.key,
@@ -1299,7 +1574,6 @@ void test_runtime_fail_closed_and_snapshot_invariance() {
     const auto quick_signal = signal(
         QuestUiProjectionSource::interaction_feedback,
         secure_mooring,
-        QuestUiAttemptTimeClassification::qualifying_error_feedback,
         result(
             mooring_quick_interaction,
             mooring_choice,
@@ -1375,7 +1649,6 @@ void test_runtime_fail_closed_and_snapshot_invariance() {
     const auto combat_signal = signal(
         QuestUiProjectionSource::combat_feedback,
         break_target,
-        QuestUiAttemptTimeClassification::qualifying_combat_feedback,
         result(flower_heavy_trigger, flower_heavy, QuestUiResultStatus::accepted),
         result(
             break_target_outcome,
@@ -1462,8 +1735,7 @@ void test_runtime_fail_closed_and_snapshot_invariance() {
         baseline.projection.source == QuestUiProjectionSource::choice_available
             ? signal(
                   QuestUiProjectionSource::choice_available,
-                  arrival_choice,
-                  QuestUiAttemptTimeClassification::qualifying_first_visit
+                  arrival_choice
               )
             : QuestUiProjectionSignal{},
         cross_beat_active,
@@ -1479,8 +1751,7 @@ void test_runtime_fail_closed_and_snapshot_invariance() {
         producer,
         signal(
             QuestUiProjectionSource::choice_available,
-            arrival_choice,
-            QuestUiAttemptTimeClassification::qualifying_first_visit
+            arrival_choice
         ),
         locked_choice_focus,
         alpha_safe.key,
@@ -1495,8 +1766,7 @@ void test_runtime_fail_closed_and_snapshot_invariance() {
         producer,
         signal(
             QuestUiProjectionSource::choice_available,
-            arrival_choice,
-            QuestUiAttemptTimeClassification::qualifying_first_visit
+            arrival_choice
         ),
         baseline_quest,
         alpha_safe.key,
@@ -1512,8 +1782,7 @@ void test_runtime_fail_closed_and_snapshot_invariance() {
         producer,
         signal(
             QuestUiProjectionSource::choice_available,
-            arrival_choice,
-            QuestUiAttemptTimeClassification::qualifying_first_visit
+            arrival_choice
         ),
         baseline_quest,
         alpha_safe.key,
@@ -1528,8 +1797,7 @@ void test_runtime_fail_closed_and_snapshot_invariance() {
         producer,
         signal(
             QuestUiProjectionSource::choice_available,
-            arrival_choice,
-            QuestUiAttemptTimeClassification::qualifying_first_visit
+            arrival_choice
         ),
         baseline_quest,
         alpha_safe.key,
@@ -1544,8 +1812,7 @@ void test_runtime_fail_closed_and_snapshot_invariance() {
         producer,
         signal(
             QuestUiProjectionSource::choice_available,
-            arrival_choice,
-            QuestUiAttemptTimeClassification::qualifying_first_visit
+            arrival_choice
         ),
         baseline_quest,
         alpha_safe.key,
@@ -1562,8 +1829,7 @@ void test_runtime_fail_closed_and_snapshot_invariance() {
         producer,
         signal(
             QuestUiProjectionSource::choice_available,
-            arrival_choice,
-            QuestUiAttemptTimeClassification::qualifying_first_visit
+            arrival_choice
         ),
         baseline_quest,
         alpha_safe.key,
@@ -1571,50 +1837,9 @@ void test_runtime_fail_closed_and_snapshot_invariance() {
         QuestUiProjectionError::invalid_snapshot,
         "hostile actor cannot be reported as player"
     );
-    auto unspecified_attempt = signal(
-        QuestUiProjectionSource::choice_available,
-        arrival_choice,
-        QuestUiAttemptTimeClassification::unspecified
-    );
-    expect_projection_failure_unchanged(
-        producer,
-        unspecified_attempt,
-        baseline_quest,
-        alpha_safe.key,
-        {},
-        QuestUiProjectionError::invalid_signal,
-        "unspecified attempt classification"
-    );
-    auto combat_classified_choice = signal(
-        QuestUiProjectionSource::choice_available,
-        arrival_choice,
-        QuestUiAttemptTimeClassification::qualifying_combat_proof
-    );
-    expect_projection_failure_unchanged(
-        producer,
-        combat_classified_choice,
-        baseline_quest,
-        alpha_safe.key,
-        {},
-        QuestUiProjectionError::invalid_signal,
-        "choice source rejects combat attempt classification"
-    );
-    auto craft_classified_combat = combat_signal;
-    craft_classified_combat.attempt_time_classification =
-        QuestUiAttemptTimeClassification::qualifying_craft_decision;
-    expect_projection_failure_unchanged(
-        producer,
-        craft_classified_combat,
-        combat_quest,
-        beta_safe.key,
-        {},
-        QuestUiProjectionError::invalid_signal,
-        "combat source rejects craft attempt classification"
-    );
     auto wrong_repeat_attempt = signal(
         QuestUiProjectionSource::interaction_feedback,
         arrival_choice,
-        QuestUiAttemptTimeClassification::qualifying_first_visit,
         result(
             arrival_low_interaction,
             arrival_choice,
@@ -1629,7 +1854,7 @@ void test_runtime_fail_closed_and_snapshot_invariance() {
         alpha_safe.key,
         {},
         QuestUiProjectionError::invalid_signal,
-        "repeat attempt classification mismatch"
+        "ignored repeat requires committed choice state"
     );
     StubQuestRuntime repeat_quest;
     repeat_quest.configure(definition, alpha_beat.key, 9'006);
@@ -1639,7 +1864,6 @@ void test_runtime_fail_closed_and_snapshot_invariance() {
     auto wrong_repeat_reason = signal(
         QuestUiProjectionSource::interaction_feedback,
         arrival_choice,
-        QuestUiAttemptTimeClassification::repeat_no_progress,
         result(
             arrival_low_interaction,
             arrival_choice,
@@ -1671,7 +1895,6 @@ void test_selector_status_polarity_and_missing_selector() {
         signal(
             QuestUiProjectionSource::combat_feedback,
             break_target,
-            QuestUiAttemptTimeClassification::qualifying_combat_feedback,
             result(flower_heavy_trigger, flower_heavy, QuestUiResultStatus::accepted),
             result(break_target_outcome, break_target, QuestUiResultStatus::accepted)
         ),
@@ -1681,12 +1904,16 @@ void test_selector_status_polarity_and_missing_selector() {
     );
     expect(accepted.error == QuestUiProjectionError::none, "selector accepted outcome");
     expect(accepted.projection.polarity == QuestUiPolarity::positive, "accepted outcome positive");
+    expect(
+        accepted.projection.attempt_time_classification ==
+            QuestUiAttemptTimeClassification::qualifying_combat_feedback,
+        "accepted outcome derives combat feedback evidence"
+    );
     quest.set_checksum(10'002);
     const auto rejected = producer.project(
         signal(
             QuestUiProjectionSource::combat_feedback,
             break_target,
-            QuestUiAttemptTimeClassification::qualifying_combat_feedback,
             result(flower_heavy_trigger, flower_heavy, QuestUiResultStatus::accepted),
             result(
                 break_target_outcome,
@@ -1702,6 +1929,11 @@ void test_selector_status_polarity_and_missing_selector() {
     expect(rejected.error == QuestUiProjectionError::none, "selector rejected outcome");
     expect(rejected.projection.polarity == QuestUiPolarity::negative, "rejected outcome negative");
     expect(
+        rejected.projection.attempt_time_classification ==
+            QuestUiAttemptTimeClassification::qualifying_combat_feedback,
+        "rejected outcome derives combat feedback evidence"
+    );
+    expect(
         rejected.projection.primary_result.status == QuestUiResultStatus::accepted &&
             rejected.projection.secondary_result.status == QuestUiResultStatus::rejected &&
             rejected.projection.secondary_result.rejection_reason ==
@@ -1711,6 +1943,11 @@ void test_selector_status_polarity_and_missing_selector() {
 
     ProjectionFixture missing_selector_fixture;
     missing_selector_fixture.cues[2].result_selectors = {};
+    missing_selector_fixture.cues[2].attempt_evidence_rules =
+        std::span<const contracts::QuestUiAttemptEvidenceRuleDefinition>{
+            &missing_selector_fixture.mooring_load_attempt_rules[0],
+            1
+        };
     const auto missing_definition = missing_selector_fixture.definition();
     StubQuestRuntime quick_quest;
     quick_quest.configure(missing_definition, alpha_beat.key, 10'003);
@@ -1726,7 +1963,6 @@ void test_selector_status_polarity_and_missing_selector() {
         signal(
             QuestUiProjectionSource::interaction_feedback,
             secure_mooring,
-            QuestUiAttemptTimeClassification::qualifying_craft_decision,
             result(lock_cross_interaction, secure_mooring, QuestUiResultStatus::accepted)
         ),
         quick_quest,
@@ -1739,7 +1975,6 @@ void test_selector_status_polarity_and_missing_selector() {
         signal(
             QuestUiProjectionSource::interaction_feedback,
             secure_mooring,
-            QuestUiAttemptTimeClassification::qualifying_error_feedback,
             result(
                 mooring_quick_interaction,
                 mooring_choice,
@@ -1797,12 +2032,21 @@ class DynamicFixture final {
             {},
         };
         cue_objectives_[0] = objectives_[choices_share_objective ? 0 : objective_count - 1];
+        attempt_evidence_rule_ = attempt_rule(
+            cue_source,
+            cue_objectives_[0],
+            QuestUiAttemptTimeClassification::qualifying_first_visit
+        );
         cue_ = {
             contracts::content_id("ui.test.dynamic"),
             beat_.id,
             source_bit(cue_source),
             std::span<const ContentId>{cue_objectives_},
             {},
+            std::span<const contracts::QuestUiAttemptEvidenceRuleDefinition>{
+                &attempt_evidence_rule_,
+                1
+            },
         };
     }
 
@@ -1850,6 +2094,7 @@ class DynamicFixture final {
     contracts::VerticalSliceBeatDefinition beat_{};
     contracts::VerticalSliceSafePointDefinition safe_point_{};
     std::array<ContentId, 1> cue_objectives_{};
+    contracts::QuestUiAttemptEvidenceRuleDefinition attempt_evidence_rule_{};
     contracts::QuestUiCueDefinition cue_{};
 };
 
@@ -1892,6 +2137,22 @@ void test_capacity_fail_closed() {
         );
     }
     {
+        ProjectionFixture fixture;
+        std::array<
+            contracts::QuestUiAttemptEvidenceRuleDefinition,
+            contracts::quest_ui_attempt_evidence_rule_capacity + 1
+        > rules{};
+        rules.fill(fixture.mooring_choice_attempt_rules[0]);
+        fixture.cues[1].attempt_evidence_rules =
+            std::span<const contracts::QuestUiAttemptEvidenceRuleDefinition>{rules};
+        DeterministicQuestUiProjectionProducer producer;
+        expect(
+            producer.initialize(fixture.definition()) ==
+                QuestUiProjectionError::invalid_definition,
+            "cue attempt evidence rules over capacity fail definition"
+        );
+    }
+    {
         DynamicFixture fixture(2, 9, true, QuestUiProjectionSource::choice_available);
         DeterministicQuestUiProjectionProducer producer;
         expect(
@@ -1909,8 +2170,7 @@ void test_capacity_fail_closed() {
         expect(producer.initialize(definition) == QuestUiProjectionError::none, "selected capacity init");
         const auto base_signal = signal(
             QuestUiProjectionSource::objective_state,
-            fixture.objectives().back(),
-            QuestUiAttemptTimeClassification::qualifying_first_visit
+            fixture.objectives().back()
         );
         const auto baseline = producer.project(base_signal, quest, fixture.safe_point(), {});
         expect(baseline.error == QuestUiProjectionError::none, "selected capacity baseline");
@@ -1942,8 +2202,7 @@ void test_capacity_fail_closed() {
         expect(producer.initialize(definition) == QuestUiProjectionError::none, "retained capacity init");
         const auto base_signal = signal(
             QuestUiProjectionSource::objective_state,
-            fixture.objectives().back(),
-            QuestUiAttemptTimeClassification::qualifying_first_visit
+            fixture.objectives().back()
         );
         const auto baseline = producer.project(base_signal, quest, fixture.safe_point(), {});
         expect(baseline.error == QuestUiProjectionError::none, "retained capacity baseline");
@@ -1971,8 +2230,7 @@ void test_capacity_fail_closed() {
         expect(producer.initialize(definition) == QuestUiProjectionError::none, "actor capacity init");
         const auto base_signal = signal(
             QuestUiProjectionSource::objective_state,
-            guard_counter,
-            QuestUiAttemptTimeClassification::qualifying_training_risk
+            guard_counter
         );
         const auto baseline = producer.project(base_signal, quest, beta_safe.key, {});
         expect(baseline.error == QuestUiProjectionError::none, "actor capacity baseline");
@@ -1999,6 +2257,7 @@ int main() {
     test_choice_order_intent_and_sequence();
     test_same_beat_stage_active_focus();
     test_definition_fail_closed();
+    test_missing_attempt_evidence_fails_without_state_change();
     test_runtime_fail_closed_and_snapshot_invariance();
     test_selector_status_polarity_and_missing_selector();
     test_capacity_fail_closed();

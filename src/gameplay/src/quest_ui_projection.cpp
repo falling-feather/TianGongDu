@@ -320,30 +320,102 @@ void hash_integer(std::uint64_t& hash, Integer value) noexcept {
     }
 }
 
+[[nodiscard]] bool attempt_evidence_result_shape_valid(
+    const contracts::QuestUiAttemptEvidenceResultSelectorDefinition& result
+) noexcept {
+    const bool known_reason =
+        result.rejection_reason == contracts::QuestUiRejectionReason::none ||
+        result.rejection_reason ==
+            contracts::QuestUiRejectionReason::prerequisite_incomplete ||
+        result.rejection_reason ==
+            contracts::QuestUiRejectionReason::selection_already_committed ||
+        result.rejection_reason == contracts::QuestUiRejectionReason::wrong_target;
+    if (!known_reason) {
+        return false;
+    }
+    if (result.status == contracts::QuestUiResultStatus::not_applicable) {
+        return empty_content_id(result.result_id) &&
+               result.rejection_reason == contracts::QuestUiRejectionReason::none;
+    }
+    if (!valid_content_id(result.result_id)) {
+        return false;
+    }
+    switch (result.status) {
+        case contracts::QuestUiResultStatus::accepted:
+        case contracts::QuestUiResultStatus::pending:
+            return result.rejection_reason == contracts::QuestUiRejectionReason::none;
+        case contracts::QuestUiResultStatus::rejected:
+            return result.rejection_reason != contracts::QuestUiRejectionReason::none;
+        case contracts::QuestUiResultStatus::ignored_repeat:
+            return result.rejection_reason ==
+                   contracts::QuestUiRejectionReason::selection_already_committed;
+        case contracts::QuestUiResultStatus::not_applicable:
+            break;
+        default:
+            break;
+    }
+    return false;
+}
+
+[[nodiscard]] bool attempt_evidence_result_not_applicable(
+    const contracts::QuestUiAttemptEvidenceResultSelectorDefinition& result
+) noexcept {
+    return result.status == contracts::QuestUiResultStatus::not_applicable &&
+           empty_content_id(result.result_id) &&
+           result.rejection_reason == contracts::QuestUiRejectionReason::none;
+}
+
+[[nodiscard]] bool attempt_evidence_classification_shape_valid(
+    const contracts::QuestUiAttemptEvidenceRuleDefinition& rule
+) noexcept {
+    if (!known_attempt_time_classification(rule.classification) ||
+        !attempt_time_classification_matches_source(rule.source, rule.classification) ||
+        !attempt_evidence_result_shape_valid(rule.primary_result) ||
+        !attempt_evidence_result_shape_valid(rule.secondary_result)) {
+        return false;
+    }
+    const bool repeat =
+        rule.classification ==
+        contracts::QuestUiAttemptTimeClassification::repeat_no_progress;
+    if ((rule.primary_result.status == contracts::QuestUiResultStatus::ignored_repeat) !=
+        repeat) {
+        return false;
+    }
+    switch (rule.source) {
+        case contracts::QuestUiProjectionSource::choice_available:
+        case contracts::QuestUiProjectionSource::objective_state:
+        case contracts::QuestUiProjectionSource::recovery_offer:
+        case contracts::QuestUiProjectionSource::recovery_resume:
+            return attempt_evidence_result_not_applicable(rule.primary_result) &&
+                   attempt_evidence_result_not_applicable(rule.secondary_result);
+        case contracts::QuestUiProjectionSource::interaction_feedback:
+            return rule.primary_result.status !=
+                       contracts::QuestUiResultStatus::not_applicable &&
+                   rule.primary_result.status != contracts::QuestUiResultStatus::pending &&
+                   attempt_evidence_result_not_applicable(rule.secondary_result);
+        case contracts::QuestUiProjectionSource::combat_feedback:
+            if (rule.primary_result.status ==
+                    contracts::QuestUiResultStatus::not_applicable ||
+                rule.primary_result.status ==
+                    contracts::QuestUiResultStatus::ignored_repeat ||
+                rule.secondary_result.status ==
+                    contracts::QuestUiResultStatus::ignored_repeat) {
+                return false;
+            }
+            return attempt_evidence_result_not_applicable(rule.secondary_result) ||
+                   rule.primary_result.status == contracts::QuestUiResultStatus::accepted;
+        default:
+            return false;
+    }
+}
+
 [[nodiscard]] bool signal_shape_valid(
     const contracts::QuestUiProjectionSignal& signal
 ) noexcept {
     if (signal.objective == 0 ||
         contracts::quest_ui_projection_source_bit(signal.source) == 0 ||
         !result_shape_valid(signal.primary_result) ||
-        !result_shape_valid(signal.secondary_result) ||
-        !known_attempt_time_classification(signal.attempt_time_classification) ||
-        !attempt_time_classification_matches_source(
-            signal.source,
-            signal.attempt_time_classification
-        )) {
-        return false;
-    }
-    const bool repeat_time = signal.attempt_time_classification ==
-                             contracts::QuestUiAttemptTimeClassification::repeat_no_progress;
-    const bool failure_time = signal.attempt_time_classification ==
-                              contracts::QuestUiAttemptTimeClassification::failure_retry_excluded;
-    const bool resume_time = signal.attempt_time_classification ==
-                             contracts::QuestUiAttemptTimeClassification::resume_no_duplicate_progress;
-    if ((signal.primary_result.status == contracts::QuestUiResultStatus::ignored_repeat) !=
-            repeat_time ||
-        (signal.source == contracts::QuestUiProjectionSource::recovery_offer) != failure_time ||
-        (signal.source == contracts::QuestUiProjectionSource::recovery_resume) != resume_time) {
+        !result_shape_valid(signal.secondary_result)) {
         return false;
     }
     switch (signal.source) {
@@ -432,6 +504,74 @@ void hash_integer(std::uint64_t& hash, Integer value) noexcept {
     return found == cue.result_selectors.end() ? nullptr : &*found;
 }
 
+[[nodiscard]] bool cue_has_result_selector(
+    const contracts::QuestUiCueDefinition& cue,
+    contracts::QuestUiProjectionSource source,
+    contracts::StableContentKey objective,
+    contracts::StableContentKey primary,
+    contracts::StableContentKey secondary
+) noexcept {
+    return std::any_of(
+        cue.result_selectors.begin(),
+        cue.result_selectors.end(),
+        [source, objective, primary, secondary](
+            const contracts::QuestUiResultSelectorDefinition& selector
+        ) {
+            return selector.source == source &&
+                   selector.objective_id.key == objective &&
+                   selector.primary_result_id.key == primary &&
+                   selector.secondary_result_id.key == secondary;
+        }
+    );
+}
+
+[[nodiscard]] bool attempt_evidence_result_matches(
+    const contracts::QuestUiAttemptEvidenceResultSelectorDefinition& selector,
+    const contracts::QuestUiResultSlot& result
+) noexcept {
+    return selector.result_id.key == result.id && selector.status == result.status &&
+           selector.rejection_reason == result.rejection_reason;
+}
+
+[[nodiscard]] const contracts::QuestUiAttemptEvidenceRuleDefinition*
+find_attempt_evidence_rule(
+    const contracts::QuestUiCueDefinition& cue,
+    const contracts::QuestUiProjectionSignal& signal,
+    bool& ambiguous
+) noexcept {
+    ambiguous = false;
+    const contracts::QuestUiAttemptEvidenceRuleDefinition* found = nullptr;
+    for (const auto& rule : cue.attempt_evidence_rules) {
+        if (rule.source != signal.source || rule.objective_id.key != signal.objective ||
+            !attempt_evidence_result_matches(rule.primary_result, signal.primary_result) ||
+            !attempt_evidence_result_matches(rule.secondary_result, signal.secondary_result)) {
+            continue;
+        }
+        if (found != nullptr) {
+            ambiguous = true;
+            return nullptr;
+        }
+        found = &rule;
+    }
+    return found;
+}
+
+[[nodiscard]] bool same_attempt_evidence_selector(
+    const contracts::QuestUiAttemptEvidenceRuleDefinition& left,
+    const contracts::QuestUiAttemptEvidenceRuleDefinition& right
+) noexcept {
+    return left.source == right.source &&
+           left.objective_id.key == right.objective_id.key &&
+           left.primary_result.result_id.key == right.primary_result.result_id.key &&
+           left.primary_result.status == right.primary_result.status &&
+           left.primary_result.rejection_reason ==
+               right.primary_result.rejection_reason &&
+           left.secondary_result.result_id.key == right.secondary_result.result_id.key &&
+           left.secondary_result.status == right.secondary_result.status &&
+           left.secondary_result.rejection_reason ==
+               right.secondary_result.rejection_reason;
+}
+
 [[nodiscard]] bool hostile_actor_is_authored(
     const contracts::VerticalSliceDefinition& definition,
     contracts::StableActorKey actor
@@ -477,6 +617,14 @@ void hash_integer(std::uint64_t& hash, Integer value) noexcept {
         if (interaction == nullptr ||
             interaction->objective_id.key != signal.primary_result.objective ||
             find_objective_beat(definition, interaction->objective_id.key) != &beat) {
+            return false;
+        }
+        if (signal.primary_result.status ==
+                contracts::QuestUiResultStatus::ignored_repeat &&
+            (interaction->kind != contracts::QuestInteractionKind::choose ||
+             quest.objective_state(interaction->objective_id.key) !=
+                 QuestObjectiveState::completed ||
+             quest.selected_option(interaction->objective_id.key) == 0)) {
             return false;
         }
         if (interaction->objective_id.key != signal.objective) {
@@ -545,6 +693,104 @@ void hash_integer(std::uint64_t& hash, Integer value) noexcept {
         polarity = contracts::QuestUiPolarity::positive;
     }
     return polarity != contracts::QuestUiPolarity::recovery;
+}
+
+[[nodiscard]] bool attempt_evidence_rule_definition_valid(
+    const contracts::VerticalSliceDefinition& definition,
+    const contracts::VerticalSliceBeatDefinition& beat,
+    const contracts::QuestUiCueDefinition& cue,
+    const contracts::QuestUiAttemptEvidenceRuleDefinition& rule
+) noexcept {
+    const auto source_bit = contracts::quest_ui_projection_source_bit(rule.source);
+    if (source_bit == 0 || (cue.source_mask & source_bit) == 0 ||
+        !valid_content_id(rule.objective_id) ||
+        !beat_has_objective(beat, rule.objective_id.key) ||
+        (!cue.objective_ids.empty() &&
+         std::none_of(
+             cue.objective_ids.begin(),
+             cue.objective_ids.end(),
+             [&rule](const contracts::ContentId& objective) {
+                 return objective.key == rule.objective_id.key;
+             }
+         )) ||
+        !attempt_evidence_classification_shape_valid(rule)) {
+        return false;
+    }
+
+    if (rule.source == contracts::QuestUiProjectionSource::choice_available ||
+        rule.source == contracts::QuestUiProjectionSource::objective_state ||
+        rule.source == contracts::QuestUiProjectionSource::recovery_offer ||
+        rule.source == contracts::QuestUiProjectionSource::recovery_resume) {
+        return true;
+    }
+
+    if (rule.source == contracts::QuestUiProjectionSource::interaction_feedback) {
+        const auto* interaction =
+            find_interaction(definition, rule.primary_result.result_id.key);
+        if (interaction == nullptr ||
+            find_objective_beat(definition, interaction->objective_id.key) != &beat) {
+            return false;
+        }
+        if (rule.classification ==
+                contracts::QuestUiAttemptTimeClassification::repeat_no_progress &&
+            interaction->kind != contracts::QuestInteractionKind::choose) {
+            return false;
+        }
+        if (interaction->objective_id.key == rule.objective_id.key) {
+            return true;
+        }
+        return rule.primary_result.status == contracts::QuestUiResultStatus::accepted &&
+               interaction->kind == contracts::QuestInteractionKind::choose &&
+               interaction->selection_id.key != 0 &&
+               directly_precedes(
+                   beat,
+                   interaction->objective_id.key,
+                   rule.objective_id.key
+               ) &&
+               cue_has_result_selector(
+                   cue,
+                   rule.source,
+                   rule.objective_id.key,
+                   rule.primary_result.result_id.key,
+                   0
+               );
+    }
+
+    if (rule.source != contracts::QuestUiProjectionSource::combat_feedback) {
+        return false;
+    }
+    const auto* trigger = find_combat_trigger(definition, rule.primary_result.result_id.key);
+    if (trigger == nullptr ||
+        find_objective_beat(definition, trigger->objective_id.key) != &beat) {
+        return false;
+    }
+    if (attempt_evidence_result_not_applicable(rule.secondary_result)) {
+        return trigger->objective_id.key == rule.objective_id.key;
+    }
+    const auto* outcome = find_combat_outcome(
+        definition,
+        rule.secondary_result.result_id.key
+    );
+    if (outcome == nullptr || outcome->objective_id.key != rule.objective_id.key ||
+        find_objective_beat(definition, outcome->objective_id.key) != &beat) {
+        return false;
+    }
+    if (trigger->objective_id.key == rule.objective_id.key) {
+        return true;
+    }
+    return rule.primary_result.status == contracts::QuestUiResultStatus::accepted &&
+           directly_precedes(
+               beat,
+               trigger->objective_id.key,
+               rule.objective_id.key
+           ) &&
+           cue_has_result_selector(
+               cue,
+               rule.source,
+               rule.objective_id.key,
+               rule.primary_result.result_id.key,
+               rule.secondary_result.result_id.key
+           );
 }
 
 void hash_result_slot(
@@ -717,6 +963,15 @@ QuestUiProjectionResult DeterministicQuestUiProjectionProducer::project(
         )) {
         return {QuestUiProjectionError::invalid_signal, {}};
     }
+    bool attempt_evidence_ambiguous = false;
+    const auto* attempt_evidence =
+        find_attempt_evidence_rule(*cue, signal, attempt_evidence_ambiguous);
+    if (attempt_evidence_ambiguous) {
+        return {QuestUiProjectionError::invalid_definition, {}};
+    }
+    if (attempt_evidence == nullptr) {
+        return {QuestUiProjectionError::missing_attempt_evidence, {}};
+    }
 
     next.sequence = sequence_ + 1;
     next.tick = quest_snapshot.tick;
@@ -732,7 +987,7 @@ QuestUiProjectionResult DeterministicQuestUiProjectionProducer::project(
     next.surface = surface_for(signal.source);
     next.polarity = polarity;
     next.objective_state = focus_state;
-    next.attempt_time_classification = signal.attempt_time_classification;
+    next.attempt_time_classification = attempt_evidence->classification;
 
     if (signal.source == contracts::QuestUiProjectionSource::choice_available) {
         if (quest.selected_option(signal.objective) != 0) {
@@ -1023,7 +1278,10 @@ QuestUiProjectionError DeterministicQuestUiProjectionProducer::validate_definiti
             beat == nullptr || cue.source_mask == 0 ||
             (cue.source_mask & ~all_projection_sources) != 0 ||
             cue.objective_ids.size() > contracts::quest_ui_cue_objective_capacity ||
-            cue.result_selectors.size() > contracts::quest_ui_result_selector_capacity) {
+            cue.result_selectors.size() > contracts::quest_ui_result_selector_capacity ||
+            cue.attempt_evidence_rules.empty() ||
+            cue.attempt_evidence_rules.size() >
+                contracts::quest_ui_attempt_evidence_rule_capacity) {
             return QuestUiProjectionError::invalid_definition;
         }
         for (std::size_t objective = 0; objective < cue.objective_ids.size(); ++objective) {
@@ -1145,6 +1403,31 @@ QuestUiProjectionError DeterministicQuestUiProjectionProducer::validate_definiti
                     return QuestUiProjectionError::invalid_definition;
                 }
             }
+        }
+
+        std::uint16_t attempt_evidence_source_mask{};
+        for (std::size_t rule_index = 0;
+             rule_index < cue.attempt_evidence_rules.size();
+             ++rule_index) {
+            const auto& rule = cue.attempt_evidence_rules[rule_index];
+            if (!attempt_evidence_rule_definition_valid(definition, *beat, cue, rule)) {
+                return QuestUiProjectionError::invalid_definition;
+            }
+            attempt_evidence_source_mask = static_cast<std::uint16_t>(
+                attempt_evidence_source_mask |
+                contracts::quest_ui_projection_source_bit(rule.source)
+            );
+            for (std::size_t prior = 0; prior < rule_index; ++prior) {
+                if (same_attempt_evidence_selector(
+                        cue.attempt_evidence_rules[prior],
+                        rule
+                    )) {
+                    return QuestUiProjectionError::invalid_definition;
+                }
+            }
+        }
+        if ((attempt_evidence_source_mask & cue.source_mask) != cue.source_mask) {
+            return QuestUiProjectionError::invalid_definition;
         }
     }
     return QuestUiProjectionError::none;

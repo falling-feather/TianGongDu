@@ -645,8 +645,6 @@ QuestUiProjectionResult DeterministicQuestUiProjectionProducer::project(
     }
 
     contracts::QuestUiProjectionSnapshot next;
-    contracts::StableContentKey pending_objective{};
-    std::size_t active_objective_count{};
     for (const auto& authored_beat : definition_->beats) {
         for (const auto& objective : authored_beat.objectives) {
             bool state_valid = false;
@@ -658,9 +656,7 @@ QuestUiProjectionResult DeterministicQuestUiProjectionProducer::project(
                 return {QuestUiProjectionError::invalid_snapshot, {}};
             }
             if (state == contracts::QuestUiObjectiveState::active) {
-                ++active_objective_count;
-                pending_objective = objective.key;
-                if (authored_beat.id.key != beat->id.key || active_objective_count > 1) {
+                if (authored_beat.id.key != beat->id.key) {
                     return {QuestUiProjectionError::invalid_snapshot, {}};
                 }
             }
@@ -690,6 +686,8 @@ QuestUiProjectionResult DeterministicQuestUiProjectionProducer::project(
         quest.objective_state(signal.objective),
         focus_state_valid
     );
+    const auto pending_objective =
+        focus_state == contracts::QuestUiObjectiveState::active ? signal.objective : 0;
     if (!focus_state_valid ||
         ((signal.source == contracts::QuestUiProjectionSource::choice_available ||
           signal.source == contracts::QuestUiProjectionSource::recovery_offer ||

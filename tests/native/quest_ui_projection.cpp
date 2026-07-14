@@ -1014,6 +1014,133 @@ void test_choice_order_intent_and_sequence() {
     expect(second.projection.checksum != first.projection.checksum, "sequence enters checksum");
 }
 
+void test_same_beat_stage_active_focus() {
+    ProjectionFixture fixture;
+    const auto definition = fixture.definition();
+
+    gameplay::DeterministicQuestRuntime real_quest;
+    expect(
+        real_quest.initialize(definition, definition.player.actor) == gameplay::QuestError::none &&
+            real_quest.start() == gameplay::QuestError::none,
+        "real Quest runtime starts with stage-active objectives"
+    );
+    expect(
+        real_quest.objective_state(alpha_inspect.key) == QuestObjectiveState::active &&
+            real_quest.objective_state(arrival_choice.key) == QuestObjectiveState::active &&
+            real_quest.objective_state(alpha_finish.key) == QuestObjectiveState::active &&
+            real_quest.objective_state(training_choice.key) == QuestObjectiveState::locked,
+        "real Quest runtime exposes all current Beat objectives as active"
+    );
+
+    DeterministicQuestUiProjectionProducer choice_producer;
+    expect(
+        choice_producer.initialize(definition) == QuestUiProjectionError::none,
+        "stage-active choice producer init"
+    );
+    const auto choice = choice_producer.project(
+        signal(
+            QuestUiProjectionSource::choice_available,
+            arrival_choice,
+            QuestUiAttemptTimeClassification::qualifying_first_visit
+        ),
+        real_quest,
+        alpha_safe.key,
+        {}
+    );
+    expect(choice.error == QuestUiProjectionError::none, "stage-active choice projection");
+    expect(
+        choice.projection.pending_objective == arrival_choice.key &&
+            choice.projection.objective == arrival_choice.key &&
+            choice.projection.choice_option_count == 3,
+        "choice projection keeps one signal focus without flattening peer active objectives"
+    );
+    expect(
+        choice_producer.validate_choice_intent(
+            {
+                choice.projection.sequence,
+                choice.projection.checksum,
+                choice.projection.objective,
+                choice.projection.choice_options[0].interaction,
+                choice.projection.choice_options[0].selection,
+            },
+            real_quest
+        ) == QuestUiSelectionIntentError::none,
+        "choice intent validates against a real multi-active Quest stage"
+    );
+
+    StubQuestRuntime gameplay_quest;
+    gameplay_quest.configure(definition, beta_beat.key, 8'101);
+    gameplay_quest.set_state(guard_counter.key, QuestObjectiveState::active);
+    gameplay_quest.set_state(flower_counter.key, QuestObjectiveState::active);
+    gameplay_quest.set_state(beta_finish.key, QuestObjectiveState::active);
+    DeterministicQuestUiProjectionProducer gameplay_producer;
+    expect(
+        gameplay_producer.initialize(definition) == QuestUiProjectionError::none,
+        "stage-active gameplay producer init"
+    );
+    const auto objective = gameplay_producer.project(
+        signal(
+            QuestUiProjectionSource::objective_state,
+            guard_counter,
+            QuestUiAttemptTimeClassification::qualifying_training_risk
+        ),
+        gameplay_quest,
+        beta_safe.key,
+        {}
+    );
+    expect(
+        objective.error == QuestUiProjectionError::none &&
+            objective.projection.pending_objective == guard_counter.key,
+        "objective projection accepts three active objectives in the current Beat"
+    );
+
+    gameplay_quest.set_checksum(8'102);
+    const auto combat = gameplay_producer.project(
+        signal(
+            QuestUiProjectionSource::combat_feedback,
+            guard_counter,
+            QuestUiAttemptTimeClassification::qualifying_combat_proof,
+            result(guard_trigger, guard_counter, QuestUiResultStatus::accepted)
+        ),
+        gameplay_quest,
+        beta_safe.key,
+        {}
+    );
+    expect(
+        combat.error == QuestUiProjectionError::none &&
+            combat.projection.pending_objective == guard_counter.key &&
+            combat.projection.sequence == objective.projection.sequence + 1,
+        "combat projection preserves signal focus with peer stage-active objectives"
+    );
+
+    StubQuestRuntime completed_focus;
+    completed_focus.configure(definition, alpha_beat.key, 8'103);
+    completed_focus.set_state(sound_bell.key, QuestObjectiveState::completed);
+    completed_focus.set_state(alpha_finish.key, QuestObjectiveState::active);
+    DeterministicQuestUiProjectionProducer completed_producer;
+    expect(
+        completed_producer.initialize(definition) == QuestUiProjectionError::none,
+        "completed focus producer init"
+    );
+    const auto completed = completed_producer.project(
+        signal(
+            QuestUiProjectionSource::interaction_feedback,
+            sound_bell,
+            QuestUiAttemptTimeClassification::qualifying_craft_confirmation,
+            result(bell_interaction, sound_bell, QuestUiResultStatus::accepted)
+        ),
+        completed_focus,
+        alpha_safe.key,
+        {}
+    );
+    expect(
+        completed.error == QuestUiProjectionError::none &&
+            completed.projection.pending_objective == 0 &&
+            completed.projection.objective == sound_bell.key,
+        "completed result focus does not invent a pending objective"
+    );
+}
+
 void expect_initialize_invalid(ProjectionFixture& fixture, std::string_view label) {
     DeterministicQuestUiProjectionProducer producer;
     expect(
@@ -1326,10 +1453,10 @@ void test_runtime_fail_closed_and_snapshot_invariance() {
         "combat rejected trigger cannot carry outcome"
     );
 
-    StubQuestRuntime multi_active;
-    multi_active.configure(definition, alpha_beat.key, 9'005);
-    multi_active.set_state(arrival_choice.key, QuestObjectiveState::active);
-    multi_active.set_state(mooring_choice.key, QuestObjectiveState::active);
+    StubQuestRuntime cross_beat_active;
+    cross_beat_active.configure(definition, alpha_beat.key, 9'005);
+    cross_beat_active.set_state(arrival_choice.key, QuestObjectiveState::active);
+    cross_beat_active.set_state(training_choice.key, QuestObjectiveState::active);
     expect_projection_failure_unchanged(
         producer,
         baseline.projection.source == QuestUiProjectionSource::choice_available
@@ -1339,11 +1466,27 @@ void test_runtime_fail_closed_and_snapshot_invariance() {
                   QuestUiAttemptTimeClassification::qualifying_first_visit
               )
             : QuestUiProjectionSignal{},
-        multi_active,
+        cross_beat_active,
         alpha_safe.key,
         {},
         QuestUiProjectionError::invalid_snapshot,
-        "multiple active objectives"
+        "active objective outside current Beat"
+    );
+    StubQuestRuntime locked_choice_focus;
+    locked_choice_focus.configure(definition, alpha_beat.key, 9'006);
+    locked_choice_focus.set_state(alpha_inspect.key, QuestObjectiveState::active);
+    expect_projection_failure_unchanged(
+        producer,
+        signal(
+            QuestUiProjectionSource::choice_available,
+            arrival_choice,
+            QuestUiAttemptTimeClassification::qualifying_first_visit
+        ),
+        locked_choice_focus,
+        alpha_safe.key,
+        {},
+        QuestUiProjectionError::invalid_snapshot,
+        "choice focus must remain active"
     );
     const std::array<contracts::CombatActorSnapshot, 1> unknown_actor{{
         actor(999, true, false),
@@ -1854,6 +1997,7 @@ void test_capacity_fail_closed() {
 int main() {
     test_authoritative_projection_catalog();
     test_choice_order_intent_and_sequence();
+    test_same_beat_stage_active_focus();
     test_definition_fail_closed();
     test_runtime_fail_closed_and_snapshot_invariance();
     test_selector_status_polarity_and_missing_selector();

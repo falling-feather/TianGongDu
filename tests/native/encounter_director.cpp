@@ -15,6 +15,8 @@
 namespace {
 
 using tgd::contracts::CombatCommandType;
+using tgd::contracts::EncounterActorDutyDefinition;
+using tgd::contracts::EncounterTacticalDuty;
 using tgd::gameplay::CombatError;
 using tgd::gameplay::DeterministicCombatResolver;
 using tgd::gameplay::DeterministicEncounterDirector;
@@ -111,6 +113,84 @@ bool expect(bool condition, std::string_view message) {
 
 [[nodiscard]] tgd::contracts::EncounterDirectorDefinition director_definition() {
     return {1, 5'000, 7'000, 1'800, 900, 1, 3, 1};
+}
+
+[[nodiscard]] std::array<tgd::contracts::CombatActorConfig, 4> tactical_actors() {
+    const auto base = actors();
+    std::array<tgd::contracts::CombatActorConfig, 4> values{
+        base[0],
+        base[1],
+        base[2],
+        base[1],
+    };
+    values[1].initial_pose = {900, 0, 0, 0};
+    values[2].initial_pose = {636, 636, 0, 0};
+    values[3].actor = 4;
+    values[3].archetype_id = tgd::contracts::content_id("actor_test_hostile_harrier");
+    values[3].initial_pose = {0, 900, 0, 0};
+    return values;
+}
+
+inline constexpr std::array<EncounterActorDutyDefinition, 3> tactical_duties{{
+    {4, EncounterTacticalDuty::harrier},
+    {2, EncounterTacticalDuty::pressure},
+    {3, EncounterTacticalDuty::flanker},
+}};
+
+[[nodiscard]] tgd::contracts::EncounterDirectorDefinition tactical_director_definition() {
+    auto definition = director_definition();
+    definition.max_simultaneous_attackers = 2;
+    definition.attack_token_lease_ticks = 6;
+    definition.actor_duties = tactical_duties;
+    return definition;
+}
+
+[[nodiscard]] std::array<tgd::contracts::CombatActorSnapshot, 4> tactical_snapshots(
+    bool reverse_hostile_order = false
+) {
+    const auto configs = tactical_actors();
+    const std::array<tgd::contracts::CombatActorSnapshot, 4> normal{{
+        {1,
+         configs[0].archetype_id.key,
+         tgd::contracts::CombatFaction::player,
+         configs[0].initial_pose,
+         configs[0].initial_resources,
+         player_stance,
+         0,
+         false,
+         true},
+        {2,
+         configs[1].archetype_id.key,
+         tgd::contracts::CombatFaction::hostile,
+         configs[1].initial_pose,
+         configs[1].initial_resources,
+         hostile_stance,
+         0,
+         false,
+         true},
+        {3,
+         configs[2].archetype_id.key,
+         tgd::contracts::CombatFaction::hostile,
+         configs[2].initial_pose,
+         configs[2].initial_resources,
+         hostile_stance,
+         0,
+         false,
+         true},
+        {4,
+         configs[3].archetype_id.key,
+         tgd::contracts::CombatFaction::hostile,
+         configs[3].initial_pose,
+         configs[3].initial_resources,
+         hostile_stance,
+         0,
+         false,
+         true},
+    }};
+    if (!reverse_hostile_order) {
+        return normal;
+    }
+    return {normal[0], normal[3], normal[2], normal[1]};
 }
 
 struct SimulationResult final {
@@ -252,6 +332,146 @@ bool test_multiple_attack_tokens_respect_occupied_slots() {
     return ok;
 }
 
+bool test_tactical_duties_rotate_and_defeat_releases_lease() {
+    const auto actor_configs = tactical_actors();
+    const auto ability_configs = abilities();
+    DeterministicEncounterDirector director;
+    bool ok = director.initialize(
+                  tactical_director_definition(),
+                  actor_configs,
+                  ability_configs
+              ) == EncounterDirectorError::none;
+    auto snapshots = tactical_snapshots(true);
+
+    auto inconsistent = snapshots;
+    inconsistent[1].active = true;
+    inconsistent[1].defeated = true;
+    const auto checksum_before_invalid = director.checksum();
+    const auto invalid = director.plan_tick(1, inconsistent, 30);
+    ok &= expect(
+        invalid.error == EncounterDirectorError::invalid_snapshot &&
+            director.current_tick() == 0 && director.checksum() == checksum_before_invalid,
+        "an Active+Defeated snapshot fails closed without consuming a lease tick"
+    );
+
+    const auto first = director.plan_tick(1, snapshots, 40);
+    ok &= expect(
+        first.error == EncounterDirectorError::none && first.batch.command_count == 2 &&
+            first.batch.commands[0].actor == 2 &&
+            first.batch.commands[1].actor == 3 &&
+            first.batch.commands[0].sequence == 40 &&
+            first.batch.commands[1].sequence == 41,
+        "a dual-token pool grants one pressure and one flanker duty in stable order"
+    );
+
+    const auto defeated = std::find_if(
+        snapshots.begin(),
+        snapshots.end(),
+        [](const auto& snapshot) { return snapshot.actor == 2; }
+    );
+    if (defeated == snapshots.end()) {
+        return expect(false, "pressure snapshot exists for the defeat boundary");
+    }
+    defeated->resources.health = 0;
+    defeated->active = false;
+    defeated->defeated = true;
+    const auto replacement = director.plan_tick(2, snapshots, 50);
+    ok &= expect(
+        replacement.error == EncounterDirectorError::none &&
+            replacement.batch.command_count == 1 &&
+            replacement.batch.commands[0].actor == 4 &&
+            replacement.batch.commands[0].sequence == 50,
+        "defeat returns the pressure lease and lets the waiting harrier take one token"
+    );
+
+    const auto held = director.plan_tick(3, snapshots, 60);
+    ok &= expect(
+        held.error == EncounterDirectorError::none && held.batch.command_count == 0,
+        "live leases reserve both tokens without allowing actors to self-increment the pool"
+    );
+
+    ok &= expect(
+        director.retry_from_initial({3, 1, 70}) == EncounterDirectorError::none,
+        "safe-point retry clears the tactical token boundary"
+    );
+    defeated->resources = actor_configs[1].initial_resources;
+    defeated->active = true;
+    defeated->defeated = false;
+    const auto after_retry = director.plan_tick(4, snapshots, 80);
+    ok &= expect(
+        after_retry.error == EncounterDirectorError::none &&
+            after_retry.batch.command_count == 2 &&
+            after_retry.batch.commands[0].actor == 2 &&
+            after_retry.batch.commands[1].actor == 3,
+        "retry resets leases, cooldowns, grant history, and the duty cursor together"
+    );
+    return ok;
+}
+
+struct TokenGrantTrace final {
+    tgd::contracts::TickIndex tick{};
+    tgd::contracts::StableActorKey actor{};
+    tgd::contracts::CommandSequence sequence{};
+
+    [[nodiscard]] friend bool operator==(
+        const TokenGrantTrace&,
+        const TokenGrantTrace&
+    ) noexcept = default;
+};
+
+struct TacticalCadenceResult final {
+    std::vector<TokenGrantTrace> grants;
+    std::uint64_t checksum{};
+    bool ok{};
+};
+
+[[nodiscard]] TacticalCadenceResult run_tactical_cadence(
+    std::size_t simulation_ticks_per_frame,
+    bool reverse_hostile_order
+) {
+    DeterministicEncounterDirector director;
+    const auto actor_configs = tactical_actors();
+    const auto ability_configs = abilities();
+    const auto snapshots = tactical_snapshots(reverse_hostile_order);
+    TacticalCadenceResult result{};
+    result.ok = director.initialize(
+                    tactical_director_definition(),
+                    actor_configs,
+                    ability_configs
+                ) == EncounterDirectorError::none;
+    tgd::contracts::CommandSequence sequence = 1;
+    tgd::contracts::TickIndex tick = 1;
+    while (tick <= 60) {
+        for (std::size_t step = 0;
+             step < simulation_ticks_per_frame && tick <= 60;
+             ++step, ++tick) {
+            const auto plan = director.plan_tick(tick, snapshots, sequence);
+            result.ok &= plan.error == EncounterDirectorError::none;
+            for (const auto& command : plan.batch.command_view()) {
+                result.grants.push_back({command.tick, command.actor, command.sequence});
+            }
+            sequence += plan.batch.command_count;
+        }
+    }
+    result.checksum = director.checksum();
+    return result;
+}
+
+bool test_tactical_tokens_are_fixed_step_deterministic() {
+    const auto sixty_hz = run_tactical_cadence(1, false);
+    const auto thirty_hz = run_tactical_cadence(2, true);
+    bool ok = expect(
+        sixty_hz.ok && thirty_hz.ok && !sixty_hz.grants.empty(),
+        "60 and 30 FPS frame groupings both complete the tactical token simulation"
+    );
+    ok &= expect(
+        sixty_hz.grants == thirty_hz.grants &&
+            sixty_hz.checksum == thirty_hz.checksum,
+        "fixed simulation ticks keep duty rotation, sequences, and checksum cadence-independent"
+    );
+    return ok;
+}
+
 bool test_wrong_tick_and_leash_return() {
     const auto actor_configs = actors();
     const auto ability_configs = abilities();
@@ -308,6 +528,79 @@ bool test_invalid_definition_fails_closed() {
             ability_configs
         ) == EncounterDirectorError::invalid_definition,
         "attack token capacity cannot exceed the authored hostile count"
+    );
+
+    auto duties_without_lease = director_definition();
+    duties_without_lease.actor_duties = tactical_duties;
+    DeterministicEncounterDirector duties_without_lease_director;
+    ok &= expect(
+        duties_without_lease_director.initialize(
+            duties_without_lease,
+            actor_configs,
+            ability_configs
+        ) == EncounterDirectorError::invalid_definition,
+        "duty bindings cannot silently activate without an authored token lease"
+    );
+
+    auto lease_without_duties = director_definition();
+    lease_without_duties.attack_token_lease_ticks = 6;
+    DeterministicEncounterDirector lease_without_duties_director;
+    ok &= expect(
+        lease_without_duties_director.initialize(
+            lease_without_duties,
+            actor_configs,
+            ability_configs
+        ) == EncounterDirectorError::invalid_definition,
+        "a token lease cannot silently default missing hostile duties"
+    );
+
+    const std::array<EncounterActorDutyDefinition, 2> duplicate_duties{{
+        {2, EncounterTacticalDuty::pressure},
+        {2, EncounterTacticalDuty::flanker},
+    }};
+    auto duplicate_binding = director_definition();
+    duplicate_binding.attack_token_lease_ticks = 6;
+    duplicate_binding.actor_duties = duplicate_duties;
+    DeterministicEncounterDirector duplicate_binding_director;
+    ok &= expect(
+        duplicate_binding_director.initialize(
+            duplicate_binding,
+            actor_configs,
+            ability_configs
+        ) == EncounterDirectorError::invalid_definition,
+        "every hostile requires one unique finite duty binding"
+    );
+
+    const std::array<EncounterActorDutyDefinition, 2> unknown_duty{{
+        {2, EncounterTacticalDuty::pressure},
+        {3, static_cast<EncounterTacticalDuty>(255)},
+    }};
+    auto invalid_duty = director_definition();
+    invalid_duty.attack_token_lease_ticks = 6;
+    invalid_duty.actor_duties = unknown_duty;
+    DeterministicEncounterDirector invalid_duty_director;
+    ok &= expect(
+        invalid_duty_director.initialize(
+            invalid_duty,
+            actor_configs,
+            ability_configs
+        ) == EncounterDirectorError::invalid_definition,
+        "unknown tactical duty enum values fail closed"
+    );
+
+    auto unbounded_lease = director_definition();
+    unbounded_lease.attack_token_lease_ticks =
+        DeterministicEncounterDirector::max_attack_token_lease_ticks + 1U;
+    unbounded_lease.actor_duties = tactical_duties;
+    const auto tactical_actor_configs = tactical_actors();
+    DeterministicEncounterDirector unbounded_lease_director;
+    ok &= expect(
+        unbounded_lease_director.initialize(
+            unbounded_lease,
+            tactical_actor_configs,
+            ability_configs
+        ) == EncounterDirectorError::invalid_definition,
+        "attack token leases have an explicit upper tick bound"
     );
     return ok;
 }
@@ -569,6 +862,8 @@ int main() {
     bool ok = true;
     ok &= test_chase_attack_tokens_and_determinism();
     ok &= test_multiple_attack_tokens_respect_occupied_slots();
+    ok &= test_tactical_duties_rotate_and_defeat_releases_lease();
+    ok &= test_tactical_tokens_are_fixed_step_deterministic();
     ok &= test_wrong_tick_and_leash_return();
     ok &= test_invalid_definition_fails_closed();
     ok &= test_retry_resets_director_boundary();

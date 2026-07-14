@@ -80,6 +80,7 @@ class DeterministicEncounterDirector final : public IEncounterDirector {
   public:
     static constexpr std::size_t hostile_capacity = EncounterPlanBatch::capacity - 1;
     static constexpr std::size_t ability_capacity = 32;
+    static constexpr std::uint16_t max_attack_token_lease_ticks = 600;
     static_assert(hostile_capacity == contracts::encounter_formation_slot_capacity);
 
     [[nodiscard]] EncounterDirectorError initialize(
@@ -108,7 +109,10 @@ class DeterministicEncounterDirector final : public IEncounterDirector {
         contracts::StableActorKey actor{};
         contracts::GroundPoseMm home_pose{};
         std::uint8_t formation_slot{};
+        contracts::EncounterTacticalDuty duty{contracts::EncounterTacticalDuty::pressure};
         contracts::TickIndex next_attack_tick{};
+        contracts::TickIndex token_lease_until_tick{};
+        contracts::TickIndex last_token_grant_tick{};
         std::uint32_t attack_count{};
     };
 
@@ -143,6 +147,8 @@ class DeterministicEncounterDirector final : public IEncounterDirector {
     std::size_t ability_count_{};
     contracts::TickIndex current_tick_{};
     contracts::CommandSequence last_boundary_sequence_{};
+    std::uint8_t duty_cursor_{};
+    bool tactical_tokens_enabled_{};
     std::uint64_t checksum_{};
 };
 

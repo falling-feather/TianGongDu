@@ -143,6 +143,18 @@ struct CombatEvent final {
     std::uint32_t feedback_tags{};
 };
 
+enum class EncounterTacticalDuty : std::uint8_t {
+    pressure,
+    flanker,
+    harrier,
+    controller,
+};
+
+struct EncounterActorDutyDefinition final {
+    StableActorKey actor{};
+    EncounterTacticalDuty duty{EncounterTacticalDuty::pressure};
+};
+
 struct EncounterDirectorDefinition final {
     StableActorKey player_actor{};
     std::int32_t aggro_range_mm{};
@@ -152,6 +164,8 @@ struct EncounterDirectorDefinition final {
     std::uint16_t decision_interval_ticks{};
     std::uint16_t post_attack_cooldown_ticks{};
     std::uint8_t max_simultaneous_attackers{};
+    std::uint16_t attack_token_lease_ticks{};
+    std::span<const EncounterActorDutyDefinition> actor_duties{};
 };
 
 struct CombatEncounterDefinition final {

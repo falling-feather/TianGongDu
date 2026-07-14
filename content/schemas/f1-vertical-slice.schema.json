@@ -113,6 +113,8 @@
     "beats": {
       "type": "array",
       "minItems": 7,
+      "maxItems": 7,
+      "description": "Exactly seven authored beats. targetMinutes is a budget only; human eligible-play evidence remains external.",
       "items": { "$ref": "#/$defs/beat" }
     },
     "safePoints": {
@@ -123,26 +125,30 @@
     },
     "questInteractions": {
       "type": "array",
-      "minItems": 2,
+      "minItems": 40,
       "maxItems": 64,
+      "description": "F1 topology floor after the Rain Ferry and Shen Yan density pass; item count does not prove playable minutes.",
       "items": { "$ref": "#/$defs/questInteraction" }
     },
     "questEncounterActivations": {
       "type": "array",
-      "minItems": 1,
+      "minItems": 12,
       "maxItems": 16,
+      "description": "Includes selection-covered training lanes, safety-rig replacement, defeat targets, and later authored waves.",
       "items": { "$ref": "#/$defs/questEncounterActivation" }
     },
     "questCombatTriggers": {
       "type": "array",
-      "minItems": 2,
+      "minItems": 8,
       "maxItems": 64,
+      "description": "Includes guard, evade, stance, and ability signals; target defeats remain separate outcomes.",
       "items": { "$ref": "#/$defs/questCombatTrigger" }
     },
     "questCombatOutcomes": {
       "type": "array",
-      "minItems": 2,
+      "minItems": 5,
       "maxItems": 64,
+      "description": "Both stance lessons and later encounters require deterministic hostile-clear evidence.",
       "items": { "$ref": "#/$defs/questCombatOutcome" }
     },
     "questBossPhases": {
@@ -339,8 +345,9 @@
         "director": { "$ref": "#/$defs/encounterDirector" },
         "actors": {
           "type": "array",
-          "minItems": 2,
+          "minItems": 11,
           "maxItems": 16,
+          "description": "F1 player, route enemies, durable training signal rigs, defeatable proof targets, and boss.",
           "items": { "$ref": "#/$defs/combatActor" }
         },
         "abilities": {

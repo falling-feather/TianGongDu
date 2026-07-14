@@ -180,10 +180,10 @@
         "actorKey": 104,
         "archetypeId": "f1_training_umbrella_rig",
         "faction": "hostile",
-        "poseMm": { "x": -5900, "y": 2300, "height": 0, "floorLayer": 0 },
+        "poseMm": { "x": -4100, "y": 2300, "height": 0, "floorLayer": 0 },
         "resources": {
-          "health": 160,
-          "healthMax": 160,
+          "health": 999,
+          "healthMax": 999,
           "stamina": 100,
           "staminaMax": 100,
           "poise": 80,
@@ -258,6 +258,90 @@
         },
         "stanceIds": ["stance_umbrella_rust"],
         "initialStanceId": "stance_umbrella_rust",
+        "initiallyActive": false
+      },
+      {
+        "actorKey": 107,
+        "archetypeId": "f1_training_eavesguard_target",
+        "faction": "hostile",
+        "poseMm": { "x": -4000, "y": 2000, "height": 0, "floorLayer": 0 },
+        "resources": {
+          "health": 120,
+          "healthMax": 120,
+          "stamina": 80,
+          "staminaMax": 80,
+          "poise": 48,
+          "poiseMax": 48,
+          "lantern": 0,
+          "lanternMax": 0,
+          "evidence": 0
+        },
+        "recovery": {
+          "staminaDelayTicks": 45,
+          "staminaIntervalTicks": 10,
+          "staminaPerInterval": 2,
+          "poiseDelayTicks": 150,
+          "poiseIntervalTicks": 15,
+          "poisePerInterval": 3
+        },
+        "stanceIds": ["stance_umbrella_rust"],
+        "initialStanceId": "stance_umbrella_rust",
+        "initiallyActive": false
+      },
+      {
+        "actorKey": 108,
+        "archetypeId": "f1_training_flower_turn_rig",
+        "faction": "hostile",
+        "poseMm": { "x": -3300, "y": 1200, "height": 700, "floorLayer": 0 },
+        "resources": {
+          "health": 999,
+          "healthMax": 999,
+          "stamina": 120,
+          "staminaMax": 120,
+          "poise": 80,
+          "poiseMax": 80,
+          "lantern": 0,
+          "lanternMax": 0,
+          "evidence": 0
+        },
+        "recovery": {
+          "staminaDelayTicks": 36,
+          "staminaIntervalTicks": 8,
+          "staminaPerInterval": 2,
+          "poiseDelayTicks": 120,
+          "poiseIntervalTicks": 12,
+          "poisePerInterval": 3
+        },
+        "stanceIds": ["stance_paper_egret"],
+        "initialStanceId": "stance_paper_egret",
+        "initiallyActive": false
+      },
+      {
+        "actorKey": 109,
+        "archetypeId": "f1_training_flower_turn_target",
+        "faction": "hostile",
+        "poseMm": { "x": -3000, "y": -800, "height": 700, "floorLayer": 0 },
+        "resources": {
+          "health": 120,
+          "healthMax": 120,
+          "stamina": 100,
+          "staminaMax": 100,
+          "poise": 42,
+          "poiseMax": 42,
+          "lantern": 0,
+          "lanternMax": 0,
+          "evidence": 0
+        },
+        "recovery": {
+          "staminaDelayTicks": 36,
+          "staminaIntervalTicks": 8,
+          "staminaPerInterval": 2,
+          "poiseDelayTicks": 120,
+          "poiseIntervalTicks": 12,
+          "poisePerInterval": 3
+        },
+        "stanceIds": ["stance_paper_egret"],
+        "initialStanceId": "stance_paper_egret",
         "initiallyActive": false
       },
       {
@@ -549,9 +633,14 @@
       "cellId": "f1_cell_rain_ferry",
       "objectiveIds": [
         "f1_objective_inspect_travel_writ",
-        "f1_objective_read_flood_marks",
+        "f1_objective_choose_arrival_clue",
+        "f1_objective_read_ferry_condition",
+        "f1_objective_choose_mooring_method",
         "f1_objective_secure_ferry_mooring",
+        "f1_objective_inspect_bilge_counterweight",
+        "f1_objective_release_ferry_bilge",
         "f1_objective_raise_wayfinding_lantern",
+        "f1_objective_read_workshop_bell_code",
         "f1_objective_sound_workshop_bell",
         "f1_objective_reach_ferry_gate"
       ],
@@ -564,11 +653,19 @@
       "cellId": "f1_cell_rain_ferry",
       "objectiveIds": [
         "f1_objective_meet_shen_yan",
-        "f1_objective_commit_eavesguard_heavy",
+        "f1_objective_choose_training_lane",
+        "f1_objective_take_eavesguard_mark",
         "f1_objective_eavesguard_counter",
+        "f1_objective_commit_eavesguard_heavy",
+        "f1_objective_break_eavesguard_target",
+        "f1_objective_review_eavesguard_with_shen_yan",
         "f1_objective_enter_flower_turn",
+        "f1_objective_cross_flower_turn_line",
+        "f1_objective_flower_turn_counter",
         "f1_objective_commit_flower_turn_light",
-        "f1_objective_flower_turn_counter"
+        "f1_objective_commit_flower_turn_heavy",
+        "f1_objective_break_flower_turn_target",
+        "f1_objective_finish_shen_yan_training"
       ],
       "autoAdvance": false
     },
@@ -647,7 +744,7 @@
     {
       "id": "f1_safe_point_shen_yan_training",
       "beatId": "f1_beat_shen_yan_training",
-      "poseMm": { "x": -10500, "y": -600, "height": 0, "floorLayer": 0 }
+      "poseMm": { "x": -6500, "y": -500, "height": 0, "floorLayer": 0 }
     },
     {
       "id": "f1_safe_point_umbrella_lane",
@@ -689,31 +786,171 @@
       "prerequisiteObjectiveIds": []
     },
     {
-      "id": "f1_interaction_read_flood_marks",
-      "kind": "inspect",
+      "id": "f1_interaction_arrival_clue_high_water_tags",
+      "kind": "choose",
       "cellId": "f1_cell_rain_ferry",
-      "objectiveId": "f1_objective_read_flood_marks",
-      "selectionId": null,
+      "objectiveId": "f1_objective_choose_arrival_clue",
+      "selectionId": "f1_choice_arrival_high_water_tags",
       "requiredSelectionObjectiveId": null,
       "requiredSelectionId": null,
-      "poseMm": { "x": -11700, "y": -1300, "height": 0, "floorLayer": 0 },
-      "radiusMm": 650,
+      "poseMm": { "x": -12200, "y": 900, "height": 0, "floorLayer": 0 },
+      "radiusMm": 600,
       "prerequisiteObjectiveIds": [
         "f1_objective_inspect_travel_writ"
       ]
     },
     {
-      "id": "f1_interaction_secure_ferry_mooring",
+      "id": "f1_interaction_arrival_clue_drowned_manifest",
+      "kind": "choose",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_choose_arrival_clue",
+      "selectionId": "f1_choice_arrival_drowned_manifest",
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -11400, "y": -3100, "height": 0, "floorLayer": 0 },
+      "radiusMm": 600,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_inspect_travel_writ"
+      ]
+    },
+    {
+      "id": "f1_interaction_arrival_clue_follow_bell",
+      "kind": "choose",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_choose_arrival_clue",
+      "selectionId": "f1_choice_arrival_follow_bell",
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -10900, "y": -1000, "height": 0, "floorLayer": 0 },
+      "radiusMm": 700,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_inspect_travel_writ"
+      ]
+    },
+    {
+      "id": "f1_interaction_read_high_water_repairs",
+      "kind": "inspect",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_read_ferry_condition",
+      "selectionId": null,
+      "requiredSelectionObjectiveId": "f1_objective_choose_arrival_clue",
+      "requiredSelectionId": "f1_choice_arrival_high_water_tags",
+      "poseMm": { "x": -11100, "y": 1700, "height": 0, "floorLayer": 0 },
+      "radiusMm": 550,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_choose_arrival_clue"
+      ]
+    },
+    {
+      "id": "f1_interaction_read_manifest_waterline",
+      "kind": "inspect",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_read_ferry_condition",
+      "selectionId": null,
+      "requiredSelectionObjectiveId": "f1_objective_choose_arrival_clue",
+      "requiredSelectionId": "f1_choice_arrival_drowned_manifest",
+      "poseMm": { "x": -10600, "y": -2800, "height": 0, "floorLayer": 0 },
+      "radiusMm": 550,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_choose_arrival_clue"
+      ]
+    },
+    {
+      "id": "f1_interaction_read_main_flood_gauge",
+      "kind": "inspect",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_read_ferry_condition",
+      "selectionId": null,
+      "requiredSelectionObjectiveId": "f1_objective_choose_arrival_clue",
+      "requiredSelectionId": "f1_choice_arrival_follow_bell",
+      "poseMm": { "x": -10700, "y": -900, "height": 0, "floorLayer": 0 },
+      "radiusMm": 650,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_choose_arrival_clue"
+      ]
+    },
+    {
+      "id": "f1_interaction_choose_cross_belay",
+      "kind": "choose",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_choose_mooring_method",
+      "selectionId": "f1_choice_mooring_cross_belay",
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -10100, "y": 1200, "height": 0, "floorLayer": 0 },
+      "radiusMm": 600,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_read_ferry_condition"
+      ]
+    },
+    {
+      "id": "f1_interaction_choose_quick_hitch",
+      "kind": "choose",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_choose_mooring_method",
+      "selectionId": "f1_choice_mooring_quick_hitch",
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -10000, "y": -1700, "height": 0, "floorLayer": 0 },
+      "radiusMm": 600,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_read_ferry_condition"
+      ]
+    },
+    {
+      "id": "f1_interaction_lock_cross_belay",
       "kind": "operate",
       "cellId": "f1_cell_rain_ferry",
       "objectiveId": "f1_objective_secure_ferry_mooring",
       "selectionId": null,
+      "requiredSelectionObjectiveId": "f1_objective_choose_mooring_method",
+      "requiredSelectionId": "f1_choice_mooring_cross_belay",
+      "poseMm": { "x": -9400, "y": 1900, "height": 0, "floorLayer": 0 },
+      "radiusMm": 550,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_choose_mooring_method"
+      ]
+    },
+    {
+      "id": "f1_interaction_correct_overloaded_quick_hitch",
+      "kind": "operate",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_secure_ferry_mooring",
+      "selectionId": null,
+      "requiredSelectionObjectiveId": "f1_objective_choose_mooring_method",
+      "requiredSelectionId": "f1_choice_mooring_quick_hitch",
+      "poseMm": { "x": -9200, "y": -2300, "height": 0, "floorLayer": 0 },
+      "radiusMm": 550,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_choose_mooring_method"
+      ]
+    },
+    {
+      "id": "f1_interaction_inspect_bilge_counterweight",
+      "kind": "inspect",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_inspect_bilge_counterweight",
+      "selectionId": null,
       "requiredSelectionObjectiveId": null,
       "requiredSelectionId": null,
-      "poseMm": { "x": -11400, "y": -1000, "height": 0, "floorLayer": 0 },
-      "radiusMm": 650,
+      "poseMm": { "x": -8700, "y": -800, "height": 0, "floorLayer": 0 },
+      "radiusMm": 550,
       "prerequisiteObjectiveIds": [
-        "f1_objective_read_flood_marks"
+        "f1_objective_secure_ferry_mooring"
+      ]
+    },
+    {
+      "id": "f1_interaction_release_ferry_bilge",
+      "kind": "operate",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_release_ferry_bilge",
+      "selectionId": null,
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -8400, "y": 1100, "height": 0, "floorLayer": 0 },
+      "radiusMm": 550,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_inspect_bilge_counterweight"
       ]
     },
     {
@@ -724,10 +961,24 @@
       "selectionId": null,
       "requiredSelectionObjectiveId": null,
       "requiredSelectionId": null,
-      "poseMm": { "x": -11100, "y": -700, "height": 0, "floorLayer": 0 },
-      "radiusMm": 650,
+      "poseMm": { "x": -7900, "y": -300, "height": 0, "floorLayer": 0 },
+      "radiusMm": 600,
       "prerequisiteObjectiveIds": [
-        "f1_objective_secure_ferry_mooring"
+        "f1_objective_release_ferry_bilge"
+      ]
+    },
+    {
+      "id": "f1_interaction_read_workshop_bell_code",
+      "kind": "inspect",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_read_workshop_bell_code",
+      "selectionId": null,
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -7500, "y": 1300, "height": 0, "floorLayer": 0 },
+      "radiusMm": 550,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_raise_wayfinding_lantern"
       ]
     },
     {
@@ -738,10 +989,10 @@
       "selectionId": null,
       "requiredSelectionObjectiveId": null,
       "requiredSelectionId": null,
-      "poseMm": { "x": -10800, "y": -400, "height": 0, "floorLayer": 0 },
-      "radiusMm": 650,
+      "poseMm": { "x": -7100, "y": 300, "height": 0, "floorLayer": 0 },
+      "radiusMm": 600,
       "prerequisiteObjectiveIds": [
-        "f1_objective_raise_wayfinding_lantern"
+        "f1_objective_read_workshop_bell_code"
       ]
     },
     {
@@ -752,8 +1003,8 @@
       "selectionId": null,
       "requiredSelectionObjectiveId": null,
       "requiredSelectionId": null,
-      "poseMm": { "x": -10450, "y": -100, "height": 0, "floorLayer": 0 },
-      "radiusMm": 900,
+      "poseMm": { "x": -6700, "y": -600, "height": 0, "floorLayer": 0 },
+      "radiusMm": 800,
       "prerequisiteObjectiveIds": [
         "f1_objective_sound_workshop_bell"
       ]
@@ -766,9 +1017,107 @@
       "selectionId": null,
       "requiredSelectionObjectiveId": null,
       "requiredSelectionId": null,
-      "poseMm": { "x": -10500, "y": -600, "height": 0, "floorLayer": 0 },
+      "poseMm": { "x": -6500, "y": -500, "height": 0, "floorLayer": 0 },
       "radiusMm": 800,
       "prerequisiteObjectiveIds": []
+    },
+    {
+      "id": "f1_interaction_choose_training_windward_lane",
+      "kind": "choose",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_choose_training_lane",
+      "selectionId": "f1_choice_training_windward_lane",
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -6100, "y": 1600, "height": 0, "floorLayer": 0 },
+      "radiusMm": 600,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_meet_shen_yan"
+      ]
+    },
+    {
+      "id": "f1_interaction_choose_training_leeward_lane",
+      "kind": "choose",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_choose_training_lane",
+      "selectionId": "f1_choice_training_leeward_lane",
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -6000, "y": -2200, "height": 0, "floorLayer": 0 },
+      "radiusMm": 600,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_meet_shen_yan"
+      ]
+    },
+    {
+      "id": "f1_interaction_take_windward_eavesguard_mark",
+      "kind": "operate",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_take_eavesguard_mark",
+      "selectionId": null,
+      "requiredSelectionObjectiveId": "f1_objective_choose_training_lane",
+      "requiredSelectionId": "f1_choice_training_windward_lane",
+      "poseMm": { "x": -5400, "y": 1900, "height": 0, "floorLayer": 0 },
+      "radiusMm": 550,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_choose_training_lane"
+      ]
+    },
+    {
+      "id": "f1_interaction_take_leeward_eavesguard_mark",
+      "kind": "operate",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_take_eavesguard_mark",
+      "selectionId": null,
+      "requiredSelectionObjectiveId": "f1_objective_choose_training_lane",
+      "requiredSelectionId": "f1_choice_training_leeward_lane",
+      "poseMm": { "x": -5200, "y": -2400, "height": 0, "floorLayer": 0 },
+      "radiusMm": 550,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_choose_training_lane"
+      ]
+    },
+    {
+      "id": "f1_interaction_review_eavesguard_with_shen_yan",
+      "kind": "talk",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_review_eavesguard_with_shen_yan",
+      "selectionId": null,
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -5000, "y": -200, "height": 0, "floorLayer": 0 },
+      "radiusMm": 800,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_break_eavesguard_target"
+      ]
+    },
+    {
+      "id": "f1_interaction_cross_flower_turn_line",
+      "kind": "operate",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_cross_flower_turn_line",
+      "selectionId": null,
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -3400, "y": -1700, "height": 0, "floorLayer": 0 },
+      "radiusMm": 550,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_enter_flower_turn"
+      ]
+    },
+    {
+      "id": "f1_interaction_finish_shen_yan_training",
+      "kind": "talk",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_finish_shen_yan_training",
+      "selectionId": null,
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -5000, "y": -200, "height": 0, "floorLayer": 0 },
+      "radiusMm": 800,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_break_flower_turn_target"
+      ]
     },
     {
       "id": "f1_interaction_inspect_torn_canopy_seam",
@@ -995,35 +1344,103 @@
   ],
   "questEncounterActivations": [
     {
-      "id": "f1_activation_shen_yan_training_rigs",
+      "id": "f1_activation_training_windward_guard_rig",
       "beatId": "f1_beat_shen_yan_training",
-      "triggerObjectiveId": null,
-      "requiredSelectionObjectiveId": null,
-      "requiredSelectionId": null,
+      "triggerObjectiveId": "f1_objective_take_eavesguard_mark",
+      "requiredSelectionObjectiveId": "f1_objective_choose_training_lane",
+      "requiredSelectionId": "f1_choice_training_windward_lane",
       "mode": "replace",
       "encounterId": "f1_encounter_umbrella_lane_bootstrap",
       "actorKeys": [104],
       "actorPlacements": [
         {
           "actorKey": 104,
-          "poseMm": { "x": -5900, "y": 2300, "height": 0, "floorLayer": 0 },
+          "poseMm": { "x": -4100, "y": 2300, "height": 0, "floorLayer": 0 },
           "formationSlot": 0
         }
       ]
     },
     {
-      "id": "f1_activation_shen_yan_flower_turn_rig",
+      "id": "f1_activation_training_leeward_guard_rig",
       "beatId": "f1_beat_shen_yan_training",
-      "triggerObjectiveId": "f1_objective_eavesguard_counter",
+      "triggerObjectiveId": "f1_objective_take_eavesguard_mark",
+      "requiredSelectionObjectiveId": "f1_objective_choose_training_lane",
+      "requiredSelectionId": "f1_choice_training_leeward_lane",
+      "mode": "replace",
+      "encounterId": "f1_encounter_umbrella_lane_bootstrap",
+      "actorKeys": [104],
+      "actorPlacements": [
+        {
+          "actorKey": 104,
+          "poseMm": { "x": -3900, "y": -2500, "height": 0, "floorLayer": 0 },
+          "formationSlot": 0
+        }
+      ]
+    },
+    {
+      "id": "f1_activation_training_windward_eavesguard_target",
+      "beatId": "f1_beat_shen_yan_training",
+      "triggerObjectiveId": "f1_objective_commit_eavesguard_heavy",
+      "requiredSelectionObjectiveId": "f1_objective_choose_training_lane",
+      "requiredSelectionId": "f1_choice_training_windward_lane",
+      "mode": "replace",
+      "encounterId": "f1_encounter_umbrella_lane_bootstrap",
+      "actorKeys": [107],
+      "actorPlacements": [
+        {
+          "actorKey": 107,
+          "poseMm": { "x": -4000, "y": 2000, "height": 0, "floorLayer": 0 },
+          "formationSlot": 0
+        }
+      ]
+    },
+    {
+      "id": "f1_activation_training_leeward_eavesguard_target",
+      "beatId": "f1_beat_shen_yan_training",
+      "triggerObjectiveId": "f1_objective_commit_eavesguard_heavy",
+      "requiredSelectionObjectiveId": "f1_objective_choose_training_lane",
+      "requiredSelectionId": "f1_choice_training_leeward_lane",
+      "mode": "replace",
+      "encounterId": "f1_encounter_umbrella_lane_bootstrap",
+      "actorKeys": [107],
+      "actorPlacements": [
+        {
+          "actorKey": 107,
+          "poseMm": { "x": -3800, "y": -2100, "height": 0, "floorLayer": 0 },
+          "formationSlot": 0
+        }
+      ]
+    },
+    {
+      "id": "f1_activation_training_flower_turn_rig",
+      "beatId": "f1_beat_shen_yan_training",
+      "triggerObjectiveId": "f1_objective_review_eavesguard_with_shen_yan",
       "requiredSelectionObjectiveId": null,
       "requiredSelectionId": null,
       "mode": "replace",
       "encounterId": "f1_encounter_umbrella_lane_bootstrap",
-      "actorKeys": [105],
+      "actorKeys": [108],
       "actorPlacements": [
         {
-          "actorKey": 105,
-          "poseMm": { "x": -5200, "y": -1600, "height": 700, "floorLayer": 0 },
+          "actorKey": 108,
+          "poseMm": { "x": -3300, "y": 1200, "height": 700, "floorLayer": 0 },
+          "formationSlot": 2
+        }
+      ]
+    },
+    {
+      "id": "f1_activation_training_flower_turn_target",
+      "beatId": "f1_beat_shen_yan_training",
+      "triggerObjectiveId": "f1_objective_commit_flower_turn_heavy",
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "mode": "replace",
+      "encounterId": "f1_encounter_umbrella_lane_bootstrap",
+      "actorKeys": [109],
+      "actorPlacements": [
+        {
+          "actorKey": 109,
+          "poseMm": { "x": -3000, "y": -800, "height": 700, "floorLayer": 0 },
           "formationSlot": 2
         }
       ]
@@ -1194,18 +1611,6 @@
   ],
   "questCombatTriggers": [
     {
-      "id": "f1_trigger_eavesguard_heavy",
-      "kind": "player_ability_started",
-      "objectiveId": "f1_objective_commit_eavesguard_heavy",
-      "requiredStanceId": "stance_eavesguard",
-      "requiredAbilityId": "ability_eavesguard_heavy",
-      "requiredSelectionObjectiveId": null,
-      "requiredSelectionId": null,
-      "prerequisiteObjectiveIds": [
-        "f1_objective_meet_shen_yan"
-      ]
-    },
-    {
       "id": "f1_trigger_eavesguard_counter",
       "kind": "player_hit_guarded",
       "objectiveId": "f1_objective_eavesguard_counter",
@@ -1214,7 +1619,19 @@
       "requiredSelectionObjectiveId": null,
       "requiredSelectionId": null,
       "prerequisiteObjectiveIds": [
-        "f1_objective_commit_eavesguard_heavy"
+        "f1_objective_take_eavesguard_mark"
+      ]
+    },
+    {
+      "id": "f1_trigger_eavesguard_heavy",
+      "kind": "player_ability_started",
+      "objectiveId": "f1_objective_commit_eavesguard_heavy",
+      "requiredStanceId": "stance_eavesguard",
+      "requiredAbilityId": "ability_eavesguard_heavy",
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_eavesguard_counter"
       ]
     },
     {
@@ -1226,7 +1643,19 @@
       "requiredSelectionObjectiveId": null,
       "requiredSelectionId": null,
       "prerequisiteObjectiveIds": [
-        "f1_objective_eavesguard_counter"
+        "f1_objective_review_eavesguard_with_shen_yan"
+      ]
+    },
+    {
+      "id": "f1_trigger_flower_turn_counter",
+      "kind": "player_hit_evaded",
+      "objectiveId": "f1_objective_flower_turn_counter",
+      "requiredStanceId": "stance_flower_turn",
+      "requiredAbilityId": null,
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_cross_flower_turn_line"
       ]
     },
     {
@@ -1238,15 +1667,15 @@
       "requiredSelectionObjectiveId": null,
       "requiredSelectionId": null,
       "prerequisiteObjectiveIds": [
-        "f1_objective_enter_flower_turn"
+        "f1_objective_flower_turn_counter"
       ]
     },
     {
-      "id": "f1_trigger_flower_turn_counter",
-      "kind": "player_hit_evaded",
-      "objectiveId": "f1_objective_flower_turn_counter",
+      "id": "f1_trigger_flower_turn_heavy",
+      "kind": "player_ability_started",
+      "objectiveId": "f1_objective_commit_flower_turn_heavy",
       "requiredStanceId": "stance_flower_turn",
-      "requiredAbilityId": null,
+      "requiredAbilityId": "ability_flower_heavy",
       "requiredSelectionObjectiveId": null,
       "requiredSelectionId": null,
       "prerequisiteObjectiveIds": [
@@ -1279,6 +1708,20 @@
     }
   ],
   "questCombatOutcomes": [
+    {
+      "id": "f1_outcome_break_eavesguard_target",
+      "kind": "hostile_archetype_defeated",
+      "objectiveId": "f1_objective_break_eavesguard_target",
+      "archetypeId": "f1_training_eavesguard_target",
+      "requiredCount": 1
+    },
+    {
+      "id": "f1_outcome_break_flower_turn_target",
+      "kind": "hostile_archetype_defeated",
+      "objectiveId": "f1_objective_break_flower_turn_target",
+      "archetypeId": "f1_training_flower_turn_target",
+      "requiredCount": 1
+    },
     {
       "id": "f1_outcome_defeat_leaking_dolls",
       "kind": "hostile_archetype_defeated",

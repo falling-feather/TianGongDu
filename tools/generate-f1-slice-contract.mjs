@@ -144,7 +144,7 @@ export function validateF1SliceContract(contract, catalog) {
   assertUnique(safePoints.map((safePoint) => safePoint.beatId), "safe point beat");
   const expectedSafePoints = [
     ["f1_safe_point_rain_ferry_arrival", -12000, -1600],
-    ["f1_safe_point_shen_yan_training", -10500, -600],
+    ["f1_safe_point_shen_yan_training", -6500, -500],
     ["f1_safe_point_umbrella_lane", -5600, -1200],
     ["f1_safe_point_shared_workbench", -4300, -100],
     ["f1_safe_point_canopy_return", -4300, -100],
@@ -159,8 +159,8 @@ export function validateF1SliceContract(contract, catalog) {
     fail("F1 safe-point route or authored poses drifted");
   }
   const interactions = contract.questInteractions;
-  if (!Array.isArray(interactions) || interactions.length < 2 || interactions.length > 64) {
-    fail("quest interactions must contain 2..64 definitions");
+  if (!Array.isArray(interactions) || interactions.length < 40 || interactions.length > 64) {
+    fail("the F1 route must contain 40..64 quest interaction definitions");
   }
   const interactionKinds = new Set(["inspect", "operate", "talk", "choose"]);
   const interactionsByObjective = new Map();
@@ -290,30 +290,67 @@ export function validateF1SliceContract(contract, catalog) {
     }
   }
   const firstBeatObjectives = new Set(contract.beats[0].objectiveIds);
-  const firstBeatInteractionObjectives = interactions
+  const firstBeatInteractionObjectives = new Set(interactions
     .filter((interaction) => firstBeatObjectives.has(interaction.objectiveId))
-    .map((interaction) => interaction.objectiveId);
+    .map((interaction) => interaction.objectiveId));
   if (
-    firstBeatInteractionObjectives.length !== firstBeatObjectives.size ||
-    firstBeatInteractionObjectives.some((objective) => !firstBeatObjectives.has(objective))
+    firstBeatInteractionObjectives.size !== firstBeatObjectives.size ||
+    [...firstBeatInteractionObjectives].some(
+      (objective) => !firstBeatObjectives.has(objective)
+    )
   ) {
     fail("the first playable beat must be fully covered by scene interactions");
   }
-  const expectedRainFerryChain = [
-    ["f1_interaction_travel_writ", "inspect", "f1_objective_inspect_travel_writ", -12000, -1600, 800, []],
-    ["f1_interaction_read_flood_marks", "inspect", "f1_objective_read_flood_marks", -11700, -1300, 650, ["f1_objective_inspect_travel_writ"]],
-    ["f1_interaction_secure_ferry_mooring", "operate", "f1_objective_secure_ferry_mooring", -11400, -1000, 650, ["f1_objective_read_flood_marks"]],
-    ["f1_interaction_raise_wayfinding_lantern", "operate", "f1_objective_raise_wayfinding_lantern", -11100, -700, 650, ["f1_objective_secure_ferry_mooring"]],
-    ["f1_interaction_sound_workshop_bell", "operate", "f1_objective_sound_workshop_bell", -10800, -400, 650, ["f1_objective_raise_wayfinding_lantern"]],
-    ["f1_interaction_ferry_gate", "operate", "f1_objective_reach_ferry_gate", -10450, -100, 900, ["f1_objective_sound_workshop_bell"]]
-  ].map(([id, kind, objectiveId, x, y, radiusMm, prerequisiteObjectiveIds]) => ({
+  const expectedRainFerryObjectives = [
+    "f1_objective_inspect_travel_writ",
+    "f1_objective_choose_arrival_clue",
+    "f1_objective_read_ferry_condition",
+    "f1_objective_choose_mooring_method",
+    "f1_objective_secure_ferry_mooring",
+    "f1_objective_inspect_bilge_counterweight",
+    "f1_objective_release_ferry_bilge",
+    "f1_objective_raise_wayfinding_lantern",
+    "f1_objective_read_workshop_bell_code",
+    "f1_objective_sound_workshop_bell",
+    "f1_objective_reach_ferry_gate"
+  ];
+  const expectedRainFerryInteractions = [
+    ["f1_interaction_travel_writ", "inspect", expectedRainFerryObjectives[0], null, null, null, -12000, -1600, 800, []],
+    ["f1_interaction_arrival_clue_high_water_tags", "choose", expectedRainFerryObjectives[1], "f1_choice_arrival_high_water_tags", null, null, -12200, 900, 600, [expectedRainFerryObjectives[0]]],
+    ["f1_interaction_arrival_clue_drowned_manifest", "choose", expectedRainFerryObjectives[1], "f1_choice_arrival_drowned_manifest", null, null, -11400, -3100, 600, [expectedRainFerryObjectives[0]]],
+    ["f1_interaction_arrival_clue_follow_bell", "choose", expectedRainFerryObjectives[1], "f1_choice_arrival_follow_bell", null, null, -10900, -1000, 700, [expectedRainFerryObjectives[0]]],
+    ["f1_interaction_read_high_water_repairs", "inspect", expectedRainFerryObjectives[2], null, expectedRainFerryObjectives[1], "f1_choice_arrival_high_water_tags", -11100, 1700, 550, [expectedRainFerryObjectives[1]]],
+    ["f1_interaction_read_manifest_waterline", "inspect", expectedRainFerryObjectives[2], null, expectedRainFerryObjectives[1], "f1_choice_arrival_drowned_manifest", -10600, -2800, 550, [expectedRainFerryObjectives[1]]],
+    ["f1_interaction_read_main_flood_gauge", "inspect", expectedRainFerryObjectives[2], null, expectedRainFerryObjectives[1], "f1_choice_arrival_follow_bell", -10700, -900, 650, [expectedRainFerryObjectives[1]]],
+    ["f1_interaction_choose_cross_belay", "choose", expectedRainFerryObjectives[3], "f1_choice_mooring_cross_belay", null, null, -10100, 1200, 600, [expectedRainFerryObjectives[2]]],
+    ["f1_interaction_choose_quick_hitch", "choose", expectedRainFerryObjectives[3], "f1_choice_mooring_quick_hitch", null, null, -10000, -1700, 600, [expectedRainFerryObjectives[2]]],
+    ["f1_interaction_lock_cross_belay", "operate", expectedRainFerryObjectives[4], null, expectedRainFerryObjectives[3], "f1_choice_mooring_cross_belay", -9400, 1900, 550, [expectedRainFerryObjectives[3]]],
+    ["f1_interaction_correct_overloaded_quick_hitch", "operate", expectedRainFerryObjectives[4], null, expectedRainFerryObjectives[3], "f1_choice_mooring_quick_hitch", -9200, -2300, 550, [expectedRainFerryObjectives[3]]],
+    ["f1_interaction_inspect_bilge_counterweight", "inspect", expectedRainFerryObjectives[5], null, null, null, -8700, -800, 550, [expectedRainFerryObjectives[4]]],
+    ["f1_interaction_release_ferry_bilge", "operate", expectedRainFerryObjectives[6], null, null, null, -8400, 1100, 550, [expectedRainFerryObjectives[5]]],
+    ["f1_interaction_raise_wayfinding_lantern", "operate", expectedRainFerryObjectives[7], null, null, null, -7900, -300, 600, [expectedRainFerryObjectives[6]]],
+    ["f1_interaction_read_workshop_bell_code", "inspect", expectedRainFerryObjectives[8], null, null, null, -7500, 1300, 550, [expectedRainFerryObjectives[7]]],
+    ["f1_interaction_sound_workshop_bell", "operate", expectedRainFerryObjectives[9], null, null, null, -7100, 300, 600, [expectedRainFerryObjectives[8]]],
+    ["f1_interaction_ferry_gate", "operate", expectedRainFerryObjectives[10], null, null, null, -6700, -600, 800, [expectedRainFerryObjectives[9]]]
+  ].map(([
+    id,
+    kind,
+    objectiveId,
+    selectionId,
+    requiredSelectionObjectiveId,
+    requiredSelectionId,
+    x,
+    y,
+    radiusMm,
+    prerequisiteObjectiveIds
+  ]) => ({
     id,
     kind,
     cellId: contract.beats[0].cellId,
     objectiveId,
-    selectionId: null,
-    requiredSelectionObjectiveId: null,
-    requiredSelectionId: null,
+    selectionId,
+    requiredSelectionObjectiveId,
+    requiredSelectionId,
     poseMm: {x, y, height: 0, floorLayer: 0},
     radiusMm,
     prerequisiteObjectiveIds
@@ -324,11 +361,69 @@ export function validateF1SliceContract(contract, catalog) {
   if (
     !sameValues(
       contract.beats[0].objectiveIds,
-      expectedRainFerryChain.map((interaction) => interaction.objectiveId)
+      expectedRainFerryObjectives
     ) ||
-    !sameValues(rainFerryChain, expectedRainFerryChain)
+    !sameValues(rainFerryChain, expectedRainFerryInteractions)
   ) {
-    fail("the Rain Ferry readiness chain drifted");
+    fail("the Rain Ferry clue, mooring correction, and readiness route drifted");
+  }
+  const expectedTrainingObjectives = [
+    "f1_objective_meet_shen_yan",
+    "f1_objective_choose_training_lane",
+    "f1_objective_take_eavesguard_mark",
+    "f1_objective_eavesguard_counter",
+    "f1_objective_commit_eavesguard_heavy",
+    "f1_objective_break_eavesguard_target",
+    "f1_objective_review_eavesguard_with_shen_yan",
+    "f1_objective_enter_flower_turn",
+    "f1_objective_cross_flower_turn_line",
+    "f1_objective_flower_turn_counter",
+    "f1_objective_commit_flower_turn_light",
+    "f1_objective_commit_flower_turn_heavy",
+    "f1_objective_break_flower_turn_target",
+    "f1_objective_finish_shen_yan_training"
+  ];
+  const expectedTrainingInteractions = [
+    ["f1_interaction_meet_shen_yan", "talk", expectedTrainingObjectives[0], null, null, null, -6500, -500, 800, []],
+    ["f1_interaction_choose_training_windward_lane", "choose", expectedTrainingObjectives[1], "f1_choice_training_windward_lane", null, null, -6100, 1600, 600, [expectedTrainingObjectives[0]]],
+    ["f1_interaction_choose_training_leeward_lane", "choose", expectedTrainingObjectives[1], "f1_choice_training_leeward_lane", null, null, -6000, -2200, 600, [expectedTrainingObjectives[0]]],
+    ["f1_interaction_take_windward_eavesguard_mark", "operate", expectedTrainingObjectives[2], null, expectedTrainingObjectives[1], "f1_choice_training_windward_lane", -5400, 1900, 550, [expectedTrainingObjectives[1]]],
+    ["f1_interaction_take_leeward_eavesguard_mark", "operate", expectedTrainingObjectives[2], null, expectedTrainingObjectives[1], "f1_choice_training_leeward_lane", -5200, -2400, 550, [expectedTrainingObjectives[1]]],
+    ["f1_interaction_review_eavesguard_with_shen_yan", "talk", expectedTrainingObjectives[6], null, null, null, -5000, -200, 800, [expectedTrainingObjectives[5]]],
+    ["f1_interaction_cross_flower_turn_line", "operate", expectedTrainingObjectives[8], null, null, null, -3400, -1700, 550, [expectedTrainingObjectives[7]]],
+    ["f1_interaction_finish_shen_yan_training", "talk", expectedTrainingObjectives[13], null, null, null, -5000, -200, 800, [expectedTrainingObjectives[12]]]
+  ].map(([
+    id,
+    kind,
+    objectiveId,
+    selectionId,
+    requiredSelectionObjectiveId,
+    requiredSelectionId,
+    x,
+    y,
+    radiusMm,
+    prerequisiteObjectiveIds
+  ]) => ({
+    id,
+    kind,
+    cellId: contract.beats[1].cellId,
+    objectiveId,
+    selectionId,
+    requiredSelectionObjectiveId,
+    requiredSelectionId,
+    poseMm: {x, y, height: 0, floorLayer: 0},
+    radiusMm,
+    prerequisiteObjectiveIds
+  }));
+  const trainingObjectiveSet = new Set(expectedTrainingObjectives);
+  const authoredTrainingInteractions = interactions.filter((interaction) =>
+    trainingObjectiveSet.has(interaction.objectiveId)
+  );
+  if (
+    !sameValues(contract.beats[1].objectiveIds, expectedTrainingObjectives) ||
+    !sameValues(authoredTrainingInteractions, expectedTrainingInteractions)
+  ) {
+    fail("the Shen Yan dialogue, practice-lane, and spatial training route drifted");
   }
   const umbrellaLaneBeat = contract.beats[2];
   const expectedUmbrellaLaneRainworks = [
@@ -607,65 +702,43 @@ export function validateF1SliceContract(contract, catalog) {
   const trainingBeat = contract.beats[1];
   const laneBeat = contract.beats[2];
   const bossBeat = contract.beats[5];
-  if (encounterActivations.length !== 8 ||
-      encounterActivations[0].beatId !== trainingBeat.id ||
-      encounterActivations[0].triggerObjectiveId !== null ||
-      encounterActivations[0].requiredSelectionId !== null ||
-      encounterActivations[0].mode !== "replace" ||
-      !sameValues(encounterActivations[0].actorKeys, [104]) ||
-      !sameValues(encounterActivations[0].actorPlacements.map((value) => value.formationSlot), [0]) ||
-      encounterActivations[1].beatId !== trainingBeat.id ||
-      encounterActivations[1].triggerObjectiveId !== trainingBeat.objectiveIds[2] ||
-      encounterActivations[1].requiredSelectionId !== null ||
-      encounterActivations[1].mode !== "replace" ||
-      !sameValues(encounterActivations[1].actorKeys, [105]) ||
-      !sameValues(encounterActivations[1].actorPlacements.map((value) => value.formationSlot), [2]) ||
-      encounterActivations[2].beatId !== laneBeat.id ||
-      encounterActivations[2].triggerObjectiveId !== null ||
-      encounterActivations[2].requiredSelectionId !== null ||
-      encounterActivations[2].mode !== "replace" ||
-      !sameValues(encounterActivations[2].actorKeys, [101, 102]) ||
-      !sameValues(encounterActivations[2].actorPlacements.map((value) => value.formationSlot), [1, 5]) ||
-      encounterActivations[3].beatId !== laneBeat.id ||
-      encounterActivations[3].triggerObjectiveId !== laneBeat.objectiveIds[3] ||
-      encounterActivations[3].requiredSelectionId !== null ||
-      encounterActivations[3].mode !== "replace" ||
-      !sameValues(encounterActivations[3].actorKeys, [103]) ||
-      !sameValues(encounterActivations[3].actorPlacements.map((value) => value.formationSlot), [2]) ||
-      encounterActivations[4].beatId !== returnBeat.id ||
-      encounterActivations[4].triggerObjectiveId !== null ||
-      encounterActivations[4].requiredSelectionId !== null ||
-      encounterActivations[4].mode !== "replace" ||
-      !sameValues(encounterActivations[4].actorKeys, [101, 102, 103]) ||
-      !sameValues(encounterActivations[4].actorPlacements.map((value) => value.formationSlot), [0, 3, 6]) ||
-      encounterActivations[5].beatId !== returnBeat.id ||
-      encounterActivations[5].triggerObjectiveId !== returnBeat.objectiveIds[0] ||
-      encounterActivations[5].requiredSelectionObjectiveId !== workbenchBeat.objectiveIds[3] ||
-      encounterActivations[5].requiredSelectionId !== "f1_choice_rib_spring_calibration" ||
-      encounterActivations[5].mode !== "reinforce" ||
-      !sameValues(encounterActivations[5].actorKeys, [106]) ||
-      !sameValues(encounterActivations[5].actorPlacements.map((value) => value.formationSlot), [5]) ||
-      encounterActivations[6].beatId !== returnBeat.id ||
-      encounterActivations[6].triggerObjectiveId !== returnBeat.objectiveIds[0] ||
-      encounterActivations[6].requiredSelectionObjectiveId !== workbenchBeat.objectiveIds[3] ||
-      encounterActivations[6].requiredSelectionId !== "f1_choice_rib_winter_calibration" ||
-      encounterActivations[6].mode !== "reinforce" ||
-      !sameValues(encounterActivations[6].actorKeys, [105]) ||
-      !sameValues(encounterActivations[6].actorPlacements.map((value) => value.formationSlot), [5]) ||
-      encounterActivations[7].beatId !== bossBeat.id ||
-      encounterActivations[7].triggerObjectiveId !== null ||
-      encounterActivations[7].requiredSelectionId !== null ||
-      encounterActivations[7].mode !== "replace" ||
-      !sameValues(encounterActivations[7].actorKeys, [201]) ||
-      !sameValues(encounterActivations[7].actorPlacements.map((value) => value.formationSlot), [4])) {
-    fail("training waves, lane waves, choice-driven return reinforcements, and boss beats must own authored activations");
-  }
+  const activationSignatures = encounterActivations.map((activation) => [
+    activation.id,
+    activation.beatId,
+    activation.triggerObjectiveId,
+    activation.requiredSelectionObjectiveId,
+    activation.requiredSelectionId,
+    activation.mode,
+    activation.actorKeys,
+    activation.actorPlacements.map((placement) => [
+      placement.actorKey,
+      placement.poseMm.x,
+      placement.poseMm.y,
+      placement.poseMm.height,
+      placement.poseMm.floorLayer,
+      placement.formationSlot
+    ])
+  ]);
+  const expectedActivationSignatures = [
+    ["f1_activation_training_windward_guard_rig", trainingBeat.id, expectedTrainingObjectives[2], expectedTrainingObjectives[1], "f1_choice_training_windward_lane", "replace", [104], [[104, -4100, 2300, 0, 0, 0]]],
+    ["f1_activation_training_leeward_guard_rig", trainingBeat.id, expectedTrainingObjectives[2], expectedTrainingObjectives[1], "f1_choice_training_leeward_lane", "replace", [104], [[104, -3900, -2500, 0, 0, 0]]],
+    ["f1_activation_training_windward_eavesguard_target", trainingBeat.id, expectedTrainingObjectives[4], expectedTrainingObjectives[1], "f1_choice_training_windward_lane", "replace", [107], [[107, -4000, 2000, 0, 0, 0]]],
+    ["f1_activation_training_leeward_eavesguard_target", trainingBeat.id, expectedTrainingObjectives[4], expectedTrainingObjectives[1], "f1_choice_training_leeward_lane", "replace", [107], [[107, -3800, -2100, 0, 0, 0]]],
+    ["f1_activation_training_flower_turn_rig", trainingBeat.id, expectedTrainingObjectives[6], null, null, "replace", [108], [[108, -3300, 1200, 700, 0, 2]]],
+    ["f1_activation_training_flower_turn_target", trainingBeat.id, expectedTrainingObjectives[11], null, null, "replace", [109], [[109, -3000, -800, 700, 0, 2]]],
+    ["f1_activation_umbrella_lane_first_encounter", laneBeat.id, null, null, null, "replace", [101, 102], [[101, -4000, -2600, 0, 0, 1], [102, -3000, -400, 0, 0, 5]]],
+    ["f1_activation_umbrella_lane_paper_egret", laneBeat.id, laneBeat.objectiveIds[3], null, null, "replace", [103], [[103, -1500, 900, 700, 0, 2]]],
+    ["f1_activation_canopy_return_encounter", returnBeat.id, null, null, null, "replace", [101, 102, 103], [[101, -2500, -1800, 0, 0, 0], [102, -900, -300, 0, 0, 3], [103, -500, 1700, 700, 0, 6]]],
+    ["f1_activation_canopy_return_spring_reinforcement", returnBeat.id, returnBeat.objectiveIds[0], workbenchBeat.objectiveIds[3], "f1_choice_rib_spring_calibration", "reinforce", [106], [[106, 500, 1400, 0, 0, 5]]],
+    ["f1_activation_canopy_return_winter_reinforcement", returnBeat.id, returnBeat.objectiveIds[0], workbenchBeat.objectiveIds[3], "f1_choice_rib_winter_calibration", "reinforce", [105], [[105, 500, 1400, 700, 0, 5]]],
+    ["f1_activation_four_seasons_wraith", bossBeat.id, null, null, null, "replace", [201], [[201, 4000, 1900, 0, 0, 4]]]
+  ];
   const returnSafePoint = safePoints[4].poseMm;
   const returnAggroRangeMm = contract.combatBootstrap?.director?.aggroRangeMm;
   const returnPlacements = [
-    ...encounterActivations[4].actorPlacements,
-    ...encounterActivations[5].actorPlacements,
-    ...encounterActivations[6].actorPlacements
+    ...encounterActivations[8].actorPlacements,
+    ...encounterActivations[9].actorPlacements,
+    ...encounterActivations[10].actorPlacements
   ];
   if (!Number.isInteger(returnAggroRangeMm) || returnPlacements.some((placement) => {
     const deltaX = placement.poseMm.x - returnSafePoint.x;
@@ -673,6 +746,9 @@ export function validateF1SliceContract(contract, catalog) {
     return deltaX * deltaX + deltaY * deltaY > returnAggroRangeMm * returnAggroRangeMm;
   })) {
     fail("return encounter placements must engage from the authored safe point");
+  }
+  if (!sameValues(activationSignatures, expectedActivationSignatures)) {
+    fail("training lane variants, proof targets, later waves, and boss activations drifted");
   }
   const bossPhases = contract.questBossPhases;
   if (!Array.isArray(bossPhases) || bossPhases.length !== 4) {
@@ -912,7 +988,14 @@ export function validateF1SliceContract(contract, catalog) {
       fail(`${trigger.objectiveId} combat triggers do not cover every authored selection option`);
     }
   }
-  const trainingCombatObjectives = new Set(contract.beats[1].objectiveIds.slice(1));
+  const trainingCombatObjectives = new Set([
+    expectedTrainingObjectives[3],
+    expectedTrainingObjectives[4],
+    expectedTrainingObjectives[7],
+    expectedTrainingObjectives[9],
+    expectedTrainingObjectives[10],
+    expectedTrainingObjectives[11]
+  ]);
   const coveredTrainingObjectives = combatTriggers
     .filter((trigger) => trainingCombatObjectives.has(trigger.objectiveId))
     .map((trigger) => trigger.objectiveId);
@@ -924,54 +1007,64 @@ export function validateF1SliceContract(contract, catalog) {
   }
   const expectedTrainingTriggers = [
     {
+      id: "f1_trigger_eavesguard_counter",
+      kind: "player_hit_guarded",
+      objectiveId: expectedTrainingObjectives[3],
+      requiredStanceId: "stance_eavesguard",
+      requiredAbilityId: null,
+      requiredSelectionObjectiveId: null,
+      requiredSelectionId: null,
+      prerequisiteObjectiveIds: [expectedTrainingObjectives[2]]
+    },
+    {
       id: "f1_trigger_eavesguard_heavy",
       kind: "player_ability_started",
-      objectiveId: "f1_objective_commit_eavesguard_heavy",
+      objectiveId: expectedTrainingObjectives[4],
       requiredStanceId: "stance_eavesguard",
       requiredAbilityId: "ability_eavesguard_heavy",
       requiredSelectionObjectiveId: null,
       requiredSelectionId: null,
-      prerequisiteObjectiveIds: ["f1_objective_meet_shen_yan"]
-    },
-    {
-      id: "f1_trigger_eavesguard_counter",
-      kind: "player_hit_guarded",
-      objectiveId: "f1_objective_eavesguard_counter",
-      requiredStanceId: "stance_eavesguard",
-      requiredAbilityId: null,
-      requiredSelectionObjectiveId: null,
-      requiredSelectionId: null,
-      prerequisiteObjectiveIds: ["f1_objective_commit_eavesguard_heavy"]
+      prerequisiteObjectiveIds: [expectedTrainingObjectives[3]]
     },
     {
       id: "f1_trigger_enter_flower_turn",
       kind: "player_stance_changed",
-      objectiveId: "f1_objective_enter_flower_turn",
+      objectiveId: expectedTrainingObjectives[7],
       requiredStanceId: "stance_flower_turn",
       requiredAbilityId: null,
       requiredSelectionObjectiveId: null,
       requiredSelectionId: null,
-      prerequisiteObjectiveIds: ["f1_objective_eavesguard_counter"]
-    },
-    {
-      id: "f1_trigger_flower_turn_light",
-      kind: "player_ability_started",
-      objectiveId: "f1_objective_commit_flower_turn_light",
-      requiredStanceId: "stance_flower_turn",
-      requiredAbilityId: "ability_flower_light",
-      requiredSelectionObjectiveId: null,
-      requiredSelectionId: null,
-      prerequisiteObjectiveIds: ["f1_objective_enter_flower_turn"]
+      prerequisiteObjectiveIds: [expectedTrainingObjectives[6]]
     },
     {
       id: "f1_trigger_flower_turn_counter",
       kind: "player_hit_evaded",
-      objectiveId: "f1_objective_flower_turn_counter",
+      objectiveId: expectedTrainingObjectives[9],
       requiredStanceId: "stance_flower_turn",
       requiredAbilityId: null,
       requiredSelectionObjectiveId: null,
       requiredSelectionId: null,
-      prerequisiteObjectiveIds: ["f1_objective_commit_flower_turn_light"]
+      prerequisiteObjectiveIds: [expectedTrainingObjectives[8]]
+    },
+    {
+      id: "f1_trigger_flower_turn_light",
+      kind: "player_ability_started",
+      objectiveId: expectedTrainingObjectives[10],
+      requiredStanceId: "stance_flower_turn",
+      requiredAbilityId: "ability_flower_light",
+      requiredSelectionObjectiveId: null,
+      requiredSelectionId: null,
+      prerequisiteObjectiveIds: [expectedTrainingObjectives[9]]
+    },
+    {
+      id: "f1_trigger_flower_turn_heavy",
+      kind: "player_ability_started",
+      objectiveId: expectedTrainingObjectives[11],
+      requiredStanceId: "stance_flower_turn",
+      requiredAbilityId: "ability_flower_heavy",
+      requiredSelectionObjectiveId: null,
+      requiredSelectionId: null,
+      prerequisiteObjectiveIds: [expectedTrainingObjectives[10]]
     }
   ];
   const authoredTrainingTriggers = combatTriggers.filter(
@@ -1038,6 +1131,41 @@ export function validateF1SliceContract(contract, catalog) {
     combatOutcomes.map((outcome) => outcome.objectiveId),
     "quest combat outcome objective"
   );
+  const expectedTrainingOutcomes = [
+    {
+      id: "f1_outcome_break_eavesguard_target",
+      kind: "hostile_archetype_defeated",
+      objectiveId: expectedTrainingObjectives[5],
+      archetypeId: "f1_training_eavesguard_target",
+      requiredCount: 1
+    },
+    {
+      id: "f1_outcome_break_flower_turn_target",
+      kind: "hostile_archetype_defeated",
+      objectiveId: expectedTrainingObjectives[12],
+      archetypeId: "f1_training_flower_turn_target",
+      requiredCount: 1
+    }
+  ];
+  const authoredTrainingOutcomes = combatOutcomes.filter((outcome) =>
+    trainingObjectiveSet.has(outcome.objectiveId)
+  );
+  if (!sameValues(authoredTrainingOutcomes, expectedTrainingOutcomes)) {
+    fail("both Shen Yan stance lessons must end in a real target defeat");
+  }
+  const coveredTrainingObjectiveIds = new Set([
+    ...authoredTrainingInteractions.map((interaction) => interaction.objectiveId),
+    ...authoredTrainingTriggers.map((trigger) => trigger.objectiveId),
+    ...authoredTrainingOutcomes.map((outcome) => outcome.objectiveId)
+  ]);
+  if (
+    coveredTrainingObjectiveIds.size !== expectedTrainingObjectives.length ||
+    expectedTrainingObjectives.some(
+      (objective) => !coveredTrainingObjectiveIds.has(objective)
+    )
+  ) {
+    fail("every Shen Yan training objective needs one authored interaction, signal, or outcome");
+  }
   const laneCombatObjectives = new Set([
     contract.beats[2].objectiveIds[0],
     contract.beats[2].objectiveIds[4]
@@ -1265,16 +1393,30 @@ export function validateF1SliceContract(contract, catalog) {
     fail("beat-scoped hostile actors must start dormant");
   }
   const trainingUmbrella = combat.actors.find((actor) => actor.actorKey === 104);
-  const trainingEgret = combat.actors.find((actor) => actor.actorKey === 105);
+  const trainingEavesguardTarget = combat.actors.find((actor) => actor.actorKey === 107);
+  const trainingFlowerRig = combat.actors.find((actor) => actor.actorKey === 108);
+  const trainingFlowerTarget = combat.actors.find((actor) => actor.actorKey === 109);
   if (trainingUmbrella?.archetypeId !== "f1_training_umbrella_rig" ||
       trainingUmbrella.initialStanceId !== "stance_umbrella_rust" ||
       trainingUmbrella.initiallyActive !== false ||
-      !sameValues(trainingUmbrella.poseMm, { x: -5900, y: 2300, height: 0, floorLayer: 0 }) ||
-      trainingEgret?.archetypeId !== "f1_training_egret_rig" ||
-      trainingEgret.initialStanceId !== "stance_paper_egret" ||
-      trainingEgret.initiallyActive !== false ||
-      !sameValues(trainingEgret.poseMm, { x: -5200, y: -1600, height: 700, floorLayer: 0 })) {
-    fail("the Shen Yan training rigs drifted from their authored encounter roles");
+      trainingUmbrella.resources.health !== 999 ||
+      !sameValues(trainingUmbrella.poseMm, { x: -4100, y: 2300, height: 0, floorLayer: 0 }) ||
+      trainingEavesguardTarget?.archetypeId !== "f1_training_eavesguard_target" ||
+      trainingEavesguardTarget.initialStanceId !== "stance_umbrella_rust" ||
+      trainingEavesguardTarget.initiallyActive !== false ||
+      trainingEavesguardTarget.resources.health !== 120 ||
+      !sameValues(trainingEavesguardTarget.poseMm, { x: -4000, y: 2000, height: 0, floorLayer: 0 }) ||
+      trainingFlowerRig?.archetypeId !== "f1_training_flower_turn_rig" ||
+      trainingFlowerRig.initialStanceId !== "stance_paper_egret" ||
+      trainingFlowerRig.initiallyActive !== false ||
+      trainingFlowerRig.resources.health !== 999 ||
+      !sameValues(trainingFlowerRig.poseMm, { x: -3300, y: 1200, height: 700, floorLayer: 0 }) ||
+      trainingFlowerTarget?.archetypeId !== "f1_training_flower_turn_target" ||
+      trainingFlowerTarget.initialStanceId !== "stance_paper_egret" ||
+      trainingFlowerTarget.initiallyActive !== false ||
+      trainingFlowerTarget.resources.health !== 120 ||
+      !sameValues(trainingFlowerTarget.poseMm, { x: -3000, y: -800, height: 700, floorLayer: 0 })) {
+    fail("the Shen Yan safety rigs and defeat targets drifted from their authored roles");
   }
   const springReturnUmbrella = combat.actors.find((actor) => actor.actorKey === 106);
   const referenceUmbrella = combat.actors.find((actor) => actor.actorKey === 101);

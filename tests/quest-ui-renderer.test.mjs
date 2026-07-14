@@ -138,6 +138,26 @@ function choiceEvent(renderer, cueId, options) {
   };
 }
 
+test("正式 Quest UI renderer 覆盖抵达线索全集且保留 authored 顺序", async () => {
+  const renderer = await loadRenderer();
+  const event = choiceEvent(renderer, "ui.f1.rain.choice.arrival-clue", [
+    ["f1_interaction_arrival_clue_high_water_tags", "f1_choice_arrival_high_water_tags"],
+    ["f1_interaction_arrival_clue_drowned_manifest", "f1_choice_arrival_drowned_manifest"],
+    ["f1_interaction_arrival_clue_follow_bell", "f1_choice_arrival_follow_bell"]
+  ]);
+  const model = renderer.createViewModel(event);
+  assert.equal(model.title, "先看哪一处？");
+  assert.deepEqual(model.options.map((option) => option.label), [
+    "上探高水痕",
+    "下探溺水货单",
+    "循钟声前行"
+  ]);
+  assert.deepEqual(
+    model.options.map((option) => option.selection),
+    event.choiceOptions.map((option) => option.selection)
+  );
+});
+
 test("正式 Quest UI renderer 按投影顺序生成系缆选项模型", async () => {
   const renderer = await loadRenderer();
   const event = choiceEvent(renderer, "ui.f1.rain.choice.mooring-method", [

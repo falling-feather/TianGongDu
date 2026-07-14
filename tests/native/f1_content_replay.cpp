@@ -1,3 +1,5 @@
+#include "F1QuestUiProjection.hpp"
+
 #include <tgd/content/content_definition_provider.hpp>
 #include <tgd/contracts/content_definition.hpp>
 #include <tgd/gameplay/quest_ui_projection.hpp>
@@ -9,8 +11,9 @@
 #include <cstddef>
 #include <cstdlib>
 #include <iostream>
-#include <span>
+#include <iterator>
 #include <memory>
+#include <span>
 #include <string_view>
 
 namespace {
@@ -157,22 +160,42 @@ struct ReplayRun final {
                             return option.selection == step.selection;
                         }
                     );
+                    const auto selected_index = static_cast<std::size_t>(
+                        std::distance(
+                            projected.projection.choice_options.begin(),
+                            selected_option
+                        )
+                    );
+                    F1QuestUiChoiceState native_choice;
+                    const auto native_started = native_choice.begin(
+                        projected.projection,
+                        false
+                    );
+                    const auto native_intent = native_choice.native_intent(selected_index);
                     ok &= expect(
                         selected_option != option_end &&
+                            native_started == F1QuestUiChoiceError::none &&
+                            native_choice.native_pending() &&
+                            native_choice.option_count() == expected_option_count &&
+                            native_intent.error == F1QuestUiChoiceError::none &&
+                            native_intent.intent.interaction == selected_option->interaction &&
+                            native_intent.intent.selection == step.selection &&
                             quest_ui.validate_choice_intent(
-                                {
-                                    projected.projection.sequence,
-                                    projected.projection.checksum,
-                                    step.objective,
-                                    selected_option != option_end
-                                        ? selected_option->interaction
-                                        : 0,
-                                    step.selection,
-                                },
+                                native_intent.intent,
                                 session.quest_runtime()
                             ) == tgd::gameplay::QuestUiSelectionIntentError::none,
-                        "replay choice is a complete authored option in the current projection"
+                        "each real choice activates the ordered Native fallback and exact intent"
                     );
+                    F1QuestUiChoiceState external_choice;
+                    ok &= expect(
+                        external_choice.begin(projected.projection, true) ==
+                                F1QuestUiChoiceError::none &&
+                            external_choice.mode() == F1QuestUiChoiceMode::external &&
+                            external_choice.matches(native_intent.intent),
+                        "each real choice exposes the same identity to the external Action path"
+                    );
+                    native_choice.finish();
+                    external_choice.finish();
                     if (projected.error == tgd::gameplay::QuestUiProjectionError::none) {
                         hash_projection(quest_ui_checksum, projected.projection.sequence);
                         hash_projection(quest_ui_checksum, projected.projection.checksum);

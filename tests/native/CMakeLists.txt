@@ -137,6 +137,11 @@ target_link_libraries(
     tgd_content_core
     tgd_test_f1_content_replay_fixture
 )
+target_include_directories(
+  tgd_native_f1_content_replay
+  PRIVATE
+    ${PROJECT_SOURCE_DIR}/apps/web-shell/Source
+)
 
 add_test(
   NAME tgd.native.f1-content-replay

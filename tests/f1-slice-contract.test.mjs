@@ -238,6 +238,28 @@ test("F1 stable content IDs have unique 64-bit keys", async () => {
 
 test("F1 quest UI cues authorize first-two-beat projections without Objective-specific Runtime", async () => {
   const contract = await loadF1SliceContract();
+  const projectedChoiceObjectives = contract.questUiCues
+    .filter((cue) => cue.sources.includes("choice_available"))
+    .flatMap((cue) => cue.objectiveIds);
+  assert.deepEqual(projectedChoiceObjectives, [
+    "f1_objective_choose_arrival_clue",
+    "f1_objective_choose_mooring_method",
+    "f1_objective_choose_training_lane"
+  ]);
+  const laterChoiceObjectives = [
+    "f1_objective_choose_lane_route",
+    "f1_objective_choose_rib_calibration",
+    "f1_objective_choose_resolution"
+  ];
+  assert(
+    laterChoiceObjectives.every((objectiveId) =>
+      contract.questInteractions.some(
+        (interaction) => interaction.kind === "choose" &&
+          interaction.objectiveId === objectiveId &&
+          interaction.selectionId !== null
+      ) && !projectedChoiceObjectives.includes(objectiveId)
+    )
+  );
   const mooring = contract.questUiCues.find(
     (cue) => cue.id === "ui.f1.rain.mooring-load"
   );

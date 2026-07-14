@@ -17,10 +17,13 @@ using tgd::gameplay::DeterministicQuestRuntime;
 using tgd::gameplay::DeterministicQuestInteractionResolver;
 using tgd::gameplay::DeterministicQuestCombatTriggerResolver;
 using tgd::gameplay::DeterministicQuestCombatOutcomeResolver;
+using tgd::gameplay::DeterministicQuestCombatOutcomeAttemptResolver;
 using tgd::gameplay::DeterministicQuestBossPhaseResolver;
 using tgd::gameplay::DeterministicQuestResolutionRewardResolver;
 using tgd::gameplay::QuestError;
 using tgd::gameplay::QuestCombatOutcomeError;
+using tgd::gameplay::QuestCombatOutcomeAttemptDisposition;
+using tgd::gameplay::QuestCombatOutcomeAttemptError;
 using tgd::gameplay::QuestCombatTriggerError;
 using tgd::gameplay::QuestBossPhaseError;
 using tgd::gameplay::QuestResolutionRewardError;
@@ -74,6 +77,51 @@ bool expect(bool condition, std::string_view message) {
         std::abort();
     }
     return *value;
+}
+
+[[nodiscard]] std::vector<tgd::contracts::CombatActorSnapshot>
+combat_actor_snapshots() {
+    std::vector<tgd::contracts::CombatActorSnapshot> actors(
+        combat_definition().actors.size()
+    );
+    for (std::size_t index = 0; index < combat_definition().actors.size(); ++index) {
+        const auto& config = combat_definition().actors[index];
+        actors[index] = {
+            config.actor,
+            config.archetype_id.key,
+            config.faction,
+            config.initial_pose,
+            config.initial_resources,
+            config.initial_stance,
+            0,
+            false,
+            config.initially_active,
+            false,
+        };
+    }
+    return actors;
+}
+
+[[nodiscard]] bool combat_actor_snapshots_equal(
+    std::span<const tgd::contracts::CombatActorSnapshot> left,
+    std::span<const tgd::contracts::CombatActorSnapshot> right
+) {
+    return left.size() == right.size() && std::equal(
+        left.begin(),
+        left.end(),
+        right.begin(),
+        [](const tgd::contracts::CombatActorSnapshot& lhs,
+           const tgd::contracts::CombatActorSnapshot& rhs) {
+            return lhs.actor == rhs.actor && lhs.archetype == rhs.archetype &&
+                   lhs.faction == rhs.faction && lhs.pose.x == rhs.pose.x &&
+                   lhs.pose.y == rhs.pose.y && lhs.pose.height == rhs.pose.height &&
+                   lhs.pose.floor_layer == rhs.pose.floor_layer &&
+                   lhs.resources == rhs.resources && lhs.stance == rhs.stance &&
+                   lhs.active_ability == rhs.active_ability &&
+                   lhs.guarding == rhs.guarding && lhs.active == rhs.active &&
+                   lhs.defeated == rhs.defeated;
+        }
+    );
 }
 
 [[nodiscard]] tgd::contracts::StableContentKey selection_for_objective(
@@ -1558,6 +1606,433 @@ bool test_combat_signals_resolve_training_objectives() {
     return ok;
 }
 
+bool test_combat_outcome_attempts_are_target_specific_and_read_only() {
+    DeterministicQuestRuntime quest;
+    DeterministicQuestCombatTriggerResolver triggers;
+    DeterministicQuestCombatOutcomeResolver outcomes;
+    DeterministicQuestCombatOutcomeAttemptResolver attempts;
+    DeterministicQuestResolutionRewardResolver rewards;
+    CollectingSink sink;
+    bool ok = quest.initialize(definition(), definition().player.actor) == QuestError::none;
+    ok &= quest.start() == QuestError::none;
+    ok &= triggers.initialize(definition().quest_combat_triggers) ==
+          QuestCombatTriggerError::none;
+    ok &= outcomes.initialize(definition().quest_combat_outcomes) ==
+          QuestCombatOutcomeError::none;
+    ok &= rewards.initialize(definition().quest_resolution_rewards) ==
+          QuestResolutionRewardError::none;
+
+    const tgd::contracts::CombatEvent empty_event{};
+    ok &= expect(
+        attempts.evaluate_attempt({}, empty_event, {}, quest).error ==
+            QuestCombatOutcomeAttemptError::invalid_lifecycle,
+        "combat outcome attempts require full-definition initialization"
+    );
+    ok &= expect(
+        attempts.initialize(definition()) == QuestCombatOutcomeAttemptError::none &&
+            attempts.initialize(definition()) ==
+                QuestCombatOutcomeAttemptError::invalid_lifecycle,
+        "combat outcome attempt definitions initialize exactly once"
+    );
+
+    tgd::contracts::TickIndex tick = 1;
+    tgd::contracts::CommandSequence sequence = 1;
+    for (const auto& objective : definition().beats.front().objectives) {
+        ok &= quest.apply(
+                  {
+                      tick++,
+                      definition().player.actor,
+                      sequence++,
+                      {},
+                      objective.key,
+                      selection_for_objective(objective.key),
+                  },
+                  sink
+              ).error == QuestError::none;
+    }
+    const auto& training = definition().beats[1];
+    for (std::size_t index = 0; index < 3; ++index) {
+        ok &= quest.apply(
+                  {
+                      tick++,
+                      definition().player.actor,
+                      sequence++,
+                      {},
+                      training.objectives[index].key,
+                      selection_for_objective(training.objectives[index].key),
+                  },
+                  sink
+              ).error == QuestError::none;
+    }
+
+    const auto guarded = triggers.resolve(
+        {
+            definition().player.actor,
+            tgd::contracts::QuestCombatTriggerKind::player_hit_guarded,
+            tgd::contracts::stable_content_key("stance_eavesguard"),
+        },
+        quest
+    );
+    ok &= expect(
+        guarded.error == QuestCombatTriggerError::none && guarded.found,
+        "the eavesguard counter produces an accepted authored trigger result"
+    );
+    ok &= quest.apply(
+              {
+                  tick++,
+                  definition().player.actor,
+                  sequence++,
+                  {},
+                  guarded.objective,
+              },
+              sink
+          ).error == QuestError::none;
+    const auto guard_before = quest.snapshot();
+    const auto no_candidate = attempts.evaluate_attempt(
+        guarded,
+        {
+            tick,
+            tgd::contracts::CombatEventType::hit_guarded,
+            104,
+            definition().player.actor,
+        },
+        {},
+        quest
+    );
+    ok &= expect(
+        no_candidate.error == QuestCombatOutcomeAttemptError::none &&
+            !no_candidate.found &&
+            no_candidate.disposition ==
+                QuestCombatOutcomeAttemptDisposition::no_candidate,
+        "a counter whose immediate next objective is not an outcome reports no candidate"
+    );
+    ok &= expect(
+        quest.snapshot().checksum == guard_before.checksum &&
+            quest.snapshot().completed_total == guard_before.completed_total,
+        "no-candidate evaluation does not require a hostile snapshot or mutate the quest"
+    );
+    auto forged_guard_event = tgd::contracts::CombatEvent{
+        tick,
+        tgd::contracts::CombatEventType::hit_guarded,
+        999'999,
+        definition().player.actor,
+    };
+    ok &= expect(
+        attempts.evaluate_attempt(guarded, forged_guard_event, {}, quest).error ==
+            QuestCombatOutcomeAttemptError::invalid_signal,
+        "defensive evidence rejects a source not authored by the complete Definition"
+    );
+
+    for (std::size_t index = 4; index <= 10; ++index) {
+        ok &= quest.apply(
+                  {
+                      tick++,
+                      definition().player.actor,
+                      sequence++,
+                      {},
+                      training.objectives[index].key,
+                  },
+                  sink
+              ).error == QuestError::none;
+    }
+    const auto flower_heavy = triggers.resolve(
+        {
+            definition().player.actor,
+            tgd::contracts::QuestCombatTriggerKind::player_ability_started,
+            tgd::contracts::stable_content_key("stance_flower_turn"),
+            tgd::contracts::stable_content_key("ability_flower_heavy"),
+        },
+        quest
+    );
+    ok &= expect(
+        flower_heavy.error == QuestCombatTriggerError::none && flower_heavy.found,
+        "the flower heavy produces an accepted authored trigger result"
+    );
+    ok &= quest.apply(
+              {
+                  tick++,
+                  definition().player.actor,
+                  sequence++,
+                  {},
+                  flower_heavy.objective,
+              },
+              sink
+          ).error == QuestError::none;
+
+    auto actors = combat_actor_snapshots();
+    for (auto& actor : actors) {
+        if (actor.actor == 108 || actor.actor == 109) {
+            actor.active = true;
+            actor.defeated = false;
+        }
+    }
+    const auto wrong_target_event = tgd::contracts::CombatEvent{
+        tick,
+        tgd::contracts::CombatEventType::ability_started,
+        definition().player.actor,
+        108,
+        tgd::contracts::stable_content_key("ability_flower_heavy"),
+    };
+    const auto attempt_before = quest.snapshot();
+    const auto actors_before = actors;
+    const auto reward_before = rewards.resolve(quest);
+    const auto wrong_target = attempts.evaluate_attempt(
+        flower_heavy,
+        wrong_target_event,
+        actors,
+        quest
+    );
+    const auto repeated_wrong_target = attempts.evaluate_attempt(
+        flower_heavy,
+        wrong_target_event,
+        actors,
+        quest
+    );
+    ok &= expect(
+        wrong_target.error == QuestCombatOutcomeAttemptError::none &&
+            wrong_target.found &&
+            wrong_target.outcome == tgd::contracts::stable_content_key(
+                                        "f1_outcome_break_flower_turn_target"
+                                    ) &&
+            wrong_target.objective == training.objectives[12].key &&
+            wrong_target.disposition ==
+                QuestCombatOutcomeAttemptDisposition::wrong_target,
+        "an accepted attack on another authored hostile reports the adjacent proof target mismatch"
+    );
+    ok &= expect(
+        repeated_wrong_target.error == wrong_target.error &&
+            repeated_wrong_target.found == wrong_target.found &&
+            repeated_wrong_target.outcome == wrong_target.outcome &&
+            repeated_wrong_target.objective == wrong_target.objective &&
+            repeated_wrong_target.disposition == wrong_target.disposition,
+        "repeating the same wrong-target attempt returns the same result"
+    );
+    const auto reward_after_wrong_target = rewards.resolve(quest);
+    ok &= expect(
+        quest.snapshot().tick == attempt_before.tick &&
+            quest.snapshot().checksum == attempt_before.checksum &&
+            quest.snapshot().completed_total == attempt_before.completed_total &&
+            quest.snapshot().selection_count == attempt_before.selection_count &&
+            combat_actor_snapshots_equal(actors, actors_before) &&
+            reward_before.found == reward_after_wrong_target.found &&
+            reward_before.reward == reward_after_wrong_target.reward &&
+            reward_before.reward_dedup_key == reward_after_wrong_target.reward_dedup_key,
+        "repeated wrong-target evidence changes no Quest, Combat, or reward state"
+    );
+
+    auto correct_target_event = wrong_target_event;
+    correct_target_event.target = 109;
+    const auto correct_target = attempts.evaluate_attempt(
+        flower_heavy,
+        correct_target_event,
+        actors,
+        quest
+    );
+    ok &= expect(
+        correct_target.error == QuestCombatOutcomeAttemptError::none &&
+            correct_target.found && correct_target.outcome == wrong_target.outcome &&
+            correct_target.objective == wrong_target.objective &&
+            correct_target.disposition ==
+                QuestCombatOutcomeAttemptDisposition::target_matches_pending &&
+            quest.objective_state(correct_target.objective) == QuestObjectiveState::active &&
+            !outcomes.resolve(actors, quest).found,
+        "a matching active target remains pending until the existing outcome resolver sees defeat"
+    );
+    ok &= expect(
+        quest.snapshot().checksum == attempt_before.checksum &&
+            combat_actor_snapshots_equal(actors, actors_before),
+        "correct-target attempt evidence is also a pure read"
+    );
+
+    auto defeated_target = actors;
+    const auto flower_target = std::find_if(
+        defeated_target.begin(),
+        defeated_target.end(),
+        [](const tgd::contracts::CombatActorSnapshot& actor) {
+            return actor.actor == 109;
+        }
+    );
+    if (flower_target == defeated_target.end()) {
+        return false;
+    }
+    flower_target->resources.health = 0;
+    flower_target->active = false;
+    flower_target->defeated = true;
+    const auto completed_outcome = outcomes.resolve(defeated_target, quest);
+    ok &= expect(
+        completed_outcome.error == QuestCombatOutcomeError::none &&
+            completed_outcome.found && completed_outcome.outcome == correct_target.outcome,
+        "only the existing combat outcome resolver reports the defeated proof target"
+    );
+    ok &= expect(
+        quest.objective_state(correct_target.objective) == QuestObjectiveState::active,
+        "reporting a satisfied outcome still requires an explicit Quest command to progress"
+    );
+
+    ok &= expect(
+        attempts.evaluate_attempt({}, wrong_target_event, actors, quest).error ==
+            QuestCombatOutcomeAttemptError::invalid_signal,
+        "missing accepted trigger results fail closed"
+    );
+    auto mismatched_result = flower_heavy;
+    mismatched_result.objective = training.objectives[10].key;
+    ok &= expect(
+        attempts.evaluate_attempt(mismatched_result, wrong_target_event, actors, quest).error ==
+            QuestCombatOutcomeAttemptError::invalid_signal,
+        "trigger IDs cannot be paired with a different objective"
+    );
+    auto rejected_result = flower_heavy;
+    rejected_result.error = QuestCombatTriggerError::invalid_signal;
+    ok &= expect(
+        attempts.evaluate_attempt(rejected_result, wrong_target_event, actors, quest).error ==
+            QuestCombatOutcomeAttemptError::invalid_signal,
+        "a rejected trigger result cannot be presented as accepted history"
+    );
+
+    auto wrong_kind_event = wrong_target_event;
+    wrong_kind_event.type = tgd::contracts::CombatEventType::hit_guarded;
+    auto wrong_source_event = wrong_target_event;
+    wrong_source_event.source = 104;
+    auto wrong_ability_event = wrong_target_event;
+    wrong_ability_event.ability =
+        tgd::contracts::stable_content_key("ability_flower_light");
+    auto zero_target_event = wrong_target_event;
+    zero_target_event.target = 0;
+    ok &= expect(
+        attempts.evaluate_attempt(flower_heavy, wrong_kind_event, actors, quest).error ==
+                QuestCombatOutcomeAttemptError::invalid_signal &&
+            attempts.evaluate_attempt(flower_heavy, wrong_source_event, actors, quest).error ==
+                QuestCombatOutcomeAttemptError::invalid_signal &&
+            attempts.evaluate_attempt(flower_heavy, wrong_ability_event, actors, quest).error ==
+                QuestCombatOutcomeAttemptError::invalid_signal &&
+            attempts.evaluate_attempt(flower_heavy, zero_target_event, actors, quest).error ==
+                QuestCombatOutcomeAttemptError::invalid_signal,
+        "event kind, source, ability, and candidate target must match the accepted trigger"
+    );
+
+    auto unknown_target_event = wrong_target_event;
+    unknown_target_event.target = 999'999;
+    auto unauthorized_actors = actors;
+    auto unauthorized_actor = actors.front();
+    unauthorized_actor.actor = unknown_target_event.target;
+    unauthorized_actor.archetype = tgd::contracts::stable_content_key(
+        "f1_training_flower_turn_rig"
+    );
+    unauthorized_actor.faction = tgd::contracts::CombatFaction::hostile;
+    unauthorized_actor.active = true;
+    unauthorized_actor.defeated = false;
+    unauthorized_actors.push_back(unauthorized_actor);
+    ok &= expect(
+        attempts.evaluate_attempt(flower_heavy, unknown_target_event, actors, quest).error ==
+                QuestCombatOutcomeAttemptError::invalid_actor_snapshot &&
+            attempts
+                    .evaluate_attempt(
+                        flower_heavy,
+                        unknown_target_event,
+                        unauthorized_actors,
+                        quest
+                    )
+                    .error == QuestCombatOutcomeAttemptError::invalid_actor_snapshot,
+        "missing and unauthorised target actors fail closed"
+    );
+
+    auto invalid_target_actors = actors;
+    const auto invalid_target = std::find_if(
+        invalid_target_actors.begin(),
+        invalid_target_actors.end(),
+        [](const tgd::contracts::CombatActorSnapshot& actor) {
+            return actor.actor == 108;
+        }
+    );
+    if (invalid_target == invalid_target_actors.end()) {
+        return false;
+    }
+    invalid_target->resources.health = 0;
+    invalid_target->active = false;
+    invalid_target->defeated = true;
+    auto wrong_faction_actors = actors;
+    const auto wrong_faction_target = std::find_if(
+        wrong_faction_actors.begin(),
+        wrong_faction_actors.end(),
+        [](const tgd::contracts::CombatActorSnapshot& actor) {
+            return actor.actor == 108;
+        }
+    );
+    if (wrong_faction_target == wrong_faction_actors.end()) {
+        return false;
+    }
+    wrong_faction_target->faction = tgd::contracts::CombatFaction::player;
+    auto duplicate_target_actors = actors;
+    duplicate_target_actors.push_back(*std::find_if(
+        actors.begin(),
+        actors.end(),
+        [](const tgd::contracts::CombatActorSnapshot& actor) {
+            return actor.actor == 108;
+        }
+    ));
+    ok &= expect(
+        attempts
+                .evaluate_attempt(
+                    flower_heavy,
+                    wrong_target_event,
+                    invalid_target_actors,
+                    quest
+                )
+                .error == QuestCombatOutcomeAttemptError::invalid_actor_snapshot &&
+            attempts
+                    .evaluate_attempt(
+                        flower_heavy,
+                        wrong_target_event,
+                        wrong_faction_actors,
+                        quest
+                    )
+                    .error == QuestCombatOutcomeAttemptError::invalid_actor_snapshot &&
+            attempts
+                    .evaluate_attempt(
+                        flower_heavy,
+                        wrong_target_event,
+                        duplicate_target_actors,
+                        quest
+                    )
+                    .error == QuestCombatOutcomeAttemptError::invalid_actor_snapshot,
+        "inactive, defeated, wrong-faction, and duplicate target snapshots fail closed"
+    );
+
+    auto other_definition = definition();
+    other_definition.id = tgd::contracts::content_id("other_quest_definition");
+    DeterministicQuestRuntime other_quest;
+    ok &= other_quest.initialize(other_definition, other_definition.player.actor) ==
+          QuestError::none;
+    ok &= other_quest.start() == QuestError::none;
+    ok &= expect(
+        attempts.evaluate_attempt(flower_heavy, wrong_target_event, actors, other_quest).error ==
+            QuestCombatOutcomeAttemptError::invalid_quest_context,
+        "accepted trigger evidence cannot be replayed against another quest definition"
+    );
+
+    auto invalid_outcomes = std::vector<tgd::contracts::QuestCombatOutcomeDefinition>{
+        definition().quest_combat_outcomes.begin(),
+        definition().quest_combat_outcomes.end(),
+    };
+    invalid_outcomes.front().objective_id =
+        tgd::contracts::content_id("unknown_outcome_attempt_objective");
+    auto invalid_definition = definition();
+    invalid_definition.quest_combat_outcomes = invalid_outcomes;
+    DeterministicQuestCombatOutcomeAttemptResolver retryable;
+    ok &= expect(
+        retryable.initialize(invalid_definition) ==
+                QuestCombatOutcomeAttemptError::invalid_definition &&
+            retryable.initialize(definition()) == QuestCombatOutcomeAttemptError::none,
+        "invalid cross-references fail initialization without leaving partial state"
+    );
+    ok &= expect(
+        quest.snapshot().checksum == attempt_before.checksum &&
+            combat_actor_snapshots_equal(actors, actors_before),
+        "all negative attempt queries leave the last valid Quest and Combat snapshots intact"
+    );
+    return ok;
+}
+
 bool test_hostile_group_outcomes_unlock_lane_choice() {
     DeterministicQuestRuntime quest;
     DeterministicQuestCombatTriggerResolver triggers;
@@ -2476,6 +2951,7 @@ int main() {
     ok &= test_scene_interaction_ties_are_stable();
     ok &= test_scene_interaction_selection_gates_follow_lane_route();
     ok &= test_combat_signals_resolve_training_objectives();
+    ok &= test_combat_outcome_attempts_are_target_specific_and_read_only();
     ok &= test_hostile_group_outcomes_unlock_lane_choice();
     ok &= test_return_calibration_combat_trigger_follows_choice();
     ok &= test_four_seasons_boss_phases_are_ordered();

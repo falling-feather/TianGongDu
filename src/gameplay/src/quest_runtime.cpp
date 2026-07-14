@@ -166,6 +166,54 @@ void hash_integer(std::uint64_t& hash, Integer value) noexcept {
     return matches == 1;
 }
 
+[[nodiscard]] bool hostile_actor_is_authored(
+    const contracts::VerticalSliceDefinition& definition,
+    contracts::StableActorKey actor
+) noexcept {
+    if (actor == 0 || actor == definition.player.actor) {
+        return false;
+    }
+    for (const auto& activation : definition.quest_encounter_activations) {
+        if (std::find(activation.actor_keys.begin(), activation.actor_keys.end(), actor) !=
+            activation.actor_keys.end()) {
+            return true;
+        }
+    }
+    return std::any_of(
+        definition.quest_boss_phases.begin(),
+        definition.quest_boss_phases.end(),
+        [actor](const contracts::QuestBossPhaseDefinition& phase) {
+            return phase.actor == actor;
+        }
+    );
+}
+
+[[nodiscard]] bool event_matches_trigger(
+    const contracts::VerticalSliceDefinition& definition,
+    const contracts::QuestCombatTriggerDefinition& trigger,
+    const contracts::CombatEvent& event
+) noexcept {
+    switch (trigger.kind) {
+        case contracts::QuestCombatTriggerKind::player_ability_started:
+            return event.type == contracts::CombatEventType::ability_started &&
+                   event.source == definition.player.actor &&
+                   event.ability == trigger.required_ability;
+        case contracts::QuestCombatTriggerKind::player_stance_changed:
+            return event.type == contracts::CombatEventType::stance_changed &&
+                   event.source == definition.player.actor && event.target == 0 &&
+                   event.ability == trigger.required_stance;
+        case contracts::QuestCombatTriggerKind::player_hit_guarded:
+            return event.type == contracts::CombatEventType::hit_guarded &&
+                   hostile_actor_is_authored(definition, event.source) &&
+                   event.target == definition.player.actor;
+        case contracts::QuestCombatTriggerKind::player_hit_evaded:
+            return event.type == contracts::CombatEventType::hit_evaded &&
+                   hostile_actor_is_authored(definition, event.source) &&
+                   event.target == definition.player.actor;
+    }
+    return false;
+}
+
 }  // namespace
 
 QuestInteractionError DeterministicQuestInteractionResolver::initialize(
@@ -610,6 +658,197 @@ QuestCombatOutcomeResult DeterministicQuestCombatOutcomeResolver::resolve(
             result.objective = definition.objective_id.key;
         }
     }
+    return result;
+}
+
+QuestCombatOutcomeAttemptError DeterministicQuestCombatOutcomeAttemptResolver::initialize(
+    const contracts::VerticalSliceDefinition& definition
+) noexcept {
+    if (definition_ != nullptr) {
+        return QuestCombatOutcomeAttemptError::invalid_lifecycle;
+    }
+    if (definition.id.key == 0 || definition.player.actor == 0 ||
+        definition.beats.empty() ||
+        definition.beats.size() > DeterministicQuestRuntime::stage_capacity) {
+        return QuestCombatOutcomeAttemptError::invalid_definition;
+    }
+
+    std::array<contracts::StableContentKey, DeterministicQuestRuntime::objective_capacity>
+        objectives{};
+    std::array<contracts::StableContentKey, DeterministicQuestRuntime::stage_capacity>
+        beats{};
+    std::size_t objective_count = 0;
+    for (std::size_t beat_index = 0; beat_index < definition.beats.size(); ++beat_index) {
+        const auto& beat = definition.beats[beat_index];
+        if (beat.id.key == 0 || beat.objectives.empty() ||
+            std::find(beats.begin(), beats.begin() + beat_index, beat.id.key) !=
+                beats.begin() + beat_index ||
+            beat.objectives.size() > objectives.size() - objective_count) {
+            return QuestCombatOutcomeAttemptError::invalid_definition;
+        }
+        beats[beat_index] = beat.id.key;
+        for (const auto& objective : beat.objectives) {
+            if (objective.key == 0 ||
+                std::find(
+                    objectives.begin(),
+                    objectives.begin() + objective_count,
+                    objective.key
+                ) != objectives.begin() + objective_count) {
+                return QuestCombatOutcomeAttemptError::invalid_definition;
+            }
+            objectives[objective_count++] = objective.key;
+        }
+    }
+
+    DeterministicQuestCombatTriggerResolver trigger_validator;
+    DeterministicQuestCombatOutcomeResolver outcome_validator;
+    if (trigger_validator.initialize(definition.quest_combat_triggers) !=
+            QuestCombatTriggerError::none ||
+        outcome_validator.initialize(definition.quest_combat_outcomes) !=
+            QuestCombatOutcomeError::none) {
+        return QuestCombatOutcomeAttemptError::invalid_definition;
+    }
+    for (const auto& trigger : definition.quest_combat_triggers) {
+        if (!definition_owns_objective_once(definition, trigger.objective_id.key) ||
+            (trigger.required_selection_objective_id.key != 0 &&
+             !definition_owns_objective_once(
+                 definition,
+                 trigger.required_selection_objective_id.key
+             ))) {
+            return QuestCombatOutcomeAttemptError::invalid_definition;
+        }
+        for (const auto& prerequisite : trigger.prerequisite_objectives) {
+            if (!definition_owns_objective_once(definition, prerequisite.key)) {
+                return QuestCombatOutcomeAttemptError::invalid_definition;
+            }
+        }
+    }
+    for (const auto& outcome : definition.quest_combat_outcomes) {
+        if (!definition_owns_objective_once(definition, outcome.objective_id.key)) {
+            return QuestCombatOutcomeAttemptError::invalid_definition;
+        }
+    }
+
+    definition_ = &definition;
+    return QuestCombatOutcomeAttemptError::none;
+}
+
+QuestCombatOutcomeAttemptResult
+DeterministicQuestCombatOutcomeAttemptResolver::evaluate_attempt(
+    const QuestCombatTriggerResult& accepted_trigger,
+    const contracts::CombatEvent& event,
+    std::span<const contracts::CombatActorSnapshot> actors,
+    const IQuestRuntime& quest
+) const noexcept {
+    QuestCombatOutcomeAttemptResult result{};
+    if (definition_ == nullptr) {
+        result.error = QuestCombatOutcomeAttemptError::invalid_lifecycle;
+        return result;
+    }
+    if (accepted_trigger.error != QuestCombatTriggerError::none ||
+        !accepted_trigger.found || accepted_trigger.trigger == 0 ||
+        accepted_trigger.objective == 0) {
+        result.error = QuestCombatOutcomeAttemptError::invalid_signal;
+        return result;
+    }
+
+    const auto trigger = std::find_if(
+        definition_->quest_combat_triggers.begin(),
+        definition_->quest_combat_triggers.end(),
+        [&accepted_trigger](const contracts::QuestCombatTriggerDefinition& candidate) {
+            return candidate.id.key == accepted_trigger.trigger;
+        }
+    );
+    if (trigger == definition_->quest_combat_triggers.end() ||
+        trigger->objective_id.key != accepted_trigger.objective ||
+        !event_matches_trigger(*definition_, *trigger, event)) {
+        result.error = QuestCombatOutcomeAttemptError::invalid_signal;
+        return result;
+    }
+
+    const auto& snapshot = quest.snapshot();
+    if (snapshot.quest != definition_->id.key || snapshot.stage == 0 ||
+        snapshot.stage_count != definition_->beats.size() ||
+        snapshot.stage_index >= definition_->beats.size() ||
+        definition_->beats[snapshot.stage_index].id.key != snapshot.stage) {
+        result.error = QuestCombatOutcomeAttemptError::invalid_quest_context;
+        return result;
+    }
+    const auto& current_beat = definition_->beats[snapshot.stage_index];
+    const auto trigger_objective = std::find_if(
+        current_beat.objectives.begin(),
+        current_beat.objectives.end(),
+        [&accepted_trigger](const contracts::ContentId& objective) {
+            return objective.key == accepted_trigger.objective;
+        }
+    );
+    if (trigger_objective == current_beat.objectives.end()) {
+        result.error = QuestCombatOutcomeAttemptError::invalid_quest_context;
+        return result;
+    }
+    const auto trigger_state = quest.objective_state(accepted_trigger.objective);
+    if (trigger_state == QuestObjectiveState::unknown) {
+        result.error = QuestCombatOutcomeAttemptError::invalid_quest_context;
+        return result;
+    }
+    if (trigger_state != QuestObjectiveState::completed) {
+        result.error = QuestCombatOutcomeAttemptError::invalid_signal;
+        return result;
+    }
+
+    const auto next_objective = trigger_objective + 1;
+    if (next_objective == current_beat.objectives.end()) {
+        return result;
+    }
+    const auto outcome = std::find_if(
+        definition_->quest_combat_outcomes.begin(),
+        definition_->quest_combat_outcomes.end(),
+        [next_objective](const contracts::QuestCombatOutcomeDefinition& candidate) {
+            return candidate.objective_id.key == next_objective->key;
+        }
+    );
+    if (outcome == definition_->quest_combat_outcomes.end() ||
+        outcome->kind != contracts::QuestCombatOutcomeKind::hostile_archetype_defeated) {
+        return result;
+    }
+    const auto outcome_state = quest.objective_state(outcome->objective_id.key);
+    if (outcome_state == QuestObjectiveState::unknown) {
+        result.error = QuestCombatOutcomeAttemptError::invalid_quest_context;
+        return result;
+    }
+    if (outcome_state != QuestObjectiveState::active) {
+        return result;
+    }
+    if (event.target == 0) {
+        result.error = QuestCombatOutcomeAttemptError::invalid_signal;
+        return result;
+    }
+
+    const contracts::CombatActorSnapshot* target = nullptr;
+    for (const auto& actor : actors) {
+        if (actor.actor != event.target) {
+            continue;
+        }
+        if (target != nullptr) {
+            result.error = QuestCombatOutcomeAttemptError::invalid_actor_snapshot;
+            return result;
+        }
+        target = &actor;
+    }
+    if (target == nullptr || target->archetype == 0 ||
+        !hostile_actor_is_authored(*definition_, target->actor) ||
+        target->faction != contracts::CombatFaction::hostile || !target->active ||
+        target->defeated || target->resources.health <= 0) {
+        result.error = QuestCombatOutcomeAttemptError::invalid_actor_snapshot;
+        return result;
+    }
+
+    result.found = true;
+    result.outcome = outcome->id.key;
+    result.objective = outcome->objective_id.key;
+    result.disposition = target->archetype == outcome->archetype_id.key
+                             ? QuestCombatOutcomeAttemptDisposition::target_matches_pending
+                             : QuestCombatOutcomeAttemptDisposition::wrong_target;
     return result;
 }
 

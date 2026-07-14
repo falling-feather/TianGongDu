@@ -206,6 +206,49 @@ class DeterministicQuestCombatOutcomeResolver final {
     bool initialized_{};
 };
 
+enum class QuestCombatOutcomeAttemptError : std::uint8_t {
+    none,
+    invalid_lifecycle,
+    invalid_definition,
+    invalid_signal,
+    invalid_actor_snapshot,
+    invalid_quest_context,
+};
+
+enum class QuestCombatOutcomeAttemptDisposition : std::uint8_t {
+    no_candidate,
+    target_matches_pending,
+    wrong_target,
+};
+
+struct QuestCombatOutcomeAttemptResult final {
+    QuestCombatOutcomeAttemptError error{QuestCombatOutcomeAttemptError::none};
+    bool found{};
+    contracts::StableContentKey outcome{};
+    contracts::StableContentKey objective{};
+    QuestCombatOutcomeAttemptDisposition disposition{
+        QuestCombatOutcomeAttemptDisposition::no_candidate
+    };
+};
+
+class DeterministicQuestCombatOutcomeAttemptResolver final {
+  public:
+    // The full Definition owns adjacency and authored hostile identity. Evaluation is a
+    // pure read: only DeterministicQuestCombatOutcomeResolver may report completion.
+    [[nodiscard]] QuestCombatOutcomeAttemptError initialize(
+        const contracts::VerticalSliceDefinition& definition
+    ) noexcept;
+    [[nodiscard]] QuestCombatOutcomeAttemptResult evaluate_attempt(
+        const QuestCombatTriggerResult& accepted_trigger,
+        const contracts::CombatEvent& event,
+        std::span<const contracts::CombatActorSnapshot> actors,
+        const IQuestRuntime& quest
+    ) const noexcept;
+
+  private:
+    const contracts::VerticalSliceDefinition* definition_{};
+};
+
 enum class QuestBossPhaseError : std::uint8_t {
     none,
     invalid_lifecycle,

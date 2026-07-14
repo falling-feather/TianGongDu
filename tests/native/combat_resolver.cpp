@@ -562,6 +562,96 @@ bool test_authored_group_activation_isolates_hostiles() {
     return ok;
 }
 
+bool test_multi_actor_reinforcement_is_atomic() {
+    DeterministicCombatResolver resolver;
+    CollectingSink sink;
+    const auto base = actors();
+    std::array<tgd::contracts::CombatActorConfig, 5> actor_configs{
+        base[0],
+        base[1],
+        base[1],
+        base[1],
+        base[1],
+    };
+    actor_configs[2].actor = 3;
+    actor_configs[2].archetype_id = tgd::contracts::content_id("enemy_reinforcement_a");
+    actor_configs[2].initially_active = false;
+    actor_configs[3].actor = 4;
+    actor_configs[3].archetype_id = tgd::contracts::content_id("enemy_reinforcement_b");
+    actor_configs[3].initially_active = false;
+    actor_configs[4].actor = 5;
+    actor_configs[4].archetype_id = tgd::contracts::content_id("enemy_reinforcement_reserve");
+    actor_configs[4].initially_active = false;
+
+    bool ok = resolver.initialize(actor_configs, abilities()) == CombatError::none;
+    ok &= resolver.start() == CombatError::none;
+    sink.clear();
+    const auto checksum_before_invalid = resolver.checksum();
+    const std::array<tgd::contracts::EncounterActorPlacementDefinition, 2> invalid_batch{{
+        {3, {3'000, 1'200, 0, 0}, 6},
+        {2, {-3'000, -1'200, 0, 0}, 8},
+    }};
+    const tgd::contracts::EncounterActivationCommand reinforce{
+        0,
+        1,
+        1,
+        tgd::contracts::EncounterActivationMode::reinforce,
+    };
+    ok &= expect(
+        resolver.activate_group(reinforce, invalid_batch, sink) ==
+            CombatError::activation_not_allowed,
+        "a multi-actor reinforcement rejects the whole batch when a later actor is active"
+    );
+    ok &= expect(
+        resolver.checksum() == checksum_before_invalid && !resolver.actors()[2].active &&
+            !resolver.actors()[2].defeated &&
+            resolver.actors()[2].resources == actor_configs[2].initial_resources &&
+            sink.values.empty(),
+        "a rejected reinforcement does not partially activate an earlier actor"
+    );
+
+    const auto player_before = resolver.actors()[0];
+    const auto active_hostile_before = resolver.actors()[1];
+    const std::array<tgd::contracts::EncounterActorPlacementDefinition, 2> valid_batch{{
+        {3, {3'000, 1'200, 0, 0}, 6},
+        {4, {-3'000, -1'200, 0, 0}, 8},
+    }};
+    ok &= expect(
+        resolver.activate_group(reinforce, valid_batch, sink) == CombatError::none,
+        "two dormant actors can reinforce one encounter in a single boundary"
+    );
+    const auto snapshots = resolver.actors();
+    ok &= expect(
+        snapshots[0].pose == player_before.pose &&
+            snapshots[0].resources == player_before.resources &&
+            snapshots[0].active == player_before.active &&
+            snapshots[1].pose == active_hostile_before.pose &&
+            snapshots[1].resources == active_hostile_before.resources &&
+            snapshots[1].active == active_hostile_before.active && snapshots[2].active &&
+            !snapshots[2].defeated && snapshots[2].pose == valid_batch[0].pose &&
+            snapshots[2].resources == actor_configs[2].initial_resources &&
+            snapshots[3].active && !snapshots[3].defeated &&
+            snapshots[3].pose == valid_batch[1].pose &&
+            snapshots[3].resources == actor_configs[3].initial_resources &&
+            !snapshots[4].active && !snapshots[4].defeated &&
+            snapshots[4].resources == actor_configs[4].initial_resources &&
+            sink.count(CombatEventType::encounter_reinforced) == 1,
+        "multi-actor reinforcement restores only the authored actors and emits one group event"
+    );
+    const auto checksum_after_commit = resolver.checksum();
+    ok &= expect(
+        resolver.activate_group(reinforce, valid_batch, sink) ==
+            CombatError::stale_activation_sequence,
+        "replaying a committed reinforcement boundary is rejected"
+    );
+    ok &= expect(
+        resolver.checksum() == checksum_after_commit &&
+            sink.count(CombatEventType::encounter_reinforced) == 1,
+        "a replayed reinforcement cannot mutate actors or emit a second group event"
+    );
+    return ok;
+}
+
 bool test_defeat_cancels_pending_ability() {
     DeterministicCombatResolver resolver;
     CollectingSink sink;
@@ -602,6 +692,7 @@ int main() {
     ok &= test_delayed_resource_recovery();
     ok &= test_defeat_retry_restores_initial_encounter();
     ok &= test_authored_group_activation_isolates_hostiles();
+    ok &= test_multi_actor_reinforcement_is_atomic();
     ok &= test_defeat_cancels_pending_ability();
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

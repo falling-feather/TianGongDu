@@ -335,6 +335,147 @@ bool test_retry_resets_director_boundary() {
     return ok;
 }
 
+bool test_multi_actor_reinforcement_is_atomic() {
+    const auto base = actors();
+    std::array<tgd::contracts::CombatActorConfig, 5> actor_configs{
+        base[0],
+        base[1],
+        base[2],
+        base[1],
+        base[1],
+    };
+    actor_configs[2].initially_active = false;
+    actor_configs[3].actor = 4;
+    actor_configs[3].archetype_id = tgd::contracts::content_id("actor_test_hostile_b");
+    actor_configs[3].initial_pose = {-4'200, -300, 0, 0};
+    actor_configs[3].initially_active = false;
+    actor_configs[4].actor = 5;
+    actor_configs[4].archetype_id = tgd::contracts::content_id("actor_test_hostile_reserve");
+    actor_configs[4].initial_pose = {4'400, 600, 0, 0};
+    actor_configs[4].initially_active = false;
+
+    DeterministicEncounterDirector director;
+    bool ok = director.initialize(director_definition(), actor_configs, abilities()) ==
+              EncounterDirectorError::none;
+    std::array<tgd::contracts::CombatActorSnapshot, 5> snapshots{{
+        {1,
+         actor_configs[0].archetype_id.key,
+         tgd::contracts::CombatFaction::player,
+         actor_configs[0].initial_pose,
+         actor_configs[0].initial_resources,
+         player_stance,
+         0,
+         false,
+         true},
+        {2,
+         actor_configs[1].archetype_id.key,
+         tgd::contracts::CombatFaction::hostile,
+         actor_configs[1].initial_pose,
+         actor_configs[1].initial_resources,
+         hostile_stance,
+         0,
+         false,
+         true},
+        {3,
+         actor_configs[2].archetype_id.key,
+         tgd::contracts::CombatFaction::hostile,
+         actor_configs[2].initial_pose,
+         actor_configs[2].initial_resources,
+         hostile_stance,
+         0,
+         false,
+         false},
+        {4,
+         actor_configs[3].archetype_id.key,
+         tgd::contracts::CombatFaction::hostile,
+         actor_configs[3].initial_pose,
+         actor_configs[3].initial_resources,
+         hostile_stance,
+         0,
+         false,
+         false},
+        {5,
+         actor_configs[4].archetype_id.key,
+         tgd::contracts::CombatFaction::hostile,
+         actor_configs[4].initial_pose,
+         actor_configs[4].initial_resources,
+         hostile_stance,
+         0,
+         false,
+         false},
+    }};
+    const tgd::contracts::EncounterActivationCommand reinforce{
+        0,
+        1,
+        1,
+        tgd::contracts::EncounterActivationMode::reinforce,
+    };
+    const auto checksum_before_invalid = director.checksum();
+    const std::array<tgd::contracts::EncounterActorPlacementDefinition, 2> invalid_batch{{
+        {3, {3'000, 1'500, 0, 0}, 6},
+        {2, {-3'000, -1'500, 0, 0}, 8},
+    }};
+    ok &= expect(
+        director.activate_group(reinforce, invalid_batch, snapshots) ==
+            EncounterDirectorError::activation_not_allowed,
+        "director rejects a whole reinforcement batch when a later actor is already active"
+    );
+    ok &= expect(
+        director.checksum() == checksum_before_invalid,
+        "a rejected reinforcement does not partially change an earlier hostile runtime"
+    );
+
+    const std::array<tgd::contracts::EncounterActorPlacementDefinition, 2> valid_batch{{
+        {3, {3'000, 1'500, 0, 0}, 6},
+        {4, {-3'000, -1'500, 0, 0}, 8},
+    }};
+    ok &= expect(
+        director.activate_group(reinforce, valid_batch, snapshots) ==
+            EncounterDirectorError::none,
+        "director accepts two dormant reinforcements in one monotonic boundary"
+    );
+    const auto checksum_after_commit = director.checksum();
+    ok &= expect(
+        checksum_after_commit != checksum_before_invalid,
+        "committed multi-actor reinforcement updates the director checksum once"
+    );
+    ok &= expect(
+        director.activate_group(reinforce, valid_batch, snapshots) ==
+            EncounterDirectorError::stale_activation_sequence,
+        "director rejects replay of a committed multi-actor reinforcement"
+    );
+    ok &= expect(
+        director.checksum() == checksum_after_commit,
+        "replayed reinforcement leaves the committed director runtime unchanged"
+    );
+
+    snapshots[2].pose = valid_batch[0].pose;
+    snapshots[2].active = true;
+    snapshots[3].pose = valid_batch[1].pose;
+    snapshots[3].active = true;
+    const auto plan = director.plan_tick(1, snapshots, 10);
+    ok &= expect(
+        plan.error == EncounterDirectorError::none,
+        "director plans the next tick after a multi-actor reinforcement"
+    );
+    const auto first_reinforcement = std::find_if(
+        plan.batch.poses().begin(),
+        plan.batch.poses().end(),
+        [](const auto& update) { return update.actor == 3; }
+    );
+    const auto second_reinforcement = std::find_if(
+        plan.batch.poses().begin(),
+        plan.batch.poses().end(),
+        [](const auto& update) { return update.actor == 4; }
+    );
+    ok &= expect(
+        first_reinforcement != plan.batch.poses().end() &&
+            second_reinforcement != plan.batch.poses().end(),
+        "both reinforced actors participate in the same deterministic encounter plan"
+    );
+    return ok;
+}
+
 }  // namespace
 
 int main() {
@@ -343,5 +484,6 @@ int main() {
     ok &= test_wrong_tick_and_leash_return();
     ok &= test_invalid_definition_fails_closed();
     ok &= test_retry_resets_director_boundary();
+    ok &= test_multi_actor_reinforcement_is_atomic();
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

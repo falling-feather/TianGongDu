@@ -227,8 +227,11 @@ bool test_same_commands_produce_same_composed_checksum() {
 
     const auto& first_beat = definition().beats.front();
     for (const auto& objective : first_beat.objectives) {
-        ok &= left.complete_objective(objective.key).error == VerticalSliceError::none;
-        ok &= right.complete_objective(objective.key).error == VerticalSliceError::none;
+        const auto selection = selection_for_objective(objective.key);
+        ok &= left.complete_objective(objective.key, selection).error ==
+              VerticalSliceError::none;
+        ok &= right.complete_objective(objective.key, selection).error ==
+              VerticalSliceError::none;
     }
     ok &= expect(
         left.current_snapshot().checksum == right.current_snapshot().checksum &&
@@ -253,12 +256,17 @@ bool test_retry_preserves_objective_progress() {
     ok &= session.complete_objective(definition().beats.front().objectives.front().key).error ==
           VerticalSliceError::none;
     for (std::size_t index = 1; index < definition().beats.front().objectives.size(); ++index) {
+        const auto objective = definition().beats.front().objectives[index].key;
         ok &= session.complete_objective(
-                  definition().beats.front().objectives[index].key
+                  objective,
+                  selection_for_objective(objective)
               ).error == VerticalSliceError::none;
     }
     for (const auto& objective : definition().beats[1].objectives) {
-        ok &= session.complete_objective(objective.key).error == VerticalSliceError::none;
+        ok &= session.complete_objective(
+                  objective.key,
+                  selection_for_objective(objective.key)
+              ).error == VerticalSliceError::none;
     }
     ok &= expect(
         session.current_snapshot().beat_index == 2 &&
@@ -437,7 +445,7 @@ bool test_objective_driven_encounter_activations_fail_closed() {
             definition().quest_encounter_activations.begin(),
             definition().quest_encounter_activations.end()
         );
-    stage_entry_reinforcement_activations[4].mode =
+    stage_entry_reinforcement_activations[6].mode =
         tgd::contracts::EncounterActivationMode::reinforce;
     stage_entry_reinforcement.quest_encounter_activations =
         stage_entry_reinforcement_activations;
@@ -456,7 +464,7 @@ bool test_objective_driven_encounter_activations_fail_closed() {
             definition().quest_encounter_activations.begin(),
             definition().quest_encounter_activations.end()
         );
-    half_selection_activations[5].required_selection_id = {};
+    half_selection_activations[9].required_selection_id = {};
     half_selection_gate.quest_encounter_activations = half_selection_activations;
     VerticalSliceSession half_selection_session;
     ok &= expect(
@@ -471,8 +479,8 @@ bool test_objective_driven_encounter_activations_fail_closed() {
             definition().quest_encounter_activations.begin(),
             definition().quest_encounter_activations.end()
         );
-    duplicate_selection_activations[6].required_selection_id =
-        duplicate_selection_activations[5].required_selection_id;
+    duplicate_selection_activations[10].required_selection_id =
+        duplicate_selection_activations[9].required_selection_id;
     duplicate_selection_gate.quest_encounter_activations =
         duplicate_selection_activations;
     VerticalSliceSession duplicate_selection_session;
@@ -490,7 +498,7 @@ bool test_objective_driven_encounter_activations_fail_closed() {
             definition().quest_encounter_activations.begin(),
             definition().quest_encounter_activations.end()
         );
-    incomplete_selection_activations.erase(incomplete_selection_activations.begin() + 6);
+    incomplete_selection_activations.erase(incomplete_selection_activations.begin() + 10);
     incomplete_selection_gate.quest_encounter_activations =
         incomplete_selection_activations;
     VerticalSliceSession incomplete_selection_session;
@@ -509,11 +517,11 @@ bool test_objective_driven_encounter_activations_fail_closed() {
             definition().quest_encounter_activations.end()
         );
     std::vector<tgd::contracts::EncounterActorPlacementDefinition> mismatched_placements(
-        mismatched_activations[2].actor_placements.begin(),
-        mismatched_activations[2].actor_placements.end()
+        mismatched_activations[6].actor_placements.begin(),
+        mismatched_activations[6].actor_placements.end()
     );
-    mismatched_placements[0].actor = mismatched_activations[3].actor_keys.front();
-    mismatched_activations[2].actor_placements = mismatched_placements;
+    mismatched_placements[0].actor = mismatched_activations[7].actor_keys.front();
+    mismatched_activations[6].actor_placements = mismatched_placements;
     mismatched_placement.quest_encounter_activations = mismatched_activations;
     VerticalSliceSession mismatched_session;
     ok &= expect(
@@ -528,11 +536,11 @@ bool test_objective_driven_encounter_activations_fail_closed() {
         definition().quest_encounter_activations.end()
     );
     std::vector<tgd::contracts::EncounterActorPlacementDefinition> overlapping_placements(
-        overlapping_activations[2].actor_placements.begin(),
-        overlapping_activations[2].actor_placements.end()
+        overlapping_activations[6].actor_placements.begin(),
+        overlapping_activations[6].actor_placements.end()
     );
     overlapping_placements[1].formation_slot = overlapping_placements[0].formation_slot;
-    overlapping_activations[2].actor_placements = overlapping_placements;
+    overlapping_activations[6].actor_placements = overlapping_placements;
     overlapping_slots.quest_encounter_activations = overlapping_activations;
     VerticalSliceSession overlapping_session;
     ok &= expect(

@@ -74,38 +74,39 @@ int main() {
         "every beat owns an ordered content-driven movement safe point"
     );
     ok &= expect(
-        definition->quest_interactions.size() == 23 &&
+        definition->quest_interactions.size() == 41 &&
             definition->quest_interactions.front().objective_id.key ==
                 tgd::contracts::stable_content_key("f1_objective_inspect_travel_writ"),
         "the expanded opening scene interactions are generated content, not presentation rules"
     );
     ok &= expect(
-        definition->quest_combat_triggers.size() == 7 &&
+        definition->quest_combat_triggers.size() == 8 &&
             definition->quest_combat_triggers.front().required_stance ==
                 tgd::contracts::stable_content_key("stance_eavesguard") &&
-            definition->quest_combat_triggers.front().required_ability ==
+            definition->quest_combat_triggers.front().required_ability == 0 &&
+            definition->quest_combat_triggers[1].required_ability ==
                 tgd::contracts::stable_content_key("ability_eavesguard_heavy") &&
             definition->quest_combat_triggers.front().prerequisite_objectives.size() == 1 &&
             definition->quest_combat_triggers.front().prerequisite_objectives.front().key ==
-                tgd::contracts::stable_content_key("f1_objective_meet_shen_yan"),
-        "training actions and counters are generated combat-to-quest bindings"
+                tgd::contracts::stable_content_key("f1_objective_take_eavesguard_mark"),
+        "training guard, evade, and chained abilities are generated combat-to-quest bindings"
     );
     ok &= expect(
-        definition->quest_combat_triggers[5].objective_id.key ==
+        definition->quest_combat_triggers[6].objective_id.key ==
                 tgd::contracts::stable_content_key(
                     "f1_objective_demonstrate_rib_calibration"
                 ) &&
-            definition->quest_combat_triggers[5].required_ability ==
+            definition->quest_combat_triggers[6].required_ability ==
                 tgd::contracts::stable_content_key("ability_eavesguard_heavy") &&
-            definition->quest_combat_triggers[5].required_selection_id.key ==
+            definition->quest_combat_triggers[6].required_selection_id.key ==
                 tgd::contracts::stable_content_key(
                     "f1_choice_rib_spring_calibration"
                 ) &&
-            definition->quest_combat_triggers[6].objective_id.key ==
-                definition->quest_combat_triggers[5].objective_id.key &&
-            definition->quest_combat_triggers[6].required_ability ==
+            definition->quest_combat_triggers[7].objective_id.key ==
+                definition->quest_combat_triggers[6].objective_id.key &&
+            definition->quest_combat_triggers[7].required_ability ==
                 tgd::contracts::stable_content_key("ability_flower_light") &&
-            definition->quest_combat_triggers[6].required_selection_id.key ==
+            definition->quest_combat_triggers[7].required_selection_id.key ==
                 tgd::contracts::stable_content_key(
                     "f1_choice_rib_winter_calibration"
                 ),
@@ -141,7 +142,7 @@ int main() {
             drain_route_interaction != definition->quest_interactions.end() &&
             canopy_route_interaction->prerequisite_objectives.size() == 5 &&
             drain_route_interaction->prerequisite_objectives.size() == 5 &&
-            definition->quest_combat_outcomes.size() == 3,
+            definition->quest_combat_outcomes.size() == 5,
         "two lane choices wait for combat and the ordered rainworks chain"
     );
     const auto route_evidence_count = std::count_if(
@@ -210,97 +211,48 @@ int main() {
                 ),
         "two resolutions gate the authored return and map to stable reward receipts"
     );
+    const auto training_beat =
+        tgd::contracts::stable_content_key("f1_beat_shen_yan_training");
+    const auto training_activation_count = std::count_if(
+        definition->quest_encounter_activations.begin(),
+        definition->quest_encounter_activations.end(),
+        [](const tgd::contracts::QuestEncounterActivationDefinition& activation) {
+            return activation.beat_id.key == training_beat;
+        }
+    );
     ok &= expect(
-        combat != nullptr && definition->quest_encounter_activations.size() == 8 &&
-            definition->quest_encounter_activations.front().beat_id.key ==
+        combat != nullptr && definition->quest_encounter_activations.size() == 12 &&
+            training_activation_count == 6 &&
+            definition->quest_encounter_activations[0].trigger_objective_id.key ==
+                tgd::contracts::stable_content_key("f1_objective_take_eavesguard_mark") &&
+            definition->quest_encounter_activations[0].required_selection_id.key ==
+                tgd::contracts::stable_content_key("f1_choice_training_windward_lane") &&
+            definition->quest_encounter_activations[1].required_selection_id.key ==
+                tgd::contracts::stable_content_key("f1_choice_training_leeward_lane") &&
+            definition->quest_encounter_activations[0].actor_keys.front() == 104 &&
+            definition->quest_encounter_activations[1].actor_keys.front() == 104 &&
+            definition->quest_encounter_activations[2].trigger_objective_id.key ==
+                tgd::contracts::stable_content_key("f1_objective_commit_eavesguard_heavy") &&
+            definition->quest_encounter_activations[2].actor_keys.front() == 107 &&
+            definition->quest_encounter_activations[3].actor_keys.front() == 107 &&
+            definition->quest_encounter_activations[4].trigger_objective_id.key ==
                 tgd::contracts::stable_content_key(
-                    "f1_beat_shen_yan_training"
+                    "f1_objective_review_eavesguard_with_shen_yan"
                 ) &&
-            definition->quest_encounter_activations.front().encounter_id.key ==
-                combat->id.key &&
-            definition->quest_encounter_activations.front().trigger_objective_id.key == 0 &&
-            definition->quest_encounter_activations.front().mode ==
-                tgd::contracts::EncounterActivationMode::replace &&
-            definition->quest_encounter_activations.front().actor_keys.size() == 1 &&
-            definition->quest_encounter_activations.front().actor_keys.front() == 104 &&
-            definition->quest_encounter_activations.front().actor_placements.size() == 1 &&
-            definition->quest_encounter_activations.front()
-                    .actor_placements.front()
-                    .formation_slot == 0 &&
-            definition->quest_encounter_activations[1].beat_id.key ==
-                tgd::contracts::stable_content_key(
-                    "f1_beat_shen_yan_training"
-                ) &&
-            definition->quest_encounter_activations[1].trigger_objective_id.key ==
-                tgd::contracts::stable_content_key(
-                    "f1_objective_eavesguard_counter"
-                ) &&
-            definition->quest_encounter_activations[1].mode ==
-                tgd::contracts::EncounterActivationMode::replace &&
-            definition->quest_encounter_activations[1].actor_keys.size() == 1 &&
-            definition->quest_encounter_activations[1].actor_keys.front() == 105 &&
-            definition->quest_encounter_activations[1]
-                    .actor_placements.front()
-                    .formation_slot == 2 &&
-            definition->quest_encounter_activations[2].beat_id.key ==
-                tgd::contracts::stable_content_key(
-                    "f1_beat_umbrella_lane_first_encounter"
-                ) &&
-            definition->quest_encounter_activations[2].actor_keys.size() == 2 &&
-            definition->quest_encounter_activations[2].actor_placements[0].formation_slot == 1 &&
-            definition->quest_encounter_activations[2].actor_placements[1].formation_slot == 5 &&
-            definition->quest_encounter_activations[3].trigger_objective_id.key ==
-                tgd::contracts::stable_content_key(
-                    "f1_objective_raise_paper_egret_lure"
-                ) &&
-            definition->quest_encounter_activations[3].mode ==
-                tgd::contracts::EncounterActivationMode::replace &&
-            definition->quest_encounter_activations[3].actor_keys.size() == 1 &&
-            definition->quest_encounter_activations[3].actor_keys.front() == 103 &&
-            definition->quest_encounter_activations[3]
-                    .actor_placements.front()
-                    .formation_slot == 2 &&
-            definition->quest_encounter_activations[4].beat_id.key ==
-                tgd::contracts::stable_content_key(
-                    "f1_beat_canopy_return_encounter"
-                ) &&
-            definition->quest_encounter_activations[4].actor_keys.size() == 3 &&
-            definition->quest_encounter_activations[4].actor_placements[0].pose ==
-                tgd::contracts::GroundPoseMm{-2500, -1800, 0, 0} &&
-            definition->quest_encounter_activations[4].actor_placements[1].formation_slot == 3 &&
-            definition->quest_encounter_activations[4].actor_placements[2].formation_slot == 6 &&
+            definition->quest_encounter_activations[4].actor_keys.front() == 108 &&
             definition->quest_encounter_activations[5].trigger_objective_id.key ==
-                tgd::contracts::stable_content_key(
-                    "f1_objective_prime_return_calibration"
-                ) &&
-            definition->quest_encounter_activations[5]
-                    .required_selection_objective_id.key ==
-                tgd::contracts::stable_content_key(
-                    "f1_objective_choose_rib_calibration"
-                ) &&
-            definition->quest_encounter_activations[5].required_selection_id.key ==
-                tgd::contracts::stable_content_key(
-                    "f1_choice_rib_spring_calibration"
-                ) &&
-            definition->quest_encounter_activations[5].mode ==
-                tgd::contracts::EncounterActivationMode::reinforce &&
-            definition->quest_encounter_activations[5].actor_keys.size() == 1 &&
-            definition->quest_encounter_activations[5].actor_keys[0] == 106 &&
-            definition->quest_encounter_activations[5]
-                    .actor_placements[0]
-                    .formation_slot == 5 &&
-            definition->quest_encounter_activations[6].required_selection_id.key ==
-                tgd::contracts::stable_content_key(
-                    "f1_choice_rib_winter_calibration"
-                ) &&
-            definition->quest_encounter_activations[6].mode ==
-                tgd::contracts::EncounterActivationMode::reinforce &&
-            definition->quest_encounter_activations[6].actor_keys.size() == 1 &&
-            definition->quest_encounter_activations[6].actor_keys[0] == 105 &&
-            definition->quest_encounter_activations[6]
-                    .actor_placements[0]
-                    .formation_slot == 5,
-        "training, lane waves, and both selection-driven return variants are generated content"
+                tgd::contracts::stable_content_key("f1_objective_commit_flower_turn_heavy") &&
+            definition->quest_encounter_activations[5].actor_keys.front() == 109 &&
+            definition->quest_encounter_activations[6].actor_keys.size() == 2 &&
+            definition->quest_encounter_activations[7].actor_keys.front() == 103 &&
+            definition->quest_encounter_activations[8].actor_keys.size() == 3 &&
+            definition->quest_encounter_activations[9].required_selection_id.key ==
+                tgd::contracts::stable_content_key("f1_choice_rib_spring_calibration") &&
+            definition->quest_encounter_activations[9].actor_keys.front() == 106 &&
+            definition->quest_encounter_activations[10].required_selection_id.key ==
+                tgd::contracts::stable_content_key("f1_choice_rib_winter_calibration") &&
+            definition->quest_encounter_activations[10].actor_keys.front() == 105,
+        "training lanes, proof targets, lane waves, and return variants are generated content"
     );
     ok &= expect(
         definition->quest_encounter_activations.back().beat_id.key ==
@@ -335,7 +287,7 @@ int main() {
 
     if (combat != nullptr) {
         ok &= expect(
-            combat->actors.size() == 8 && combat->abilities.size() == 17,
+            combat->actors.size() == 11 && combat->abilities.size() == 17,
             "the player, enemy groups, and four-season boss combat set is explicit"
         );
         ok &= expect(
@@ -348,6 +300,9 @@ int main() {
         bool found_player = false;
         bool found_training_umbrella = false;
         bool found_training_egret = false;
+        bool found_eavesguard_target = false;
+        bool found_flower_signal_rig = false;
+        bool found_flower_target = false;
         bool found_inactive_boss = false;
         bool all_hostiles_dormant = true;
         std::unordered_set<tgd::contracts::StableContentKey> ability_ids;
@@ -363,7 +318,8 @@ int main() {
                                        actor.initial_stance ==
                                            tgd::contracts::stable_content_key(
                                                "stance_umbrella_rust"
-                                           );
+                                           ) &&
+                                       actor.initial_resources.health == 999;
             found_training_egret |= actor.actor == 105 &&
                                     actor.archetype_id.key ==
                                         tgd::contracts::stable_content_key(
@@ -373,6 +329,24 @@ int main() {
                                         tgd::contracts::stable_content_key(
                                             "stance_paper_egret"
                                         );
+            found_eavesguard_target |= actor.actor == 107 &&
+                                        actor.archetype_id.key ==
+                                            tgd::contracts::stable_content_key(
+                                                "f1_training_eavesguard_target"
+                                            ) &&
+                                        actor.initial_resources.health == 120;
+            found_flower_signal_rig |= actor.actor == 108 &&
+                                       actor.archetype_id.key ==
+                                           tgd::contracts::stable_content_key(
+                                               "f1_training_flower_turn_rig"
+                                           ) &&
+                                       actor.initial_resources.health == 999;
+            found_flower_target |= actor.actor == 109 &&
+                                   actor.archetype_id.key ==
+                                       tgd::contracts::stable_content_key(
+                                           "f1_training_flower_turn_target"
+                                       ) &&
+                                   actor.initial_resources.health == 120;
             found_inactive_boss |= actor.actor == 201 &&
                                    actor.archetype_id.key == definition->boss_id.key &&
                                    actor.faction == tgd::contracts::CombatFaction::hostile &&
@@ -403,8 +377,10 @@ int main() {
         }
         ok &= expect(found_player, "combat and movement share the same player seed");
         ok &= expect(
-            found_training_umbrella && found_training_egret && all_hostiles_dormant,
-            "training rigs and future hostile groups start dormant until their authored beat"
+            found_training_umbrella && found_training_egret &&
+                found_eavesguard_target && found_flower_signal_rig &&
+                found_flower_target && all_hostiles_dormant,
+            "training safety rigs, proof targets, and future groups start dormant"
         );
         ok &= expect(found_inactive_boss, "the four-season boss starts inactive with four stances");
     }

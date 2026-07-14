@@ -56,6 +56,28 @@ const selectedSpringTracePose = laneRoute === "canopy"
 const hiddenSpringTracePose = laneRoute === "canopy"
   ? { x: -2_700, y: -1_700 }
   : { x: -3_900, y: -100 };
+const rainFerryBranch = laneRoute === "canopy"
+  ? {
+      clue: { x: -12_200, y: 900 },
+      condition: { x: -11_100, y: 1_700 },
+      mooringChoice: { x: -10_100, y: 1_200 },
+      mooringResolution: { x: -9_400, y: 1_900 }
+    }
+  : {
+      clue: { x: -10_900, y: -1_000 },
+      condition: { x: -10_700, y: -900 },
+      mooringChoice: { x: -10_000, y: -1_700 },
+      mooringResolution: { x: -9_200, y: -2_300 }
+    };
+const trainingBranch = laneRoute === "canopy"
+  ? {
+      choice: { x: -6_100, y: 1_600 },
+      mark: { x: -5_400, y: 1_900 }
+    }
+  : {
+      choice: { x: -6_000, y: -2_200 },
+      mark: { x: -5_200, y: -2_400 }
+    };
 const forceSoftwareGraphics =
   process.env.TGD_FORCE_SOFTWARE_WEBGL === "1" || process.env.CI === "true";
 
@@ -903,14 +925,14 @@ async function runBrowser(target, origin) {
 
     await canvas.focus();
     await page.waitForFunction(
-      () => window.__tgdTest?.getF1State()?.questRequiredObjectives === 6,
+      () => window.__tgdTest?.getF1State()?.questRequiredObjectives === 11,
       undefined,
       { timeout: 5_000 }
     );
     const openingQuestState = await page.evaluate(() => window.__tgdTest.getF1State());
     assert.equal(openingQuestState.questBeatIndex, 0);
     assert.equal(openingQuestState.questCompletedObjectives, 0);
-    assert.equal(openingQuestState.questRequiredObjectives, 6);
+    assert.equal(openingQuestState.questRequiredObjectives, 11);
     assert.equal(openingQuestState.activeHostiles, 0);
     await captureRenderedFrame(
       page,
@@ -939,10 +961,15 @@ async function runBrowser(target, origin) {
       ).toFixed(2)}% of the frame.`
     );
     const rainFerryReadiness = [
-      { x: -11_700, y: -1_300, completed: 2 },
-      { x: -11_400, y: -1_000, completed: 3 },
-      { x: -11_100, y: -700, completed: 4 },
-      { x: -10_800, y: -400, completed: 5 }
+      { ...rainFerryBranch.clue, completed: 2 },
+      { ...rainFerryBranch.condition, completed: 3 },
+      { ...rainFerryBranch.mooringChoice, completed: 4 },
+      { ...rainFerryBranch.mooringResolution, completed: 5 },
+      { x: -8_700, y: -800, completed: 6 },
+      { x: -8_400, y: 1_100, completed: 7 },
+      { x: -7_900, y: -300, completed: 8 },
+      { x: -7_500, y: 1_300, completed: 9 },
+      { x: -7_100, y: 300, completed: 10 }
     ];
     for (const step of rainFerryReadiness) {
       await moveF1PlayerTo(page, step.x, step.y);
@@ -954,7 +981,7 @@ async function runBrowser(target, origin) {
         { timeout: 5_000 }
       );
     }
-    await moveF1PlayerTo(page, -10_450, -100);
+    await moveF1PlayerTo(page, -6_700, -600);
     await page.keyboard.press("f");
     await page.waitForFunction(
       () => window.__tgdTest?.getF1State()?.questBeatIndex === 1,
@@ -963,8 +990,8 @@ async function runBrowser(target, origin) {
     );
     const advancedQuestState = await page.evaluate(() => window.__tgdTest.getF1State());
     assert.equal(advancedQuestState.questCompletedObjectives, 0);
-    assert.equal(advancedQuestState.questRequiredObjectives, 6);
-    assert.equal(advancedQuestState.activeHostiles, 1);
+    assert.equal(advancedQuestState.questRequiredObjectives, 14);
+    assert.equal(advancedQuestState.activeHostiles, 0);
     await captureRenderedFrame(
       page,
       canvas,
@@ -977,13 +1004,23 @@ async function runBrowser(target, origin) {
       undefined,
       { timeout: 5_000 }
     );
-
-    await page.keyboard.down("w");
-    await page.keyboard.down("d");
-    await page.waitForTimeout(1_800);
-    await page.keyboard.up("d");
-    await page.keyboard.up("w");
-    await page.waitForTimeout(150);
+    await moveF1PlayerTo(page, trainingBranch.choice.x, trainingBranch.choice.y);
+    await page.keyboard.press("f");
+    await page.waitForFunction(
+      () => window.__tgdTest?.getF1State()?.questCompletedObjectives === 2,
+      undefined,
+      { timeout: 5_000 }
+    );
+    await moveF1PlayerTo(page, trainingBranch.mark.x, trainingBranch.mark.y);
+    await page.keyboard.press("f");
+    await page.waitForFunction(
+      () => {
+        const state = window.__tgdTest?.getF1State();
+        return state?.questCompletedObjectives === 3 && state.activeHostiles === 1;
+      },
+      undefined,
+      { timeout: 5_000 }
+    );
     const combatReadyPath = resolve(reportDirectory, `${target}-combat-ready.png`);
     const combatActionPath = resolve(reportDirectory, `${target}-combat-action.png`);
     const combatHitPath = resolve(reportDirectory, `${target}-combat-hit.png`);
@@ -997,13 +1034,34 @@ async function runBrowser(target, origin) {
       combatReadyPath,
       `${target} combat ready`
     );
+    await page.keyboard.down("Shift");
+    await page.waitForFunction(
+      () => {
+        const state = window.__tgdTest?.getF1State();
+        return state?.questBeatIndex === 1 && state.questCompletedObjectives >= 4;
+      },
+      undefined,
+      { timeout: 15_000 }
+    );
+    await captureRenderedFrame(
+      page,
+      canvas,
+      combatGuardPath,
+      `${target} eavesguard absorbed a real rig impact`
+    );
+    const guardedRigState = await page.evaluate(() => window.__tgdTest.getF1State());
+    assert.equal(guardedRigState.questCompletedObjectives, 4);
+    assert.equal(guardedRigState.activeHostiles, 1);
+    await page.keyboard.up("Shift");
+    await page.waitForTimeout(120);
+
     await page.keyboard.press("k");
     await page.waitForTimeout(50);
     const combatActionFrame = await captureRenderedFrame(
       page,
       canvas,
       combatActionPath,
-      `${target} heavy attack startup`
+      `${target} guarded eavesguard heavy startup`
     );
     const combatActionComparison = compareFrames(combatReadyFrame, combatActionFrame);
     assert(
@@ -1018,7 +1076,7 @@ async function runBrowser(target, origin) {
       page,
       canvas,
       combatHitPath,
-      `${target} heavy attack hit`
+      `${target} eavesguard proof target hit`
     );
     const combatHitComparison = compareFrames(combatReadyFrame, combatHitFrame);
     assert(
@@ -1033,31 +1091,6 @@ async function runBrowser(target, origin) {
       combatHitFrame.sha256,
       `${target} startup and hit frames must be visually distinct.`
     );
-
-    await page.waitForTimeout(450);
-    await page.keyboard.down("Shift");
-    await page.waitForFunction(
-      () => {
-        const state = window.__tgdTest?.getF1State();
-        return state?.questBeatIndex === 1 && state.questCompletedObjectives >= 3;
-      },
-      undefined,
-      { timeout: 15_000 }
-    );
-    await captureRenderedFrame(
-      page,
-      canvas,
-      combatGuardPath,
-      `${target} guard completed and flower-turn rig released`
-    );
-    const flowerRigState = await page.evaluate(() => window.__tgdTest.getF1State());
-    assert.equal(flowerRigState.questCompletedObjectives, 3);
-    assert.equal(flowerRigState.activeHostiles, 1);
-    await page.keyboard.up("Shift");
-    await page.waitForTimeout(120);
-    await page.keyboard.press("2");
-    await page.waitForTimeout(60);
-    await page.keyboard.press("j");
     await page.waitForFunction(
       () => {
         const state = window.__tgdTest?.getF1State();
@@ -1067,9 +1100,55 @@ async function runBrowser(target, origin) {
       { timeout: 5_000 }
     );
     let trainingState = await page.evaluate(() => window.__tgdTest.getF1State());
-    const trainingDeadline = Date.now() + 20_000;
-    while (trainingState.questBeatIndex === 1 && Date.now() < trainingDeadline) {
+    const eavesguardDeadline = Date.now() + 30_000;
+    while (trainingState.questCompletedObjectives < 6 && Date.now() < eavesguardDeadline) {
       assert.equal(trainingState.playerActive, true, `${target} player fell during training.`);
+      if (
+        trainingState.incomingAttackTicks > 0 &&
+        trainingState.incomingAttackTicks <= 10 &&
+        !trainingState.playerBusy
+      ) {
+        await page.keyboard.press("c");
+      } else if (!trainingState.playerBusy) {
+        await page.keyboard.press("k");
+      }
+      await page.waitForTimeout(60);
+      trainingState = await page.evaluate(() => window.__tgdTest.getF1State());
+    }
+    assert.equal(
+      trainingState.questCompletedObjectives,
+      6,
+      `${target} did not defeat the eavesguard proof target.`
+    );
+
+    await moveF1PlayerTo(page, -5_000, -200);
+    await page.keyboard.press("f");
+    await page.waitForFunction(
+      () => {
+        const state = window.__tgdTest?.getF1State();
+        return state?.questCompletedObjectives === 7 && state.activeHostiles === 1;
+      },
+      undefined,
+      { timeout: 5_000 }
+    );
+    await page.keyboard.press("2");
+    await page.waitForFunction(
+      () => window.__tgdTest?.getF1State()?.questCompletedObjectives === 8,
+      undefined,
+      { timeout: 5_000 }
+    );
+    await moveF1PlayerTo(page, -3_400, -1_700);
+    await page.keyboard.press("f");
+    await page.waitForFunction(
+      () => window.__tgdTest?.getF1State()?.questCompletedObjectives === 9,
+      undefined,
+      { timeout: 5_000 }
+    );
+
+    const evadeDeadline = Date.now() + 20_000;
+    while (trainingState.questCompletedObjectives < 10 && Date.now() < evadeDeadline) {
+      trainingState = await page.evaluate(() => window.__tgdTest.getF1State());
+      assert.equal(trainingState.playerActive, true, `${target} player fell during flower drill.`);
       if (
         trainingState.incomingAttackTicks > 0 &&
         trainingState.incomingAttackTicks <= 10 &&
@@ -1078,8 +1157,76 @@ async function runBrowser(target, origin) {
         await page.keyboard.press("c");
       }
       await page.waitForTimeout(40);
+    }
+    assert.equal(
+      trainingState.questCompletedObjectives,
+      10,
+      `${target} never evaded the active flower-turn rig.`
+    );
+    await page.waitForFunction(
+      () => {
+        const state = window.__tgdTest?.getF1State();
+        return state?.questCompletedObjectives === 10 && !state.playerBusy;
+      },
+      undefined,
+      { timeout: 5_000 }
+    );
+    await page.keyboard.press("j");
+    await page.waitForFunction(
+      () => window.__tgdTest?.getF1State()?.questCompletedObjectives === 11,
+      undefined,
+      { timeout: 5_000 }
+    );
+    await captureRenderedFrame(
+      page,
+      canvas,
+      combatFlowerLightPath,
+      `${target} flower-turn light response`
+    );
+    await page.waitForFunction(
+      () => {
+        const state = window.__tgdTest?.getF1State();
+        return state?.questCompletedObjectives === 11 && !state.playerBusy;
+      },
+      undefined,
+      { timeout: 5_000 }
+    );
+    await page.keyboard.press("k");
+    await page.waitForFunction(
+      () => window.__tgdTest?.getF1State()?.questCompletedObjectives === 12,
+      undefined,
+      { timeout: 5_000 }
+    );
+
+    const flowerTargetDeadline = Date.now() + 30_000;
+    trainingState = await page.evaluate(() => window.__tgdTest.getF1State());
+    while (trainingState.questCompletedObjectives < 13 && Date.now() < flowerTargetDeadline) {
+      assert.equal(trainingState.playerActive, true, `${target} player fell at flower target.`);
+      if (
+        trainingState.incomingAttackTicks > 0 &&
+        trainingState.incomingAttackTicks <= 10 &&
+        !trainingState.playerBusy
+      ) {
+        await page.keyboard.press("c");
+      } else if (!trainingState.playerBusy) {
+        await page.keyboard.press("j");
+      }
+      await page.waitForTimeout(50);
       trainingState = await page.evaluate(() => window.__tgdTest.getF1State());
     }
+    assert.equal(
+      trainingState.questCompletedObjectives,
+      13,
+      `${target} did not defeat the flower-turn proof target.`
+    );
+    await moveF1PlayerTo(page, -5_000, -200);
+    await page.keyboard.press("f");
+    await page.waitForFunction(
+      () => window.__tgdTest?.getF1State()?.questBeatIndex === 2,
+      undefined,
+      { timeout: 5_000 }
+    );
+    trainingState = await page.evaluate(() => window.__tgdTest.getF1State());
     assert.equal(
       trainingState.questBeatIndex,
       2,
@@ -1307,7 +1454,7 @@ async function runBrowser(target, origin) {
     let workbenchState = await page.evaluate(() => window.__tgdTest.getF1State());
     assert.equal(workbenchState.questCompletedObjectives, 0);
     assert.equal(workbenchState.questRequiredObjectives, 4);
-    assert.equal(workbenchState.questSelectedChoices, 1);
+    assert.equal(workbenchState.questSelectedChoices, 4);
 
     await moveF1PlayerTo(page, hiddenSpringTracePose.x, hiddenSpringTracePose.y);
     await page.keyboard.press("f");
@@ -1352,14 +1499,14 @@ async function runBrowser(target, origin) {
       { timeout: 5_000 }
     );
     workbenchState = await page.evaluate(() => window.__tgdTest.getF1State());
-    assert.equal(workbenchState.questSelectedChoices, 1);
+    assert.equal(workbenchState.questSelectedChoices, 4);
 
     await moveF1PlayerTo(page, -1_500, ribCalibration === "spring" ? 400 : -600);
     await page.keyboard.press("f");
     await page.waitForFunction(
       () => {
         const state = window.__tgdTest?.getF1State();
-        return state?.questBeatIndex === 4 && state.questSelectedChoices === 2;
+        return state?.questBeatIndex === 4 && state.questSelectedChoices === 5;
       },
       undefined,
       { timeout: 5_000 }
@@ -1506,7 +1653,7 @@ async function runBrowser(target, origin) {
     assert.equal(returnState.questBeatIndex, 4);
     assert.equal(returnState.questCompletedObjectives, 3);
     assert.equal(returnState.questRequiredObjectives, 4);
-    assert.equal(returnState.questSelectedChoices, 2);
+    assert.equal(returnState.questSelectedChoices, 5);
 
     await moveF1PlayerTo(page, -800, 400, 300);
     await page.keyboard.press("f");
@@ -1617,7 +1764,7 @@ async function runBrowser(target, origin) {
       () => {
         const state = window.__tgdTest?.getF1State();
         return state?.questBeatIndex === 6 && state.questCompletedObjectives === 1 &&
-          state.questSelectedChoices === 3;
+          state.questSelectedChoices === 6;
       },
       undefined,
       { timeout: 5_000 }
@@ -1636,7 +1783,7 @@ async function runBrowser(target, origin) {
     assert.equal(resolutionState.questBeatIndex, 6);
     assert.equal(resolutionState.questCompletedObjectives, 2);
     assert.equal(resolutionState.questRequiredObjectives, 2);
-    assert.equal(resolutionState.questSelectedChoices, 3);
+    assert.equal(resolutionState.questSelectedChoices, 6);
     assert.equal(resolutionState.activeHostiles, 0);
     assert.equal(resolutionState.questResolved, true);
     assert.equal(resolutionState.resolutionRewardReady, true);

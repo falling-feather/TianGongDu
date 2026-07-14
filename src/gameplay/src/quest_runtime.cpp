@@ -76,15 +76,11 @@ void hash_integer(std::uint64_t& hash, Integer value) noexcept {
            left.selection_id.key != right.selection_id.key;
 }
 
-}  // namespace
-
-QuestInteractionError DeterministicQuestInteractionResolver::initialize(
+[[nodiscard]] QuestInteractionError validate_interaction_definitions(
     std::span<const contracts::QuestInteractionDefinition> definitions
 ) noexcept {
-    if (initialized_) {
-        return QuestInteractionError::invalid_lifecycle;
-    }
-    if (definitions.empty() || definitions.size() > interaction_capacity) {
+    if (definitions.empty() ||
+        definitions.size() > DeterministicQuestInteractionResolver::interaction_capacity) {
         return QuestInteractionError::invalid_definition;
     }
     for (std::size_t index = 0; index < definitions.size(); ++index) {
@@ -137,7 +133,84 @@ QuestInteractionError DeterministicQuestInteractionResolver::initialize(
             }
         }
     }
+    return QuestInteractionError::none;
+}
+
+[[nodiscard]] bool beat_owns_objective(
+    const contracts::VerticalSliceBeatDefinition& beat,
+    contracts::StableContentKey objective
+) noexcept {
+    return std::any_of(
+        beat.objectives.begin(),
+        beat.objectives.end(),
+        [objective](const contracts::ContentId& candidate) {
+            return candidate.key == objective;
+        }
+    );
+}
+
+[[nodiscard]] bool definition_owns_objective_once(
+    const contracts::VerticalSliceDefinition& definition,
+    contracts::StableContentKey objective
+) noexcept {
+    std::size_t matches = 0;
+    for (const auto& beat : definition.beats) {
+        matches += static_cast<std::size_t>(std::count_if(
+            beat.objectives.begin(),
+            beat.objectives.end(),
+            [objective](const contracts::ContentId& candidate) {
+                return candidate.key == objective;
+            }
+        ));
+    }
+    return matches == 1;
+}
+
+}  // namespace
+
+QuestInteractionError DeterministicQuestInteractionResolver::initialize(
+    std::span<const contracts::QuestInteractionDefinition> definitions
+) noexcept {
+    if (initialized_) {
+        return QuestInteractionError::invalid_lifecycle;
+    }
+    const auto validation = validate_interaction_definitions(definitions);
+    if (validation != QuestInteractionError::none) {
+        return validation;
+    }
     definitions_ = definitions;
+    initialized_ = true;
+    return QuestInteractionError::none;
+}
+
+QuestInteractionError DeterministicQuestInteractionResolver::initialize(
+    const contracts::VerticalSliceDefinition& definition
+) noexcept {
+    if (initialized_) {
+        return QuestInteractionError::invalid_lifecycle;
+    }
+    const auto validation = validate_interaction_definitions(definition.quest_interactions);
+    if (validation != QuestInteractionError::none || definition.id.key == 0 ||
+        definition.beats.empty()) {
+        return QuestInteractionError::invalid_definition;
+    }
+    for (const auto& interaction : definition.quest_interactions) {
+        if (!definition_owns_objective_once(definition, interaction.objective_id.key) ||
+            (interaction.required_selection_objective_id.key != 0 &&
+             !definition_owns_objective_once(
+                 definition,
+                 interaction.required_selection_objective_id.key
+             ))) {
+            return QuestInteractionError::invalid_definition;
+        }
+        for (const auto& prerequisite : interaction.prerequisite_objectives) {
+            if (!definition_owns_objective_once(definition, prerequisite.key)) {
+                return QuestInteractionError::invalid_definition;
+            }
+        }
+    }
+    definitions_ = definition.quest_interactions;
+    definition_context_ = &definition;
     initialized_ = true;
     return QuestInteractionError::none;
 }
@@ -193,6 +266,112 @@ QuestInteractionResult DeterministicQuestInteractionResolver::resolve(
         }
     }
     return result;
+}
+
+QuestInteractionResult DeterministicQuestInteractionResolver::resolve_attempt(
+    const QuestInteractionQuery& query,
+    const IQuestRuntime& quest
+) const noexcept {
+    QuestInteractionResult result{};
+    if (!initialized_ || definition_context_ == nullptr) {
+        result.error = QuestInteractionError::invalid_lifecycle;
+        return result;
+    }
+    if (query.actor == 0 || query.cell == 0) {
+        result.error = QuestInteractionError::invalid_query;
+        return result;
+    }
+
+    const auto& snapshot = quest.snapshot();
+    const auto current_beat = std::find_if(
+        definition_context_->beats.begin(),
+        definition_context_->beats.end(),
+        [&snapshot](const contracts::VerticalSliceBeatDefinition& beat) {
+            return beat.id.key == snapshot.stage;
+        }
+    );
+    if (snapshot.quest != definition_context_->id.key || snapshot.stage == 0 ||
+        current_beat == definition_context_->beats.end()) {
+        result.error = QuestInteractionError::invalid_quest_context;
+        return result;
+    }
+
+    QuestInteractionResult eligible{};
+    QuestInteractionResult unavailable{};
+    auto eligible_distance = std::numeric_limits<std::uint64_t>::max();
+    auto unavailable_distance = std::numeric_limits<std::uint64_t>::max();
+    for (const auto& definition : definitions_) {
+        if (definition.cell_id.key != query.cell ||
+            definition.pose.floor_layer != query.pose.floor_layer ||
+            !beat_owns_objective(*current_beat, definition.objective_id.key) ||
+            (definition.required_selection_id.key != 0 &&
+             quest.selected_option(definition.required_selection_objective_id.key) !=
+                 definition.required_selection_id.key)) {
+            continue;
+        }
+        const auto distance = ground_distance_squared(query.pose, definition.pose);
+        const auto radius = static_cast<std::uint64_t>(definition.radius_mm);
+        if (distance > radius * radius) {
+            continue;
+        }
+
+        const auto state = quest.objective_state(definition.objective_id.key);
+        if (state == QuestObjectiveState::unknown) {
+            result.error = QuestInteractionError::invalid_quest_context;
+            return result;
+        }
+        const auto prerequisites_complete = std::all_of(
+            definition.prerequisite_objectives.begin(),
+            definition.prerequisite_objectives.end(),
+            [&quest](const contracts::ContentId& prerequisite) {
+                return quest.objective_state(prerequisite.key) ==
+                       QuestObjectiveState::completed;
+            }
+        );
+
+        auto availability = QuestInteractionAvailability::eligible;
+        if (state == QuestObjectiveState::active && !prerequisites_complete) {
+            availability = QuestInteractionAvailability::prerequisite_incomplete;
+        } else if (state == QuestObjectiveState::completed &&
+                   definition.kind == contracts::QuestInteractionKind::choose) {
+            const auto committed = quest.selected_option(definition.objective_id.key);
+            const auto authored = committed != 0 && std::any_of(
+                definitions_.begin(),
+                definitions_.end(),
+                [&definition, committed](
+                    const contracts::QuestInteractionDefinition& candidate
+                ) {
+                    return candidate.objective_id.key == definition.objective_id.key &&
+                           candidate.kind == contracts::QuestInteractionKind::choose &&
+                           candidate.selection_id.key == committed;
+                }
+            );
+            if (!authored) {
+                continue;
+            }
+            availability = QuestInteractionAvailability::selection_already_committed;
+        } else if (state != QuestObjectiveState::active) {
+            continue;
+        }
+
+        auto* candidate = availability == QuestInteractionAvailability::eligible
+                              ? &eligible
+                              : &unavailable;
+        auto* best_distance = availability == QuestInteractionAvailability::eligible
+                                  ? &eligible_distance
+                                  : &unavailable_distance;
+        if (!candidate->found || distance < *best_distance ||
+            (distance == *best_distance && definition.id.key < candidate->interaction)) {
+            candidate->found = true;
+            candidate->interaction = definition.id.key;
+            candidate->objective = definition.objective_id.key;
+            candidate->selection = definition.selection_id.key;
+            candidate->kind = definition.kind;
+            candidate->availability = availability;
+            *best_distance = distance;
+        }
+    }
+    return eligible.found ? eligible : unavailable;
 }
 
 QuestCombatTriggerError DeterministicQuestCombatTriggerResolver::initialize(

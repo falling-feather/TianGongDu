@@ -85,6 +85,13 @@ enum class QuestInteractionError : std::uint8_t {
     invalid_lifecycle,
     invalid_definition,
     invalid_query,
+    invalid_quest_context,
+};
+
+enum class QuestInteractionAvailability : std::uint8_t {
+    eligible,
+    prerequisite_incomplete,
+    selection_already_committed,
 };
 
 struct QuestInteractionQuery final {
@@ -100,6 +107,7 @@ struct QuestInteractionResult final {
     contracts::StableContentKey objective{};
     contracts::StableContentKey selection{};
     contracts::QuestInteractionKind kind{contracts::QuestInteractionKind::inspect};
+    QuestInteractionAvailability availability{QuestInteractionAvailability::eligible};
 };
 
 class DeterministicQuestInteractionResolver final {
@@ -109,13 +117,21 @@ class DeterministicQuestInteractionResolver final {
     [[nodiscard]] QuestInteractionError initialize(
         std::span<const contracts::QuestInteractionDefinition> definitions
     ) noexcept;
+    [[nodiscard]] QuestInteractionError initialize(
+        const contracts::VerticalSliceDefinition& definition
+    ) noexcept;
     [[nodiscard]] QuestInteractionResult resolve(
+        const QuestInteractionQuery& query,
+        const IQuestRuntime& quest
+    ) const noexcept;
+    [[nodiscard]] QuestInteractionResult resolve_attempt(
         const QuestInteractionQuery& query,
         const IQuestRuntime& quest
     ) const noexcept;
 
   private:
     std::span<const contracts::QuestInteractionDefinition> definitions_{};
+    const contracts::VerticalSliceDefinition* definition_context_{};
     bool initialized_{};
 };
 

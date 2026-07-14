@@ -24,6 +24,7 @@ using tgd::gameplay::QuestCombatOutcomeError;
 using tgd::gameplay::QuestCombatTriggerError;
 using tgd::gameplay::QuestBossPhaseError;
 using tgd::gameplay::QuestResolutionRewardError;
+using tgd::gameplay::QuestInteractionAvailability;
 using tgd::gameplay::QuestInteractionError;
 using tgd::gameplay::QuestLifecycle;
 using tgd::gameplay::QuestObjectiveState;
@@ -370,6 +371,330 @@ bool test_scene_interactions_resolve_from_active_objectives() {
         interactions.resolve({0, definition().beats.front().cell_id.key, {}}, quest).error ==
             QuestInteractionError::invalid_query,
         "invalid actor queries fail closed"
+    );
+    return ok;
+}
+
+bool test_interaction_attempt_resolution_is_read_only_and_fail_closed() {
+    const auto find_interaction = [](tgd::contracts::StableContentKey id) {
+        return std::find_if(
+            definition().quest_interactions.begin(),
+            definition().quest_interactions.end(),
+            [id](const tgd::contracts::QuestInteractionDefinition& interaction) {
+                return interaction.id.key == id;
+            }
+        );
+    };
+    const auto travel = find_interaction(
+        tgd::contracts::stable_content_key("f1_interaction_travel_writ")
+    );
+    const auto drowned_manifest = find_interaction(
+        tgd::contracts::stable_content_key(
+            "f1_interaction_arrival_clue_drowned_manifest"
+        )
+    );
+    const auto read_manifest = find_interaction(
+        tgd::contracts::stable_content_key("f1_interaction_read_manifest_waterline")
+    );
+    const auto bell = find_interaction(
+        tgd::contracts::stable_content_key("f1_interaction_sound_workshop_bell")
+    );
+    const auto future_training_choice = find_interaction(
+        tgd::contracts::stable_content_key(
+            "f1_interaction_choose_training_windward_lane"
+        )
+    );
+    if (travel == definition().quest_interactions.end() ||
+        drowned_manifest == definition().quest_interactions.end() ||
+        read_manifest == definition().quest_interactions.end() ||
+        bell == definition().quest_interactions.end() ||
+        future_training_choice == definition().quest_interactions.end()) {
+        return false;
+    }
+
+    DeterministicQuestRuntime quest;
+    DeterministicQuestInteractionResolver interactions;
+    CollectingSink sink;
+    bool ok = quest.initialize(definition(), definition().player.actor) == QuestError::none;
+    ok &= quest.start() == QuestError::none;
+    ok &= expect(
+        interactions.initialize(definition()) == QuestInteractionError::none,
+        "attempt queries initialize from the complete authored quest definition"
+    );
+
+    const auto opening_before = quest.snapshot();
+    const auto legacy_opening = interactions.resolve(
+        {definition().player.actor, travel->cell_id.key, travel->pose},
+        quest
+    );
+    const auto attempted_opening = interactions.resolve_attempt(
+        {definition().player.actor, travel->cell_id.key, travel->pose},
+        quest
+    );
+    ok &= expect(
+        attempted_opening.error == QuestInteractionError::none &&
+            attempted_opening.found &&
+            attempted_opening.availability == QuestInteractionAvailability::eligible &&
+            attempted_opening.interaction == legacy_opening.interaction &&
+            attempted_opening.objective == legacy_opening.objective,
+        "eligible attempt results preserve the existing resolver ordering and payload"
+    );
+    ok &= expect(
+        quest.snapshot().checksum == opening_before.checksum &&
+            quest.snapshot().tick == opening_before.tick,
+        "eligible attempt queries do not mutate quest state"
+    );
+
+    const auto blocked_before = quest.snapshot();
+    const auto blocked_bell = interactions.resolve_attempt(
+        {definition().player.actor, bell->cell_id.key, bell->pose},
+        quest
+    );
+    const auto blocked_bell_repeat = interactions.resolve_attempt(
+        {definition().player.actor, bell->cell_id.key, bell->pose},
+        quest
+    );
+    ok &= expect(
+        blocked_bell.error == QuestInteractionError::none && blocked_bell.found &&
+            blocked_bell.interaction == bell->id.key &&
+            blocked_bell.objective == bell->objective_id.key &&
+            blocked_bell.availability ==
+                QuestInteractionAvailability::prerequisite_incomplete &&
+            blocked_bell_repeat.interaction == blocked_bell.interaction &&
+            blocked_bell_repeat.availability == blocked_bell.availability,
+        "a current-Beat interaction with an incomplete prerequisite is reported deterministically"
+    );
+    ok &= expect(
+        quest.snapshot().checksum == blocked_before.checksum &&
+            quest.snapshot().tick == blocked_before.tick,
+        "repeated prerequisite queries remain pure reads"
+    );
+
+    auto out_of_range_pose = bell->pose;
+    out_of_range_pose.x += bell->radius_mm + 1;
+    ok &= expect(
+        !interactions
+             .resolve_attempt(
+                 {definition().player.actor, bell->cell_id.key, out_of_range_pose},
+                 quest
+             )
+             .found,
+        "a query one millimetre outside the authored radius is not an attempt candidate"
+    );
+    ok &= expect(
+        interactions.resolve_attempt({0, bell->cell_id.key, bell->pose}, quest).error ==
+                QuestInteractionError::invalid_query &&
+            interactions
+                    .resolve_attempt({definition().player.actor, 0, bell->pose}, quest)
+                    .error == QuestInteractionError::invalid_query,
+        "zero actor and cell attempt queries fail closed"
+    );
+    ok &= expect(
+        !interactions
+             .resolve_attempt(
+                 {
+                     definition().player.actor,
+                     future_training_choice->cell_id.key,
+                     future_training_choice->pose,
+                 },
+                 quest
+             )
+             .found,
+        "future-Beat interactions are not surfaced as attempts"
+    );
+    ok &= expect(
+        quest.snapshot().checksum == blocked_before.checksum &&
+            quest.snapshot().completed_total == blocked_before.completed_total &&
+            quest.snapshot().selection_count == blocked_before.selection_count,
+        "invalid, out-of-range, and future-Beat attempt queries leave the quest unchanged"
+    );
+
+    tgd::contracts::TickIndex tick = 1;
+    tgd::contracts::CommandSequence sequence = 1;
+    ok &= quest.apply(
+                  {
+                      tick++,
+                      definition().player.actor,
+                      sequence++,
+                      {},
+                      travel->objective_id.key,
+                  },
+                  sink
+              ).error == QuestError::none;
+    const auto completed_non_choice = interactions.resolve_attempt(
+        {definition().player.actor, travel->cell_id.key, travel->pose},
+        quest
+    );
+    ok &= expect(
+        !completed_non_choice.found && quest.snapshot().completed_total == 1 &&
+            quest.snapshot().selection_count == 0,
+        "completed non-choice interactions are not misreported as selection repeats"
+    );
+
+    const auto arrival_choice =
+        tgd::contracts::stable_content_key("f1_objective_choose_arrival_clue");
+    const auto high_water =
+        tgd::contracts::stable_content_key("f1_choice_arrival_high_water_tags");
+    ok &= quest.apply(
+                  {
+                      tick++,
+                      definition().player.actor,
+                      sequence++,
+                      {},
+                      arrival_choice,
+                      high_water,
+                  },
+                  sink
+              ).error == QuestError::none;
+    const auto repeat_before = quest.snapshot();
+    const auto repeated_choice = interactions.resolve_attempt(
+        {
+            definition().player.actor,
+            drowned_manifest->cell_id.key,
+            drowned_manifest->pose,
+        },
+        quest
+    );
+    ok &= expect(
+        repeated_choice.error == QuestInteractionError::none && repeated_choice.found &&
+            repeated_choice.interaction == drowned_manifest->id.key &&
+            repeated_choice.objective == arrival_choice &&
+            repeated_choice.availability ==
+                QuestInteractionAvailability::selection_already_committed &&
+            quest.selected_option(arrival_choice) == high_water,
+        "touching another authored option reports the retained completed choice as a repeat"
+    );
+    ok &= expect(
+        quest.snapshot().checksum == repeat_before.checksum &&
+            quest.snapshot().selection_count == repeat_before.selection_count,
+        "selection-repeat attempts preserve sequence, checksum, and the retained option"
+    );
+    ok &= expect(
+        !interactions
+             .resolve_attempt(
+                 {definition().player.actor, read_manifest->cell_id.key, read_manifest->pose},
+                 quest
+             )
+             .found,
+        "required-selection mismatches are not surfaced as attempts"
+    );
+    ok &= expect(
+        quest.snapshot().checksum == repeat_before.checksum &&
+            quest.selected_option(arrival_choice) == high_water,
+        "route-mismatch queries preserve the committed branch and checksum"
+    );
+
+    const auto read_code = tgd::contracts::stable_content_key(
+        "f1_objective_read_workshop_bell_code"
+    );
+    ok &= quest.apply(
+                  {
+                      tick++,
+                      definition().player.actor,
+                      sequence++,
+                      {},
+                      read_code,
+                  },
+                  sink
+              ).error == QuestError::none;
+    const auto eligible_bell = interactions.resolve_attempt(
+        {definition().player.actor, bell->cell_id.key, bell->pose},
+        quest
+    );
+    ok &= expect(
+        eligible_bell.found && eligible_bell.interaction == bell->id.key &&
+            eligible_bell.availability == QuestInteractionAvailability::eligible,
+        "the same bell interaction becomes eligible after its authored prerequisite"
+    );
+
+    auto collocated_interactions =
+        std::vector<tgd::contracts::QuestInteractionDefinition>{
+            definition().quest_interactions.begin(),
+            definition().quest_interactions.end(),
+        };
+    const auto collocated_travel = std::find_if(
+        collocated_interactions.begin(),
+        collocated_interactions.end(),
+        [travel](const tgd::contracts::QuestInteractionDefinition& interaction) {
+            return interaction.id.key == travel->id.key;
+        }
+    );
+    if (collocated_travel == collocated_interactions.end()) {
+        return false;
+    }
+    collocated_travel->pose = bell->pose;
+    collocated_travel->radius_mm = bell->radius_mm;
+    auto collocated_definition = definition();
+    collocated_definition.quest_interactions = collocated_interactions;
+    DeterministicQuestRuntime collocated_quest;
+    DeterministicQuestInteractionResolver collocated_resolver;
+    ok &= collocated_quest.initialize(
+              collocated_definition,
+              collocated_definition.player.actor
+          ) == QuestError::none;
+    ok &= collocated_quest.start() == QuestError::none;
+    ok &= collocated_resolver.initialize(collocated_definition) ==
+          QuestInteractionError::none;
+    const auto collocated = collocated_resolver.resolve_attempt(
+        {
+            collocated_definition.player.actor,
+            bell->cell_id.key,
+            bell->pose,
+        },
+        collocated_quest
+    );
+    ok &= expect(
+        collocated.found && collocated.interaction == travel->id.key &&
+            collocated.availability == QuestInteractionAvailability::eligible,
+        "an eligible collocated candidate outranks an unavailable attempt candidate"
+    );
+
+    DeterministicQuestInteractionResolver legacy_only;
+    ok &= legacy_only.initialize(definition().quest_interactions) ==
+          QuestInteractionError::none;
+    ok &= expect(
+        legacy_only
+                .resolve_attempt(
+                    {definition().player.actor, travel->cell_id.key, travel->pose},
+                    quest
+                )
+                .error == QuestInteractionError::invalid_lifecycle,
+        "attempt resolution requires the additive full-definition initialization path"
+    );
+
+    auto invalid_interactions =
+        std::vector<tgd::contracts::QuestInteractionDefinition>{
+            definition().quest_interactions.begin(),
+            definition().quest_interactions.end(),
+        };
+    invalid_interactions.front().objective_id =
+        tgd::contracts::content_id("unknown_attempt_objective");
+    auto invalid_definition = definition();
+    invalid_definition.quest_interactions = invalid_interactions;
+    DeterministicQuestInteractionResolver invalid_context;
+    ok &= expect(
+        invalid_context.initialize(invalid_definition) ==
+                QuestInteractionError::invalid_definition &&
+            invalid_context.initialize(definition()) == QuestInteractionError::none,
+        "full-definition attempt initialization rejects unknown objectives without partial state"
+    );
+
+    auto mismatched_definition = definition();
+    mismatched_definition.id = tgd::contracts::content_id("mismatched_quest_context");
+    DeterministicQuestRuntime mismatched_quest;
+    ok &= mismatched_quest.initialize(
+              mismatched_definition,
+              mismatched_definition.player.actor
+          ) == QuestError::none;
+    ok &= mismatched_quest.start() == QuestError::none;
+    ok &= expect(
+        interactions
+                .resolve_attempt(
+                    {definition().player.actor, travel->cell_id.key, travel->pose},
+                    mismatched_quest
+                )
+                .error == QuestInteractionError::invalid_quest_context,
+        "attempt queries reject a quest snapshot from another definition"
     );
     return ok;
 }
@@ -2146,6 +2471,7 @@ int main() {
     ok &= test_full_resolution_is_deterministic();
     ok &= test_invalid_definition_fails_closed();
     ok &= test_scene_interactions_resolve_from_active_objectives();
+    ok &= test_interaction_attempt_resolution_is_read_only_and_fail_closed();
     ok &= test_rain_ferry_optional_clues_and_error_recovery_converge();
     ok &= test_scene_interaction_ties_are_stable();
     ok &= test_scene_interaction_selection_gates_follow_lane_route();

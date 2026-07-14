@@ -107,6 +107,17 @@ const trainingBranch = laneRoute === "canopy"
       choice: { x: -6_000, y: -2_200 },
       mark: { x: -5_200, y: -2_400 }
     };
+const authoredChoiceRoute = laneRoute === "canopy"
+  ? {
+      arrival: { optionCount: 3, targetIndex: 0 },
+      mooring: { optionCount: 2, targetIndex: 0 },
+      training: { optionCount: 2, targetIndex: 0 }
+    }
+  : {
+      arrival: { optionCount: 3, targetIndex: 2 },
+      mooring: { optionCount: 2, targetIndex: 1 },
+      training: { optionCount: 2, targetIndex: 1 }
+    };
 const forceSoftwareGraphics =
   process.env.TGD_FORCE_SOFTWARE_WEBGL === "1" || process.env.CI === "true";
 
@@ -414,6 +425,15 @@ async function captureRenderedFrame(page, canvas, path, label, timeoutMs = 20_00
   );
 }
 
+async function captureQuestChoiceFrame(page, path, label) {
+  const buffer = await page.screenshot({ type: "png", animations: "disabled" });
+  const frame = analyzePng(buffer);
+  await writeFile(path, buffer);
+  assert(frame.uniqueColors >= 8, `${label} did not contain a readable rendered frame.`);
+  assert(frame.width >= 520 && frame.height >= 800, `${label} screenshot was undersized.`);
+  return publicFrame(frame);
+}
+
 function parseLifecycle(message) {
   const prefix = "[tgd.lifecycle] ";
   if (!message.startsWith(prefix)) return null;
@@ -628,6 +648,267 @@ async function runBrowser(target, origin) {
     const saveProfile = page.getByTestId("save-profile");
     const lastEvent = page.locator("#last-event");
     const canvas = page.locator("canvas");
+    const questUi = page.getByTestId("quest-ui");
+    const questUiPanel = questUi.locator(".quest-ui-panel");
+    const authoredChoiceCheckpoints = [];
+    const worldChoiceCheckpoints = [];
+
+    const completeAuthoredChoice = async ({
+      name,
+      optionCount,
+      targetIndex,
+      screenshotName
+    }) => {
+      const before = await page.evaluate(() => window.__tgdTest.getF1State());
+      const traceStart = await page.evaluate(() => window.__tgdLifecycleTrace.length);
+      assert(
+        await questUi.isHidden() || await questUi.getAttribute("data-surface") !== "choice",
+        `${target} ${name} started while another Quest choice was visible.`
+      );
+
+      await canvas.focus();
+      await page.keyboard.press("f");
+      await questUi.waitFor({ state: "visible", timeout: 5_000 });
+      await page.waitForFunction(
+        (expectedOptionCount) => {
+          const root = document.getElementById("quest-ui");
+          return root && !root.hidden && root.dataset.surface === "choice" &&
+            root.querySelectorAll("button[data-choice-index]").length === expectedOptionCount;
+        },
+        optionCount,
+        { timeout: 5_000 }
+      );
+
+      const afterOpen = await page.evaluate(() => window.__tgdTest.getF1State());
+      assert.equal(
+        afterOpen.questCompletedObjectives,
+        before.questCompletedObjectives,
+        `${target} ${name} advanced when F only opened the authoritative panel.`
+      );
+      assert.equal(
+        afterOpen.questSelectedChoices,
+        before.questSelectedChoices,
+        `${target} ${name} committed a selection before a DOM Action.`
+      );
+      assert.equal(await questUiPanel.getAttribute("aria-modal"), "true");
+      assert.equal(await questUiPanel.getAttribute("aria-busy"), "false");
+
+      const choiceEvent = await page.evaluate(() => window.__tgdQuestUi.getState());
+      assert(choiceEvent, `${target} ${name} omitted the decoded authoritative event.`);
+      assert.equal(choiceEvent.sourceName, "choice_available");
+      assert.equal(choiceEvent.surfaceName, "choice");
+      assert.equal(choiceEvent.choiceOptions.length, optionCount);
+      assert.match(choiceEvent.messageSequence, /^[1-9][0-9]*$/);
+      assert.match(choiceEvent.sequence, /^[1-9][0-9]*$/);
+      assert.match(choiceEvent.checksum, /^[0-9a-f]{16}$/);
+
+      const domOptions = await questUi.locator("button[data-choice-index]").evaluateAll(
+        (buttons) => buttons.map((button) => ({
+          index: Number(button.dataset.choiceIndex),
+          interaction: button.dataset.interaction,
+          selection: button.dataset.selection,
+          label: button.querySelector("strong")?.textContent?.trim() ?? "",
+          hint: button.querySelector("span")?.textContent?.trim() ?? "",
+          ariaDisabled: button.getAttribute("aria-disabled")
+        }))
+      );
+      assert.deepEqual(
+        domOptions.map(({ index, interaction, selection }) => ({
+          index,
+          interaction,
+          selection
+        })),
+        choiceEvent.choiceOptions.map((option, index) => ({ index, ...option })),
+        `${target} ${name} DOM order drifted from projection.choiceOptions.`
+      );
+      for (const option of domOptions) {
+        assert(option.label, `${target} ${name} exposed an unlabeled choice.`);
+        assert(option.hint, `${target} ${name} exposed a choice without a player hint.`);
+        assert.doesNotMatch(
+          `${option.label} ${option.hint}`,
+          /f1_|\b[0-9a-f]{16}\b/i,
+          `${target} ${name} leaked Stable IDs into player copy.`
+        );
+        assert.equal(option.ariaDisabled, null);
+      }
+      assert(targetIndex >= 0 && targetIndex < domOptions.length);
+
+      await page.waitForFunction(
+        () => document.activeElement?.matches("#quest-ui button[data-choice-index='0']"),
+        undefined,
+        { timeout: 2_000 }
+      );
+      for (let index = 0; index < targetIndex; index += 1) {
+        await page.keyboard.press("ArrowDown");
+      }
+      assert.equal(
+        await page.evaluate(() => Number(document.activeElement?.dataset?.choiceIndex ?? -1)),
+        targetIndex,
+        `${target} ${name} keyboard navigation did not retain the authored target.`
+      );
+      const screenshotPath = resolve(reportDirectory, screenshotName);
+      const choiceFrame = await captureQuestChoiceFrame(
+        page,
+        screenshotPath,
+        `${target} ${name}`
+      );
+
+      await page.keyboard.press("Enter");
+      await page.waitForFunction(
+        ({ completed, sessionGeneration, messageSequence, projectionSequence, projectionChecksum }) => {
+          const state = window.__tgdTest?.getF1State();
+          const root = document.getElementById("quest-ui");
+          const latestEvent = window.__tgdQuestUi?.getState?.();
+          const close = window.__tgdQuestUi?.getCloseState?.();
+          const closeMatches = close?.sessionGeneration === sessionGeneration &&
+            close?.projectionSequence === projectionSequence &&
+            close?.projectionChecksum === projectionChecksum &&
+            BigInt(close.messageSequence) > BigInt(messageSequence);
+          const replaceMatches = latestEvent?.sessionGeneration === sessionGeneration &&
+            latestEvent?.sourceName !== "choice_available" &&
+            BigInt(latestEvent?.messageSequence ?? "0") > BigInt(messageSequence) &&
+            BigInt(latestEvent?.sequence ?? "0") > BigInt(projectionSequence);
+          return state?.questCompletedObjectives === completed + 1 &&
+            (!root || root.hidden || root.dataset.surface !== "choice") &&
+            (closeMatches || replaceMatches);
+        },
+        {
+          completed: before.questCompletedObjectives,
+          sessionGeneration: choiceEvent.sessionGeneration,
+          messageSequence: choiceEvent.messageSequence,
+          projectionSequence: choiceEvent.sequence,
+          projectionChecksum: choiceEvent.checksum
+        },
+        { timeout: 5_000 }
+      );
+
+      const authority = await page.evaluate((choiceIdentity) => {
+        const root = document.getElementById("quest-ui");
+        const latestEvent = window.__tgdQuestUi.getState();
+        const close = window.__tgdQuestUi.getCloseState();
+        const closeMatches = close?.sessionGeneration === choiceIdentity.sessionGeneration &&
+          close?.projectionSequence === choiceIdentity.sequence &&
+          close?.projectionChecksum === choiceIdentity.checksum &&
+          BigInt(close.messageSequence) > BigInt(choiceIdentity.messageSequence);
+        const replaceMatches = latestEvent?.sessionGeneration === choiceIdentity.sessionGeneration &&
+          latestEvent?.sourceName !== "choice_available" &&
+          BigInt(latestEvent?.messageSequence ?? "0") > BigInt(choiceIdentity.messageSequence) &&
+          BigInt(latestEvent?.sequence ?? "0") > BigInt(choiceIdentity.sequence);
+        return {
+          disposition: closeMatches ? "close" : replaceMatches ? "replace" : "missing",
+          sessionGeneration: choiceIdentity.sessionGeneration,
+          choiceMessageSequence: choiceIdentity.messageSequence,
+          choiceProjectionSequence: choiceIdentity.sequence,
+          choiceProjectionChecksum: choiceIdentity.checksum,
+          authorityMessageSequence: closeMatches
+            ? close.messageSequence
+            : latestEvent?.messageSequence ?? null,
+          authorityProjectionSequence: closeMatches
+            ? close.projectionSequence
+            : latestEvent?.sequence ?? null,
+          authorityProjectionChecksum: closeMatches
+            ? close.projectionChecksum
+            : latestEvent?.checksum ?? null,
+          surface: root?.hidden ? "hidden" : root?.dataset.surface ?? "missing",
+          canvasFocused: document.activeElement === document.getElementById("canvas")
+        };
+      }, choiceEvent);
+      assert.notEqual(authority.disposition, "missing");
+      assert.equal(authority.canvasFocused, true, `${target} ${name} did not restore canvas focus.`);
+      assert.notEqual(authority.surface, "choice");
+
+      const afterCommit = await page.evaluate(() => window.__tgdTest.getF1State());
+      assert.equal(afterCommit.questCompletedObjectives, before.questCompletedObjectives + 1);
+      assert.equal(afterCommit.questSelectedChoices, before.questSelectedChoices + 1);
+      await page.waitForTimeout(150);
+      assert.equal(
+        (await page.evaluate(() => window.__tgdTest.getF1State())).questCompletedObjectives,
+        afterCommit.questCompletedObjectives,
+        `${target} ${name} advanced more than once after one DOM Action.`
+      );
+
+      const choiceTrace = await page.evaluate(
+        (start) => window.__tgdLifecycleTrace.slice(start).map((record) => ({ ...record })),
+        traceStart
+      );
+      const renderedIndex = choiceTrace.findIndex(
+        (record) => record.event === "quest_ui.rendered" &&
+          record.sequence === choiceEvent.sequence && record.checksum === choiceEvent.checksum &&
+          record.source === "choice_available"
+      );
+      assert(renderedIndex >= 0, `${target} ${name} did not render the formal choice event.`);
+      const authorityIndex = choiceTrace.findIndex((record, index) => index > renderedIndex && (
+        (authority.disposition === "close" && record.event === "quest_ui.closed" &&
+          record.sequence === choiceEvent.sequence && record.checksum === choiceEvent.checksum) ||
+        (authority.disposition === "replace" && record.event === "quest_ui.rendered" &&
+          record.source !== "choice_available")
+      ));
+      assert(authorityIndex > renderedIndex, `${target} ${name} lacked a later authority event.`);
+
+      const checkpoint = {
+        name,
+        laneRoute,
+        optionCount,
+        targetIndex,
+        beforeCompletedObjectives: before.questCompletedObjectives,
+        afterOpenCompletedObjectives: afterOpen.questCompletedObjectives,
+        afterCommitCompletedObjectives: afterCommit.questCompletedObjectives,
+        beforeSelectedChoices: before.questSelectedChoices,
+        afterCommitSelectedChoices: afterCommit.questSelectedChoices,
+        authority,
+        frame: choiceFrame,
+        screenshot: projectPath(screenshotPath)
+      };
+      authoredChoiceCheckpoints.push(checkpoint);
+      return checkpoint;
+    };
+
+    const beginWorldChoice = async (name) => {
+      const before = await page.evaluate(() => window.__tgdTest.getF1State());
+      assert(
+        await questUi.isHidden() || await questUi.getAttribute("data-surface") !== "choice",
+        `${target} ${name} began inside a projected choice surface.`
+      );
+      await canvas.focus();
+      return {
+        name,
+        before,
+        traceStart: await page.evaluate(() => window.__tgdLifecycleTrace.length)
+      };
+    };
+
+    const finishWorldChoice = async (probe) => {
+      const after = await page.evaluate(() => window.__tgdTest.getF1State());
+      assert.equal(after.questSelectedChoices, probe.before.questSelectedChoices + 1);
+      assert.equal(await questUi.getAttribute("data-surface"), "none");
+      assert.equal(await questUi.isVisible(), false);
+      assert.equal(
+        await page.evaluate(() => document.activeElement === document.getElementById("canvas")),
+        true,
+        `${target} ${probe.name} unexpectedly transferred focus to DOM UI.`
+      );
+      const trace = await page.evaluate(
+        (start) => window.__tgdLifecycleTrace.slice(start).map((record) => ({ ...record })),
+        probe.traceStart
+      );
+      assert.equal(
+        trace.some(
+          (record) => record.event === "quest_ui.rendered" &&
+            record.source === "choice_available"
+        ),
+        false,
+        `${target} ${probe.name} incorrectly opened a cue-less choice panel.`
+      );
+      const checkpoint = {
+        name: probe.name,
+        beforeSelectedChoices: probe.before.questSelectedChoices,
+        afterSelectedChoices: after.questSelectedChoices,
+        beforeBeatIndex: probe.before.questBeatIndex,
+        afterBeatIndex: after.questBeatIndex
+      };
+      worldChoiceCheckpoints.push(checkpoint);
+      return checkpoint;
+    };
     await waitForText(page, status, "宿主已就绪", 45_000);
     await waitForText(page, state, "presentation: running");
     await canvas.waitFor({ state: "visible" });
@@ -973,9 +1254,25 @@ async function runBrowser(target, origin) {
       ).toFixed(2)}% of the frame.`
     );
     const rainFerryReadiness = [
-      { ...rainFerryBranch.clue, completed: 2 },
+      {
+        ...rainFerryBranch.clue,
+        completed: 2,
+        authoredChoice: {
+          name: "arrival-clue",
+          ...authoredChoiceRoute.arrival,
+          screenshotName: `${target}-arrival-clue-choice.png`
+        }
+      },
       { ...rainFerryBranch.condition, completed: 3 },
-      { ...rainFerryBranch.mooringChoice, completed: 4 },
+      {
+        ...rainFerryBranch.mooringChoice,
+        completed: 4,
+        authoredChoice: {
+          name: "mooring-method",
+          ...authoredChoiceRoute.mooring,
+          screenshotName: `${target}-mooring-method-choice.png`
+        }
+      },
       { ...rainFerryBranch.mooringResolution, completed: 5 },
       { x: -8_700, y: -800, completed: 6 },
       { x: -8_400, y: 1_100, completed: 7 },
@@ -985,12 +1282,21 @@ async function runBrowser(target, origin) {
     ];
     for (const step of rainFerryReadiness) {
       await moveF1PlayerTo(page, step.x, step.y);
-      await page.keyboard.press("f");
-      await page.waitForFunction(
-        (completed) =>
-          window.__tgdTest?.getF1State()?.questCompletedObjectives === completed,
-        step.completed,
-        { timeout: 5_000 }
+      if (step.authoredChoice) {
+        await completeAuthoredChoice(step.authoredChoice);
+      } else {
+        await page.keyboard.press("f");
+        await page.waitForFunction(
+          (completed) =>
+            window.__tgdTest?.getF1State()?.questCompletedObjectives === completed,
+          step.completed,
+          { timeout: 5_000 }
+        );
+      }
+      assert.equal(
+        (await page.evaluate(() => window.__tgdTest.getF1State()))
+          .questCompletedObjectives,
+        step.completed
       );
     }
     await moveF1PlayerTo(page, -6_700, -600);
@@ -1017,11 +1323,14 @@ async function runBrowser(target, origin) {
       { timeout: 5_000 }
     );
     await moveF1PlayerTo(page, trainingBranch.choice.x, trainingBranch.choice.y);
-    await page.keyboard.press("f");
-    await page.waitForFunction(
-      () => window.__tgdTest?.getF1State()?.questCompletedObjectives === 2,
-      undefined,
-      { timeout: 5_000 }
+    await completeAuthoredChoice({
+      name: "training-lane",
+      ...authoredChoiceRoute.training,
+      screenshotName: `${target}-training-lane-choice.png`
+    });
+    assert.equal(
+      (await page.evaluate(() => window.__tgdTest.getF1State())).questCompletedObjectives,
+      2
     );
     await moveF1PlayerTo(page, trainingBranch.mark.x, trainingBranch.mark.y);
     await page.keyboard.press("f");
@@ -1451,12 +1760,14 @@ async function runBrowser(target, origin) {
     assert.equal(victoryState.questRequiredObjectives, 6);
 
     await moveF1PlayerTo(page, laneRoutePose.x, laneRoutePose.y);
+    const laneRouteChoiceProbe = await beginWorldChoice("umbrella-lane-route");
     await page.keyboard.press("f");
     await page.waitForFunction(
       () => window.__tgdTest?.getF1State()?.questBeatIndex === 3,
       undefined,
       { timeout: 5_000 }
     );
+    await finishWorldChoice(laneRouteChoiceProbe);
     await captureRenderedFrame(
       page,
       canvas,
@@ -1514,6 +1825,7 @@ async function runBrowser(target, origin) {
     assert.equal(workbenchState.questSelectedChoices, 4);
 
     await moveF1PlayerTo(page, -1_500, ribCalibration === "spring" ? 400 : -600);
+    const calibrationChoiceProbe = await beginWorldChoice("rib-calibration");
     await page.keyboard.press("f");
     await page.waitForFunction(
       () => {
@@ -1523,6 +1835,7 @@ async function runBrowser(target, origin) {
       undefined,
       { timeout: 5_000 }
     );
+    await finishWorldChoice(calibrationChoiceProbe);
     workbenchState = await page.evaluate(() => window.__tgdTest.getF1State());
     assert.equal(workbenchState.questCompletedObjectives, 0);
     assert.equal(workbenchState.questRequiredObjectives, 4);
@@ -1771,6 +2084,7 @@ async function runBrowser(target, origin) {
       resolutionChoicePath,
       `${target} ${resolutionChoice} resolution choice`
     );
+    const resolutionChoiceProbe = await beginWorldChoice("resolution");
     await page.keyboard.press("f");
     await page.waitForFunction(
       () => {
@@ -1781,6 +2095,7 @@ async function runBrowser(target, origin) {
       undefined,
       { timeout: 5_000 }
     );
+    await finishWorldChoice(resolutionChoiceProbe);
     const beforeRewardState = await page.evaluate(() => window.__tgdTest.getF1State());
     const beforeRewardProfile = await page.evaluate(() => window.__tgdProfile.getState());
     const rewardTraceStart = await page.evaluate(() => window.__tgdLifecycleTrace.length);
@@ -2165,6 +2480,8 @@ async function runBrowser(target, origin) {
       },
       replayProbe,
       checkpoints,
+      authoredChoiceCheckpoints,
+      worldChoiceCheckpoints,
       consoleProblems,
       expectedConsoleDiagnostics,
       pageErrors,
@@ -2196,7 +2513,10 @@ async function runBrowser(target, origin) {
       frameComparison,
       screenshots: [
         projectPath(resolve(reportDirectory, `${target}-quest-interaction-ready.png`)),
+        projectPath(resolve(reportDirectory, `${target}-arrival-clue-choice.png`)),
+        projectPath(resolve(reportDirectory, `${target}-mooring-method-choice.png`)),
         projectPath(resolve(reportDirectory, `${target}-quest-stage-advanced.png`)),
+        projectPath(resolve(reportDirectory, `${target}-training-lane-choice.png`)),
         projectPath(resolve(reportDirectory, `${target}-training-complete.png`)),
         projectPath(resolve(reportDirectory, `${target}-umbrella-lane-rainworks.png`)),
         projectPath(

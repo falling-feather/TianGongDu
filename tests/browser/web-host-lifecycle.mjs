@@ -20,6 +20,19 @@ function commaList(value) {
   return value.split(",").map((entry) => entry.trim()).filter(Boolean);
 }
 
+const stableKeyFnvOffset = 14_695_981_039_346_656_037n;
+const stableKeyFnvPrime = 1_099_511_628_211n;
+const stableKeyMask = (1n << 64n) - 1n;
+
+function stableContentKeyHex(name) {
+  let hash = stableKeyFnvOffset;
+  for (let index = 0; index < name.length; index += 1) {
+    hash ^= BigInt(name.charCodeAt(index));
+    hash = (hash * stableKeyFnvPrime) & stableKeyMask;
+  }
+  return hash.toString(16).padStart(16, "0");
+}
+
 const targets = commaList(
   argument("targets") ??
     process.env.TGD_BROWSER_TARGETS ??
@@ -652,6 +665,135 @@ async function runBrowser(target, origin) {
     const questUiPanel = questUi.locator(".quest-ui-panel");
     const authoredChoiceCheckpoints = [];
     const worldChoiceCheckpoints = [];
+    const questUiEmitterCheckpoints = [];
+
+    const currentQuestUiMessageSequence = async () =>
+      (await page.evaluate(() => window.__tgdQuestUi?.getState?.()?.messageSequence ?? "0"));
+
+    const waitForQuestUiProjection = async ({
+      name,
+      afterMessageSequence,
+      sourceName,
+      objectiveId,
+      polarityName,
+      classificationName,
+      primary,
+      secondary,
+      activeActorKeys = [],
+      inactiveActorKeys = []
+    }) => {
+      const expected = {
+        afterMessageSequence,
+        sourceName,
+        objective: stableContentKeyHex(objectiveId),
+        polarityName,
+        classificationName,
+        activeActorKeys: activeActorKeys.map((key) =>
+          BigInt(key).toString(16).padStart(16, "0")),
+        inactiveActorKeys: inactiveActorKeys.map((key) =>
+          BigInt(key).toString(16).padStart(16, "0")),
+        primary: primary ? {
+          id: primary.id ? stableContentKeyHex(primary.id) : "0000000000000000",
+          objective: primary.id
+            ? stableContentKeyHex(primary.objectiveId ?? objectiveId)
+            : "0000000000000000",
+          statusName: primary.statusName,
+          rejectionReasonName: primary.rejectionReasonName ?? "none"
+        } : null,
+        secondary: secondary ? {
+          id: secondary.id ? stableContentKeyHex(secondary.id) : "0000000000000000",
+          objective: secondary.id
+            ? stableContentKeyHex(secondary.objectiveId ?? objectiveId)
+            : "0000000000000000",
+          statusName: secondary.statusName,
+          rejectionReasonName: secondary.rejectionReasonName ?? "none"
+        } : null
+      };
+      try {
+        await page.waitForFunction(
+          (candidate) => {
+            const event = window.__tgdQuestUi?.getState?.();
+            const resultMatches = (actual, wanted) => wanted === null || (
+              actual?.id === wanted.id &&
+              actual?.objective === wanted.objective &&
+              actual?.statusName === wanted.statusName &&
+              actual?.rejectionReasonName === wanted.rejectionReasonName
+            );
+            return event &&
+              BigInt(event.messageSequence) > BigInt(candidate.afterMessageSequence) &&
+              event.sourceName === candidate.sourceName &&
+              event.objective === candidate.objective &&
+              event.polarityName === candidate.polarityName &&
+              event.attemptTimeClassificationName === candidate.classificationName &&
+              candidate.activeActorKeys.every((actor) => event.activeActorKeys.includes(actor)) &&
+              candidate.inactiveActorKeys.every((actor) => !event.activeActorKeys.includes(actor)) &&
+              resultMatches(event.primaryResult, candidate.primary) &&
+              resultMatches(event.secondaryResult, candidate.secondary);
+          },
+          expected,
+          { timeout: 5_000 }
+        );
+      } catch (error) {
+        const actual = await page.evaluate(() => window.__tgdQuestUi?.getState?.() ?? null);
+        throw new Error(
+          `${target} ${name} projection mismatch: expected=${JSON.stringify(expected)} ` +
+            `actual=${JSON.stringify(actual)}`,
+          { cause: error }
+        );
+      }
+      const event = await page.evaluate(() => window.__tgdQuestUi.getState());
+      assert.equal(event.sourceName, sourceName);
+      assert.equal(event.objective, expected.objective);
+      assert.equal(event.polarityName, polarityName);
+      assert.equal(event.attemptTimeClassificationName, classificationName);
+      for (const actor of expected.activeActorKeys) {
+        assert(event.activeActorKeys.includes(actor), `${target} ${name} omitted active Actor ${actor}.`);
+      }
+      for (const actor of expected.inactiveActorKeys) {
+        assert(
+          !event.activeActorKeys.includes(actor),
+          `${target} ${name} retained inactive Actor ${actor}.`
+        );
+      }
+      if (expected.primary) {
+        assert.deepEqual(
+          {
+            id: event.primaryResult.id,
+            objective: event.primaryResult.objective,
+            statusName: event.primaryResult.statusName,
+            rejectionReasonName: event.primaryResult.rejectionReasonName
+          },
+          expected.primary
+        );
+      }
+      if (expected.secondary) {
+        assert.deepEqual(
+          {
+            id: event.secondaryResult.id,
+            objective: event.secondaryResult.objective,
+            statusName: event.secondaryResult.statusName,
+            rejectionReasonName: event.secondaryResult.rejectionReasonName
+          },
+          expected.secondary
+        );
+      }
+      const checkpoint = {
+        name,
+        messageSequence: event.messageSequence,
+        projectionSequence: event.sequence,
+        projectionChecksum: event.checksum,
+        sourceName: event.sourceName,
+        objective: event.objective,
+        polarityName: event.polarityName,
+        classificationName: event.attemptTimeClassificationName,
+        primaryResult: event.primaryResult,
+        secondaryResult: event.secondaryResult,
+        activeActorKeys: event.activeActorKeys,
+        defeatedActorKeys: event.defeatedActorKeys
+      };
+      questUiEmitterCheckpoints.push(checkpoint);
+      return checkpoint;
+    };
 
     const completeAuthoredChoice = async ({
       name,
@@ -880,8 +1022,11 @@ async function runBrowser(target, origin) {
     const finishWorldChoice = async (probe) => {
       const after = await page.evaluate(() => window.__tgdTest.getF1State());
       assert.equal(after.questSelectedChoices, probe.before.questSelectedChoices + 1);
-      assert.equal(await questUi.getAttribute("data-surface"), "none");
-      assert.equal(await questUi.isVisible(), false);
+      assert.notEqual(
+        await questUi.getAttribute("data-surface"),
+        "choice",
+        `${target} ${probe.name} left a cue-less choice panel active.`
+      );
       assert.equal(
         await page.evaluate(() => document.activeElement === document.getElementById("canvas")),
         true,
@@ -1282,8 +1427,10 @@ async function runBrowser(target, origin) {
     ];
     for (const step of rainFerryReadiness) {
       await moveF1PlayerTo(page, step.x, step.y);
+      const beforeMessageSequence = await currentQuestUiMessageSequence();
+      let authoredChoiceCheckpoint = null;
       if (step.authoredChoice) {
-        await completeAuthoredChoice(step.authoredChoice);
+        authoredChoiceCheckpoint = await completeAuthoredChoice(step.authoredChoice);
       } else {
         await page.keyboard.press("f");
         await page.waitForFunction(
@@ -1298,6 +1445,105 @@ async function runBrowser(target, origin) {
           .questCompletedObjectives,
         step.completed
       );
+      if (step.completed === 2) {
+        await moveF1PlayerTo(page, -11_400, -3_100);
+        const repeatBefore = await page.evaluate(() => window.__tgdTest.getF1State());
+        const repeatMessageSequence = await currentQuestUiMessageSequence();
+        await canvas.focus();
+        await page.keyboard.press("f");
+        await waitForQuestUiProjection({
+          name: "arrival-clue-repeat",
+          afterMessageSequence: repeatMessageSequence,
+          sourceName: "interaction_feedback",
+          objectiveId: "f1_objective_choose_arrival_clue",
+          polarityName: "negative",
+          classificationName: "repeat_no_progress",
+          primary: {
+            id: "f1_interaction_arrival_clue_drowned_manifest",
+            statusName: "ignored_repeat",
+            rejectionReasonName: "selection_already_committed"
+          },
+          secondary: { statusName: "not_applicable" }
+        });
+        const repeatAfter = await page.evaluate(() => window.__tgdTest.getF1State());
+        assert.equal(repeatAfter.questCompletedObjectives, repeatBefore.questCompletedObjectives);
+        assert.equal(repeatAfter.questSelectedChoices, repeatBefore.questSelectedChoices);
+      }
+      if (step.completed === 4 && laneRoute === "drain") {
+        assert(authoredChoiceCheckpoint, `${target} quick-hitch choice checkpoint missing.`);
+        await waitForQuestUiProjection({
+          name: "quick-hitch-overload",
+          afterMessageSequence:
+            authoredChoiceCheckpoint.authority.choiceMessageSequence,
+          sourceName: "interaction_feedback",
+          objectiveId: "f1_objective_secure_ferry_mooring",
+          polarityName: "negative",
+          classificationName: "qualifying_error_feedback",
+          primary: {
+            id: "f1_interaction_choose_quick_hitch",
+            objectiveId: "f1_objective_choose_mooring_method",
+            statusName: "accepted"
+          },
+          secondary: { statusName: "not_applicable" }
+        });
+      }
+      if (step.completed === 5 && laneRoute === "canopy") {
+        await waitForQuestUiProjection({
+          name: "cross-belay-stable",
+          afterMessageSequence: beforeMessageSequence,
+          sourceName: "interaction_feedback",
+          objectiveId: "f1_objective_secure_ferry_mooring",
+          polarityName: "positive",
+          classificationName: "qualifying_craft_decision",
+          primary: {
+            id: "f1_interaction_lock_cross_belay",
+            statusName: "accepted"
+          },
+          secondary: { statusName: "not_applicable" }
+        });
+      }
+      if (step.completed === 8) {
+        await moveF1PlayerTo(page, -7_100, 300);
+        const wrongOrderBefore = await page.evaluate(() => window.__tgdTest.getF1State());
+        const wrongOrderMessageSequence = await currentQuestUiMessageSequence();
+        await canvas.focus();
+        await page.keyboard.press("f");
+        await waitForQuestUiProjection({
+          name: "bell-wrong-order",
+          afterMessageSequence: wrongOrderMessageSequence,
+          sourceName: "interaction_feedback",
+          objectiveId: "f1_objective_sound_workshop_bell",
+          polarityName: "negative",
+          classificationName: "qualifying_wrong_order_feedback",
+          primary: {
+            id: "f1_interaction_sound_workshop_bell",
+            statusName: "rejected",
+            rejectionReasonName: "prerequisite_incomplete"
+          },
+          secondary: { statusName: "not_applicable" }
+        });
+        const wrongOrderAfter = await page.evaluate(() => window.__tgdTest.getF1State());
+        assert.equal(
+          wrongOrderAfter.questCompletedObjectives,
+          wrongOrderBefore.questCompletedObjectives
+        );
+        assert.equal(wrongOrderAfter.questSelectedChoices, wrongOrderBefore.questSelectedChoices);
+      }
+      if (step.completed === 10) {
+        await waitForQuestUiProjection({
+          name: "bell-code-accepted",
+          afterMessageSequence: beforeMessageSequence,
+          sourceName: "interaction_feedback",
+          objectiveId: "f1_objective_sound_workshop_bell",
+          polarityName: "positive",
+          classificationName: "qualifying_craft_confirmation",
+          primary: {
+            id: "f1_interaction_sound_workshop_bell",
+            statusName: "accepted"
+          },
+          secondary: { statusName: "not_applicable" }
+        });
+      }
     }
     await moveF1PlayerTo(page, -6_700, -600);
     await page.keyboard.press("f");
@@ -1333,6 +1579,7 @@ async function runBrowser(target, origin) {
       2
     );
     await moveF1PlayerTo(page, trainingBranch.mark.x, trainingBranch.mark.y);
+    const eavesguardPhaseBefore = await currentQuestUiMessageSequence();
     await page.keyboard.press("f");
     await page.waitForFunction(
       () => {
@@ -1342,6 +1589,17 @@ async function runBrowser(target, origin) {
       undefined,
       { timeout: 5_000 }
     );
+    await waitForQuestUiProjection({
+      name: "eavesguard-phase",
+      afterMessageSequence: eavesguardPhaseBefore,
+      sourceName: "objective_state",
+      objectiveId: "f1_objective_eavesguard_counter",
+      polarityName: "positive",
+      classificationName: "qualifying_training_risk",
+      primary: { statusName: "not_applicable" },
+      secondary: { statusName: "not_applicable" },
+      activeActorKeys: [104]
+    });
     const combatReadyPath = resolve(reportDirectory, `${target}-combat-ready.png`);
     const combatActionPath = resolve(reportDirectory, `${target}-combat-action.png`);
     const combatHitPath = resolve(reportDirectory, `${target}-combat-hit.png`);
@@ -1355,6 +1613,7 @@ async function runBrowser(target, origin) {
       combatReadyPath,
       `${target} combat ready`
     );
+    const eavesguardProofBefore = await currentQuestUiMessageSequence();
     await page.keyboard.down("Shift");
     await page.waitForFunction(
       () => {
@@ -1373,6 +1632,20 @@ async function runBrowser(target, origin) {
     const guardedRigState = await page.evaluate(() => window.__tgdTest.getF1State());
     assert.equal(guardedRigState.questCompletedObjectives, 4);
     assert.equal(guardedRigState.activeHostiles, 1);
+    await waitForQuestUiProjection({
+      name: "eavesguard-trigger-accepted",
+      afterMessageSequence: eavesguardProofBefore,
+      sourceName: "combat_feedback",
+      objectiveId: "f1_objective_eavesguard_counter",
+      polarityName: "positive",
+      classificationName: "qualifying_combat_proof",
+      primary: {
+        id: "f1_trigger_eavesguard_counter",
+        statusName: "accepted"
+      },
+      secondary: { statusName: "not_applicable" },
+      activeActorKeys: [104]
+    });
     await page.keyboard.up("Shift");
     await page.waitForTimeout(120);
 
@@ -1459,12 +1732,24 @@ async function runBrowser(target, origin) {
       { timeout: 5_000 }
     );
     await moveF1PlayerTo(page, -3_400, -1_700);
+    const flowerPhaseBefore = await currentQuestUiMessageSequence();
     await page.keyboard.press("f");
     await page.waitForFunction(
       () => window.__tgdTest?.getF1State()?.questCompletedObjectives === 9,
       undefined,
       { timeout: 5_000 }
     );
+    await waitForQuestUiProjection({
+      name: "flower-turn-phase",
+      afterMessageSequence: flowerPhaseBefore,
+      sourceName: "objective_state",
+      objectiveId: "f1_objective_flower_turn_counter",
+      polarityName: "positive",
+      classificationName: "qualifying_training_risk",
+      primary: { statusName: "not_applicable" },
+      secondary: { statusName: "not_applicable" },
+      activeActorKeys: [108]
+    });
 
     const evadeDeadline = Date.now() + 20_000;
     while (trainingState.questCompletedObjectives < 10 && Date.now() < evadeDeadline) {
@@ -1512,12 +1797,33 @@ async function runBrowser(target, origin) {
       undefined,
       { timeout: 5_000 }
     );
+    const flowerWrongTargetBefore = await currentQuestUiMessageSequence();
     await page.keyboard.press("k");
     await page.waitForFunction(
       () => window.__tgdTest?.getF1State()?.questCompletedObjectives === 12,
       undefined,
       { timeout: 5_000 }
     );
+    await waitForQuestUiProjection({
+      name: "flower-heavy-wrong-target",
+      afterMessageSequence: flowerWrongTargetBefore,
+      sourceName: "combat_feedback",
+      objectiveId: "f1_objective_break_flower_turn_target",
+      polarityName: "negative",
+      classificationName: "qualifying_combat_feedback",
+      primary: {
+        id: "f1_trigger_flower_turn_heavy",
+        objectiveId: "f1_objective_commit_flower_turn_heavy",
+        statusName: "accepted"
+      },
+      secondary: {
+        id: "f1_outcome_break_flower_turn_target",
+        statusName: "rejected",
+        rejectionReasonName: "wrong_target"
+      },
+      activeActorKeys: [109],
+      inactiveActorKeys: [108]
+    });
 
     const flowerTargetDeadline = Date.now() + 30_000;
     trainingState = await page.evaluate(() => window.__tgdTest.getF1State());
@@ -2482,6 +2788,7 @@ async function runBrowser(target, origin) {
       checkpoints,
       authoredChoiceCheckpoints,
       worldChoiceCheckpoints,
+      questUiEmitterCheckpoints,
       consoleProblems,
       expectedConsoleDiagnostics,
       pageErrors,

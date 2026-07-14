@@ -77,6 +77,7 @@ class F1GrayboxLayer final :
 
     static constexpr std::size_t hostile_capacity = 6;
     static constexpr std::size_t combat_intent_capacity = 8;
+    static constexpr std::size_t quest_ui_combat_feedback_capacity = 8;
     static constexpr std::size_t quest_marker_capacity =
         tgd::gameplay::DeterministicQuestInteractionResolver::interaction_capacity;
 
@@ -100,6 +101,19 @@ class F1GrayboxLayer final :
     void submitQuestCombatOutcome(const tgd::contracts::CombatEvent& event) noexcept;
     void submitQuestBossPhase() noexcept;
     void syncBossStanceForQuest() noexcept;
+    void publishQuestUiInteractionFeedback(
+        const tgd::gameplay::QuestInteractionResult& interaction,
+        bool quest_command_accepted
+    ) noexcept;
+    void publishQuestUiCombatFeedback(
+        const tgd::gameplay::QuestCombatTriggerResult& trigger,
+        const tgd::contracts::CombatEvent& event
+    ) noexcept;
+    void publishPendingQuestUiObjectiveState() noexcept;
+    void publishPendingQuestUiCombatFeedback() noexcept;
+    void publishQuestUiRecovery(
+        tgd::contracts::QuestUiProjectionSource source
+    ) noexcept;
     [[nodiscard]] QuestUiPublication publishQuestUiProjection(
         const tgd::contracts::QuestUiProjectionSignal& signal
     ) noexcept;
@@ -144,9 +158,12 @@ class F1GrayboxLayer final :
     tgd::gameplay::DeterministicQuestInteractionResolver quest_interactions_{};
     tgd::gameplay::DeterministicQuestCombatTriggerResolver quest_combat_triggers_{};
     tgd::gameplay::DeterministicQuestCombatOutcomeResolver quest_combat_outcomes_{};
+    tgd::gameplay::DeterministicQuestCombatOutcomeAttemptResolver
+        quest_combat_outcome_attempts_{};
     tgd::gameplay::DeterministicQuestBossPhaseResolver quest_boss_phases_{};
     tgd::gameplay::DeterministicQuestResolutionRewardResolver quest_resolution_rewards_{};
     tgd::gameplay::DeterministicQuestUiProjectionProducer quest_ui_projection_{};
+    F1QuestUiSignalEmitter quest_ui_signal_emitter_{};
     tgd::gameplay::SessionInputState input_{};
     tgd::contracts::PlatformSequence platform_sequence_{};
     tgd::contracts::CommandSequence command_sequence_{1};
@@ -168,6 +185,12 @@ class F1GrayboxLayer final :
     tgd::contracts::StableActorKey incoming_attack_source_{};
     tgd::contracts::StableContentKey pending_encounter_activation_beat_{};
     tgd::contracts::StableContentKey pending_encounter_activation_objective_{};
+    tgd::contracts::StableContentKey pending_quest_ui_objective_state_{};
+    std::array<
+        tgd::contracts::QuestUiProjectionSignal,
+        quest_ui_combat_feedback_capacity
+    > pending_quest_ui_combat_feedback_{};
+    std::size_t pending_quest_ui_combat_feedback_count_{};
     tgd::contracts::StableContentKey pending_boss_stance_{};
     tgd::contracts::StableContentKey resolution_reward_{};
     tgd::contracts::StableContentKey resolution_reward_dedup_key_{};

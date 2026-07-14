@@ -245,6 +245,27 @@ add_test(
   COMMAND tgd_native_quest_ui_projection
 )
 
+add_executable(tgd_native_f1_quest_ui_emitter f1_quest_ui_emitter.cpp)
+target_compile_features(tgd_native_f1_quest_ui_emitter PRIVATE cxx_std_20)
+tgd_enable_strict_warnings(tgd_native_f1_quest_ui_emitter)
+target_link_libraries(
+  tgd_native_f1_quest_ui_emitter
+  PRIVATE
+    tgd_contracts
+    tgd_gameplay
+    tgd_content_core
+)
+target_include_directories(
+  tgd_native_f1_quest_ui_emitter
+  PRIVATE
+    ${PROJECT_SOURCE_DIR}/apps/web-shell/Source
+)
+
+add_test(
+  NAME tgd.native.f1-quest-ui-emitter
+  COMMAND tgd_native_f1_quest_ui_emitter
+)
+
 add_test(
   NAME tgd.architecture.reject-reverse-link
   COMMAND

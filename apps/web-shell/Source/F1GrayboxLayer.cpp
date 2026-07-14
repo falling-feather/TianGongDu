@@ -530,12 +530,16 @@ bool F1GrayboxLayer::init() {
         (!definition_->quest_ui_cues.empty() &&
          quest_ui_projection_.initialize(*definition_) !=
              tgd::gameplay::QuestUiProjectionError::none) ||
-        quest_interactions_.initialize(definition_->quest_interactions) !=
+        quest_ui_signal_emitter_.initialize(*definition_) !=
+            F1QuestUiSignalEmitterError::none ||
+        quest_interactions_.initialize(*definition_) !=
             tgd::gameplay::QuestInteractionError::none ||
         quest_combat_triggers_.initialize(definition_->quest_combat_triggers) !=
             tgd::gameplay::QuestCombatTriggerError::none ||
         quest_combat_outcomes_.initialize(definition_->quest_combat_outcomes) !=
             tgd::gameplay::QuestCombatOutcomeError::none ||
+        quest_combat_outcome_attempts_.initialize(*definition_) !=
+            tgd::gameplay::QuestCombatOutcomeAttemptError::none ||
         quest_boss_phases_.initialize(definition_->quest_boss_phases) !=
             tgd::gameplay::QuestBossPhaseError::none ||
         quest_resolution_rewards_.initialize(definition_->quest_resolution_rewards) !=
@@ -663,46 +667,115 @@ F1GrayboxLayer::QuestUiPublication F1GrayboxLayer::publishQuestUiProjection(
 void F1GrayboxLayer::publishAcceptedChoiceFeedback(
     const tgd::contracts::QuestUiSelectionIntent& intent
 ) noexcept {
-    const auto stage = session_.quest_snapshot().stage;
-    const auto beat = std::find_if(
-        definition_->beats.begin(),
-        definition_->beats.end(),
-        [stage](const tgd::contracts::VerticalSliceBeatDefinition& candidate) {
-            return candidate.id.key == stage;
-        }
+    const auto emission = quest_ui_signal_emitter_.accepted_choice_feedback(
+        intent,
+        session_.quest_runtime()
     );
-    if (beat == definition_->beats.end()) {
+    if (emission.error != F1QuestUiSignalEmitterError::none || !emission.found) {
         return;
     }
-    const auto origin = std::find_if(
-        beat->objectives.begin(),
-        beat->objectives.end(),
-        [&intent](const tgd::contracts::ContentId& objective) {
-            return objective.key == intent.objective;
-        }
-    );
-    if (origin == beat->objectives.end()) {
-        return;
-    }
+    static_cast<void>(publishQuestUiProjection(emission.signal));
+}
 
-    tgd::contracts::QuestUiProjectionSignal signal;
-    signal.source = tgd::contracts::QuestUiProjectionSource::interaction_feedback;
-    signal.primary_result = {
-        intent.interaction,
-        intent.objective,
-        tgd::contracts::QuestUiResultStatus::accepted,
-        tgd::contracts::QuestUiRejectionReason::none,
-    };
-    const auto next = origin + 1;
-    if (next != beat->objectives.end() &&
-        session_.objective_state(next->key) == tgd::gameplay::QuestObjectiveState::active) {
-        signal.objective = next->key;
-        if (publishQuestUiProjection(signal).projected) {
-            return;
+void F1GrayboxLayer::publishQuestUiInteractionFeedback(
+    const tgd::gameplay::QuestInteractionResult& interaction,
+    bool quest_command_accepted
+) noexcept {
+    const auto emission = quest_ui_signal_emitter_.interaction_feedback(
+        interaction,
+        quest_command_accepted,
+        session_.quest_runtime()
+    );
+    if (emission.error != F1QuestUiSignalEmitterError::none) {
+        if (combat_event_label_ != nullptr) {
+            combat_event_label_->setString("QUEST UI INTERACTION SIGNAL REJECTED / CONTRACT DRIFT");
         }
+        return;
     }
-    signal.objective = intent.objective;
-    static_cast<void>(publishQuestUiProjection(signal));
+    if (!emission.found) {
+        return;
+    }
+    static_cast<void>(publishQuestUiProjection(emission.signal));
+}
+
+void F1GrayboxLayer::publishQuestUiCombatFeedback(
+    const tgd::gameplay::QuestCombatTriggerResult& trigger,
+    const tgd::contracts::CombatEvent& event
+) noexcept {
+    const auto attempt = quest_combat_outcome_attempts_.evaluate_attempt(
+        trigger,
+        event,
+        combat_.actors(),
+        session_.quest_runtime()
+    );
+    const auto emission = quest_ui_signal_emitter_.combat_feedback(
+        trigger,
+        attempt,
+        session_.quest_runtime()
+    );
+    if (emission.error != F1QuestUiSignalEmitterError::none) {
+        if (combat_event_label_ != nullptr) {
+            combat_event_label_->setString("QUEST UI COMBAT SIGNAL REJECTED / CONTRACT DRIFT");
+        }
+        return;
+    }
+    if (!emission.found) {
+        return;
+    }
+    if (pending_quest_ui_combat_feedback_count_ >=
+        pending_quest_ui_combat_feedback_.size()) {
+        if (combat_event_label_ != nullptr) {
+            combat_event_label_->setString("QUEST UI COMBAT SIGNAL REJECTED / QUEUE CAPACITY");
+        }
+        return;
+    }
+    pending_quest_ui_combat_feedback_[pending_quest_ui_combat_feedback_count_++] =
+        emission.signal;
+}
+
+void F1GrayboxLayer::publishPendingQuestUiObjectiveState() noexcept {
+    if (pending_quest_ui_objective_state_ == 0) {
+        return;
+    }
+    if (session_.quest_runtime().objective_state(pending_quest_ui_objective_state_) !=
+        tgd::gameplay::QuestObjectiveState::active) {
+        pending_quest_ui_objective_state_ = 0;
+        return;
+    }
+    tgd::contracts::QuestUiProjectionSignal signal;
+    signal.source = tgd::contracts::QuestUiProjectionSource::objective_state;
+    signal.objective = pending_quest_ui_objective_state_;
+    if (publishQuestUiProjection(signal).projected) {
+        pending_quest_ui_objective_state_ = 0;
+    }
+}
+
+void F1GrayboxLayer::publishPendingQuestUiCombatFeedback() noexcept {
+    for (std::size_t index = 0; index < pending_quest_ui_combat_feedback_count_; ++index) {
+        static_cast<void>(publishQuestUiProjection(pending_quest_ui_combat_feedback_[index]));
+    }
+    pending_quest_ui_combat_feedback_ = {};
+    pending_quest_ui_combat_feedback_count_ = 0;
+}
+
+void F1GrayboxLayer::publishQuestUiRecovery(
+    tgd::contracts::QuestUiProjectionSource source
+) noexcept {
+    const auto emission = quest_ui_signal_emitter_.recovery(
+        source,
+        session_.quest_runtime()
+    );
+    if (emission.error != F1QuestUiSignalEmitterError::none || !emission.found) {
+        return;
+    }
+    if (!quest_ui_projection_.has_authored_cue(
+            session_.quest_runtime().snapshot().stage,
+            emission.signal.objective,
+            source
+        )) {
+        return;
+    }
+    static_cast<void>(publishQuestUiProjection(emission.signal));
 }
 
 void F1GrayboxLayer::notifyRewardClaimCommitted(
@@ -1085,7 +1158,7 @@ void F1GrayboxLayer::simulateTick() noexcept {
     }
     if (commands.interact_pressed) {
         const auto& snapshot = session_.current_snapshot();
-        const auto interaction = quest_interactions_.resolve(
+        const auto interaction = quest_interactions_.resolve_attempt(
             {definition_->player.actor, snapshot.cell_id.key, snapshot.player_pose},
             session_.quest_runtime()
         );
@@ -1099,6 +1172,11 @@ void F1GrayboxLayer::simulateTick() noexcept {
             if (combat_event_label_ != nullptr) {
                 combat_event_label_->setString("NO ACTIVE QUEST INTERACTION IN RANGE");
             }
+        } else if (
+            interaction.availability !=
+            tgd::gameplay::QuestInteractionAvailability::eligible
+        ) {
+            publishQuestUiInteractionFeedback(interaction, false);
         } else if (
             interaction.kind == tgd::contracts::QuestInteractionKind::choose &&
             quest_ui_projection_.has_authored_cue(
@@ -1135,17 +1213,24 @@ void F1GrayboxLayer::simulateTick() noexcept {
                 }
                 return;
             }
+            if (completed.accepted) {
+                publishQuestUiInteractionFeedback(interaction, true);
+            }
         }
     }
     if (!applyPendingEncounterActivation()) {
         return;
     }
+    publishPendingQuestUiObjectiveState();
+    publishPendingQuestUiCombatFeedback();
     if (!submitCombatTick(next_tick)) {
         return;
     }
     if (!applyPendingEncounterActivation()) {
         return;
     }
+    publishPendingQuestUiObjectiveState();
+    publishPendingQuestUiCombatFeedback();
     if (player_action_ticks_ > 0) {
         --player_action_ticks_;
     }
@@ -1401,6 +1486,9 @@ void F1GrayboxLayer::publish(
             player_defeated_ = true;
             retry_requested_ = false;
             clearHeldInput(tgd::contracts::InputClearReason::player_defeated, false);
+            publishQuestUiRecovery(
+                tgd::contracts::QuestUiProjectionSource::recovery_offer
+            );
         } else if (event.type == tgd::contracts::CombatEventType::encounter_restarted) {
             player_defeated_ = false;
             retry_requested_ = false;
@@ -1500,6 +1588,18 @@ void F1GrayboxLayer::publish(
             }
         }
         if (event.type == tgd::contracts::QuestEventType::objective_completed) {
+            const auto phase = quest_ui_signal_emitter_.objective_state_after(
+                event,
+                session_.quest_runtime()
+            );
+            if (phase.error == F1QuestUiSignalEmitterError::none && phase.found &&
+                quest_ui_projection_.has_authored_cue(
+                    session_.quest_runtime().snapshot().stage,
+                    phase.signal.objective,
+                    phase.signal.source
+                )) {
+                pending_quest_ui_objective_state_ = phase.signal.objective;
+            }
             const auto activation = std::find_if(
                 definition_->quest_encounter_activations.begin(),
                 definition_->quest_encounter_activations.end(),
@@ -1516,6 +1616,7 @@ void F1GrayboxLayer::publish(
         } else if (event.type == tgd::contracts::QuestEventType::stage_advanced) {
             pending_encounter_activation_beat_ = event.stage;
             pending_encounter_activation_objective_ = 0;
+            pending_quest_ui_objective_state_ = 0;
         }
         if (combat_event_label_ == nullptr) {
             continue;
@@ -1698,10 +1799,14 @@ void F1GrayboxLayer::submitQuestCombatSignal(
     }
     if (resolved.found) {
         const auto completed = session_.complete_objective(resolved.objective, *this);
-        if (completed.error != tgd::gameplay::VerticalSliceError::none &&
-            combat_event_label_ != nullptr) {
-            combat_event_label_->setString("COMBAT OBJECTIVE REJECTED / QUEST STATE DRIFT");
+        if (completed.error != tgd::gameplay::VerticalSliceError::none ||
+            !completed.accepted) {
+            if (combat_event_label_ != nullptr) {
+                combat_event_label_->setString("COMBAT OBJECTIVE REJECTED / QUEST STATE DRIFT");
+            }
+            return;
         }
+        publishQuestUiCombatFeedback(resolved, event);
     }
 }
 
@@ -1997,6 +2102,7 @@ bool F1GrayboxLayer::submitCombatTick(tgd::contracts::TickIndex tick) noexcept {
 
 bool F1GrayboxLayer::retryEncounter() noexcept {
     const auto completed_tick = session_.current_snapshot().tick;
+    const auto quest_before_retry = session_.quest_snapshot();
     const auto actors = combat_.actors();
     const auto player = std::find_if(
         actors.begin(),
@@ -2028,6 +2134,12 @@ bool F1GrayboxLayer::retryEncounter() noexcept {
     if (!restoreEncounterForBeat(session_.current_snapshot().beat_id.key)) {
         return false;
     }
+    const auto& quest_after_retry = session_.quest_snapshot();
+    if (quest_after_retry.completed_total != quest_before_retry.completed_total ||
+        quest_after_retry.selection_count != quest_before_retry.selection_count ||
+        quest_after_retry.checksum != quest_before_retry.checksum) {
+        return false;
+    }
     ++retry_count_;
     player_action_ticks_ = 0;
     player_hit_ticks_ = 0;
@@ -2038,6 +2150,9 @@ bool F1GrayboxLayer::retryEncounter() noexcept {
     if (combat_event_label_ != nullptr) {
         combat_event_label_->setString("ENCOUNTER RETRIED / SAFE POINT RESTORED");
     }
+    publishQuestUiRecovery(
+        tgd::contracts::QuestUiProjectionSource::recovery_resume
+    );
     return true;
 }
 

@@ -309,12 +309,24 @@ const f1MovementDistanceQuantum = 80;
 const f1MovementAttemptMargin = 8;
 const f1MovementMinimumAttempts = 10;
 const f1MovementMaximumAttempts = 256;
-const f1MovementNoProgressLimit = 12;
+const f1MovementAxisProbeLimit = 3;
 const f1MovementDiagnosticsByPage = new WeakMap();
 
+function f1MovementAxisRemaining(state, targetX, targetY, tolerance) {
+  return {
+    x: Math.max(0, Math.abs(targetX - state.playerPoseX) - tolerance),
+    y: Math.max(0, Math.abs(targetY - state.playerPoseY) - tolerance)
+  };
+}
+
+function f1MovementTotalRemaining(axisRemaining) {
+  return axisRemaining.x + axisRemaining.y;
+}
+
 function f1MovementRemainingDistance(state, targetX, targetY, tolerance) {
-  return Math.max(0, Math.abs(targetX - state.playerPoseX) - tolerance) +
-    Math.max(0, Math.abs(targetY - state.playerPoseY) - tolerance);
+  return f1MovementTotalRemaining(
+    f1MovementAxisRemaining(state, targetX, targetY, tolerance)
+  );
 }
 
 function deriveF1MovementAttemptBudget(initialRemainingDistance) {
@@ -330,10 +342,103 @@ function deriveF1MovementAttemptBudget(initialRemainingDistance) {
   };
 }
 
-function updateF1MovementProgress(bestRemainingDistance, remainingDistance, noProgressCount) {
-  return remainingDistance < bestRemainingDistance
-    ? { bestRemainingDistance: remainingDistance, noProgressCount: 0 }
-    : { bestRemainingDistance, noProgressCount: noProgressCount + 1 };
+function selectF1MovementPrimaryAxis(axisRemaining) {
+  if (axisRemaining.x <= 0 && axisRemaining.y <= 0) return null;
+  if (axisRemaining.x <= 0) return "y";
+  if (axisRemaining.y <= 0) return "x";
+  return axisRemaining.x >= axisRemaining.y ? "x" : "y";
+}
+
+function createF1MovementAxisStrategy(axisRemaining) {
+  const primaryAxis = selectF1MovementPrimaryAxis(axisRemaining);
+  return {
+    primaryAxis,
+    currentAxis: primaryAxis,
+    noProgress: { x: 0, y: 0 },
+    exhausted: { x: false, y: false }
+  };
+}
+
+function f1MovementStrategyName(axisStrategy) {
+  return axisStrategy.currentAxis === axisStrategy.primaryAxis ? "primary" : "alternate";
+}
+
+function updateF1MovementAxisStrategy(axisStrategy, beforeRemaining, afterRemaining) {
+  const axis = axisStrategy.currentAxis;
+  assert(axis === "x" || axis === "y", "F1 movement strategy requires an active axis.");
+  const strategy = f1MovementStrategyName(axisStrategy);
+  const axisProgress = beforeRemaining[axis] - afterRemaining[axis];
+
+  if (axisProgress > 0) {
+    const nextState = createF1MovementAxisStrategy(afterRemaining);
+    return {
+      axisProgress,
+      failureReason: null,
+      transition: strategy === "alternate"
+        ? "alternate-progress-return-primary"
+        : "primary-progress",
+      nextState
+    };
+  }
+
+  const noProgress = {
+    ...axisStrategy.noProgress,
+    [axis]: axisStrategy.noProgress[axis] + 1
+  };
+  if (noProgress[axis] < f1MovementAxisProbeLimit) {
+    return {
+      axisProgress,
+      failureReason: null,
+      transition: `${strategy}-probe-no-progress-${noProgress[axis]}/${f1MovementAxisProbeLimit}`,
+      nextState: { ...axisStrategy, noProgress }
+    };
+  }
+
+  const exhausted = { ...axisStrategy.exhausted, [axis]: true };
+  const otherAxis = axis === "x" ? "y" : "x";
+  if (afterRemaining[otherAxis] > 0 && !exhausted[otherAxis]) {
+    const nextState = {
+      ...axisStrategy,
+      currentAxis: otherAxis,
+      noProgress,
+      exhausted
+    };
+    return {
+      axisProgress,
+      failureReason: null,
+      transition: `${strategy}-stalled-switch-${f1MovementStrategyName(nextState)}`,
+      nextState
+    };
+  }
+
+  return {
+    axisProgress,
+    failureReason: "axis-strategies-exhausted",
+    transition: "axis-strategies-exhausted",
+    nextState: { ...axisStrategy, noProgress, exhausted }
+  };
+}
+
+function f1MovementKeysForAxis(axis, delta) {
+  if (axis === "x") return delta > 0 ? ["w", "d"] : ["s", "a"];
+  if (axis === "y") return delta > 0 ? ["w", "a"] : ["s", "d"];
+  throw new Error(`Unsupported F1 movement axis: ${axis}`);
+}
+
+function canAttemptF1Movement(attempts, attemptBudget) {
+  return attempts < Math.min(attemptBudget, f1MovementMaximumAttempts);
+}
+
+function serializeF1MovementFailure(error) {
+  const failure = error && typeof error === "object" ? error.f1MovementFailure : null;
+  if (!failure || !Array.isArray(failure.movementAttempts)) return {};
+  const screenshot = typeof failure.screenshot === "string" ? failure.screenshot : null;
+  return {
+    movementAttempts: failure.movementAttempts,
+    movementFailureScreenshot: screenshot,
+    movementFailureScreenshotError: failure.screenshotError ?? null,
+    screenshots: screenshot ? [screenshot] : []
+  };
 }
 
 function assertF1MovementBudgetContract() {
@@ -347,21 +452,89 @@ function assertF1MovementBudgetContract() {
 
   const cappedMove = deriveF1MovementAttemptBudget(Number.MAX_SAFE_INTEGER);
   assert.equal(cappedMove.attemptBudget, f1MovementMaximumAttempts);
-  assert.ok(f1MovementNoProgressLimit < cappedMove.attemptBudget);
+  assert.ok(f1MovementAxisProbeLimit < cappedMove.attemptBudget);
+  assert.equal(canAttemptF1Movement(255, cappedMove.attemptBudget), true);
+  assert.equal(canAttemptF1Movement(256, cappedMove.attemptBudget), false);
+  assert.equal(canAttemptF1Movement(256, f1MovementMaximumAttempts + 1), false);
 
-  let stalledProgress = { bestRemainingDistance: 1_000, noProgressCount: 0 };
-  for (let index = 0; index < f1MovementNoProgressLimit; index += 1) {
-    stalledProgress = updateF1MovementProgress(
-      stalledProgress.bestRemainingDistance,
-      1_000,
-      stalledProgress.noProgressCount
-    );
+  assert.equal(selectF1MovementPrimaryAxis({ x: 100, y: 40 }), "x");
+  assert.equal(selectF1MovementPrimaryAxis({ x: 40, y: 100 }), "y");
+  assert.equal(selectF1MovementPrimaryAxis({ x: 40, y: 40 }), "x");
+  assert.equal(selectF1MovementPrimaryAxis({ x: 0, y: 40 }), "y");
+  assert.equal(selectF1MovementPrimaryAxis({ x: 0, y: 0 }), null);
+  assert.deepEqual(f1MovementKeysForAxis("x", 1), ["w", "d"]);
+  assert.deepEqual(f1MovementKeysForAxis("x", -1), ["s", "a"]);
+  assert.deepEqual(f1MovementKeysForAxis("y", 1), ["w", "a"]);
+  assert.deepEqual(f1MovementKeysForAxis("y", -1), ["s", "d"]);
+
+  const stalledRemaining = { x: 100, y: 40 };
+  let axisStrategy = createF1MovementAxisStrategy(stalledRemaining);
+  let decision = updateF1MovementAxisStrategy(
+    axisStrategy,
+    stalledRemaining,
+    stalledRemaining
+  );
+  axisStrategy = decision.nextState;
+  assert.equal(axisStrategy.currentAxis, "x");
+  assert.equal(axisStrategy.exhausted.x, false);
+  decision = updateF1MovementAxisStrategy(axisStrategy, stalledRemaining, stalledRemaining);
+  axisStrategy = decision.nextState;
+  assert.equal(axisStrategy.currentAxis, "x");
+  assert.equal(axisStrategy.exhausted.x, false);
+  decision = updateF1MovementAxisStrategy(axisStrategy, stalledRemaining, stalledRemaining);
+  axisStrategy = decision.nextState;
+  assert.equal(decision.transition, "primary-stalled-switch-alternate");
+  assert.equal(axisStrategy.currentAxis, "y");
+  assert.equal(axisStrategy.exhausted.x, true);
+
+  decision = updateF1MovementAxisStrategy(
+    axisStrategy,
+    stalledRemaining,
+    { x: 100, y: 20 }
+  );
+  assert.equal(decision.transition, "alternate-progress-return-primary");
+  assert.equal(decision.nextState.currentAxis, "x");
+  assert.deepEqual(decision.nextState.exhausted, { x: false, y: false });
+  assert.deepEqual(decision.nextState.noProgress, { x: 0, y: 0 });
+
+  axisStrategy = createF1MovementAxisStrategy(stalledRemaining);
+  for (let index = 0; index < f1MovementAxisProbeLimit; index += 1) {
+    decision = updateF1MovementAxisStrategy(axisStrategy, stalledRemaining, stalledRemaining);
+    axisStrategy = decision.nextState;
   }
-  assert.equal(stalledProgress.noProgressCount, f1MovementNoProgressLimit);
-  assert.deepEqual(updateF1MovementProgress(1_000, 999, 11), {
-    bestRemainingDistance: 999,
-    noProgressCount: 0
+  for (let index = 0; index < f1MovementAxisProbeLimit; index += 1) {
+    decision = updateF1MovementAxisStrategy(axisStrategy, stalledRemaining, stalledRemaining);
+    axisStrategy = decision.nextState;
+  }
+  assert.equal(decision.failureReason, "axis-strategies-exhausted");
+  assert.deepEqual(axisStrategy.exhausted, { x: true, y: true });
+
+  const singleAxisRemaining = { x: 100, y: 0 };
+  axisStrategy = createF1MovementAxisStrategy(singleAxisRemaining);
+  for (let index = 0; index < f1MovementAxisProbeLimit; index += 1) {
+    decision = updateF1MovementAxisStrategy(
+      axisStrategy,
+      singleAxisRemaining,
+      singleAxisRemaining
+    );
+    axisStrategy = decision.nextState;
+  }
+  assert.equal(decision.failureReason, "axis-strategies-exhausted");
+  assert.deepEqual(axisStrategy.exhausted, { x: true, y: false });
+
+  const failureTrace = [{ attempt: 1, strategy: "primary", axis: "x" }];
+  const failureReport = serializeF1MovementFailure({
+    f1MovementFailure: {
+      movementAttempts: [{ trace: failureTrace }],
+      screenshot: "build/browser-qa/firefox-movement-failed.png"
+    }
   });
+  assert.deepEqual(failureReport.movementAttempts[0].trace, failureTrace);
+  assert.equal(
+    failureReport.movementFailureScreenshot,
+    "build/browser-qa/firefox-movement-failed.png"
+  );
+  assert.deepEqual(serializeF1MovementFailure(new Error("unrelated")), {});
 }
 
 assertF1MovementBudgetContract();
@@ -372,7 +545,7 @@ if (process.argv.includes("--movement-budget-self-test")) {
         short: deriveF1MovementAttemptBudget(360),
         failedCiLong: deriveF1MovementAttemptBudget(17_240),
         capped: deriveF1MovementAttemptBudget(Number.MAX_SAFE_INTEGER),
-        noProgressLimit: f1MovementNoProgressLimit
+        axisProbeLimit: f1MovementAxisProbeLimit
       })
   );
   process.exit(0);
@@ -381,27 +554,42 @@ if (process.argv.includes("--movement-budget-self-test")) {
 async function moveF1PlayerTo(page, targetX, targetY, tolerance = 180) {
   let state = await page.evaluate(() => window.__tgdTest.getF1State());
   const initialPose = { x: state.playerPoseX, y: state.playerPoseY };
-  let remainingDistance = f1MovementRemainingDistance(state, targetX, targetY, tolerance);
+  let axisRemaining = f1MovementAxisRemaining(state, targetX, targetY, tolerance);
+  let remainingDistance = f1MovementTotalRemaining(axisRemaining);
   const initialRemainingDistance = remainingDistance;
+  const initialAxisRemaining = { ...axisRemaining };
   const movementDiagnostics = f1MovementDiagnosticsByPage.get(page);
+  const trace = [];
   let distanceQuanta = 0;
   let attemptBudget = 0;
   let attempts = 0;
   let minimumPositiveProgress = Number.POSITIVE_INFINITY;
-  const recordMovementAttempt = (status) => movementDiagnostics?.push({
-    target: { x: targetX, y: targetY, tolerance },
-    initialPose,
-    finalPose: { x: state.playerPoseX, y: state.playerPoseY },
-    initialRemaining: initialRemainingDistance,
-    finalRemaining: remainingDistance,
-    distanceQuanta,
-    attemptsUsed: attempts,
-    attemptBudget,
-    minimumPositiveProgress: Number.isFinite(minimumPositiveProgress)
-      ? minimumPositiveProgress
-      : null,
-    status
-  });
+  let bestRemainingDistance = remainingDistance;
+  let axisStrategy = createF1MovementAxisStrategy(axisRemaining);
+  const recordMovementAttempt = (status) => {
+    const movementAttempt = {
+      target: { x: targetX, y: targetY, tolerance },
+      initialPose,
+      finalPose: { x: state.playerPoseX, y: state.playerPoseY },
+      initialRemaining: initialRemainingDistance,
+      finalRemaining: remainingDistance,
+      initialAxisRemaining,
+      finalAxisRemaining: { ...axisRemaining },
+      bestRemaining: bestRemainingDistance,
+      distanceQuanta,
+      attemptsUsed: attempts,
+      attemptBudget,
+      minimumPositiveProgress: Number.isFinite(minimumPositiveProgress)
+        ? minimumPositiveProgress
+        : null,
+      axisProbeLimit: f1MovementAxisProbeLimit,
+      finalAxisStrategy: axisStrategy,
+      trace,
+      status
+    };
+    movementDiagnostics?.push(movementAttempt);
+    return movementAttempt;
+  };
   if (remainingDistance === 0) {
     recordMovementAttempt("reached");
     return state;
@@ -410,60 +598,89 @@ async function moveF1PlayerTo(page, targetX, targetY, tolerance = 180) {
   ({ distanceQuanta, attemptBudget } = deriveF1MovementAttemptBudget(
     initialRemainingDistance
   ));
-  let bestRemainingDistance = remainingDistance;
-  let consecutiveNoProgress = 0;
   let failureReason = "attempt-budget-exhausted";
 
-  while (attempts < attemptBudget) {
-    const deltaX = targetX - state.playerPoseX;
-    const deltaY = targetY - state.playerPoseY;
-    if (Math.abs(deltaX) <= tolerance && Math.abs(deltaY) <= tolerance) return state;
-
-    const moveX = Math.abs(deltaX) > tolerance;
-    const delta = moveX ? deltaX : deltaY;
-    const keys = moveX
-      ? delta > 0 ? ["w", "d"] : ["s", "a"]
-      : delta > 0 ? ["w", "a"] : ["s", "d"];
+  while (canAttemptF1Movement(attempts, attemptBudget)) {
+    const axis = axisStrategy.currentAxis;
+    assert(axis === "x" || axis === "y", "F1 movement strategy lost its active axis.");
+    const strategy = f1MovementStrategyName(axisStrategy);
+    const delta = axis === "x"
+      ? targetX - state.playerPoseX
+      : targetY - state.playerPoseY;
+    const keys = f1MovementKeysForAxis(axis, delta);
     const durationMs = Math.min(
       120,
       Math.max(35, Math.floor(Math.abs(delta) / 3_600 * 750))
     );
+    const beforePose = { x: state.playerPoseX, y: state.playerPoseY };
+    const beforeAxisRemaining = { ...axisRemaining };
+    const beforeRemainingDistance = remainingDistance;
+    const beforeBestRemainingDistance = bestRemainingDistance;
     await holdMovementKeys(page, keys, durationMs);
     attempts += 1;
 
-    const previousRemainingDistance = remainingDistance;
     state = await page.evaluate(() => window.__tgdTest.getF1State());
-    remainingDistance = f1MovementRemainingDistance(state, targetX, targetY, tolerance);
-    const positiveProgress = previousRemainingDistance - remainingDistance;
-    if (positiveProgress > 0) {
-      minimumPositiveProgress = Math.min(minimumPositiveProgress, positiveProgress);
+    axisRemaining = f1MovementAxisRemaining(state, targetX, targetY, tolerance);
+    remainingDistance = f1MovementTotalRemaining(axisRemaining);
+    const decision = updateF1MovementAxisStrategy(
+      axisStrategy,
+      beforeAxisRemaining,
+      axisRemaining
+    );
+    if (decision.axisProgress > 0) {
+      minimumPositiveProgress = Math.min(minimumPositiveProgress, decision.axisProgress);
+      bestRemainingDistance = Math.min(bestRemainingDistance, remainingDistance);
     }
+    axisStrategy = decision.nextState;
+    trace.push({
+      attempt: attempts,
+      strategy,
+      axis,
+      keys: [...keys],
+      beforePose,
+      afterPose: { x: state.playerPoseX, y: state.playerPoseY },
+      beforeRemaining: { ...beforeAxisRemaining, total: beforeRemainingDistance },
+      afterRemaining: { ...axisRemaining, total: remainingDistance },
+      best: {
+        before: beforeBestRemainingDistance,
+        after: bestRemainingDistance
+      },
+      axisProgress: decision.axisProgress,
+      axisNoProgress: { ...axisStrategy.noProgress },
+      exhaustedAxes: { ...axisStrategy.exhausted },
+      transition: decision.transition
+    });
     if (remainingDistance === 0) {
       recordMovementAttempt("reached");
       return state;
     }
-    const progress = updateF1MovementProgress(
-      bestRemainingDistance,
-      remainingDistance,
-      consecutiveNoProgress
-    );
-    bestRemainingDistance = progress.bestRemainingDistance;
-    consecutiveNoProgress = progress.noProgressCount;
-    if (consecutiveNoProgress >= f1MovementNoProgressLimit) {
-      failureReason = "no-progress";
+    if (decision.failureReason) {
+      failureReason = decision.failureReason;
       break;
     }
   }
 
   const finalState = state;
-  recordMovementAttempt(failureReason);
-  throw new Error(
+  const failedMovementAttempt = recordMovementAttempt(failureReason);
+  const error = new Error(
     `F1 player did not reach (${targetX}, ${targetY}); reason=${failureReason}; ` +
       `attempts=${attempts}/${attemptBudget}; distanceQuanta=${distanceQuanta}; ` +
       `remaining=${remainingDistance}; best=${bestRemainingDistance}; ` +
-      `noProgress=${consecutiveNoProgress}/${f1MovementNoProgressLimit}; ` +
+      `axis=${axisStrategy.currentAxis ?? "none"}; ` +
+      `strategy=${f1MovementStrategyName(axisStrategy)}; ` +
+      `probes=x:${axisStrategy.noProgress.x}/${f1MovementAxisProbeLimit},` +
+      `y:${axisStrategy.noProgress.y}/${f1MovementAxisProbeLimit}; ` +
+      `exhausted=x:${axisStrategy.exhausted.x},y:${axisStrategy.exhausted.y}; ` +
       `finalState=${JSON.stringify(finalState)}`
   );
+  error.f1MovementFailure = {
+    movementAttempts: movementDiagnostics
+      ? [...movementDiagnostics]
+      : [failedMovementAttempt],
+    screenshot: null,
+    screenshotError: null
+  };
+  throw error;
 }
 
 function analyzePng(buffer) {
@@ -736,13 +953,14 @@ async function runBrowser(target, origin) {
   const movementAttempts = [];
   let browser;
   let context;
+  let page;
   let contextLossProbeActive = false;
   let pendingEmptyContextDiagnostics = 0;
 
   try {
     browser = await definition.browserType.launch(definition.launchOptions);
     context = await browser.newContext({ viewport: { width: 1280, height: 960 } });
-    const page = await context.newPage();
+    page = await context.newPage();
     f1MovementDiagnosticsByPage.set(page, movementAttempts);
     page.on("console", (message) => {
       const text = message.text();
@@ -3311,6 +3529,27 @@ async function runBrowser(target, origin) {
         projectPath(afterPath)
       ]
     };
+  } catch (error) {
+    const movementFailure = error && typeof error === "object"
+      ? error.f1MovementFailure
+      : null;
+    if (movementFailure && page) {
+      const screenshotPath = resolve(reportDirectory, `${target}-movement-failed.png`);
+      try {
+        await page.screenshot({
+          path: screenshotPath,
+          type: "png",
+          animations: "disabled",
+          fullPage: true
+        });
+        movementFailure.screenshot = projectPath(screenshotPath);
+      } catch (screenshotError) {
+        movementFailure.screenshotError = screenshotError instanceof Error
+          ? screenshotError.stack ?? screenshotError.message
+          : String(screenshotError);
+      }
+    }
+    throw error;
   } finally {
     await browser?.close();
   }
@@ -3334,6 +3573,7 @@ try {
         target,
         status: "failed",
         durationMs: Date.now() - started,
+        ...serializeF1MovementFailure(error),
         error: error instanceof Error ? error.stack ?? error.message : String(error)
       });
       console.error(`[browser-qa] ${target}: failed`);

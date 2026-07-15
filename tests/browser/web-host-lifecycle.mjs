@@ -305,10 +305,116 @@ async function holdMovementKeys(page, keys, durationMs) {
   await page.waitForTimeout(25);
 }
 
+const f1MovementDistanceQuantum = 80;
+const f1MovementAttemptMargin = 8;
+const f1MovementMinimumAttempts = 10;
+const f1MovementMaximumAttempts = 256;
+const f1MovementNoProgressLimit = 12;
+const f1MovementDiagnosticsByPage = new WeakMap();
+
+function f1MovementRemainingDistance(state, targetX, targetY, tolerance) {
+  return Math.max(0, Math.abs(targetX - state.playerPoseX) - tolerance) +
+    Math.max(0, Math.abs(targetY - state.playerPoseY) - tolerance);
+}
+
+function deriveF1MovementAttemptBudget(initialRemainingDistance) {
+  const distanceQuanta = Math.ceil(
+    Math.max(0, initialRemainingDistance) / f1MovementDistanceQuantum
+  );
+  return {
+    distanceQuanta,
+    attemptBudget: Math.min(
+      f1MovementMaximumAttempts,
+      Math.max(f1MovementMinimumAttempts, distanceQuanta + f1MovementAttemptMargin)
+    )
+  };
+}
+
+function updateF1MovementProgress(bestRemainingDistance, remainingDistance, noProgressCount) {
+  return remainingDistance < bestRemainingDistance
+    ? { bestRemainingDistance: remainingDistance, noProgressCount: 0 }
+    : { bestRemainingDistance, noProgressCount: noProgressCount + 1 };
+}
+
+function assertF1MovementBudgetContract() {
+  const shortMove = deriveF1MovementAttemptBudget(360);
+  assert.equal(shortMove.distanceQuanta, 5);
+  assert.equal(shortMove.attemptBudget, 13);
+
+  const failedCiLongMove = deriveF1MovementAttemptBudget(17_240);
+  assert.equal(failedCiLongMove.attemptBudget, 224);
+  assert.ok(failedCiLongMove.attemptBudget < f1MovementMaximumAttempts);
+
+  const cappedMove = deriveF1MovementAttemptBudget(Number.MAX_SAFE_INTEGER);
+  assert.equal(cappedMove.attemptBudget, f1MovementMaximumAttempts);
+  assert.ok(f1MovementNoProgressLimit < cappedMove.attemptBudget);
+
+  let stalledProgress = { bestRemainingDistance: 1_000, noProgressCount: 0 };
+  for (let index = 0; index < f1MovementNoProgressLimit; index += 1) {
+    stalledProgress = updateF1MovementProgress(
+      stalledProgress.bestRemainingDistance,
+      1_000,
+      stalledProgress.noProgressCount
+    );
+  }
+  assert.equal(stalledProgress.noProgressCount, f1MovementNoProgressLimit);
+  assert.deepEqual(updateF1MovementProgress(1_000, 999, 11), {
+    bestRemainingDistance: 999,
+    noProgressCount: 0
+  });
+}
+
+assertF1MovementBudgetContract();
+if (process.argv.includes("--movement-budget-self-test")) {
+  console.log(
+    "[browser-qa] F1 movement budget contract: passed " +
+      JSON.stringify({
+        short: deriveF1MovementAttemptBudget(360),
+        failedCiLong: deriveF1MovementAttemptBudget(17_240),
+        capped: deriveF1MovementAttemptBudget(Number.MAX_SAFE_INTEGER),
+        noProgressLimit: f1MovementNoProgressLimit
+      })
+  );
+  process.exit(0);
+}
+
 async function moveF1PlayerTo(page, targetX, targetY, tolerance = 180) {
-  const deadline = Date.now() + 10_000;
-  while (Date.now() < deadline) {
-    const state = await page.evaluate(() => window.__tgdTest.getF1State());
+  let state = await page.evaluate(() => window.__tgdTest.getF1State());
+  const initialPose = { x: state.playerPoseX, y: state.playerPoseY };
+  let remainingDistance = f1MovementRemainingDistance(state, targetX, targetY, tolerance);
+  const initialRemainingDistance = remainingDistance;
+  const movementDiagnostics = f1MovementDiagnosticsByPage.get(page);
+  let distanceQuanta = 0;
+  let attemptBudget = 0;
+  let attempts = 0;
+  let minimumPositiveProgress = Number.POSITIVE_INFINITY;
+  const recordMovementAttempt = (status) => movementDiagnostics?.push({
+    target: { x: targetX, y: targetY, tolerance },
+    initialPose,
+    finalPose: { x: state.playerPoseX, y: state.playerPoseY },
+    initialRemaining: initialRemainingDistance,
+    finalRemaining: remainingDistance,
+    distanceQuanta,
+    attemptsUsed: attempts,
+    attemptBudget,
+    minimumPositiveProgress: Number.isFinite(minimumPositiveProgress)
+      ? minimumPositiveProgress
+      : null,
+    status
+  });
+  if (remainingDistance === 0) {
+    recordMovementAttempt("reached");
+    return state;
+  }
+
+  ({ distanceQuanta, attemptBudget } = deriveF1MovementAttemptBudget(
+    initialRemainingDistance
+  ));
+  let bestRemainingDistance = remainingDistance;
+  let consecutiveNoProgress = 0;
+  let failureReason = "attempt-budget-exhausted";
+
+  while (attempts < attemptBudget) {
     const deltaX = targetX - state.playerPoseX;
     const deltaY = targetY - state.playerPoseY;
     if (Math.abs(deltaX) <= tolerance && Math.abs(deltaY) <= tolerance) return state;
@@ -323,10 +429,40 @@ async function moveF1PlayerTo(page, targetX, targetY, tolerance = 180) {
       Math.max(35, Math.floor(Math.abs(delta) / 3_600 * 750))
     );
     await holdMovementKeys(page, keys, durationMs);
+    attempts += 1;
+
+    const previousRemainingDistance = remainingDistance;
+    state = await page.evaluate(() => window.__tgdTest.getF1State());
+    remainingDistance = f1MovementRemainingDistance(state, targetX, targetY, tolerance);
+    const positiveProgress = previousRemainingDistance - remainingDistance;
+    if (positiveProgress > 0) {
+      minimumPositiveProgress = Math.min(minimumPositiveProgress, positiveProgress);
+    }
+    if (remainingDistance === 0) {
+      recordMovementAttempt("reached");
+      return state;
+    }
+    const progress = updateF1MovementProgress(
+      bestRemainingDistance,
+      remainingDistance,
+      consecutiveNoProgress
+    );
+    bestRemainingDistance = progress.bestRemainingDistance;
+    consecutiveNoProgress = progress.noProgressCount;
+    if (consecutiveNoProgress >= f1MovementNoProgressLimit) {
+      failureReason = "no-progress";
+      break;
+    }
   }
-  const finalState = await page.evaluate(() => window.__tgdTest.getF1State());
+
+  const finalState = state;
+  recordMovementAttempt(failureReason);
   throw new Error(
-    `F1 player did not reach (${targetX}, ${targetY}): ${JSON.stringify(finalState)}`
+    `F1 player did not reach (${targetX}, ${targetY}); reason=${failureReason}; ` +
+      `attempts=${attempts}/${attemptBudget}; distanceQuanta=${distanceQuanta}; ` +
+      `remaining=${remainingDistance}; best=${bestRemainingDistance}; ` +
+      `noProgress=${consecutiveNoProgress}/${f1MovementNoProgressLimit}; ` +
+      `finalState=${JSON.stringify(finalState)}`
   );
 }
 
@@ -597,6 +733,7 @@ async function runBrowser(target, origin) {
   const lifecycle = [];
   const replayProbes = [];
   const checkpoints = [];
+  const movementAttempts = [];
   let browser;
   let context;
   let contextLossProbeActive = false;
@@ -606,6 +743,7 @@ async function runBrowser(target, origin) {
     browser = await definition.browserType.launch(definition.launchOptions);
     context = await browser.newContext({ viewport: { width: 1280, height: 960 } });
     const page = await context.newPage();
+    f1MovementDiagnosticsByPage.set(page, movementAttempts);
     page.on("console", (message) => {
       const text = message.text();
       const type = message.type();
@@ -2796,6 +2934,7 @@ async function runBrowser(target, origin) {
       beforeFrame: publicFrame(beforeFrame),
       afterFrame: publicFrame(afterFrame),
       movementComparison,
+      movementAttempts,
       combatActionComparison,
       combatHitComparison,
       laneRoute,

@@ -784,12 +784,10 @@ bool test_recovery_events() {
     F1QuestUiSignalEmitter emitter;
     bool ok = emitter.initialize(definition()) == F1QuestUiSignalEmitterError::none;
 
-    const auto run_recovery = [&emitter](
-                                  std::size_t completed_count,
-                                  StableContentKey lane,
-                                  tgd::contracts::QuestUiProjectionSource source,
-                                  QuestUiAttemptTimeClassification classification
-                              ) {
+    const auto run_recovery_pair = [&emitter](
+                                       std::size_t completed_count,
+                                       StableContentKey lane
+                                   ) {
         QuestHarness harness;
         const std::array selections{
             Selection{stable_content_key("f1_objective_choose_training_lane"), lane},
@@ -801,15 +799,33 @@ bool test_recovery_events() {
                                "recovery completed prefix is built"
                            );
         const auto before = harness.quest.snapshot();
-        const auto emission = emitter.recovery(source, harness.quest);
-        recovery_ok &= expect(
-            emission.signal.objective ==
-                    definition().beats[1].objectives[completed_count].key &&
-                harness.quest.objective_state(emission.signal.objective) ==
-                    tgd::gameplay::QuestObjectiveState::active,
-            "recovery focus is the first incomplete authored frontier"
+        const auto offer = emitter.recovery(
+            tgd::contracts::QuestUiProjectionSource::recovery_offer,
+            harness.quest
         );
-        recovery_ok &= project(emission, harness.quest, classification);
+        const auto resume = emitter.recovery(
+            tgd::contracts::QuestUiProjectionSource::recovery_resume,
+            harness.quest
+        );
+        const auto expected_objective =
+            definition().beats[1].objectives[completed_count].key;
+        recovery_ok &= expect(
+            offer.signal.objective == expected_objective &&
+                resume.signal.objective == expected_objective &&
+                harness.quest.objective_state(expected_objective) ==
+                    tgd::gameplay::QuestObjectiveState::active,
+            "offer and resume focus the same first incomplete authored frontier"
+        );
+        recovery_ok &= project(
+            offer,
+            harness.quest,
+            QuestUiAttemptTimeClassification::failure_retry_excluded
+        );
+        recovery_ok &= project(
+            resume,
+            harness.quest,
+            QuestUiAttemptTimeClassification::resume_no_duplicate_progress
+        );
         recovery_ok &= expect(
             harness.quest.snapshot().completed_total == before.completed_total &&
                 harness.quest.snapshot().selection_count == before.selection_count &&
@@ -817,22 +833,145 @@ bool test_recovery_events() {
                 harness.quest.selected_option(
                     stable_content_key("f1_objective_choose_training_lane")
                 ) == lane,
-            "recovery emission preserves completed count, selection and Quest checksum"
+            "paired recovery emissions preserve completed count, selection and Quest checksum"
         );
         return recovery_ok;
     };
 
-    ok &= run_recovery(
+    ok &= run_recovery_pair(
         3,
-        stable_content_key("f1_choice_training_windward_lane"),
-        tgd::contracts::QuestUiProjectionSource::recovery_offer,
-        QuestUiAttemptTimeClassification::failure_retry_excluded
+        stable_content_key("f1_choice_training_windward_lane")
     );
-    ok &= run_recovery(
+    ok &= run_recovery_pair(
         9,
-        stable_content_key("f1_choice_training_leeward_lane"),
-        tgd::contracts::QuestUiProjectionSource::recovery_resume,
-        QuestUiAttemptTimeClassification::resume_no_duplicate_progress
+        stable_content_key("f1_choice_training_leeward_lane")
+    );
+    return ok;
+}
+
+bool test_recovery_resume_gate() {
+    QuestHarness harness;
+    const std::array selections{
+        Selection{
+            stable_content_key("f1_objective_choose_training_lane"),
+            stable_content_key("f1_choice_training_leeward_lane"),
+        },
+    };
+    bool ok = expect(harness.start(), "recovery gate quest starts") &&
+              expect(enter_training(harness), "recovery gate enters training") &&
+              expect(
+                  complete_prefix(harness, 1, 9, selections),
+                  "recovery gate reaches the flower-turn frontier"
+              );
+    const auto quest = harness.quest.snapshot();
+    const auto objective = definition().beats[1].objectives[9].key;
+    const auto flower_turn = stable_content_key("stance_flower_turn");
+    const auto eavesguard = stable_content_key("stance_eavesguard");
+    tgd::contracts::CombatActorSnapshot defeated_player;
+    defeated_player.actor = definition().player.actor;
+    defeated_player.faction = tgd::contracts::CombatFaction::player;
+    defeated_player.stance = flower_turn;
+    defeated_player.active = false;
+    defeated_player.defeated = true;
+
+    F1QuestUiRecoveryResumeGate gate;
+    ok &= expect(
+        gate.arm(quest, objective, defeated_player, 60),
+        "a projected offer arms the authoritative recovery identity"
+    );
+    ok &= expect(
+        !gate.mark_retry_restored(quest, 59, true) && gate.pending() &&
+            !gate.retry_restored(),
+        "a retry tick earlier than defeat fails without consuming the armed gate"
+    );
+    ok &= expect(
+        gate.mark_retry_restored(quest, 64, true),
+        "a delayed player retry records its actual authoritative tick"
+    );
+    ok &= expect(
+        !gate.mark_retry_restored(quest, 65, true),
+        "the same recovery gate cannot mark component restore twice"
+    );
+    auto restored_player = defeated_player;
+    restored_player.active = true;
+    restored_player.defeated = false;
+    restored_player.stance = eavesguard;
+    ok &= expect(
+        !gate.ready(quest, objective, 65, 65, 65, restored_player),
+        "resume stays closed while the requested stance has not taken effect"
+    );
+    restored_player.stance = flower_turn;
+    ok &= expect(
+        !gate.ready(quest, objective, 65, 65, 65, restored_player),
+        "a matching snapshot without the authoritative stance event is insufficient"
+    );
+    gate.observe({
+        64,
+        tgd::contracts::CombatEventType::stance_changed,
+        definition().player.actor,
+        0,
+        flower_turn,
+    });
+    ok &= expect(
+        !gate.ready(quest, objective, 65, 65, 65, restored_player),
+        "a stance event at the retry boundary is not a later Combat result"
+    );
+    gate.observe({
+        65,
+        tgd::contracts::CombatEventType::stance_changed,
+        definition().player.actor,
+        0,
+        flower_turn,
+    });
+    ok &= expect(
+        !gate.ready(quest, objective, 66, 65, 65, restored_player) &&
+            !gate.ready(quest, objective, 65, 66, 65, restored_player) &&
+            !gate.ready(quest, objective, 65, 65, 66, restored_player),
+        "session, Encounter and Combat ticks must match before resume"
+    );
+    ok &= expect(
+        gate.ready(quest, objective, 65, 65, 65, restored_player),
+        "a Combat result strictly later than actual retry unlocks resume"
+    );
+    auto drifted_quest = quest;
+    ++drifted_quest.completed_total;
+    drifted_quest.checksum ^= 1U;
+    ok &= expect(
+        !gate.ready(drifted_quest, objective, 65, 65, 65, restored_player) &&
+            !gate.ready(
+                quest,
+                definition().beats[1].objectives[8].key,
+                65,
+                65,
+                65,
+                restored_player
+            ),
+        "Quest progress or pending Objective drift keeps resume closed"
+    );
+
+    gate.clear();
+    auto invalid_player = defeated_player;
+    invalid_player.stance = 0;
+    ok &= expect(
+        !gate.arm(quest, objective, invalid_player, 70),
+        "an invalid authoritative stance cannot arm recovery"
+    );
+    defeated_player.stance = eavesguard;
+    restored_player.stance = eavesguard;
+    ok &= expect(
+        gate.arm(quest, objective, defeated_player, 70) &&
+            gate.mark_retry_restored(quest, 73, false) &&
+            gate.ready(quest, objective, 74, 74, 74, restored_player),
+        "an already-restored eavesguard stance is not polluted by flower-turn recovery"
+    );
+
+    gate.clear();
+    ok &= expect(
+        gate.arm(quest, objective, defeated_player, 80) &&
+            !gate.mark_retry_restored(drifted_quest, 84, false) && gate.pending() &&
+            !gate.retry_restored() && gate.mark_retry_restored(quest, 84, false) &&
+            gate.ready(quest, objective, 85, 85, 85, restored_player),
+        "Quest drift during component retry fails without poisoning a later valid mark"
     );
     return ok;
 }
@@ -872,6 +1011,7 @@ int main() {
     ok &= test_phase_events();
     ok &= test_combat_feedback_events();
     ok &= test_recovery_events();
+    ok &= test_recovery_resume_gate();
     ok &= test_fail_closed_shapes();
     return ok ? 0 : 1;
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <tgd/contracts/content_definition.hpp>
+#include <tgd/contracts/combat_types.hpp>
 #include <tgd/contracts/quest_ui.hpp>
 #include <tgd/contracts/quest_types.hpp>
 #include <tgd/gameplay/quest_runtime.hpp>
@@ -53,6 +54,117 @@ struct F1QuestUiSignalEmission final {
     F1QuestUiSignalEmitterError error{F1QuestUiSignalEmitterError::none};
     bool found{};
     tgd::contracts::QuestUiProjectionSignal signal{};
+};
+
+// App-boundary freshness gate for recovery Presentation. CombatResolver remains
+// the stance owner: this gate only remembers an authoritative defeated snapshot,
+// observes the existing switch_stance result, and verifies that Quest identity did
+// not drift before a recovery_resume projection is allowed.
+class F1QuestUiRecoveryResumeGate final {
+  public:
+    [[nodiscard]] bool arm(
+        const tgd::contracts::QuestSnapshot& quest,
+        tgd::contracts::StableContentKey objective,
+        const tgd::contracts::CombatActorSnapshot& defeated_player,
+        tgd::contracts::TickIndex defeat_tick
+    ) noexcept {
+        if (armed_ || quest.quest == 0 || quest.stage == 0 || quest.resolved ||
+            objective == 0 || defeat_tick == 0 || defeated_player.actor == 0 ||
+            defeated_player.faction != tgd::contracts::CombatFaction::player ||
+            defeated_player.active || !defeated_player.defeated ||
+            defeated_player.stance == 0) {
+            return false;
+        }
+        quest_ = quest;
+        objective_ = objective;
+        player_ = defeated_player.actor;
+        stance_ = defeated_player.stance;
+        defeat_tick_ = defeat_tick;
+        armed_ = true;
+        return true;
+    }
+
+    [[nodiscard]] bool mark_retry_restored(
+        const tgd::contracts::QuestSnapshot& quest,
+        tgd::contracts::TickIndex retry_tick,
+        bool stance_change_required
+    ) noexcept {
+        if (!armed_ || retry_restored_ || retry_tick < defeat_tick_ ||
+            !same_quest(quest)) {
+            return false;
+        }
+        retry_tick_ = retry_tick;
+        retry_restored_ = true;
+        stance_change_required_ = stance_change_required;
+        return true;
+    }
+
+    void observe(const tgd::contracts::CombatEvent& event) noexcept {
+        if (!armed_ || !retry_restored_ || !stance_change_required_ ||
+            event.type != tgd::contracts::CombatEventType::stance_changed ||
+            event.tick <= retry_tick_ || event.source != player_ ||
+            event.ability != stance_) {
+            return;
+        }
+        stance_change_observed_ = true;
+    }
+
+    [[nodiscard]] bool ready(
+        const tgd::contracts::QuestSnapshot& quest,
+        tgd::contracts::StableContentKey objective,
+        tgd::contracts::TickIndex session_tick,
+        tgd::contracts::TickIndex encounter_tick,
+        tgd::contracts::TickIndex combat_tick,
+        const tgd::contracts::CombatActorSnapshot& player
+    ) const noexcept {
+        return armed_ && retry_restored_ && same_quest(quest) &&
+               objective == objective_ && session_tick == encounter_tick &&
+               encounter_tick == combat_tick && combat_tick > retry_tick_ &&
+               player.actor == player_ &&
+               player.faction == tgd::contracts::CombatFaction::player && player.active &&
+               !player.defeated && player.stance == stance_ &&
+               (!stance_change_required_ || stance_change_observed_);
+    }
+
+    [[nodiscard]] constexpr bool pending() const noexcept { return armed_; }
+    [[nodiscard]] constexpr bool retry_restored() const noexcept {
+        return retry_restored_;
+    }
+    [[nodiscard]] constexpr tgd::contracts::StableContentKey expected_objective()
+        const noexcept {
+        return objective_;
+    }
+    [[nodiscard]] constexpr tgd::contracts::StableContentKey expected_stance()
+        const noexcept {
+        return stance_;
+    }
+
+    void clear() noexcept { *this = {}; }
+
+  private:
+    [[nodiscard]] bool same_quest(
+        const tgd::contracts::QuestSnapshot& quest
+    ) const noexcept {
+        return quest.tick == quest_.tick && quest.quest == quest_.quest &&
+               quest.stage == quest_.stage && quest.stage_index == quest_.stage_index &&
+               quest.stage_count == quest_.stage_count &&
+               quest.completed_in_stage == quest_.completed_in_stage &&
+               quest.required_in_stage == quest_.required_in_stage &&
+               quest.completed_total == quest_.completed_total &&
+               quest.selection_count == quest_.selection_count &&
+               quest.resolved == quest_.resolved && quest.checksum == quest_.checksum;
+    }
+
+    tgd::contracts::QuestSnapshot quest_{};
+    tgd::contracts::StableContentKey objective_{};
+    tgd::contracts::StableActorKey player_{};
+    tgd::contracts::StableContentKey stance_{};
+    tgd::contracts::TickIndex defeat_tick_{};
+    tgd::contracts::TickIndex retry_tick_{};
+    bool armed_{};
+    bool retry_restored_{};
+    bool stance_change_required_{};
+    bool stance_change_observed_{};
 };
 
 // App-boundary signal assembly. This class maps already-authoritative Quest/Combat

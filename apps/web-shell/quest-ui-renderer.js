@@ -232,7 +232,23 @@
         }, {
           title: "回到沈砚训练点",
           prompt: "已完成的对话、选线和取标保留；从檐守格挡继续。",
-          detail: "训练伞架已归位，可以立即再试。"
+          detail: "可以立即再试或离开；失败次数不会推进训练。"
+        }),
+        presentationVariant({
+          sourceName: "recovery_resume",
+          objectiveId: "f1_objective_eavesguard_counter"
+        }, {
+          title: "檐守训练已恢复",
+          prompt: "训练架已归位，已完成的对话、选线与取标没有重复提交。",
+          detail: "从当前檐守来击重新证明，不重放前置步骤。"
+        }),
+        presentationVariant({
+          sourceName: "recovery_offer",
+          objectiveId: "f1_objective_flower_turn_counter"
+        }, {
+          title: "回到沈砚训练点",
+          prompt: "已完成的檐守证明、复盘、切式和越线保留；从翻花反制继续。",
+          detail: "可以立即再试或离开；失败次数不会推进训练。"
         }),
         presentationVariant({
           sourceName: "recovery_resume",

@@ -758,7 +758,7 @@ void F1GrayboxLayer::publishPendingQuestUiCombatFeedback() noexcept {
     pending_quest_ui_combat_feedback_count_ = 0;
 }
 
-void F1GrayboxLayer::publishQuestUiRecovery(
+F1GrayboxLayer::QuestUiPublication F1GrayboxLayer::publishQuestUiRecovery(
     tgd::contracts::QuestUiProjectionSource source
 ) noexcept {
     const auto emission = quest_ui_signal_emitter_.recovery(
@@ -766,16 +766,16 @@ void F1GrayboxLayer::publishQuestUiRecovery(
         session_.quest_runtime()
     );
     if (emission.error != F1QuestUiSignalEmitterError::none || !emission.found) {
-        return;
+        return {};
     }
     if (!quest_ui_projection_.has_authored_cue(
             session_.quest_runtime().snapshot().stage,
             emission.signal.objective,
             source
         )) {
-        return;
+        return {};
     }
-    static_cast<void>(publishQuestUiProjection(emission.signal));
+    return publishQuestUiProjection(emission.signal);
 }
 
 void F1GrayboxLayer::notifyRewardClaimCommitted(
@@ -1231,6 +1231,7 @@ void F1GrayboxLayer::simulateTick() noexcept {
     }
     publishPendingQuestUiObjectiveState();
     publishPendingQuestUiCombatFeedback();
+    finalizePendingRetryRecovery();
     if (player_action_ticks_ > 0) {
         --player_action_ticks_;
     }
@@ -1408,6 +1409,7 @@ void F1GrayboxLayer::publish(
     std::span<const tgd::contracts::CombatEvent> events
 ) noexcept {
     for (const auto& event : events) {
+        recovery_resume_gate_.observe(event);
         const bool accepted_player_combat =
             (event.source == definition_->player.actor &&
              (event.type == tgd::contracts::CombatEventType::ability_started ||
@@ -1485,10 +1487,33 @@ void F1GrayboxLayer::publish(
             event.target == definition_->player.actor) {
             player_defeated_ = true;
             retry_requested_ = false;
+            pending_retry_player_stance_ = 0;
+            recovery_resume_gate_.clear();
             clearHeldInput(tgd::contracts::InputClearReason::player_defeated, false);
-            publishQuestUiRecovery(
+            const auto actors = combat_.actors();
+            const auto player = std::find_if(
+                actors.begin(),
+                actors.end(),
+                [this](const tgd::contracts::CombatActorSnapshot& actor) {
+                    return actor.actor == definition_->player.actor;
+                }
+            );
+            if (player != actors.end() && !player->active && player->defeated &&
+                player->stance != 0) {
+                pending_retry_player_stance_ = player->stance;
+            }
+            const auto recovery_offer = publishQuestUiRecovery(
                 tgd::contracts::QuestUiProjectionSource::recovery_offer
             );
+            if (recovery_offer.projected && player != actors.end() &&
+                !recovery_resume_gate_.arm(
+                    session_.quest_snapshot(),
+                    recovery_offer.projection.objective,
+                    *player,
+                    event.tick
+                )) {
+                recovery_resume_gate_.clear();
+            }
         } else if (event.type == tgd::contracts::CombatEventType::encounter_restarted) {
             player_defeated_ = false;
             retry_requested_ = false;
@@ -2112,10 +2137,13 @@ bool F1GrayboxLayer::retryEncounter() noexcept {
         }
     );
     if (!player_defeated_ || player == actors.end() || player->active ||
+        pending_retry_player_stance_ == 0 ||
+        player->stance != pending_retry_player_stance_ ||
         combat_.current_tick() != completed_tick ||
         encounter_.current_tick() != completed_tick) {
         return false;
     }
+    const auto expected_player_stance = pending_retry_player_stance_;
     pending_encounter_activation_beat_ = 0;
     pending_encounter_activation_objective_ = 0;
     const tgd::contracts::SafePointRetryCommand command{
@@ -2128,18 +2156,64 @@ bool F1GrayboxLayer::retryEncounter() noexcept {
             tgd::gameplay::EncounterDirectorError::none ||
         session_.retry_from_safe_point(command) != tgd::gameplay::VerticalSliceError::none ||
         combat_.retry_from_initial(command, *this) != tgd::gameplay::CombatError::none) {
+        pending_retry_player_stance_ = 0;
+        recovery_resume_gate_.clear();
         return false;
     }
     ++retry_command_sequence_;
     if (!restoreEncounterForBeat(session_.current_snapshot().beat_id.key)) {
+        pending_retry_player_stance_ = 0;
+        recovery_resume_gate_.clear();
         return false;
     }
     const auto& quest_after_retry = session_.quest_snapshot();
-    if (quest_after_retry.completed_total != quest_before_retry.completed_total ||
+    if (quest_after_retry.quest != quest_before_retry.quest ||
+        quest_after_retry.stage != quest_before_retry.stage ||
+        quest_after_retry.stage_index != quest_before_retry.stage_index ||
+        quest_after_retry.completed_total != quest_before_retry.completed_total ||
         quest_after_retry.selection_count != quest_before_retry.selection_count ||
         quest_after_retry.checksum != quest_before_retry.checksum) {
+        pending_retry_player_stance_ = 0;
+        recovery_resume_gate_.clear();
         return false;
     }
+    const auto restored_actors = combat_.actors();
+    const auto restored_player = std::find_if(
+        restored_actors.begin(),
+        restored_actors.end(),
+        [this](const tgd::contracts::CombatActorSnapshot& actor) {
+            return actor.actor == definition_->player.actor;
+        }
+    );
+    if (restored_player == restored_actors.end() || !restored_player->active ||
+        restored_player->defeated) {
+        pending_retry_player_stance_ = 0;
+        recovery_resume_gate_.clear();
+        return false;
+    }
+    const bool stance_change_required =
+        restored_player->stance != expected_player_stance;
+    if (stance_change_required) {
+        if (combat_intent_count_ >= combat_intents_.size()) {
+            pending_retry_player_stance_ = 0;
+            recovery_resume_gate_.clear();
+            return false;
+        }
+        queueCombatIntent(
+            tgd::contracts::CombatCommandType::switch_stance,
+            expected_player_stance
+        );
+    }
+    if (recovery_resume_gate_.pending() &&
+        (recovery_resume_gate_.expected_stance() != expected_player_stance ||
+         !recovery_resume_gate_.mark_retry_restored(
+             quest_after_retry,
+             completed_tick,
+             stance_change_required
+         ))) {
+        recovery_resume_gate_.clear();
+    }
+    pending_retry_player_stance_ = 0;
     ++retry_count_;
     player_action_ticks_ = 0;
     player_hit_ticks_ = 0;
@@ -2150,10 +2224,54 @@ bool F1GrayboxLayer::retryEncounter() noexcept {
     if (combat_event_label_ != nullptr) {
         combat_event_label_->setString("ENCOUNTER RETRIED / SAFE POINT RESTORED");
     }
-    publishQuestUiRecovery(
+    return true;
+}
+
+void F1GrayboxLayer::finalizePendingRetryRecovery() noexcept {
+    if (!recovery_resume_gate_.pending() ||
+        !recovery_resume_gate_.retry_restored()) {
+        return;
+    }
+    const auto emission = quest_ui_signal_emitter_.recovery(
+        tgd::contracts::QuestUiProjectionSource::recovery_resume,
+        session_.quest_runtime()
+    );
+    const auto actors = combat_.actors();
+    const auto player = std::find_if(
+        actors.begin(),
+        actors.end(),
+        [this](const tgd::contracts::CombatActorSnapshot& actor) {
+            return actor.actor == definition_->player.actor;
+        }
+    );
+    const bool ready = emission.error == F1QuestUiSignalEmitterError::none &&
+                       emission.found && player != actors.end() &&
+                       recovery_resume_gate_.ready(
+                           session_.quest_snapshot(),
+                           emission.signal.objective,
+                           session_.current_snapshot().tick,
+                           encounter_.current_tick(),
+                           combat_.current_tick(),
+                           *player
+                       );
+    if (!ready) {
+        recovery_resume_gate_.clear();
+        if (combat_event_label_ != nullptr) {
+            combat_event_label_->setString(
+                "RECOVERY RESUME REJECTED / AUTHORITATIVE STATE DRIFT"
+            );
+        }
+        return;
+    }
+    const auto publication = publishQuestUiRecovery(
         tgd::contracts::QuestUiProjectionSource::recovery_resume
     );
-    return true;
+    recovery_resume_gate_.clear();
+    if (!publication.projected && combat_event_label_ != nullptr) {
+        combat_event_label_->setString(
+            "RECOVERY RESUME REJECTED / QUEST UI PROJECTION DRIFT"
+        );
+    }
 }
 
 bool F1GrayboxLayer::restoreEncounterForBeat(

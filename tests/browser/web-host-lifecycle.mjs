@@ -574,7 +574,7 @@ async function captureRenderedFrame(page, canvas, path, label, timeoutMs = 20_00
   );
 }
 
-async function captureQuestChoiceFrame(page, path, label) {
+async function captureQuestUiFrame(page, path, label) {
   const buffer = await page.screenshot({ type: "png", animations: "disabled" });
   const frame = analyzePng(buffer);
   await writeFile(path, buffer);
@@ -804,6 +804,8 @@ async function runBrowser(target, origin) {
     const authoredChoiceCheckpoints = [];
     const worldChoiceCheckpoints = [];
     const questUiEmitterCheckpoints = [];
+    const questUiRecoveryCheckpoints = [];
+    const questUiRecoveryScreenshots = [];
 
     const currentQuestUiMessageSequence = async () =>
       (await page.evaluate(() => window.__tgdQuestUi?.getState?.()?.messageSequence ?? "0"));
@@ -919,6 +921,7 @@ async function runBrowser(target, origin) {
         name,
         messageSequence: event.messageSequence,
         projectionSequence: event.sequence,
+        questChecksum: event.questChecksum,
         projectionChecksum: event.checksum,
         sourceName: event.sourceName,
         objective: event.objective,
@@ -930,6 +933,263 @@ async function runBrowser(target, origin) {
         defeatedActorKeys: event.defeatedActorKeys
       };
       questUiEmitterCheckpoints.push(checkpoint);
+      return checkpoint;
+    };
+
+    const exerciseTrainingRecovery = async ({
+      name,
+      objectiveId,
+      activeActorKey,
+      previousProjection
+    }) => {
+      const before = await page.evaluate(() => window.__tgdTest.getF1State());
+      assert.equal(before.playerActive, true, `${target} ${name} did not begin alive.`);
+      assert.notEqual(
+        previousProjection.questChecksum,
+        "0000000000000000",
+        `${target} ${name} began without an authoritative Quest checksum.`
+      );
+
+      await page.waitForFunction(
+        () => window.__tgdTest?.getF1State()?.playerActive === false,
+        undefined,
+        { timeout: 45_000 }
+      );
+      const defeated = await page.evaluate(() => window.__tgdTest.getF1State());
+      const offer = await waitForQuestUiProjection({
+        name: `${name}-offer`,
+        afterMessageSequence: previousProjection.messageSequence,
+        sourceName: "recovery_offer",
+        objectiveId,
+        polarityName: "recovery",
+        classificationName: "failure_retry_excluded",
+        primary: { statusName: "not_applicable" },
+        secondary: { statusName: "not_applicable" },
+        activeActorKeys: [activeActorKey]
+      });
+      assert.equal(
+        offer.questChecksum,
+        previousProjection.questChecksum,
+        `${target} ${name} offer changed the Quest checksum.`
+      );
+      assert.equal(
+        defeated.questCompletedObjectives,
+        before.questCompletedObjectives,
+        `${target} ${name} defeat advanced a Quest objective.`
+      );
+      assert.equal(
+        defeated.questSelectedChoices,
+        before.questSelectedChoices,
+        `${target} ${name} defeat changed an authored selection.`
+      );
+      const offerScreenshot = resolve(reportDirectory, `${target}-${name}-offer.png`);
+      await captureQuestUiFrame(
+        page,
+        offerScreenshot,
+        `${target} ${name} authoritative recovery offer`
+      );
+
+      await canvas.focus();
+      assert.equal(
+        await canvas.evaluate((element) => document.activeElement === element),
+        true,
+        `${target} ${name} could not focus the authoritative gameplay Canvas before retry.`
+      );
+      const retryFocus = await page.evaluate(() => ({
+        id: document.activeElement?.id ?? "",
+        tagName: document.activeElement?.tagName ?? ""
+      }));
+      await page.keyboard.press("r");
+      try {
+        await page.waitForFunction(
+          (expectedRetryCount) => {
+            const state = window.__tgdTest?.getF1State();
+            return state?.playerActive === true &&
+              state.retryCount === expectedRetryCount &&
+              state.playerHealth === 120 &&
+              state.playerPoseX === state.safePointPoseX &&
+              state.playerPoseY === state.safePointPoseY &&
+              state.activeHostiles === 1;
+          },
+          before.retryCount + 1,
+          { timeout: 10_000 }
+        );
+      } catch (error) {
+        const retryFailureState = await page.evaluate(() => window.__tgdTest?.getF1State?.());
+        throw new Error(
+          `${target} ${name} retry input/component restore did not complete after Canvas focus ` +
+          `${JSON.stringify(retryFocus)}; state=${JSON.stringify(retryFailureState)}`,
+          { cause: error }
+        );
+      }
+      const restored = await page.evaluate(() => window.__tgdTest.getF1State());
+      let resume;
+      try {
+        resume = await waitForQuestUiProjection({
+          name: `${name}-resume`,
+          afterMessageSequence: offer.messageSequence,
+          sourceName: "recovery_resume",
+          objectiveId,
+          polarityName: "recovery",
+          classificationName: "resume_no_duplicate_progress",
+          primary: { statusName: "not_applicable" },
+          secondary: { statusName: "not_applicable" },
+          activeActorKeys: [activeActorKey]
+        });
+      } catch (error) {
+        const latestProjection = await page.evaluate(() => window.__tgdQuestUi?.getState?.());
+        throw new Error(
+          `${target} ${name} component retry completed but no fresh authoritative resume was ` +
+          `published; restored=${JSON.stringify(restored)} ` +
+          `latestProjection=${JSON.stringify(latestProjection)}`,
+          { cause: error }
+        );
+      }
+      assert.equal(
+        resume.questChecksum,
+        previousProjection.questChecksum,
+        `${target} ${name} resume changed the Quest checksum.`
+      );
+      assert.equal(
+        resume.objective,
+        offer.objective,
+        `${target} ${name} resume moved to a different pending Objective.`
+      );
+      assert(
+        BigInt(resume.messageSequence) > BigInt(offer.messageSequence),
+        `${target} ${name} resume was not a fresh authoritative message.`
+      );
+      assert(
+        BigInt(resume.projectionSequence) > BigInt(offer.projectionSequence),
+        `${target} ${name} resume did not advance the authoritative projection sequence.`
+      );
+      assert.equal(
+        restored.questCompletedObjectives,
+        before.questCompletedObjectives,
+        `${target} ${name} retry changed completed Objective count.`
+      );
+      assert.equal(
+        restored.questSelectedChoices,
+        before.questSelectedChoices,
+        `${target} ${name} retry changed authored selections.`
+      );
+      assert.equal(
+        restored.questBeatIndex,
+        before.questBeatIndex,
+        `${target} ${name} retry changed the active Beat.`
+      );
+      assert.equal(restored.playerHealth, 120, `${target} ${name} did not restore player health.`);
+      assert.equal(restored.activeHostiles, 1, `${target} ${name} rebuilt the wrong phase.`);
+      assert.equal(restored.playerPoseX, restored.safePointPoseX);
+      assert.equal(restored.playerPoseY, restored.safePointPoseY);
+      const auditTickTotal = (state) =>
+        state.eligiblePlayTicks + state.idleTicks + state.failureRetryTicks;
+      const resumeAuditTick = auditTickTotal(
+        await page.evaluate(() => window.__tgdTest.getF1State())
+      );
+      await page.waitForFunction(
+        (baseline) => {
+          const state = window.__tgdTest?.getF1State?.();
+          return state &&
+            state.eligiblePlayTicks + state.idleTicks + state.failureRetryTicks >= baseline + 3;
+        },
+        resumeAuditTick,
+        { timeout: 5_000 }
+      );
+      await canvas.focus();
+      const repeatedRetryBefore = await page.evaluate(() => ({
+        f1: window.__tgdTest.getF1State(),
+        questUi: window.__tgdQuestUi.getState()
+      }));
+      await page.keyboard.press("r");
+      const repeatedRetryAuditTick = auditTickTotal(repeatedRetryBefore.f1);
+      await page.waitForFunction(
+        (baseline) => {
+          const state = window.__tgdTest?.getF1State?.();
+          return state &&
+            state.eligiblePlayTicks + state.idleTicks + state.failureRetryTicks >= baseline + 3;
+        },
+        repeatedRetryAuditTick,
+        { timeout: 5_000 }
+      );
+      const repeatedRetryAfter = await page.evaluate(() => ({
+        f1: window.__tgdTest.getF1State(),
+        questUi: window.__tgdQuestUi.getState()
+      }));
+      assert.equal(
+        repeatedRetryAfter.f1.retryCount,
+        repeatedRetryBefore.f1.retryCount,
+        `${target} ${name} repeated R submitted a second retry.`
+      );
+      assert.equal(
+        repeatedRetryAfter.questUi.messageSequence,
+        repeatedRetryBefore.questUi.messageSequence,
+        `${target} ${name} repeated R published another Quest UI message.`
+      );
+      assert.equal(
+        repeatedRetryAfter.questUi.objective,
+        repeatedRetryBefore.questUi.objective,
+        `${target} ${name} repeated R changed the projected Objective.`
+      );
+      assert.equal(
+        repeatedRetryAfter.f1.questCompletedObjectives,
+        repeatedRetryBefore.f1.questCompletedObjectives,
+        `${target} ${name} repeated R advanced an Objective.`
+      );
+      assert.equal(
+        repeatedRetryAfter.f1.questSelectedChoices,
+        repeatedRetryBefore.f1.questSelectedChoices,
+        `${target} ${name} repeated R changed an authored selection.`
+      );
+      assert.equal(
+        repeatedRetryAfter.f1.questBeatIndex,
+        repeatedRetryBefore.f1.questBeatIndex,
+        `${target} ${name} repeated R changed the active Beat.`
+      );
+      const resumeScreenshot = resolve(reportDirectory, `${target}-${name}-resume.png`);
+      await captureQuestUiFrame(
+        page,
+        resumeScreenshot,
+        `${target} ${name} authoritative recovery resume`
+      );
+      const checkpoint = {
+        name,
+        objective: offer.objective,
+        beforeMessageSequence: previousProjection.messageSequence,
+        offer,
+        resume,
+        before: {
+          questCompletedObjectives: before.questCompletedObjectives,
+          questSelectedChoices: before.questSelectedChoices,
+          retryCount: before.retryCount
+        },
+        defeated: {
+          questCompletedObjectives: defeated.questCompletedObjectives,
+          questSelectedChoices: defeated.questSelectedChoices,
+          playerHealth: defeated.playerHealth
+        },
+        restored: {
+          questCompletedObjectives: restored.questCompletedObjectives,
+          questSelectedChoices: restored.questSelectedChoices,
+          retryCount: restored.retryCount,
+          playerHealth: restored.playerHealth,
+          activeHostiles: restored.activeHostiles,
+          retryFocus
+        },
+        repeatedRetry: {
+          beforeAuditTick: repeatedRetryAuditTick,
+          afterAuditTick: auditTickTotal(repeatedRetryAfter.f1),
+          retryCount: repeatedRetryAfter.f1.retryCount,
+          messageSequence: repeatedRetryAfter.questUi.messageSequence,
+          objective: repeatedRetryAfter.questUi.objective,
+          questCompletedObjectives: repeatedRetryAfter.f1.questCompletedObjectives,
+          questSelectedChoices: repeatedRetryAfter.f1.questSelectedChoices,
+          questBeatIndex: repeatedRetryAfter.f1.questBeatIndex
+        },
+        screenshots: [projectPath(offerScreenshot), projectPath(resumeScreenshot)]
+      };
+      questUiRecoveryCheckpoints.push(checkpoint);
+      questUiRecoveryScreenshots.push(...checkpoint.screenshots);
       return checkpoint;
     };
 
@@ -1027,7 +1287,7 @@ async function runBrowser(target, origin) {
         `${target} ${name} keyboard navigation did not retain the authored target.`
       );
       const screenshotPath = resolve(reportDirectory, screenshotName);
-      const choiceFrame = await captureQuestChoiceFrame(
+      const choiceFrame = await captureQuestUiFrame(
         page,
         screenshotPath,
         `${target} ${name}`
@@ -1727,7 +1987,7 @@ async function runBrowser(target, origin) {
       undefined,
       { timeout: 5_000 }
     );
-    await waitForQuestUiProjection({
+    const eavesguardPhase = await waitForQuestUiProjection({
       name: "eavesguard-phase",
       afterMessageSequence: eavesguardPhaseBefore,
       sourceName: "objective_state",
@@ -1738,6 +1998,31 @@ async function runBrowser(target, origin) {
       secondary: { statusName: "not_applicable" },
       activeActorKeys: [104]
     });
+    if (laneRoute === "canopy") {
+      const eavesguardRecovery = await exerciseTrainingRecovery({
+        name: "training-eavesguard-recovery",
+        objectiveId: "f1_objective_eavesguard_counter",
+        activeActorKey: 104,
+        previousProjection: eavesguardPhase
+      });
+      await moveF1PlayerTo(page, trainingBranch.mark.x, trainingBranch.mark.y);
+      await page.waitForFunction(
+        () => {
+          const state = window.__tgdTest?.getF1State();
+          return state?.playerActive === true && state.activeHostiles === 1 &&
+            state.questCompletedObjectives === 3 && state.incomingAttackTicks > 0;
+        },
+        undefined,
+        { timeout: 10_000 }
+      );
+      const rearmedAttack = await page.evaluate(() => window.__tgdTest.getF1State());
+      eavesguardRecovery.rearmedAttack = {
+        incomingAttackTicks: rearmedAttack.incomingAttackTicks,
+        questCompletedObjectives: rearmedAttack.questCompletedObjectives,
+        questSelectedChoices: rearmedAttack.questSelectedChoices,
+        activeHostiles: rearmedAttack.activeHostiles
+      };
+    }
     const combatReadyPath = resolve(reportDirectory, `${target}-combat-ready.png`);
     const combatActionPath = resolve(reportDirectory, `${target}-combat-action.png`);
     const combatHitPath = resolve(reportDirectory, `${target}-combat-hit.png`);
@@ -1877,7 +2162,7 @@ async function runBrowser(target, origin) {
       undefined,
       { timeout: 5_000 }
     );
-    await waitForQuestUiProjection({
+    const flowerPhase = await waitForQuestUiProjection({
       name: "flower-turn-phase",
       afterMessageSequence: flowerPhaseBefore,
       sourceName: "objective_state",
@@ -1888,6 +2173,31 @@ async function runBrowser(target, origin) {
       secondary: { statusName: "not_applicable" },
       activeActorKeys: [108]
     });
+    if (laneRoute === "drain") {
+      const flowerRecovery = await exerciseTrainingRecovery({
+        name: "training-flower-recovery",
+        objectiveId: "f1_objective_flower_turn_counter",
+        activeActorKey: 108,
+        previousProjection: flowerPhase
+      });
+      await moveF1PlayerTo(page, -3_400, -1_700);
+      await page.waitForFunction(
+        () => {
+          const state = window.__tgdTest?.getF1State();
+          return state?.playerActive === true && state.activeHostiles === 1 &&
+            state.questCompletedObjectives === 9 && state.incomingAttackTicks > 0;
+        },
+        undefined,
+        { timeout: 10_000 }
+      );
+      const rearmedAttack = await page.evaluate(() => window.__tgdTest.getF1State());
+      flowerRecovery.rearmedAttack = {
+        incomingAttackTicks: rearmedAttack.incomingAttackTicks,
+        questCompletedObjectives: rearmedAttack.questCompletedObjectives,
+        questSelectedChoices: rearmedAttack.questSelectedChoices,
+        activeHostiles: rearmedAttack.activeHostiles
+      };
+    }
 
     const evadeDeadline = Date.now() + 20_000;
     while (trainingState.questCompletedObjectives < 10 && Date.now() < evadeDeadline) {
@@ -2037,13 +2347,14 @@ async function runBrowser(target, origin) {
       combatDefeatedPath,
       `${target} player defeated`
     );
+    const laterRetryCount = defeatedState.retryCount;
     await page.keyboard.press("r");
     await page.waitForFunction(
-      () => {
+      (expectedRetryCount) => {
         const state = window.__tgdTest?.getF1State();
-        return state?.playerActive === true && state.retryCount === 1;
+        return state?.playerActive === true && state.retryCount === expectedRetryCount;
       },
-      undefined,
+      laterRetryCount + 1,
       { timeout: 5_000 }
     );
     const retryState = await page.evaluate(() => window.__tgdTest.getF1State());
@@ -2927,6 +3238,7 @@ async function runBrowser(target, origin) {
       authoredChoiceCheckpoints,
       worldChoiceCheckpoints,
       questUiEmitterCheckpoints,
+      questUiRecoveryCheckpoints,
       consoleProblems,
       expectedConsoleDiagnostics,
       pageErrors,
@@ -2958,6 +3270,7 @@ async function runBrowser(target, origin) {
       retryFrameComparison,
       frameComparison,
       screenshots: [
+        ...questUiRecoveryScreenshots,
         projectPath(resolve(reportDirectory, `${target}-quest-interaction-ready.png`)),
         projectPath(resolve(reportDirectory, `${target}-arrival-clue-choice.png`)),
         projectPath(resolve(reportDirectory, `${target}-mooring-method-choice.png`)),

@@ -111,7 +111,7 @@ class F1GrayboxLayer final :
     ) noexcept;
     void publishPendingQuestUiObjectiveState() noexcept;
     void publishPendingQuestUiCombatFeedback() noexcept;
-    void publishQuestUiRecovery(
+    [[nodiscard]] QuestUiPublication publishQuestUiRecovery(
         tgd::contracts::QuestUiProjectionSource source
     ) noexcept;
     [[nodiscard]] QuestUiPublication publishQuestUiProjection(
@@ -140,6 +140,7 @@ class F1GrayboxLayer final :
     ) noexcept;
     [[nodiscard]] bool applyPendingEncounterActivation() noexcept;
     [[nodiscard]] bool retryEncounter() noexcept;
+    void finalizePendingRetryRecovery() noexcept;
     void refreshCombatHud() noexcept;
 
     [[nodiscard]] ax::Vec2 project(const tgd::contracts::GroundPoseMm& pose) const noexcept;
@@ -181,6 +182,8 @@ class F1GrayboxLayer final :
     bool player_defeated_{};
     bool retry_requested_{};
     std::uint32_t retry_count_{};
+    tgd::contracts::StableContentKey pending_retry_player_stance_{};
+    F1QuestUiRecoveryResumeGate recovery_resume_gate_{};
     tgd::contracts::TickIndex incoming_attack_tick_{};
     tgd::contracts::StableActorKey incoming_attack_source_{};
     tgd::contracts::StableContentKey pending_encounter_activation_beat_{};

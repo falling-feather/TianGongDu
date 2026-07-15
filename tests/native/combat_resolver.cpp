@@ -399,6 +399,7 @@ bool test_defeat_retry_restores_initial_encounter() {
     bool ok = resolver.initialize(actor_configs, ability_configs) == CombatError::none;
     ok &= resolver.start() == CombatError::none;
     const std::array commands{
+        CombatCommand{1, 1, 1, CombatCommandType::switch_stance, 0, flower_turn},
         CombatCommand{1, 2, 1, CombatCommandType::heavy_attack, 1, 0},
         CombatCommand{10, 1, 2, CombatCommandType::light_attack, 2, 0},
     };
@@ -409,6 +410,11 @@ bool test_defeat_retry_restores_initial_encounter() {
     ok &= expect(
         !resolver.actors()[0].active && resolver.actors()[0].defeated,
         "zero health enters the explicit defeated state"
+    );
+    const auto authoritative_stance_before_retry = resolver.actors()[0].stance;
+    ok &= expect(
+        authoritative_stance_before_retry == flower_turn,
+        "the defeated snapshot retains the last Combat-owned player stance"
     );
     ok &= expect(sink.contains(CombatEventType::actor_defeated), "defeat emits an event");
 
@@ -426,8 +432,9 @@ bool test_defeat_retry_restores_initial_encounter() {
         resolver.current_tick() == 5 && resolver.actors()[0].active &&
             !resolver.actors()[0].defeated &&
             resolver.actors()[0].resources == actor_configs[0].initial_resources &&
-            resolver.actors()[1].resources == actor_configs[1].initial_resources,
-        "retry preserves the tick and restores every actor resource"
+            resolver.actors()[1].resources == actor_configs[1].initial_resources &&
+            resolver.actors()[0].stance == actor_configs[0].initial_stance,
+        "retry preserves the tick and restores every actor resource and initial stance"
     );
     ok &= expect(
         sink.contains(CombatEventType::encounter_restarted),
@@ -450,7 +457,41 @@ bool test_defeat_retry_restores_initial_encounter() {
         resolver.activate_group(stage_activation, return_group, sink) == CombatError::none,
         "an active player can activate an authored hostile group"
     );
-    for (int tick = 5; tick < 10; ++tick) {
+    sink.clear();
+    const auto before_invalid_stance = resolver.checksum();
+    const std::array invalid_stance_command{
+        CombatCommand{
+            6,
+            1,
+            2,
+            CombatCommandType::switch_stance,
+            0,
+            tgd::contracts::stable_content_key("stance_not_authored"),
+        },
+    };
+    ok &= expect(
+        resolver.submit(invalid_stance_command) == CombatError::invalid_command &&
+            resolver.checksum() == before_invalid_stance,
+        "an unauthorised retry stance fails without changing Combat state"
+    );
+    const std::array restore_authoritative_stance{
+        CombatCommand{
+            6,
+            1,
+            2,
+            CombatCommandType::switch_stance,
+            0,
+            authoritative_stance_before_retry,
+        },
+    };
+    ok &= expect(
+        resolver.submit(restore_authoritative_stance) == CombatError::none &&
+            resolver.advance_one_tick(sink) == CombatError::none &&
+            resolver.actors()[0].stance == authoritative_stance_before_retry &&
+            sink.contains(CombatEventType::stance_changed),
+        "the existing switch_stance command re-arms the authoritative stance on a later tick"
+    );
+    for (int tick = 6; tick < 10; ++tick) {
         ok &= resolver.advance_one_tick(sink) == CombatError::none;
     }
     ok &= expect(

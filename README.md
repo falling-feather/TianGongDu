@@ -8,6 +8,8 @@
 
 当前工作区是 **2.2 开发对接版设计基础**，不冒充已经完成的正式 WASM 游戏。当前里程碑改为 `F1-SYSTEM-DEMO-01`：先用一块可由轻量编辑器反复生产的战斗沙盒，证明游戏好玩、工具能制作内容；既有“雨夜试伞”7 Beat、60/70 分钟审计和两种结算保留为回归基线，不再优先扩写长流程。验证 Axmol 当前仍标记为 Preview 的 WebAssembly 路径后再扩大生产。
 
+当前可见玩家宿主只有 Axmol Web Single；Windows 已有 MSVC/Clang GameCore 与测试对照，但 `apps/native-shell/` 仍为空，尚不存在可玩的 Windows 窗口版。系统型 Demo 把真实 Windows Preview 列为 `PLATFORM-001` 独立交付，任何 CTest 或命令行回放都不能替代它。
+
 ## 当前系统型 Demo 目标
 
 - 从编辑器摆放玩家、敌人、障碍、互动点、机关和安全点，配置波次/触发/目标，保存、加载、导出并直接启动 Windows/Web 试玩。

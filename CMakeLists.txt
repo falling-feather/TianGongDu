@@ -171,6 +171,29 @@ target_include_directories(
 target_link_libraries(tgd_content_core PUBLIC tgd_contracts)
 tgd_register_layer(tgd_content_core ALLOW tgd_contracts)
 
+tgd_add_static_layer(tgd_sandbox_integration)
+target_sources(
+  tgd_sandbox_integration
+  PRIVATE src/sandbox-integration/src/sandbox_session_adapter.cpp
+)
+target_include_directories(
+  tgd_sandbox_integration
+  PUBLIC
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/sandbox-integration/include>"
+)
+target_link_libraries(
+  tgd_sandbox_integration
+  PUBLIC
+    tgd_content_core
+    tgd_gameplay
+)
+tgd_register_layer(
+  tgd_sandbox_integration
+  ALLOW
+    tgd_content_core
+    tgd_gameplay
+)
+
 tgd_add_static_layer(tgd_sync_contracts)
 target_sources(tgd_sync_contracts PRIVATE src/sync-contracts/src/layer_probe.cpp)
 target_link_libraries(tgd_sync_contracts PUBLIC tgd_contracts)

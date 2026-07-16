@@ -115,6 +115,19 @@ add_test(
   COMMAND tgd_native_sandbox_session
 )
 
+add_executable(tgd_native_sandbox_session_adapter sandbox_session_adapter.cpp)
+target_compile_features(tgd_native_sandbox_session_adapter PRIVATE cxx_std_20)
+tgd_enable_strict_warnings(tgd_native_sandbox_session_adapter)
+target_link_libraries(
+  tgd_native_sandbox_session_adapter
+  PRIVATE tgd_sandbox_integration
+)
+
+add_test(
+  NAME tgd.native.sandbox-session-adapter
+  COMMAND tgd_native_sandbox_session_adapter
+)
+
 add_executable(tgd_native_profile_progress profile_progress.cpp)
 target_compile_features(tgd_native_profile_progress PRIVATE cxx_std_20)
 tgd_enable_strict_warnings(tgd_native_profile_progress)

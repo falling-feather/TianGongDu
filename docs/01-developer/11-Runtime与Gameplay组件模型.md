@@ -421,3 +421,11 @@ operate 的拒绝顺序固定为 invalid/uninitialized → stale generation → 
 checksum 使用独立域和逐字段小端哈希，覆盖 generation、显式 player content/actor mapping、spawn/retry/current pose 与 facing、规范化 typed graph、三组件状态、last-valid command/tick 和跨 generation 单调 event sequence；不哈希内存布局、padding、name/address、输入排列或拒绝命令。retry 先按 generation/sequence/invariant 准备完整候选，成功后 generation+1、player 回 authored initial safe point、三组件回规范初态并清零 generation-local command/tick，event sequence 不复用；overflow、stale 或 invalid state 均保留旧 snapshot/checksum，且没有测试专用故障后门。
 
 `tests/native/sandbox_session.cpp` 直接覆盖输入生命周期与乱序规范化、player binding 全负例、spawn/retry safe-point 区分、500/3000 边界、+1 mm/错层/height、首次原子事件、fresh repeat/committed replay、拒绝优先级、多链隔离、retry/new generation/event 单调、generation helper overflow、失败不漂移与双 Session 确定性。当前能力仍是 **Bootstrap Implemented / Not Wire-backed / Not Preview-ready**：本切片没有 player movement pose 同步入口，operate 仅消费 Session 当前 pose（初始化时为 player spawn，retry 后为 authored initial safe point）；player movement 接线、actor runtime binding、Objective/Wave/Encounter/Combat 聚合 retry、Platform、Profile、奖励与编辑器均为 Open。
+
+## 36. Sandbox Package 到 Session Integration Bootstrap
+
+独立物理层 `tgd_sandbox_integration` 同步组合 `tgd_content_core + tgd_gameplay`，不改变纯 Gameplay 的依赖方向，也不拥有新的玩法真相。`build_sandbox_session_blueprint` 只在调用期间借用 validated `SandboxPackageDocument`，把 standalone Session 所需的 player、safe point、interaction、mechanism、ground blocker 与 typed binding 复制到按 Stable key 排序的固定容量 move-only blueprint。每个所需 `ContentId` 都保存 Stable key 与最长 96 bytes 的 owned UTF-8 name；仅在同步 initialize 栈上创建指向 blueprint 自有 bytes 的临时 view，不保存 candidate、document、canonical bytes、span、`string_view`、指针或输入地址，也不从 Content ID 推导 Actor key。
+
+`initialize_sandbox_session_from_blueprint` 继续调用既有 `SandboxSession::initialize` 和唯一 gameplay-binding validator。Adapter 先构造私有候选 Session，只有完整成功后才一次替换 destination；builder、player binding 或 initialize 失败都保留旧 generation、command/event sequence、snapshot 与 checksum。Package compiler/decoder/validator 仍是 package-wide ID、图与引用规则的唯一 Owner，adapter 只防御自身容量、owned ID view 和 move 生命周期。
+
+当前状态是 **Adapter Bootstrap Implemented / Not Preview-ready**。本笔没有 provider、hot reload、last-valid package 管理或 player movement pose 同步入口；operate 仍只消费 standalone Session 当前 pose。Actor Runtime、dynamic collision、Objective/Wave/Encounter/Combat 聚合 retry、Platform、Presentation、Preview、资产与内容实例接入均为 Open，standalone retry 也不是完整安全点恢复事务。

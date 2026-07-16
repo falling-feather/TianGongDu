@@ -7,8 +7,8 @@
 
 namespace tgd::contracts {
 
-// Ability targeting stays authored data. Platform input can request an ability,
-// but only Gameplay may decide whether the current actor/target satisfies this policy.
+// Ability targeting stays authored data. Platform input submits only Action samples;
+// Gameplay maps actor-owned slots to Ability IDs and evaluates the target policy.
 enum class AbilityTargetPolicy : std::uint8_t {
     trigger_default,
     opposing_actor,

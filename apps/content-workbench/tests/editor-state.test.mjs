@@ -249,3 +249,40 @@ test("nested symbol and non-enumerable unknown fields survive cloning and fail c
     assertUnchanged(before, failed);
   }
 });
+
+test("top-level patch descriptors survive merging and fail closed", () => {
+  const decorators = [
+    (patch) => {
+      Object.defineProperty(patch, "hiddenUnknownPatchField", {
+        value: 1,
+        enumerable: false
+      });
+    },
+    (patch) => {
+      Object.defineProperty(patch, Symbol("unknown-patch-field"), {
+        value: 1,
+        enumerable: false
+      });
+    }
+  ];
+
+  for (const decorate of decorators) {
+    const state = createSandboxEditorState(fixture());
+    const before = snapshot(state);
+    const patch = { facingMillidegrees: 90000 };
+    decorate(patch);
+
+    const failed = reduceSandboxEditorState(state, {
+      type: "entity.update",
+      expectedRevision: 0,
+      collection: "safePoints",
+      key: "safe.start",
+      patch
+    });
+
+    assert.equal(failed.lastError.code, "invalid_document");
+    assert.strictEqual(failed.document, state.document);
+    assert.strictEqual(failed.lastValidDocument, state.lastValidDocument);
+    assertUnchanged(before, failed);
+  }
+});

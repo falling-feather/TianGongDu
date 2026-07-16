@@ -225,6 +225,17 @@ function matchingIndexes(records, collection, key) {
   return indexes;
 }
 
+function applyPatchDescriptors(target, patch) {
+  for (const key of Reflect.ownKeys(patch)) {
+    Object.defineProperty(
+      target,
+      key,
+      Object.getOwnPropertyDescriptor(patch, key)
+    );
+  }
+  return target;
+}
+
 function completeDocumentChange(state, normalized) {
   if (
     serializeSandboxAuthoringDocument(normalized) ===
@@ -282,7 +293,10 @@ function applyEntityCommand(state, command) {
         "entity patch must be a plain object"
       );
     }
-    records[index] = Object.assign({}, records[index], cloneValue(command.patch));
+    records[index] = applyPatchDescriptors(
+      records[index],
+      cloneValue(command.patch)
+    );
   }
   return completeDocumentChange(
     state,

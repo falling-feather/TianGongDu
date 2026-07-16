@@ -1,0 +1,3614 @@
+import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
+import { mkdir, stat, writeFile } from "node:fs/promises";
+import { createServer } from "node:http";
+import { extname, relative, resolve, sep } from "node:path";
+
+import { chromium, firefox } from "playwright";
+import pngjs from "pngjs";
+
+const { PNG } = pngjs;
+const root = resolve(import.meta.dirname, "../..");
+
+function argument(name) {
+  const prefix = `--${name}=`;
+  return process.argv.find((entry) => entry.startsWith(prefix))?.slice(prefix.length);
+}
+
+function commaList(value) {
+  return value.split(",").map((entry) => entry.trim()).filter(Boolean);
+}
+
+const stableKeyFnvOffset = 14_695_981_039_346_656_037n;
+const stableKeyFnvPrime = 1_099_511_628_211n;
+const stableKeyMask = (1n << 64n) - 1n;
+
+function stableContentKeyHex(name) {
+  let hash = stableKeyFnvOffset;
+  for (let index = 0; index < name.length; index += 1) {
+    hash ^= BigInt(name.charCodeAt(index));
+    hash = (hash * stableKeyFnvPrime) & stableKeyMask;
+  }
+  return hash.toString(16).padStart(16, "0");
+}
+
+const targets = commaList(
+  argument("targets") ??
+    process.env.TGD_BROWSER_TARGETS ??
+    (process.platform === "win32" ? "chrome,edge,firefox" : "chromium,firefox")
+);
+const distDirectory = resolve(
+  root,
+  argument("dist") ??
+    process.env.TGD_WEB_DIST ??
+    "build/web-release-single/dist/web"
+);
+const reportDirectory = resolve(
+  root,
+  argument("report-dir") ??
+    process.env.TGD_BROWSER_REPORT_DIR ??
+    "build/browser-qa"
+);
+const expectedCommit = process.env.TGD_EXPECT_COMMIT?.trim() || null;
+const ribCalibration =
+  argument("rib-calibration") ?? process.env.TGD_F1_RIB_CALIBRATION ?? "spring";
+if (!["spring", "winter"].includes(ribCalibration)) {
+  throw new Error(`Unsupported F1 rib calibration QA branch: ${ribCalibration}`);
+}
+const laneRoute = argument("lane-route") ?? process.env.TGD_F1_LANE_ROUTE ?? "canopy";
+if (!["canopy", "drain"].includes(laneRoute)) {
+  throw new Error(`Unsupported F1 lane route QA branch: ${laneRoute}`);
+}
+const laneRoutePose = laneRoute === "canopy"
+  ? { x: -3_900, y: -100 }
+  : { x: -800, y: 900 };
+const selectedSpringTracePose = laneRoute === "canopy"
+  ? { x: -3_900, y: -100 }
+  : { x: -2_700, y: -1_700 };
+const hiddenSpringTracePose = laneRoute === "canopy"
+  ? { x: -2_700, y: -1_700 }
+  : { x: -3_900, y: -100 };
+const resolutionChoice =
+  argument("resolution-choice") ??
+  process.env.TGD_F1_RESOLUTION_CHOICE ??
+  "restore-shared-mark";
+if (!["subdue", "restore-shared-mark"].includes(resolutionChoice)) {
+  throw new Error(`Unsupported F1 resolution choice: ${resolutionChoice}`);
+}
+const resolutionChoicePose = resolutionChoice === "subdue"
+  ? { x: 3_300, y: 1_200 }
+  : { x: 4_200, y: 2_300 };
+const expectedResolutionReward = resolutionChoice === "subdue"
+  ? {
+      sourceId: "d0f941408eb43548",
+      rewardId: "114b65073b29fe2c",
+      rewardDedupKey: "ff8e0d62ed634ab7"
+    }
+  : {
+      sourceId: "44db64887748264e",
+      rewardId: "4337ec5d1426b5de",
+      rewardDedupKey: "9b2f5e4a8d6f8877"
+    };
+const rewardStorageFault =
+  argument("reward-storage-fault") ??
+  process.env.TGD_F1_REWARD_STORAGE_FAULT ??
+  "";
+if (!["", "reward_abort_once", "reward_conflict_once"].includes(rewardStorageFault)) {
+  throw new Error(`Unsupported reward storage fault: ${rewardStorageFault}`);
+}
+const rewardOffline = process.env.TGD_F1_REWARD_OFFLINE === "1";
+const rainFerryBranch = laneRoute === "canopy"
+  ? {
+      clue: { x: -12_200, y: 900 },
+      condition: { x: -11_100, y: 1_700 },
+      mooringChoice: { x: -10_100, y: 1_200 },
+      mooringResolution: { x: -9_400, y: 1_900 }
+    }
+  : {
+      clue: { x: -10_900, y: -1_000 },
+      condition: { x: -10_700, y: -900 },
+      mooringChoice: { x: -10_000, y: -1_700 },
+      mooringResolution: { x: -9_200, y: -2_300 }
+    };
+const trainingBranch = laneRoute === "canopy"
+  ? {
+      choice: { x: -6_100, y: 1_600 },
+      mark: { x: -5_400, y: 1_900 }
+    }
+  : {
+      choice: { x: -6_000, y: -2_200 },
+      mark: { x: -5_200, y: -2_400 }
+    };
+const authoredChoiceRoute = laneRoute === "canopy"
+  ? {
+      arrival: { optionCount: 3, targetIndex: 0 },
+      mooring: { optionCount: 2, targetIndex: 0 },
+      training: { optionCount: 2, targetIndex: 0 }
+    }
+  : {
+      arrival: { optionCount: 3, targetIndex: 2 },
+      mooring: { optionCount: 2, targetIndex: 1 },
+      training: { optionCount: 2, targetIndex: 1 }
+    };
+const forceSoftwareGraphics =
+  process.env.TGD_FORCE_SOFTWARE_WEBGL === "1" || process.env.CI === "true";
+
+const contentTypes = new Map([
+  [".html", "text/html; charset=utf-8"],
+  [".js", "text/javascript; charset=utf-8"],
+  [".wasm", "application/wasm"],
+  [".json", "application/json; charset=utf-8"],
+  [".png", "image/png"]
+]);
+
+function projectPath(path) {
+  return relative(root, path).split(sep).join("/");
+}
+
+async function assertWebArtifacts() {
+  for (const fileName of [
+    "tiangongdu-f1.html",
+    "tiangongdu-f1.js",
+    "tiangongdu-f1.wasm",
+    "service-worker.js",
+    "tgd-replay-probe.html",
+    "tgd-replay-probe.js",
+    "tgd-replay-probe.wasm"
+  ]) {
+    const artifact = resolve(distDirectory, fileName);
+    const metadata = await stat(artifact);
+    assert(metadata.isFile(), `Web artifact is not a file: ${projectPath(artifact)}`);
+    assert(metadata.size > 0, `Web artifact is empty: ${projectPath(artifact)}`);
+  }
+}
+
+async function startStaticServer() {
+  const directoryPrefix = `${distDirectory}${sep}`;
+  const server = createServer(async (request, response) => {
+    try {
+      const url = new URL(request.url ?? "/", "http://127.0.0.1");
+      if (url.pathname === "/favicon.ico") {
+        response.writeHead(204, {
+          "Cache-Control": "no-store",
+          "Content-Length": 0
+        }).end();
+        return;
+      }
+      const pathname = decodeURIComponent(
+        url.pathname === "/" ? "/tiangongdu-f1.html" : url.pathname
+      );
+      const requestedFile = resolve(distDirectory, `.${pathname}`);
+      if (requestedFile !== distDirectory && !requestedFile.startsWith(directoryPrefix)) {
+        response.writeHead(403).end("Forbidden");
+        return;
+      }
+
+      const metadata = await stat(requestedFile);
+      if (!metadata.isFile()) {
+        response.writeHead(404).end("Not found");
+        return;
+      }
+
+      response.writeHead(200, {
+        "Cache-Control": "no-store",
+        "Content-Length": metadata.size,
+        "Content-Type": contentTypes.get(extname(requestedFile)) ?? "application/octet-stream",
+        "X-Content-Type-Options": "nosniff"
+      });
+      createReadStream(requestedFile).pipe(response);
+    } catch {
+      response.writeHead(404).end("Not found");
+    }
+  });
+
+  await new Promise((resolveListen, rejectListen) => {
+    server.once("error", rejectListen);
+    server.listen(0, "127.0.0.1", resolveListen);
+  });
+  const address = server.address();
+  assert(address && typeof address === "object", "Static server did not expose an address.");
+  return {
+    origin: `http://127.0.0.1:${address.port}`,
+    close: () => new Promise((resolveClose, rejectClose) => {
+      server.close((error) => error ? rejectClose(error) : resolveClose());
+    })
+  };
+}
+
+function launchDefinition(target) {
+  const chromiumSoftwareArguments = forceSoftwareGraphics
+    ? ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"]
+    : [];
+  const firefoxSoftwarePreferences = forceSoftwareGraphics
+    ? {
+        "layers.d3d11.force-warp": true,
+        "webgl.angle.force-d3d11": true,
+        "webgl.angle.force-warp": true,
+        "webgl.disable-fail-if-major-performance-caveat": true,
+        "webgl.enable-webgl2": true,
+        "webgl.forbid-software": false,
+        "webgl.force-enabled": true
+      }
+    : undefined;
+  switch (target) {
+    case "chrome":
+      return {
+        browserType: chromium,
+        launchOptions: { channel: "chrome", headless: true, args: chromiumSoftwareArguments }
+      };
+    case "edge":
+      return {
+        browserType: chromium,
+        launchOptions: { channel: "msedge", headless: true, args: chromiumSoftwareArguments }
+      };
+    case "chromium":
+      return {
+        browserType: chromium,
+        launchOptions: { headless: true, args: chromiumSoftwareArguments }
+      };
+    case "firefox":
+      return {
+        browserType: firefox,
+        launchOptions: {
+          headless: true,
+          ...(firefoxSoftwarePreferences
+            ? { firefoxUserPrefs: firefoxSoftwarePreferences }
+            : {})
+        }
+      };
+    default:
+      throw new Error(`Unsupported browser target: ${target}`);
+  }
+}
+
+async function waitForText(page, locator, expected, timeoutMs = 15_000) {
+  const deadline = Date.now() + timeoutMs;
+  let lastText = "";
+  while (Date.now() < deadline) {
+    try {
+      lastText = (await locator.innerText({ timeout: 1_000 })).trim();
+      if (lastText.includes(expected)) {
+        return lastText;
+      }
+    } catch {
+      // The document may still be replacing its startup text.
+    }
+    await page.waitForTimeout(100);
+  }
+  throw new Error(`Timed out waiting for "${expected}"; last text was "${lastText}".`);
+}
+
+async function waitForChangedText(page, locator, previous, expected, timeoutMs = 15_000) {
+  const deadline = Date.now() + timeoutMs;
+  let lastText = previous;
+  while (Date.now() < deadline) {
+    try {
+      lastText = (await locator.innerText({ timeout: 1_000 })).trim();
+      if (lastText !== previous && lastText.includes(expected)) {
+        return lastText;
+      }
+    } catch {
+      // The document may still be processing the browser event.
+    }
+    await page.waitForTimeout(100);
+  }
+  throw new Error(
+    `Timed out waiting for a new "${expected}" event; last text was "${lastText}".`
+  );
+}
+
+async function holdMovementKeys(page, keys, durationMs) {
+  for (const key of keys) await page.keyboard.down(key);
+  await page.waitForTimeout(durationMs);
+  for (const key of [...keys].reverse()) await page.keyboard.up(key);
+  await page.waitForTimeout(25);
+}
+
+const f1MovementDistanceQuantum = 80;
+const f1MovementAttemptMargin = 8;
+const f1MovementMinimumAttempts = 10;
+const f1MovementMaximumAttempts = 256;
+const f1MovementAxisProbeLimit = 3;
+const f1MovementDiagnosticsByPage = new WeakMap();
+
+function f1MovementAxisRemaining(state, targetX, targetY, tolerance) {
+  return {
+    x: Math.max(0, Math.abs(targetX - state.playerPoseX) - tolerance),
+    y: Math.max(0, Math.abs(targetY - state.playerPoseY) - tolerance)
+  };
+}
+
+function f1MovementTotalRemaining(axisRemaining) {
+  return axisRemaining.x + axisRemaining.y;
+}
+
+function f1MovementRemainingDistance(state, targetX, targetY, tolerance) {
+  return f1MovementTotalRemaining(
+    f1MovementAxisRemaining(state, targetX, targetY, tolerance)
+  );
+}
+
+function deriveF1MovementAttemptBudget(initialRemainingDistance) {
+  const distanceQuanta = Math.ceil(
+    Math.max(0, initialRemainingDistance) / f1MovementDistanceQuantum
+  );
+  return {
+    distanceQuanta,
+    attemptBudget: Math.min(
+      f1MovementMaximumAttempts,
+      Math.max(f1MovementMinimumAttempts, distanceQuanta + f1MovementAttemptMargin)
+    )
+  };
+}
+
+function selectF1MovementPrimaryAxis(axisRemaining) {
+  if (axisRemaining.x <= 0 && axisRemaining.y <= 0) return null;
+  if (axisRemaining.x <= 0) return "y";
+  if (axisRemaining.y <= 0) return "x";
+  return axisRemaining.x >= axisRemaining.y ? "x" : "y";
+}
+
+function createF1MovementAxisStrategy(axisRemaining) {
+  const primaryAxis = selectF1MovementPrimaryAxis(axisRemaining);
+  return {
+    primaryAxis,
+    currentAxis: primaryAxis,
+    noProgress: { x: 0, y: 0 },
+    exhausted: { x: false, y: false }
+  };
+}
+
+function f1MovementStrategyName(axisStrategy) {
+  return axisStrategy.currentAxis === axisStrategy.primaryAxis ? "primary" : "alternate";
+}
+
+function updateF1MovementAxisStrategy(axisStrategy, beforeRemaining, afterRemaining) {
+  const axis = axisStrategy.currentAxis;
+  assert(axis === "x" || axis === "y", "F1 movement strategy requires an active axis.");
+  const strategy = f1MovementStrategyName(axisStrategy);
+  const axisProgress = beforeRemaining[axis] - afterRemaining[axis];
+
+  if (axisProgress > 0) {
+    const nextState = createF1MovementAxisStrategy(afterRemaining);
+    return {
+      axisProgress,
+      failureReason: null,
+      transition: strategy === "alternate"
+        ? "alternate-progress-return-primary"
+        : "primary-progress",
+      nextState
+    };
+  }
+
+  const noProgress = {
+    ...axisStrategy.noProgress,
+    [axis]: axisStrategy.noProgress[axis] + 1
+  };
+  if (noProgress[axis] < f1MovementAxisProbeLimit) {
+    return {
+      axisProgress,
+      failureReason: null,
+      transition: `${strategy}-probe-no-progress-${noProgress[axis]}/${f1MovementAxisProbeLimit}`,
+      nextState: { ...axisStrategy, noProgress }
+    };
+  }
+
+  const exhausted = { ...axisStrategy.exhausted, [axis]: true };
+  const otherAxis = axis === "x" ? "y" : "x";
+  if (afterRemaining[otherAxis] > 0 && !exhausted[otherAxis]) {
+    const nextState = {
+      ...axisStrategy,
+      currentAxis: otherAxis,
+      noProgress,
+      exhausted
+    };
+    return {
+      axisProgress,
+      failureReason: null,
+      transition: `${strategy}-stalled-switch-${f1MovementStrategyName(nextState)}`,
+      nextState
+    };
+  }
+
+  return {
+    axisProgress,
+    failureReason: "axis-strategies-exhausted",
+    transition: "axis-strategies-exhausted",
+    nextState: { ...axisStrategy, noProgress, exhausted }
+  };
+}
+
+function f1MovementKeysForAxis(axis, delta) {
+  if (axis === "x") return delta > 0 ? ["w", "d"] : ["s", "a"];
+  if (axis === "y") return delta > 0 ? ["w", "a"] : ["s", "d"];
+  throw new Error(`Unsupported F1 movement axis: ${axis}`);
+}
+
+function canAttemptF1Movement(attempts, attemptBudget) {
+  return attempts < Math.min(attemptBudget, f1MovementMaximumAttempts);
+}
+
+function serializeF1MovementFailure(error) {
+  const failure = error && typeof error === "object" ? error.f1MovementFailure : null;
+  if (!failure || !Array.isArray(failure.movementAttempts)) return {};
+  const screenshot = typeof failure.screenshot === "string" ? failure.screenshot : null;
+  return {
+    movementAttempts: failure.movementAttempts,
+    movementFailureScreenshot: screenshot,
+    movementFailureScreenshotError: failure.screenshotError ?? null,
+    screenshots: screenshot ? [screenshot] : []
+  };
+}
+
+function assertF1MovementBudgetContract() {
+  const shortMove = deriveF1MovementAttemptBudget(360);
+  assert.equal(shortMove.distanceQuanta, 5);
+  assert.equal(shortMove.attemptBudget, 13);
+
+  const failedCiLongMove = deriveF1MovementAttemptBudget(17_240);
+  assert.equal(failedCiLongMove.attemptBudget, 224);
+  assert.ok(failedCiLongMove.attemptBudget < f1MovementMaximumAttempts);
+
+  const cappedMove = deriveF1MovementAttemptBudget(Number.MAX_SAFE_INTEGER);
+  assert.equal(cappedMove.attemptBudget, f1MovementMaximumAttempts);
+  assert.ok(f1MovementAxisProbeLimit < cappedMove.attemptBudget);
+  assert.equal(canAttemptF1Movement(255, cappedMove.attemptBudget), true);
+  assert.equal(canAttemptF1Movement(256, cappedMove.attemptBudget), false);
+  assert.equal(canAttemptF1Movement(256, f1MovementMaximumAttempts + 1), false);
+
+  assert.equal(selectF1MovementPrimaryAxis({ x: 100, y: 40 }), "x");
+  assert.equal(selectF1MovementPrimaryAxis({ x: 40, y: 100 }), "y");
+  assert.equal(selectF1MovementPrimaryAxis({ x: 40, y: 40 }), "x");
+  assert.equal(selectF1MovementPrimaryAxis({ x: 0, y: 40 }), "y");
+  assert.equal(selectF1MovementPrimaryAxis({ x: 0, y: 0 }), null);
+  assert.deepEqual(f1MovementKeysForAxis("x", 1), ["w", "d"]);
+  assert.deepEqual(f1MovementKeysForAxis("x", -1), ["s", "a"]);
+  assert.deepEqual(f1MovementKeysForAxis("y", 1), ["w", "a"]);
+  assert.deepEqual(f1MovementKeysForAxis("y", -1), ["s", "d"]);
+
+  const stalledRemaining = { x: 100, y: 40 };
+  let axisStrategy = createF1MovementAxisStrategy(stalledRemaining);
+  let decision = updateF1MovementAxisStrategy(
+    axisStrategy,
+    stalledRemaining,
+    stalledRemaining
+  );
+  axisStrategy = decision.nextState;
+  assert.equal(axisStrategy.currentAxis, "x");
+  assert.equal(axisStrategy.exhausted.x, false);
+  decision = updateF1MovementAxisStrategy(axisStrategy, stalledRemaining, stalledRemaining);
+  axisStrategy = decision.nextState;
+  assert.equal(axisStrategy.currentAxis, "x");
+  assert.equal(axisStrategy.exhausted.x, false);
+  decision = updateF1MovementAxisStrategy(axisStrategy, stalledRemaining, stalledRemaining);
+  axisStrategy = decision.nextState;
+  assert.equal(decision.transition, "primary-stalled-switch-alternate");
+  assert.equal(axisStrategy.currentAxis, "y");
+  assert.equal(axisStrategy.exhausted.x, true);
+
+  decision = updateF1MovementAxisStrategy(
+    axisStrategy,
+    stalledRemaining,
+    { x: 100, y: 20 }
+  );
+  assert.equal(decision.transition, "alternate-progress-return-primary");
+  assert.equal(decision.nextState.currentAxis, "x");
+  assert.deepEqual(decision.nextState.exhausted, { x: false, y: false });
+  assert.deepEqual(decision.nextState.noProgress, { x: 0, y: 0 });
+
+  axisStrategy = createF1MovementAxisStrategy(stalledRemaining);
+  for (let index = 0; index < f1MovementAxisProbeLimit; index += 1) {
+    decision = updateF1MovementAxisStrategy(axisStrategy, stalledRemaining, stalledRemaining);
+    axisStrategy = decision.nextState;
+  }
+  for (let index = 0; index < f1MovementAxisProbeLimit; index += 1) {
+    decision = updateF1MovementAxisStrategy(axisStrategy, stalledRemaining, stalledRemaining);
+    axisStrategy = decision.nextState;
+  }
+  assert.equal(decision.failureReason, "axis-strategies-exhausted");
+  assert.deepEqual(axisStrategy.exhausted, { x: true, y: true });
+
+  const singleAxisRemaining = { x: 100, y: 0 };
+  axisStrategy = createF1MovementAxisStrategy(singleAxisRemaining);
+  for (let index = 0; index < f1MovementAxisProbeLimit; index += 1) {
+    decision = updateF1MovementAxisStrategy(
+      axisStrategy,
+      singleAxisRemaining,
+      singleAxisRemaining
+    );
+    axisStrategy = decision.nextState;
+  }
+  assert.equal(decision.failureReason, "axis-strategies-exhausted");
+  assert.deepEqual(axisStrategy.exhausted, { x: true, y: false });
+
+  const failureTrace = [{ attempt: 1, strategy: "primary", axis: "x" }];
+  const failureReport = serializeF1MovementFailure({
+    f1MovementFailure: {
+      movementAttempts: [{ trace: failureTrace }],
+      screenshot: "build/browser-qa/firefox-movement-failed.png"
+    }
+  });
+  assert.deepEqual(failureReport.movementAttempts[0].trace, failureTrace);
+  assert.equal(
+    failureReport.movementFailureScreenshot,
+    "build/browser-qa/firefox-movement-failed.png"
+  );
+  assert.deepEqual(serializeF1MovementFailure(new Error("unrelated")), {});
+}
+
+assertF1MovementBudgetContract();
+if (process.argv.includes("--movement-budget-self-test")) {
+  console.log(
+    "[browser-qa] F1 movement budget contract: passed " +
+      JSON.stringify({
+        short: deriveF1MovementAttemptBudget(360),
+        failedCiLong: deriveF1MovementAttemptBudget(17_240),
+        capped: deriveF1MovementAttemptBudget(Number.MAX_SAFE_INTEGER),
+        axisProbeLimit: f1MovementAxisProbeLimit
+      })
+  );
+  process.exit(0);
+}
+
+async function moveF1PlayerTo(page, targetX, targetY, tolerance = 180) {
+  let state = await page.evaluate(() => window.__tgdTest.getF1State());
+  const initialPose = { x: state.playerPoseX, y: state.playerPoseY };
+  let axisRemaining = f1MovementAxisRemaining(state, targetX, targetY, tolerance);
+  let remainingDistance = f1MovementTotalRemaining(axisRemaining);
+  const initialRemainingDistance = remainingDistance;
+  const initialAxisRemaining = { ...axisRemaining };
+  const movementDiagnostics = f1MovementDiagnosticsByPage.get(page);
+  const trace = [];
+  let distanceQuanta = 0;
+  let attemptBudget = 0;
+  let attempts = 0;
+  let minimumPositiveProgress = Number.POSITIVE_INFINITY;
+  let bestRemainingDistance = remainingDistance;
+  let axisStrategy = createF1MovementAxisStrategy(axisRemaining);
+  const recordMovementAttempt = (status) => {
+    const movementAttempt = {
+      target: { x: targetX, y: targetY, tolerance },
+      initialPose,
+      finalPose: { x: state.playerPoseX, y: state.playerPoseY },
+      initialRemaining: initialRemainingDistance,
+      finalRemaining: remainingDistance,
+      initialAxisRemaining,
+      finalAxisRemaining: { ...axisRemaining },
+      bestRemaining: bestRemainingDistance,
+      distanceQuanta,
+      attemptsUsed: attempts,
+      attemptBudget,
+      minimumPositiveProgress: Number.isFinite(minimumPositiveProgress)
+        ? minimumPositiveProgress
+        : null,
+      axisProbeLimit: f1MovementAxisProbeLimit,
+      finalAxisStrategy: axisStrategy,
+      trace,
+      status
+    };
+    movementDiagnostics?.push(movementAttempt);
+    return movementAttempt;
+  };
+  if (remainingDistance === 0) {
+    recordMovementAttempt("reached");
+    return state;
+  }
+
+  ({ distanceQuanta, attemptBudget } = deriveF1MovementAttemptBudget(
+    initialRemainingDistance
+  ));
+  let failureReason = "attempt-budget-exhausted";
+
+  while (canAttemptF1Movement(attempts, attemptBudget)) {
+    const axis = axisStrategy.currentAxis;
+    assert(axis === "x" || axis === "y", "F1 movement strategy lost its active axis.");
+    const strategy = f1MovementStrategyName(axisStrategy);
+    const delta = axis === "x"
+      ? targetX - state.playerPoseX
+      : targetY - state.playerPoseY;
+    const keys = f1MovementKeysForAxis(axis, delta);
+    const durationMs = Math.min(
+      120,
+      Math.max(35, Math.floor(Math.abs(delta) / 3_600 * 750))
+    );
+    const beforePose = { x: state.playerPoseX, y: state.playerPoseY };
+    const beforeAxisRemaining = { ...axisRemaining };
+    const beforeRemainingDistance = remainingDistance;
+    const beforeBestRemainingDistance = bestRemainingDistance;
+    await holdMovementKeys(page, keys, durationMs);
+    attempts += 1;
+
+    state = await page.evaluate(() => window.__tgdTest.getF1State());
+    axisRemaining = f1MovementAxisRemaining(state, targetX, targetY, tolerance);
+    remainingDistance = f1MovementTotalRemaining(axisRemaining);
+    const decision = updateF1MovementAxisStrategy(
+      axisStrategy,
+      beforeAxisRemaining,
+      axisRemaining
+    );
+    if (decision.axisProgress > 0) {
+      minimumPositiveProgress = Math.min(minimumPositiveProgress, decision.axisProgress);
+      bestRemainingDistance = Math.min(bestRemainingDistance, remainingDistance);
+    }
+    axisStrategy = decision.nextState;
+    trace.push({
+      attempt: attempts,
+      strategy,
+      axis,
+      keys: [...keys],
+      beforePose,
+      afterPose: { x: state.playerPoseX, y: state.playerPoseY },
+      beforeRemaining: { ...beforeAxisRemaining, total: beforeRemainingDistance },
+      afterRemaining: { ...axisRemaining, total: remainingDistance },
+      best: {
+        before: beforeBestRemainingDistance,
+        after: bestRemainingDistance
+      },
+      axisProgress: decision.axisProgress,
+      axisNoProgress: { ...axisStrategy.noProgress },
+      exhaustedAxes: { ...axisStrategy.exhausted },
+      transition: decision.transition
+    });
+    if (remainingDistance === 0) {
+      recordMovementAttempt("reached");
+      return state;
+    }
+    if (decision.failureReason) {
+      failureReason = decision.failureReason;
+      break;
+    }
+  }
+
+  const finalState = state;
+  const failedMovementAttempt = recordMovementAttempt(failureReason);
+  const error = new Error(
+    `F1 player did not reach (${targetX}, ${targetY}); reason=${failureReason}; ` +
+      `attempts=${attempts}/${attemptBudget}; distanceQuanta=${distanceQuanta}; ` +
+      `remaining=${remainingDistance}; best=${bestRemainingDistance}; ` +
+      `axis=${axisStrategy.currentAxis ?? "none"}; ` +
+      `strategy=${f1MovementStrategyName(axisStrategy)}; ` +
+      `probes=x:${axisStrategy.noProgress.x}/${f1MovementAxisProbeLimit},` +
+      `y:${axisStrategy.noProgress.y}/${f1MovementAxisProbeLimit}; ` +
+      `exhausted=x:${axisStrategy.exhausted.x},y:${axisStrategy.exhausted.y}; ` +
+      `finalState=${JSON.stringify(finalState)}`
+  );
+  error.f1MovementFailure = {
+    movementAttempts: movementDiagnostics
+      ? [...movementDiagnostics]
+      : [failedMovementAttempt],
+    screenshot: null,
+    screenshotError: null
+  };
+  throw error;
+}
+
+function analyzePng(buffer) {
+  const png = PNG.sync.read(buffer);
+  const uniqueColors = new Set();
+  let goldPixels = 0;
+  let nearBlackPixels = 0;
+  let opaquePixels = 0;
+  for (let offset = 0; offset < png.data.length; offset += 4) {
+    const red = png.data[offset];
+    const green = png.data[offset + 1];
+    const blue = png.data[offset + 2];
+    const alpha = png.data[offset + 3];
+    if (alpha < 250) continue;
+    opaquePixels += 1;
+    if (uniqueColors.size < 1024) uniqueColors.add((red << 16) | (green << 8) | blue);
+    if (red >= 150 && green >= 80 && green <= 190 && blue <= 130) goldPixels += 1;
+    if (red <= 3 && green <= 3 && blue <= 3) nearBlackPixels += 1;
+  }
+  return {
+    width: png.width,
+    height: png.height,
+    opaquePixels,
+    uniqueColors: uniqueColors.size,
+    goldPixelRatio: opaquePixels === 0 ? 0 : goldPixels / opaquePixels,
+    nearBlackPixels,
+    nearBlackPixelRatio: opaquePixels === 0 ? 1 : nearBlackPixels / opaquePixels,
+    sha256: createHash("sha256").update(buffer).digest("hex"),
+    pixels: png.data
+  };
+}
+
+function compareFrames(before, after) {
+  assert.equal(after.width, before.width, "Restored canvas width changed.");
+  assert.equal(after.height, before.height, "Restored canvas height changed.");
+  let changedPixels = 0;
+  const pixelCount = before.width * before.height;
+  for (let offset = 0; offset < before.pixels.length; offset += 4) {
+    const maximumDifference = Math.max(
+      Math.abs(before.pixels[offset] - after.pixels[offset]),
+      Math.abs(before.pixels[offset + 1] - after.pixels[offset + 1]),
+      Math.abs(before.pixels[offset + 2] - after.pixels[offset + 2]),
+      Math.abs(before.pixels[offset + 3] - after.pixels[offset + 3])
+    );
+    if (maximumDifference > 10) changedPixels += 1;
+  }
+  return {
+    changedPixels,
+    changedPixelRatio: changedPixels / pixelCount
+  };
+}
+
+function publicFrame(frame) {
+  const { pixels: _pixels, ...summary } = frame;
+  return summary;
+}
+
+async function inspectWebgl(page, target) {
+  return page.evaluate((useDebugRendererInfo) => {
+    const canvas = document.querySelector("canvas");
+    const context = canvas?.getContext("webgl2") ?? null;
+    if (!context) return { available: false };
+    const debugRendererInfo = useDebugRendererInfo
+      ? context.getExtension("WEBGL_debug_renderer_info")
+      : null;
+    const contextLossExtension = context.getExtension("WEBGL_lose_context");
+    return {
+      available: true,
+      contextLost: context.isContextLost(),
+      contextLossExtension: Boolean(contextLossExtension),
+      version: String(context.getParameter(context.VERSION)),
+      shadingLanguageVersion: String(context.getParameter(context.SHADING_LANGUAGE_VERSION)),
+      vendor: String(
+        context.getParameter(debugRendererInfo?.UNMASKED_VENDOR_WEBGL ?? context.VENDOR)
+      ),
+      renderer: String(
+        context.getParameter(debugRendererInfo?.UNMASKED_RENDERER_WEBGL ?? context.RENDERER)
+      ),
+      maxTextureSize: Number(context.getParameter(context.MAX_TEXTURE_SIZE))
+    };
+  }, target !== "firefox");
+}
+
+async function captureRenderedFrame(page, canvas, path, label, timeoutMs = 20_000) {
+  const deadline = Date.now() + timeoutMs;
+  let buffer;
+  let frame;
+  while (Date.now() < deadline) {
+    buffer = await canvas.screenshot();
+    frame = analyzePng(buffer);
+    if (
+      frame.uniqueColors >= 4 &&
+      frame.goldPixelRatio >= 0.005 &&
+      frame.nearBlackPixelRatio <= 0.0001
+    ) {
+      await writeFile(path, buffer);
+      return frame;
+    }
+    await page.waitForTimeout(250);
+  }
+  if (buffer) await writeFile(path, buffer);
+  throw new Error(
+    `${label} did not render a complete bootstrap frame: ${frame?.uniqueColors ?? 0} colors, ${(
+      (frame?.goldPixelRatio ?? 0) * 100
+    ).toFixed(3)}% gold pixels, ${(
+      (frame?.nearBlackPixelRatio ?? 1) * 100
+    ).toFixed(3)}% near-black pixels.`
+  );
+}
+
+async function captureQuestUiFrame(page, path, label) {
+  const buffer = await page.screenshot({ type: "png", animations: "disabled" });
+  const frame = analyzePng(buffer);
+  await writeFile(path, buffer);
+  assert(frame.uniqueColors >= 8, `${label} did not contain a readable rendered frame.`);
+  assert(frame.width >= 520 && frame.height >= 800, `${label} screenshot was undersized.`);
+  return publicFrame(frame);
+}
+
+function parseLifecycle(message) {
+  const prefix = "[tgd.lifecycle] ";
+  if (!message.startsWith(prefix)) return null;
+  try {
+    return JSON.parse(message.slice(prefix.length));
+  } catch {
+    return null;
+  }
+}
+
+function parseReplayProbe(message) {
+  const prefix = "[tgd.replay] ";
+  if (!message.startsWith(prefix)) return null;
+  try {
+    return JSON.parse(message.slice(prefix.length));
+  } catch {
+    return null;
+  }
+}
+
+async function waitForRecord(page, records, label, timeoutMs = 45_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (records.length > 0) return records.at(-1);
+    await page.waitForTimeout(100);
+  }
+  throw new Error(`Timed out waiting for ${label}.`);
+}
+
+function validateReplayProbe(record, target) {
+  assert.equal(record.schemaVersion, "1.0.0", `${target} replay schema changed.`);
+  assert.equal(record.status, "passed", `${target} WASM replay probe failed.`);
+  assert(record.build, `${target} replay omitted its build identity.`);
+  assert(record.build.version, `${target} replay omitted its semantic version.`);
+  assert(record.build.commit, `${target} replay omitted its Git commit.`);
+  assert(record.build.channel, `${target} replay omitted its build channel.`);
+  assert.equal(record.formatMajor, 1, `${target} replay major changed.`);
+  assert.equal(record.formatMinor, 0, `${target} replay minor changed.`);
+  assert.equal(record.finalTick, 10_000, `${target} replay did not target 10,000 ticks.`);
+  assert.match(
+    record.contentFingerprint,
+    /^[0-9a-f]{16}$/,
+    `${target} replay content fingerprint is not canonical.`
+  );
+  assert.match(
+    record.expectedChecksum,
+    /^[0-9a-f]{16}$/,
+    `${target} replay checksum is not canonical.`
+  );
+  assert(record.canonicalBytes > 0, `${target} replay emitted no canonical bytes.`);
+  for (const field of [
+    "validationError",
+    "encodeError",
+    "decodeError",
+    "reencodeError"
+  ]) {
+    assert.equal(record[field], 0, `${target} replay ${field} was non-zero.`);
+  }
+  assert.deepEqual(
+    record.cadences.map((cadence) => cadence.fps),
+    [30, 60, 144],
+    `${target} replay cadence matrix changed.`
+  );
+  const expectedPose = record.cadences[0]?.pose;
+  assert(expectedPose, `${target} replay omitted its quantized pose.`);
+  assert.notEqual(expectedPose.x, 0, `${target} replay did not exercise world x.`);
+  assert.notEqual(expectedPose.y, 0, `${target} replay did not exercise world y.`);
+  assert(expectedPose.height > 0, `${target} replay did not exercise independent height.`);
+  assert.notEqual(
+    expectedPose.floorLayer,
+    0,
+    `${target} replay did not exercise an independent floor layer.`
+  );
+  for (const cadence of record.cadences) {
+    assert.equal(cadence.error, 0, `${target} ${cadence.fps} Hz replay failed.`);
+    assert.equal(cadence.tick, record.finalTick, `${target} ${cadence.fps} Hz tick drifted.`);
+    assert.equal(
+      cadence.checksum,
+      record.expectedChecksum,
+      `${target} ${cadence.fps} Hz checksum drifted.`
+    );
+    assert(cadence.frames > 0, `${target} ${cadence.fps} Hz emitted no render frames.`);
+    assert.deepEqual(
+      cadence.pose,
+      expectedPose,
+      `${target} ${cadence.fps} Hz quantized pose drifted.`
+    );
+  }
+  return record;
+}
+
+function isExpectedConsoleDiagnostic(target, type, text) {
+  return (
+    target === "firefox" &&
+    type === "warning" &&
+    text.includes('[JavaScript Warning: "WebGL context was lost."')
+  );
+}
+
+async function inspectProfileOperations(page) {
+  return page.evaluate(async () => {
+    const profileId = window.__tgdProfile.identity.profileId;
+    const database = await new Promise((resolveOpen, rejectOpen) => {
+      const request = indexedDB.open("tiangongdu.prototype_f1.internal.profile", 1);
+      request.onsuccess = () => resolveOpen(request.result);
+      request.onerror = () => rejectOpen(request.error);
+    });
+    try {
+      const transaction = database.transaction("operations", "readonly");
+      const transactionDone = new Promise((resolveTransaction, rejectTransaction) => {
+        transaction.oncomplete = resolveTransaction;
+        transaction.onabort = () => rejectTransaction(transaction.error);
+        transaction.onerror = () => rejectTransaction(transaction.error);
+      });
+      const records = await new Promise((resolveRecords, rejectRecords) => {
+        const request = transaction.objectStore("operations").getAll();
+        request.onsuccess = () => resolveRecords(request.result);
+        request.onerror = () => rejectRecords(request.error);
+      });
+      await transactionDone;
+      return records
+        .filter((record) => record.profileId === profileId)
+        .map((record) => ({
+          operationId: record.operationId,
+          deviceId: record.deviceId,
+          baseRevision: record.baseRevision,
+          logicalSequence: record.logicalSequence,
+          domain: record.domain,
+          payloadVersion: record.payloadVersion,
+          sourceId: record.sourceId,
+          rewardId: record.rewardId,
+          rewardDedupKey: record.rewardDedupKey,
+          status: record.status,
+          byteLength: record.bytes?.byteLength ?? 0
+        }));
+    } finally {
+      database.close();
+    }
+  });
+}
+
+async function runBrowser(target, origin) {
+  const definition = launchDefinition(target);
+  const consoleProblems = [];
+  const expectedConsoleDiagnostics = [];
+  const pageErrors = [];
+  const requestFailures = [];
+  const lifecycle = [];
+  const replayProbes = [];
+  const checkpoints = [];
+  const movementAttempts = [];
+  let browser;
+  let context;
+  let page;
+  let contextLossProbeActive = false;
+  let pendingEmptyContextDiagnostics = 0;
+
+  try {
+    browser = await definition.browserType.launch(definition.launchOptions);
+    context = await browser.newContext({ viewport: { width: 1280, height: 960 } });
+    page = await context.newPage();
+    f1MovementDiagnosticsByPage.set(page, movementAttempts);
+    page.on("console", (message) => {
+      const text = message.text();
+      const type = message.type();
+      if (type === "warning" || type === "error") {
+        const diagnostic = { type, text };
+        const expectedContextError =
+          contextLossProbeActive &&
+          type === "error" &&
+          /OpenGL error 0x(?:9242|0500).*CommandBufferGL\.cpp beginRenderPass/.test(text);
+        const expectedEmptyContextError =
+          contextLossProbeActive &&
+          type === "error" &&
+          text === "" &&
+          pendingEmptyContextDiagnostics > 0;
+        if (expectedContextError) pendingEmptyContextDiagnostics += 1;
+        if (expectedEmptyContextError) pendingEmptyContextDiagnostics -= 1;
+        if (
+          isExpectedConsoleDiagnostic(target, type, text) ||
+          expectedContextError ||
+          expectedEmptyContextError
+        ) {
+          expectedConsoleDiagnostics.push(diagnostic);
+        } else {
+          consoleProblems.push(diagnostic);
+        }
+      }
+      const record = parseLifecycle(text);
+      if (record) lifecycle.push(record);
+      const replayProbe = parseReplayProbe(text);
+      if (replayProbe) replayProbes.push(replayProbe);
+    });
+    page.on("pageerror", (error) => pageErrors.push(error.message));
+    page.on("requestfailed", (request) => {
+      if (request.url().startsWith(origin)) {
+        requestFailures.push({
+          url: request.url(),
+          error: request.failure()?.errorText ?? "unknown"
+        });
+      }
+    });
+
+    const url = new URL("/tiangongdu-f1.html", origin);
+    url.searchParams.set("qa", "1");
+    if (rewardStorageFault) url.searchParams.set("storageFault", rewardStorageFault);
+    const pageUrl = url.href;
+    const response = await page.goto(pageUrl, { waitUntil: "domcontentloaded", timeout: 45_000 });
+    assert(response?.ok(), `${target} failed to load ${pageUrl}: HTTP ${response?.status()}`);
+    assert.equal(await page.title(), "天工渡 · F1 Web Host");
+
+    const status = page.locator("#status");
+    const state = page.getByTestId("qa-state");
+    const profileState = page.getByTestId("profile-state");
+    const saveProfile = page.getByTestId("save-profile");
+    const lastEvent = page.locator("#last-event");
+    const canvas = page.locator("canvas");
+    const questUi = page.getByTestId("quest-ui");
+    const questUiPanel = questUi.locator(".quest-ui-panel");
+    const authoredChoiceCheckpoints = [];
+    const worldChoiceCheckpoints = [];
+    const questUiEmitterCheckpoints = [];
+    const questUiRecoveryCheckpoints = [];
+    const questUiRecoveryScreenshots = [];
+
+    const currentQuestUiMessageSequence = async () =>
+      (await page.evaluate(() => window.__tgdQuestUi?.getState?.()?.messageSequence ?? "0"));
+
+    const waitForQuestUiProjection = async ({
+      name,
+      afterMessageSequence,
+      sourceName,
+      objectiveId,
+      polarityName,
+      classificationName,
+      primary,
+      secondary,
+      activeActorKeys = [],
+      inactiveActorKeys = []
+    }) => {
+      const expected = {
+        afterMessageSequence,
+        sourceName,
+        objective: stableContentKeyHex(objectiveId),
+        polarityName,
+        classificationName,
+        activeActorKeys: activeActorKeys.map((key) =>
+          BigInt(key).toString(16).padStart(16, "0")),
+        inactiveActorKeys: inactiveActorKeys.map((key) =>
+          BigInt(key).toString(16).padStart(16, "0")),
+        primary: primary ? {
+          id: primary.id ? stableContentKeyHex(primary.id) : "0000000000000000",
+          objective: primary.id
+            ? stableContentKeyHex(primary.objectiveId ?? objectiveId)
+            : "0000000000000000",
+          statusName: primary.statusName,
+          rejectionReasonName: primary.rejectionReasonName ?? "none"
+        } : null,
+        secondary: secondary ? {
+          id: secondary.id ? stableContentKeyHex(secondary.id) : "0000000000000000",
+          objective: secondary.id
+            ? stableContentKeyHex(secondary.objectiveId ?? objectiveId)
+            : "0000000000000000",
+          statusName: secondary.statusName,
+          rejectionReasonName: secondary.rejectionReasonName ?? "none"
+        } : null
+      };
+      try {
+        await page.waitForFunction(
+          (candidate) => {
+            const event = window.__tgdQuestUi?.getState?.();
+            const resultMatches = (actual, wanted) => wanted === null || (
+              actual?.id === wanted.id &&
+              actual?.objective === wanted.objective &&
+              actual?.statusName === wanted.statusName &&
+              actual?.rejectionReasonName === wanted.rejectionReasonName
+            );
+            return event &&
+              BigInt(event.messageSequence) > BigInt(candidate.afterMessageSequence) &&
+              event.sourceName === candidate.sourceName &&
+              event.objective === candidate.objective &&
+              event.polarityName === candidate.polarityName &&
+              event.attemptTimeClassificationName === candidate.classificationName &&
+              candidate.activeActorKeys.every((actor) => event.activeActorKeys.includes(actor)) &&
+              candidate.inactiveActorKeys.every((actor) => !event.activeActorKeys.includes(actor)) &&
+              resultMatches(event.primaryResult, candidate.primary) &&
+              resultMatches(event.secondaryResult, candidate.secondary);
+          },
+          expected,
+          { timeout: 5_000 }
+        );
+      } catch (error) {
+        const actual = await page.evaluate(() => window.__tgdQuestUi?.getState?.() ?? null);
+        throw new Error(
+          `${target} ${name} projection mismatch: expected=${JSON.stringify(expected)} ` +
+            `actual=${JSON.stringify(actual)}`,
+          { cause: error }
+        );
+      }
+      const event = await page.evaluate(() => window.__tgdQuestUi.getState());
+      assert.equal(event.sourceName, sourceName);
+      assert.equal(event.objective, expected.objective);
+      assert.equal(event.polarityName, polarityName);
+      assert.equal(event.attemptTimeClassificationName, classificationName);
+      for (const actor of expected.activeActorKeys) {
+        assert(event.activeActorKeys.includes(actor), `${target} ${name} omitted active Actor ${actor}.`);
+      }
+      for (const actor of expected.inactiveActorKeys) {
+        assert(
+          !event.activeActorKeys.includes(actor),
+          `${target} ${name} retained inactive Actor ${actor}.`
+        );
+      }
+      if (expected.primary) {
+        assert.deepEqual(
+          {
+            id: event.primaryResult.id,
+            objective: event.primaryResult.objective,
+            statusName: event.primaryResult.statusName,
+            rejectionReasonName: event.primaryResult.rejectionReasonName
+          },
+          expected.primary
+        );
+      }
+      if (expected.secondary) {
+        assert.deepEqual(
+          {
+            id: event.secondaryResult.id,
+            objective: event.secondaryResult.objective,
+            statusName: event.secondaryResult.statusName,
+            rejectionReasonName: event.secondaryResult.rejectionReasonName
+          },
+          expected.secondary
+        );
+      }
+      const checkpoint = {
+        name,
+        messageSequence: event.messageSequence,
+        projectionSequence: event.sequence,
+        questChecksum: event.questChecksum,
+        projectionChecksum: event.checksum,
+        sourceName: event.sourceName,
+        objective: event.objective,
+        polarityName: event.polarityName,
+        classificationName: event.attemptTimeClassificationName,
+        primaryResult: event.primaryResult,
+        secondaryResult: event.secondaryResult,
+        activeActorKeys: event.activeActorKeys,
+        defeatedActorKeys: event.defeatedActorKeys
+      };
+      questUiEmitterCheckpoints.push(checkpoint);
+      return checkpoint;
+    };
+
+    const exerciseTrainingRecovery = async ({
+      name,
+      objectiveId,
+      activeActorKey,
+      previousProjection
+    }) => {
+      const before = await page.evaluate(() => window.__tgdTest.getF1State());
+      assert.equal(before.playerActive, true, `${target} ${name} did not begin alive.`);
+      assert.notEqual(
+        previousProjection.questChecksum,
+        "0000000000000000",
+        `${target} ${name} began without an authoritative Quest checksum.`
+      );
+
+      await page.waitForFunction(
+        () => window.__tgdTest?.getF1State()?.playerActive === false,
+        undefined,
+        { timeout: 45_000 }
+      );
+      const defeated = await page.evaluate(() => window.__tgdTest.getF1State());
+      const offer = await waitForQuestUiProjection({
+        name: `${name}-offer`,
+        afterMessageSequence: previousProjection.messageSequence,
+        sourceName: "recovery_offer",
+        objectiveId,
+        polarityName: "recovery",
+        classificationName: "failure_retry_excluded",
+        primary: { statusName: "not_applicable" },
+        secondary: { statusName: "not_applicable" },
+        activeActorKeys: [activeActorKey]
+      });
+      assert.equal(
+        offer.questChecksum,
+        previousProjection.questChecksum,
+        `${target} ${name} offer changed the Quest checksum.`
+      );
+      assert.equal(
+        defeated.questCompletedObjectives,
+        before.questCompletedObjectives,
+        `${target} ${name} defeat advanced a Quest objective.`
+      );
+      assert.equal(
+        defeated.questSelectedChoices,
+        before.questSelectedChoices,
+        `${target} ${name} defeat changed an authored selection.`
+      );
+      const offerScreenshot = resolve(reportDirectory, `${target}-${name}-offer.png`);
+      await captureQuestUiFrame(
+        page,
+        offerScreenshot,
+        `${target} ${name} authoritative recovery offer`
+      );
+
+      await canvas.focus();
+      assert.equal(
+        await canvas.evaluate((element) => document.activeElement === element),
+        true,
+        `${target} ${name} could not focus the authoritative gameplay Canvas before retry.`
+      );
+      const retryFocus = await page.evaluate(() => ({
+        id: document.activeElement?.id ?? "",
+        tagName: document.activeElement?.tagName ?? ""
+      }));
+      await page.keyboard.press("r");
+      try {
+        await page.waitForFunction(
+          (expectedRetryCount) => {
+            const state = window.__tgdTest?.getF1State();
+            return state?.playerActive === true &&
+              state.retryCount === expectedRetryCount &&
+              state.playerHealth === 120 &&
+              state.playerPoseX === state.safePointPoseX &&
+              state.playerPoseY === state.safePointPoseY &&
+              state.activeHostiles === 1;
+          },
+          before.retryCount + 1,
+          { timeout: 10_000 }
+        );
+      } catch (error) {
+        const retryFailureState = await page.evaluate(() => window.__tgdTest?.getF1State?.());
+        throw new Error(
+          `${target} ${name} retry input/component restore did not complete after Canvas focus ` +
+          `${JSON.stringify(retryFocus)}; state=${JSON.stringify(retryFailureState)}`,
+          { cause: error }
+        );
+      }
+      const restored = await page.evaluate(() => window.__tgdTest.getF1State());
+      let resume;
+      try {
+        resume = await waitForQuestUiProjection({
+          name: `${name}-resume`,
+          afterMessageSequence: offer.messageSequence,
+          sourceName: "recovery_resume",
+          objectiveId,
+          polarityName: "recovery",
+          classificationName: "resume_no_duplicate_progress",
+          primary: { statusName: "not_applicable" },
+          secondary: { statusName: "not_applicable" },
+          activeActorKeys: [activeActorKey]
+        });
+      } catch (error) {
+        const latestProjection = await page.evaluate(() => window.__tgdQuestUi?.getState?.());
+        throw new Error(
+          `${target} ${name} component retry completed but no fresh authoritative resume was ` +
+          `published; restored=${JSON.stringify(restored)} ` +
+          `latestProjection=${JSON.stringify(latestProjection)}`,
+          { cause: error }
+        );
+      }
+      assert.equal(
+        resume.questChecksum,
+        previousProjection.questChecksum,
+        `${target} ${name} resume changed the Quest checksum.`
+      );
+      assert.equal(
+        resume.objective,
+        offer.objective,
+        `${target} ${name} resume moved to a different pending Objective.`
+      );
+      assert(
+        BigInt(resume.messageSequence) > BigInt(offer.messageSequence),
+        `${target} ${name} resume was not a fresh authoritative message.`
+      );
+      assert(
+        BigInt(resume.projectionSequence) > BigInt(offer.projectionSequence),
+        `${target} ${name} resume did not advance the authoritative projection sequence.`
+      );
+      assert.equal(
+        restored.questCompletedObjectives,
+        before.questCompletedObjectives,
+        `${target} ${name} retry changed completed Objective count.`
+      );
+      assert.equal(
+        restored.questSelectedChoices,
+        before.questSelectedChoices,
+        `${target} ${name} retry changed authored selections.`
+      );
+      assert.equal(
+        restored.questBeatIndex,
+        before.questBeatIndex,
+        `${target} ${name} retry changed the active Beat.`
+      );
+      assert.equal(restored.playerHealth, 120, `${target} ${name} did not restore player health.`);
+      assert.equal(restored.activeHostiles, 1, `${target} ${name} rebuilt the wrong phase.`);
+      assert.equal(restored.playerPoseX, restored.safePointPoseX);
+      assert.equal(restored.playerPoseY, restored.safePointPoseY);
+      const auditTickTotal = (state) =>
+        state.eligiblePlayTicks + state.idleTicks + state.failureRetryTicks;
+      const resumeAuditTick = auditTickTotal(
+        await page.evaluate(() => window.__tgdTest.getF1State())
+      );
+      await page.waitForFunction(
+        (baseline) => {
+          const state = window.__tgdTest?.getF1State?.();
+          return state &&
+            state.eligiblePlayTicks + state.idleTicks + state.failureRetryTicks >= baseline + 3;
+        },
+        resumeAuditTick,
+        { timeout: 5_000 }
+      );
+      await canvas.focus();
+      const repeatedRetryBefore = await page.evaluate(() => ({
+        f1: window.__tgdTest.getF1State(),
+        questUi: window.__tgdQuestUi.getState()
+      }));
+      await page.keyboard.press("r");
+      const repeatedRetryAuditTick = auditTickTotal(repeatedRetryBefore.f1);
+      await page.waitForFunction(
+        (baseline) => {
+          const state = window.__tgdTest?.getF1State?.();
+          return state &&
+            state.eligiblePlayTicks + state.idleTicks + state.failureRetryTicks >= baseline + 3;
+        },
+        repeatedRetryAuditTick,
+        { timeout: 5_000 }
+      );
+      const repeatedRetryAfter = await page.evaluate(() => ({
+        f1: window.__tgdTest.getF1State(),
+        questUi: window.__tgdQuestUi.getState()
+      }));
+      assert.equal(
+        repeatedRetryAfter.f1.retryCount,
+        repeatedRetryBefore.f1.retryCount,
+        `${target} ${name} repeated R submitted a second retry.`
+      );
+      assert.equal(
+        repeatedRetryAfter.questUi.messageSequence,
+        repeatedRetryBefore.questUi.messageSequence,
+        `${target} ${name} repeated R published another Quest UI message.`
+      );
+      assert.equal(
+        repeatedRetryAfter.questUi.objective,
+        repeatedRetryBefore.questUi.objective,
+        `${target} ${name} repeated R changed the projected Objective.`
+      );
+      assert.equal(
+        repeatedRetryAfter.f1.questCompletedObjectives,
+        repeatedRetryBefore.f1.questCompletedObjectives,
+        `${target} ${name} repeated R advanced an Objective.`
+      );
+      assert.equal(
+        repeatedRetryAfter.f1.questSelectedChoices,
+        repeatedRetryBefore.f1.questSelectedChoices,
+        `${target} ${name} repeated R changed an authored selection.`
+      );
+      assert.equal(
+        repeatedRetryAfter.f1.questBeatIndex,
+        repeatedRetryBefore.f1.questBeatIndex,
+        `${target} ${name} repeated R changed the active Beat.`
+      );
+      const resumeScreenshot = resolve(reportDirectory, `${target}-${name}-resume.png`);
+      await captureQuestUiFrame(
+        page,
+        resumeScreenshot,
+        `${target} ${name} authoritative recovery resume`
+      );
+      const checkpoint = {
+        name,
+        objective: offer.objective,
+        beforeMessageSequence: previousProjection.messageSequence,
+        offer,
+        resume,
+        before: {
+          questCompletedObjectives: before.questCompletedObjectives,
+          questSelectedChoices: before.questSelectedChoices,
+          retryCount: before.retryCount
+        },
+        defeated: {
+          questCompletedObjectives: defeated.questCompletedObjectives,
+          questSelectedChoices: defeated.questSelectedChoices,
+          playerHealth: defeated.playerHealth
+        },
+        restored: {
+          questCompletedObjectives: restored.questCompletedObjectives,
+          questSelectedChoices: restored.questSelectedChoices,
+          retryCount: restored.retryCount,
+          playerHealth: restored.playerHealth,
+          activeHostiles: restored.activeHostiles,
+          retryFocus
+        },
+        repeatedRetry: {
+          beforeAuditTick: repeatedRetryAuditTick,
+          afterAuditTick: auditTickTotal(repeatedRetryAfter.f1),
+          retryCount: repeatedRetryAfter.f1.retryCount,
+          messageSequence: repeatedRetryAfter.questUi.messageSequence,
+          objective: repeatedRetryAfter.questUi.objective,
+          questCompletedObjectives: repeatedRetryAfter.f1.questCompletedObjectives,
+          questSelectedChoices: repeatedRetryAfter.f1.questSelectedChoices,
+          questBeatIndex: repeatedRetryAfter.f1.questBeatIndex
+        },
+        screenshots: [projectPath(offerScreenshot), projectPath(resumeScreenshot)]
+      };
+      questUiRecoveryCheckpoints.push(checkpoint);
+      questUiRecoveryScreenshots.push(...checkpoint.screenshots);
+      return checkpoint;
+    };
+
+    const completeAuthoredChoice = async ({
+      name,
+      optionCount,
+      targetIndex,
+      screenshotName
+    }) => {
+      const before = await page.evaluate(() => window.__tgdTest.getF1State());
+      const traceStart = await page.evaluate(() => window.__tgdLifecycleTrace.length);
+      assert(
+        await questUi.isHidden() || await questUi.getAttribute("data-surface") !== "choice",
+        `${target} ${name} started while another Quest choice was visible.`
+      );
+
+      await canvas.focus();
+      await page.keyboard.press("f");
+      await questUi.waitFor({ state: "visible", timeout: 5_000 });
+      await page.waitForFunction(
+        (expectedOptionCount) => {
+          const root = document.getElementById("quest-ui");
+          return root && !root.hidden && root.dataset.surface === "choice" &&
+            root.querySelectorAll("button[data-choice-index]").length === expectedOptionCount;
+        },
+        optionCount,
+        { timeout: 5_000 }
+      );
+
+      const afterOpen = await page.evaluate(() => window.__tgdTest.getF1State());
+      assert.equal(
+        afterOpen.questCompletedObjectives,
+        before.questCompletedObjectives,
+        `${target} ${name} advanced when F only opened the authoritative panel.`
+      );
+      assert.equal(
+        afterOpen.questSelectedChoices,
+        before.questSelectedChoices,
+        `${target} ${name} committed a selection before a DOM Action.`
+      );
+      assert.equal(await questUiPanel.getAttribute("aria-modal"), "true");
+      assert.equal(await questUiPanel.getAttribute("aria-busy"), "false");
+
+      const choiceEvent = await page.evaluate(() => window.__tgdQuestUi.getState());
+      assert(choiceEvent, `${target} ${name} omitted the decoded authoritative event.`);
+      assert.equal(choiceEvent.sourceName, "choice_available");
+      assert.equal(choiceEvent.surfaceName, "choice");
+      assert.equal(choiceEvent.choiceOptions.length, optionCount);
+      assert.match(choiceEvent.messageSequence, /^[1-9][0-9]*$/);
+      assert.match(choiceEvent.sequence, /^[1-9][0-9]*$/);
+      assert.match(choiceEvent.checksum, /^[0-9a-f]{16}$/);
+
+      const domOptions = await questUi.locator("button[data-choice-index]").evaluateAll(
+        (buttons) => buttons.map((button) => ({
+          index: Number(button.dataset.choiceIndex),
+          interaction: button.dataset.interaction,
+          selection: button.dataset.selection,
+          label: button.querySelector("strong")?.textContent?.trim() ?? "",
+          hint: button.querySelector("span")?.textContent?.trim() ?? "",
+          ariaDisabled: button.getAttribute("aria-disabled")
+        }))
+      );
+      assert.deepEqual(
+        domOptions.map(({ index, interaction, selection }) => ({
+          index,
+          interaction,
+          selection
+        })),
+        choiceEvent.choiceOptions.map((option, index) => ({ index, ...option })),
+        `${target} ${name} DOM order drifted from projection.choiceOptions.`
+      );
+      for (const option of domOptions) {
+        assert(option.label, `${target} ${name} exposed an unlabeled choice.`);
+        assert(option.hint, `${target} ${name} exposed a choice without a player hint.`);
+        assert.doesNotMatch(
+          `${option.label} ${option.hint}`,
+          /f1_|\b[0-9a-f]{16}\b/i,
+          `${target} ${name} leaked Stable IDs into player copy.`
+        );
+        assert.equal(option.ariaDisabled, null);
+      }
+      assert(targetIndex >= 0 && targetIndex < domOptions.length);
+
+      await page.waitForFunction(
+        () => document.activeElement?.matches("#quest-ui button[data-choice-index='0']"),
+        undefined,
+        { timeout: 2_000 }
+      );
+      for (let index = 0; index < targetIndex; index += 1) {
+        await page.keyboard.press("ArrowDown");
+      }
+      assert.equal(
+        await page.evaluate(() => Number(document.activeElement?.dataset?.choiceIndex ?? -1)),
+        targetIndex,
+        `${target} ${name} keyboard navigation did not retain the authored target.`
+      );
+      const screenshotPath = resolve(reportDirectory, screenshotName);
+      const choiceFrame = await captureQuestUiFrame(
+        page,
+        screenshotPath,
+        `${target} ${name}`
+      );
+
+      await page.keyboard.press("Enter");
+      await page.waitForFunction(
+        ({ completed, sessionGeneration, messageSequence, projectionSequence, projectionChecksum }) => {
+          const state = window.__tgdTest?.getF1State();
+          const root = document.getElementById("quest-ui");
+          const latestEvent = window.__tgdQuestUi?.getState?.();
+          const close = window.__tgdQuestUi?.getCloseState?.();
+          const closeMatches = close?.sessionGeneration === sessionGeneration &&
+            close?.projectionSequence === projectionSequence &&
+            close?.projectionChecksum === projectionChecksum &&
+            BigInt(close.messageSequence) > BigInt(messageSequence);
+          const replaceMatches = latestEvent?.sessionGeneration === sessionGeneration &&
+            latestEvent?.sourceName !== "choice_available" &&
+            BigInt(latestEvent?.messageSequence ?? "0") > BigInt(messageSequence) &&
+            BigInt(latestEvent?.sequence ?? "0") > BigInt(projectionSequence);
+          return state?.questCompletedObjectives === completed + 1 &&
+            (!root || root.hidden || root.dataset.surface !== "choice") &&
+            (closeMatches || replaceMatches);
+        },
+        {
+          completed: before.questCompletedObjectives,
+          sessionGeneration: choiceEvent.sessionGeneration,
+          messageSequence: choiceEvent.messageSequence,
+          projectionSequence: choiceEvent.sequence,
+          projectionChecksum: choiceEvent.checksum
+        },
+        { timeout: 5_000 }
+      );
+
+      const authority = await page.evaluate((choiceIdentity) => {
+        const root = document.getElementById("quest-ui");
+        const latestEvent = window.__tgdQuestUi.getState();
+        const close = window.__tgdQuestUi.getCloseState();
+        const closeMatches = close?.sessionGeneration === choiceIdentity.sessionGeneration &&
+          close?.projectionSequence === choiceIdentity.sequence &&
+          close?.projectionChecksum === choiceIdentity.checksum &&
+          BigInt(close.messageSequence) > BigInt(choiceIdentity.messageSequence);
+        const replaceMatches = latestEvent?.sessionGeneration === choiceIdentity.sessionGeneration &&
+          latestEvent?.sourceName !== "choice_available" &&
+          BigInt(latestEvent?.messageSequence ?? "0") > BigInt(choiceIdentity.messageSequence) &&
+          BigInt(latestEvent?.sequence ?? "0") > BigInt(choiceIdentity.sequence);
+        return {
+          disposition: closeMatches ? "close" : replaceMatches ? "replace" : "missing",
+          sessionGeneration: choiceIdentity.sessionGeneration,
+          choiceMessageSequence: choiceIdentity.messageSequence,
+          choiceProjectionSequence: choiceIdentity.sequence,
+          choiceProjectionChecksum: choiceIdentity.checksum,
+          authorityMessageSequence: closeMatches
+            ? close.messageSequence
+            : latestEvent?.messageSequence ?? null,
+          authorityProjectionSequence: closeMatches
+            ? close.projectionSequence
+            : latestEvent?.sequence ?? null,
+          authorityProjectionChecksum: closeMatches
+            ? close.projectionChecksum
+            : latestEvent?.checksum ?? null,
+          surface: root?.hidden ? "hidden" : root?.dataset.surface ?? "missing",
+          canvasFocused: document.activeElement === document.getElementById("canvas")
+        };
+      }, choiceEvent);
+      assert.notEqual(authority.disposition, "missing");
+      assert.equal(authority.canvasFocused, true, `${target} ${name} did not restore canvas focus.`);
+      assert.notEqual(authority.surface, "choice");
+
+      const afterCommit = await page.evaluate(() => window.__tgdTest.getF1State());
+      assert.equal(afterCommit.questCompletedObjectives, before.questCompletedObjectives + 1);
+      assert.equal(afterCommit.questSelectedChoices, before.questSelectedChoices + 1);
+      await page.waitForTimeout(150);
+      assert.equal(
+        (await page.evaluate(() => window.__tgdTest.getF1State())).questCompletedObjectives,
+        afterCommit.questCompletedObjectives,
+        `${target} ${name} advanced more than once after one DOM Action.`
+      );
+
+      const choiceTrace = await page.evaluate(
+        (start) => window.__tgdLifecycleTrace.slice(start).map((record) => ({ ...record })),
+        traceStart
+      );
+      const renderedIndex = choiceTrace.findIndex(
+        (record) => record.event === "quest_ui.rendered" &&
+          record.sequence === choiceEvent.sequence && record.checksum === choiceEvent.checksum &&
+          record.source === "choice_available"
+      );
+      assert(renderedIndex >= 0, `${target} ${name} did not render the formal choice event.`);
+      const authorityIndex = choiceTrace.findIndex((record, index) => index > renderedIndex && (
+        (authority.disposition === "close" && record.event === "quest_ui.closed" &&
+          record.sequence === choiceEvent.sequence && record.checksum === choiceEvent.checksum) ||
+        (authority.disposition === "replace" && record.event === "quest_ui.rendered" &&
+          record.source !== "choice_available")
+      ));
+      assert(authorityIndex > renderedIndex, `${target} ${name} lacked a later authority event.`);
+
+      const checkpoint = {
+        name,
+        laneRoute,
+        optionCount,
+        targetIndex,
+        beforeCompletedObjectives: before.questCompletedObjectives,
+        afterOpenCompletedObjectives: afterOpen.questCompletedObjectives,
+        afterCommitCompletedObjectives: afterCommit.questCompletedObjectives,
+        beforeSelectedChoices: before.questSelectedChoices,
+        afterCommitSelectedChoices: afterCommit.questSelectedChoices,
+        authority,
+        frame: choiceFrame,
+        screenshot: projectPath(screenshotPath)
+      };
+      authoredChoiceCheckpoints.push(checkpoint);
+      return checkpoint;
+    };
+
+    const beginWorldChoice = async (name) => {
+      const before = await page.evaluate(() => window.__tgdTest.getF1State());
+      assert(
+        await questUi.isHidden() || await questUi.getAttribute("data-surface") !== "choice",
+        `${target} ${name} began inside a projected choice surface.`
+      );
+      await canvas.focus();
+      return {
+        name,
+        before,
+        traceStart: await page.evaluate(() => window.__tgdLifecycleTrace.length)
+      };
+    };
+
+    const finishWorldChoice = async (probe) => {
+      const after = await page.evaluate(() => window.__tgdTest.getF1State());
+      assert.equal(after.questSelectedChoices, probe.before.questSelectedChoices + 1);
+      assert.notEqual(
+        await questUi.getAttribute("data-surface"),
+        "choice",
+        `${target} ${probe.name} left a cue-less choice panel active.`
+      );
+      assert.equal(
+        await page.evaluate(() => document.activeElement === document.getElementById("canvas")),
+        true,
+        `${target} ${probe.name} unexpectedly transferred focus to DOM UI.`
+      );
+      const trace = await page.evaluate(
+        (start) => window.__tgdLifecycleTrace.slice(start).map((record) => ({ ...record })),
+        probe.traceStart
+      );
+      assert.equal(
+        trace.some(
+          (record) => record.event === "quest_ui.rendered" &&
+            record.source === "choice_available"
+        ),
+        false,
+        `${target} ${probe.name} incorrectly opened a cue-less choice panel.`
+      );
+      const checkpoint = {
+        name: probe.name,
+        beforeSelectedChoices: probe.before.questSelectedChoices,
+        afterSelectedChoices: after.questSelectedChoices,
+        beforeBeatIndex: probe.before.questBeatIndex,
+        afterBeatIndex: after.questBeatIndex
+      };
+      worldChoiceCheckpoints.push(checkpoint);
+      return checkpoint;
+    };
+    await waitForText(page, status, "宿主已就绪", 45_000);
+    await waitForText(page, state, "presentation: running");
+    await canvas.waitFor({ state: "visible" });
+    assert.equal(await canvas.count(), 1, "Exactly one game canvas is required.");
+    await page.waitForFunction(
+      () => window.__tgdProfile?.getState()?.stateName === "ready",
+      undefined,
+      { timeout: 45_000 }
+    );
+    const initialProfile = await page.evaluate(() => window.__tgdProfile.getState());
+    assert.equal(initialProfile.hasSnapshot, false, `${target} Guest Profile was not fresh.`);
+    assert.equal(initialProfile.committedSaveCount, "0");
+    assert.equal(await saveProfile.isEnabled(), true, `${target} Guest save never became available.`);
+    assert.deepEqual(
+      await page.evaluate(() => window.__tgdProfile.inspectSchema()),
+      {
+        name: "tiangongdu.prototype_f1.internal.profile",
+        version: 1,
+        stores: [
+          "device_settings",
+          "migration_workspace",
+          "operations",
+          "profile_heads",
+          "profile_meta",
+          "snapshots"
+        ]
+      },
+      `${target} IndexedDB v1 schema drifted.`
+    );
+
+    await saveProfile.click();
+    await page.waitForFunction(
+      () => window.__tgdProfile?.getState()?.committedSaveCount === "1",
+      undefined,
+      { timeout: 15_000 }
+    );
+    await waitForText(page, profileState, "已保存");
+    const savedProfile = await page.evaluate(() => window.__tgdProfile.getState());
+    assert.equal(savedProfile.stateName, "ready");
+    assert.equal(savedProfile.hasSnapshot, true);
+    assert.equal(savedProfile.hasPendingSave, false);
+    assert.equal(savedProfile.logicalSequence, "1");
+    const saveTrace = await page.evaluate(() => window.__tgdLifecycleTrace
+      .filter((record) => record.event === "profile.state")
+      .map((record) => ({ ...record })));
+    const savingIndex = saveTrace.findIndex((record) => record.stateName === "saving");
+    const committedIndex = saveTrace.findIndex(
+      (record) => record.stateName === "ready" && record.committedSaveCount === "1"
+    );
+    assert(savingIndex >= 0, `${target} omitted the saving state.`);
+    assert(committedIndex > savingIndex, `${target} claimed commit before the saving state.`);
+    assert.equal(saveTrace[savingIndex].committedSaveCount, "0");
+    assert.doesNotMatch(saveTrace[savingIndex].displayText, /已保存/);
+    assert.match(saveTrace[committedIndex].displayText, /已保存/);
+
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 45_000 });
+    await waitForText(page, status, "宿主已就绪", 45_000);
+    await waitForText(page, state, "presentation: running");
+    await page.waitForFunction(
+      () => window.__tgdProfile?.getState()?.stateName === "ready",
+      undefined,
+      { timeout: 45_000 }
+    );
+    await waitForText(page, profileState, "已恢复");
+    const restoredProfile = await page.evaluate(() => window.__tgdProfile.getState());
+    assert.equal(restoredProfile.hasSnapshot, true);
+    assert.equal(restoredProfile.hasPendingSave, false);
+    assert.equal(restoredProfile.committedSaveCount, "0");
+    assert.equal(restoredProfile.logicalSequence, "1");
+    assert.equal(restoredProfile.snapshotId, savedProfile.snapshotId);
+    assert.doesNotMatch(await profileState.innerText(), /已保存/);
+
+    const quotaUrl = `${origin}/tiangongdu-f1.html?qa=1&storageFault=quota_once`;
+    const quotaPage = await context.newPage();
+    quotaPage.on("console", (message) => {
+      if (message.type() === "warning" || message.type() === "error") {
+        consoleProblems.push({
+          page: "quota",
+          type: message.type(),
+          text: message.text()
+        });
+      }
+    });
+    quotaPage.on("pageerror", (error) => pageErrors.push(`quota: ${error.message}`));
+    quotaPage.on("requestfailed", (request) => {
+      if (request.url().startsWith(origin)) {
+        requestFailures.push({
+          page: "quota",
+          url: request.url(),
+          error: request.failure()?.errorText ?? "unknown"
+        });
+      }
+    });
+    const quotaResponse = await quotaPage.goto(quotaUrl, {
+      waitUntil: "domcontentloaded",
+      timeout: 45_000
+    });
+    assert(quotaResponse?.ok(), `${target} failed to load quota fixture.`);
+    const quotaStatus = quotaPage.locator("#status");
+    const quotaState = quotaPage.getByTestId("qa-state");
+    const quotaProfileState = quotaPage.getByTestId("profile-state");
+    const quotaSaveProfile = quotaPage.getByTestId("save-profile");
+    await waitForText(quotaPage, quotaStatus, "宿主已就绪", 45_000);
+    await waitForText(quotaPage, quotaState, "presentation: running");
+    await quotaPage.waitForFunction(
+      () => window.__tgdProfile?.getState()?.stateName === "ready",
+      undefined,
+      { timeout: 45_000 }
+    );
+    assert.equal(
+      (await quotaPage.evaluate(() => window.__tgdProfile.getState())).logicalSequence,
+      "1"
+    );
+    await quotaSaveProfile.click();
+    await quotaPage.waitForFunction(
+      () => window.__tgdProfile?.getState()?.errorName === "storage_quota",
+      undefined,
+      { timeout: 15_000 }
+    );
+    const quotaProfile = await quotaPage.evaluate(() => window.__tgdProfile.getState());
+    assert.equal(quotaProfile.stateName, "save_failed");
+    assert.equal(quotaProfile.hasPendingSave, true);
+    assert.equal(quotaProfile.committedSaveCount, "0");
+    assert.equal(quotaProfile.logicalSequence, "1");
+    assert.equal((await quotaProfileState.getAttribute("data-save-state")), "retryable");
+    assert.doesNotMatch(await quotaProfileState.innerText(), /已保存/);
+    assert.match(await quotaSaveProfile.innerText(), /重试保存/);
+    assert.equal(await quotaSaveProfile.isEnabled(), true);
+
+    await quotaSaveProfile.click();
+    await quotaPage.waitForFunction(
+      () => {
+        const profile = window.__tgdProfile?.getState();
+        return profile?.stateName === "ready" && profile.committedSaveCount === "1";
+      },
+      undefined,
+      { timeout: 15_000 }
+    );
+    const retriedProfile = await quotaPage.evaluate(() => window.__tgdProfile.getState());
+    assert.equal(retriedProfile.hasPendingSave, false);
+    assert.equal(retriedProfile.logicalSequence, "2");
+    await waitForText(quotaPage, quotaProfileState, "已保存");
+
+    await quotaPage.reload({ waitUntil: "domcontentloaded", timeout: 45_000 });
+    await waitForText(quotaPage, quotaStatus, "宿主已就绪", 45_000);
+    await waitForText(quotaPage, quotaState, "presentation: running");
+    await quotaPage.waitForFunction(
+      () => window.__tgdProfile?.getState()?.stateName === "ready",
+      undefined,
+      { timeout: 45_000 }
+    );
+    const retryRestoredProfile = await quotaPage.evaluate(() => window.__tgdProfile.getState());
+    assert.equal(retryRestoredProfile.logicalSequence, "2");
+    assert.equal(retryRestoredProfile.snapshotId, retriedProfile.snapshotId);
+    await waitForText(quotaPage, quotaProfileState, "已恢复");
+    await quotaPage.close();
+
+    await page.bringToFront();
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 45_000 });
+    await waitForText(page, status, "宿主已就绪", 45_000);
+    await page.waitForFunction(
+      () => window.__tgdProfile?.getState()?.stateName === "ready",
+      undefined,
+      { timeout: 45_000 }
+    );
+    assert.equal((await page.evaluate(() => window.__tgdProfile.getState())).logicalSequence, "2");
+
+    const contenderProblems = [];
+    const contender = await page.context().newPage();
+    contender.on("pageerror", (error) => contenderProblems.push(error.message));
+    contender.on("console", (message) => {
+      if (message.type() === "error") contenderProblems.push(message.text());
+    });
+    const contenderResponse = await contender.goto(pageUrl, {
+      waitUntil: "domcontentloaded",
+      timeout: 45_000
+    });
+    assert(contenderResponse?.ok(), `${target} failed to open the second Profile tab.`);
+    await waitForText(contender, contender.getByTestId("profile-state"), "已恢复", 45_000);
+    assert.equal(
+      (await contender.evaluate(() => window.__tgdProfile.getState())).logicalSequence,
+      "2"
+    );
+
+    await saveProfile.click();
+    await page.waitForFunction(
+      () => window.__tgdProfile?.getState()?.committedSaveCount === "1",
+      undefined,
+      { timeout: 15_000 }
+    );
+    const winningProfile = await page.evaluate(() => window.__tgdProfile.getState());
+    assert.equal(winningProfile.logicalSequence, "3");
+
+    await contender.getByTestId("save-profile").click();
+    await contender.waitForFunction(
+      () => window.__tgdProfile?.getState()?.stateName === "conflict_read_only",
+      undefined,
+      { timeout: 15_000 }
+    );
+    const losingProfile = await contender.evaluate(() => window.__tgdProfile.getState());
+    assert.equal(losingProfile.errorName, "storage_conflict");
+    assert.equal(losingProfile.committedSaveCount, "0");
+    assert.equal(losingProfile.logicalSequence, "2");
+    assert.equal(await contender.getByTestId("save-profile").isDisabled(), true);
+    assert.doesNotMatch(await contender.getByTestId("profile-state").innerText(), /已保存/);
+    assert.deepEqual(contenderProblems, [], `${target} second tab emitted browser errors.`);
+    await contender.close();
+
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 45_000 });
+    await waitForText(page, status, "宿主已就绪", 45_000);
+    await page.waitForFunction(
+      () => window.__tgdProfile?.getState()?.stateName === "ready",
+      undefined,
+      { timeout: 45_000 }
+    );
+    const conflictRestoredProfile = await page.evaluate(() => window.__tgdProfile.getState());
+    assert.equal(conflictRestoredProfile.logicalSequence, "3");
+    assert.equal(conflictRestoredProfile.snapshotId, winningProfile.snapshotId);
+
+    try {
+      await page.waitForFunction(
+        () => window.__tgdServiceWorker?.ready === true,
+        undefined,
+        { timeout: 45_000 }
+      );
+    } catch (error) {
+      const serviceWorker = await page.evaluate(async () => ({
+        state: window.__tgdServiceWorker ?? null,
+        controller: navigator.serviceWorker.controller?.scriptURL ?? null,
+        registration: (await navigator.serviceWorker.getRegistration())?.active?.scriptURL ?? null,
+        webTrace: window.__tgdLifecycleTrace?.slice(-10) ?? []
+      }));
+      throw new Error(
+        `${target} Service Worker did not become ready: ${JSON.stringify(serviceWorker)}`,
+        { cause: error }
+      );
+    }
+    let offlineSavedProfile;
+    await page.context().setOffline(true);
+    try {
+      const offlineResponse = await page.reload({
+        waitUntil: "domcontentloaded",
+        timeout: 45_000
+      });
+      assert(offlineResponse?.ok(), `${target} offline shell reload did not return a cached response.`);
+      assert.equal(
+        offlineResponse.fromServiceWorker(),
+        true,
+        `${target} offline shell reload bypassed the Service Worker.`
+      );
+      await waitForText(page, status, "宿主已就绪", 45_000);
+      await page.waitForFunction(
+        () => window.__tgdProfile?.getState()?.stateName === "ready",
+        undefined,
+        { timeout: 45_000 }
+      );
+      assert.equal(
+        (await page.evaluate(() => window.__tgdProfile.getState())).logicalSequence,
+        "3"
+      );
+      await saveProfile.click();
+      await page.waitForFunction(
+        () => window.__tgdProfile?.getState()?.committedSaveCount === "1",
+        undefined,
+        { timeout: 15_000 }
+      );
+      offlineSavedProfile = await page.evaluate(() => window.__tgdProfile.getState());
+      assert.equal(offlineSavedProfile.logicalSequence, "4");
+      assert.equal(offlineSavedProfile.hasPendingSave, false);
+    } finally {
+      await page.context().setOffline(false);
+    }
+
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 45_000 });
+    await waitForText(page, status, "宿主已就绪", 45_000);
+    await page.waitForFunction(
+      () => window.__tgdProfile?.getState()?.stateName === "ready",
+      undefined,
+      { timeout: 45_000 }
+    );
+    const onlineRestoredProfile = await page.evaluate(() => window.__tgdProfile.getState());
+    assert.equal(onlineRestoredProfile.logicalSequence, "4");
+    assert.equal(onlineRestoredProfile.snapshotId, offlineSavedProfile.snapshotId);
+
+    await page.evaluate(() => {
+      const canvasElement = document.querySelector("canvas");
+      if (canvasElement) canvasElement.style.boxShadow = "none";
+    });
+    const webgl = await inspectWebgl(page, target);
+    assert(webgl.available, `${target} did not create a WebGL2 context.`);
+    assert.equal(webgl.contextLost, false, `${target} started with a lost WebGL2 context.`);
+    assert(webgl.contextLossExtension, `${target} lacks WEBGL_lose_context.`);
+    assert.match(webgl.version, /WebGL 2/i, `${target} did not expose WebGL 2.`);
+    assert(webgl.renderer, `${target} did not report a WebGL renderer.`);
+
+    const button = (testId) => page.getByTestId(testId);
+    for (const testId of [
+      "qa-hide",
+      "qa-show",
+      "qa-blur",
+      "qa-focus",
+      "qa-context-lost",
+      "qa-context-restored"
+    ]) {
+      assert.equal(await button(testId).count(), 1, `${target} is missing ${testId}.`);
+    }
+
+    await canvas.focus();
+    await page.waitForFunction(
+      () => window.__tgdTest?.getF1State()?.questRequiredObjectives === 11,
+      undefined,
+      { timeout: 5_000 }
+    );
+    const openingQuestState = await page.evaluate(() => window.__tgdTest.getF1State());
+    assert.equal(openingQuestState.questBeatIndex, 0);
+    assert.equal(openingQuestState.questCompletedObjectives, 0);
+    assert.equal(openingQuestState.questRequiredObjectives, 11);
+    assert.equal(openingQuestState.activeHostiles, 0);
+    await captureRenderedFrame(
+      page,
+      canvas,
+      resolve(reportDirectory, `${target}-quest-interaction-ready.png`),
+      `${target} opening quest interaction`
+    );
+    await page.keyboard.press("f");
+    await page.waitForFunction(
+      () => window.__tgdTest?.getF1State()?.questCompletedObjectives === 1,
+      undefined,
+      { timeout: 5_000 }
+    );
+    const stationaryFrame = analyzePng(await canvas.screenshot({ type: "png" }));
+    await page.keyboard.down("w");
+    await page.waitForTimeout(600);
+    await page.keyboard.up("w");
+    await page.waitForTimeout(150);
+    const movedFrame = analyzePng(await canvas.screenshot({ type: "png" }));
+    const movementComparison = compareFrames(stationaryFrame, movedFrame);
+    assert(
+      movementComparison.changedPixelRatio >= 0.001 &&
+        movementComparison.changedPixelRatio <= 0.03,
+      `${target} oblique movement changed ${(
+        movementComparison.changedPixelRatio * 100
+      ).toFixed(2)}% of the frame.`
+    );
+    const rainFerryReadiness = [
+      {
+        ...rainFerryBranch.clue,
+        completed: 2,
+        authoredChoice: {
+          name: "arrival-clue",
+          ...authoredChoiceRoute.arrival,
+          screenshotName: `${target}-arrival-clue-choice.png`
+        }
+      },
+      { ...rainFerryBranch.condition, completed: 3 },
+      {
+        ...rainFerryBranch.mooringChoice,
+        completed: 4,
+        authoredChoice: {
+          name: "mooring-method",
+          ...authoredChoiceRoute.mooring,
+          screenshotName: `${target}-mooring-method-choice.png`
+        }
+      },
+      { ...rainFerryBranch.mooringResolution, completed: 5 },
+      { x: -8_700, y: -800, completed: 6 },
+      { x: -8_400, y: 1_100, completed: 7 },
+      { x: -7_900, y: -300, completed: 8 },
+      { x: -7_500, y: 1_300, completed: 9 },
+      { x: -7_100, y: 300, completed: 10 }
+    ];
+    for (const step of rainFerryReadiness) {
+      await moveF1PlayerTo(page, step.x, step.y);
+      const beforeMessageSequence = await currentQuestUiMessageSequence();
+      let authoredChoiceCheckpoint = null;
+      if (step.authoredChoice) {
+        authoredChoiceCheckpoint = await completeAuthoredChoice(step.authoredChoice);
+      } else {
+        await page.keyboard.press("f");
+        await page.waitForFunction(
+          (completed) =>
+            window.__tgdTest?.getF1State()?.questCompletedObjectives === completed,
+          step.completed,
+          { timeout: 5_000 }
+        );
+      }
+      assert.equal(
+        (await page.evaluate(() => window.__tgdTest.getF1State()))
+          .questCompletedObjectives,
+        step.completed
+      );
+      if (step.completed === 2) {
+        await moveF1PlayerTo(page, -11_400, -3_100);
+        const repeatBefore = await page.evaluate(() => window.__tgdTest.getF1State());
+        const repeatMessageSequence = await currentQuestUiMessageSequence();
+        await canvas.focus();
+        await page.keyboard.press("f");
+        await waitForQuestUiProjection({
+          name: "arrival-clue-repeat",
+          afterMessageSequence: repeatMessageSequence,
+          sourceName: "interaction_feedback",
+          objectiveId: "f1_objective_choose_arrival_clue",
+          polarityName: "negative",
+          classificationName: "repeat_no_progress",
+          primary: {
+            id: "f1_interaction_arrival_clue_drowned_manifest",
+            statusName: "ignored_repeat",
+            rejectionReasonName: "selection_already_committed"
+          },
+          secondary: { statusName: "not_applicable" }
+        });
+        const repeatAfter = await page.evaluate(() => window.__tgdTest.getF1State());
+        assert.equal(repeatAfter.questCompletedObjectives, repeatBefore.questCompletedObjectives);
+        assert.equal(repeatAfter.questSelectedChoices, repeatBefore.questSelectedChoices);
+      }
+      if (step.completed === 4 && laneRoute === "drain") {
+        assert(authoredChoiceCheckpoint, `${target} quick-hitch choice checkpoint missing.`);
+        await waitForQuestUiProjection({
+          name: "quick-hitch-overload",
+          afterMessageSequence:
+            authoredChoiceCheckpoint.authority.choiceMessageSequence,
+          sourceName: "interaction_feedback",
+          objectiveId: "f1_objective_secure_ferry_mooring",
+          polarityName: "negative",
+          classificationName: "qualifying_error_feedback",
+          primary: {
+            id: "f1_interaction_choose_quick_hitch",
+            objectiveId: "f1_objective_choose_mooring_method",
+            statusName: "accepted"
+          },
+          secondary: { statusName: "not_applicable" }
+        });
+      }
+      if (step.completed === 5 && laneRoute === "canopy") {
+        await waitForQuestUiProjection({
+          name: "cross-belay-stable",
+          afterMessageSequence: beforeMessageSequence,
+          sourceName: "interaction_feedback",
+          objectiveId: "f1_objective_secure_ferry_mooring",
+          polarityName: "positive",
+          classificationName: "qualifying_craft_decision",
+          primary: {
+            id: "f1_interaction_lock_cross_belay",
+            statusName: "accepted"
+          },
+          secondary: { statusName: "not_applicable" }
+        });
+      }
+      if (step.completed === 8) {
+        await moveF1PlayerTo(page, -7_100, 300);
+        const wrongOrderBefore = await page.evaluate(() => window.__tgdTest.getF1State());
+        const wrongOrderMessageSequence = await currentQuestUiMessageSequence();
+        await canvas.focus();
+        await page.keyboard.press("f");
+        await waitForQuestUiProjection({
+          name: "bell-wrong-order",
+          afterMessageSequence: wrongOrderMessageSequence,
+          sourceName: "interaction_feedback",
+          objectiveId: "f1_objective_sound_workshop_bell",
+          polarityName: "negative",
+          classificationName: "qualifying_wrong_order_feedback",
+          primary: {
+            id: "f1_interaction_sound_workshop_bell",
+            statusName: "rejected",
+            rejectionReasonName: "prerequisite_incomplete"
+          },
+          secondary: { statusName: "not_applicable" }
+        });
+        const wrongOrderAfter = await page.evaluate(() => window.__tgdTest.getF1State());
+        assert.equal(
+          wrongOrderAfter.questCompletedObjectives,
+          wrongOrderBefore.questCompletedObjectives
+        );
+        assert.equal(wrongOrderAfter.questSelectedChoices, wrongOrderBefore.questSelectedChoices);
+      }
+      if (step.completed === 10) {
+        await waitForQuestUiProjection({
+          name: "bell-code-accepted",
+          afterMessageSequence: beforeMessageSequence,
+          sourceName: "interaction_feedback",
+          objectiveId: "f1_objective_sound_workshop_bell",
+          polarityName: "positive",
+          classificationName: "qualifying_craft_confirmation",
+          primary: {
+            id: "f1_interaction_sound_workshop_bell",
+            statusName: "accepted"
+          },
+          secondary: { statusName: "not_applicable" }
+        });
+      }
+    }
+    await moveF1PlayerTo(page, -6_700, -600);
+    await page.keyboard.press("f");
+    await page.waitForFunction(
+      () => window.__tgdTest?.getF1State()?.questBeatIndex === 1,
+      undefined,
+      { timeout: 5_000 }
+    );
+    const advancedQuestState = await page.evaluate(() => window.__tgdTest.getF1State());
+    assert.equal(advancedQuestState.questCompletedObjectives, 0);
+    assert.equal(advancedQuestState.questRequiredObjectives, 14);
+    assert.equal(advancedQuestState.activeHostiles, 0);
+    await captureRenderedFrame(
+      page,
+      canvas,
+      resolve(reportDirectory, `${target}-quest-stage-advanced.png`),
+      `${target} quest stage advanced`
+    );
+    await page.keyboard.press("f");
+    await page.waitForFunction(
+      () => window.__tgdTest?.getF1State()?.questCompletedObjectives === 1,
+      undefined,
+      { timeout: 5_000 }
+    );
+    await moveF1PlayerTo(page, trainingBranch.choice.x, trainingBranch.choice.y);
+    await completeAuthoredChoice({
+      name: "training-lane",
+      ...authoredChoiceRoute.training,
+      screenshotName: `${target}-training-lane-choice.png`
+    });
+    assert.equal(
+      (await page.evaluate(() => window.__tgdTest.getF1State())).questCompletedObjectives,
+      2
+    );
+    await moveF1PlayerTo(page, trainingBranch.mark.x, trainingBranch.mark.y);
+    const eavesguardPhaseBefore = await currentQuestUiMessageSequence();
+    await page.keyboard.press("f");
+    await page.waitForFunction(
+      () => {
+        const state = window.__tgdTest?.getF1State();
+        return state?.questCompletedObjectives === 3 && state.activeHostiles === 1;
+      },
+      undefined,
+      { timeout: 5_000 }
+    );
+    const eavesguardPhase = await waitForQuestUiProjection({
+      name: "eavesguard-phase",
+      afterMessageSequence: eavesguardPhaseBefore,
+      sourceName: "objective_state",
+      objectiveId: "f1_objective_eavesguard_counter",
+      polarityName: "positive",
+      classificationName: "qualifying_training_risk",
+      primary: { statusName: "not_applicable" },
+      secondary: { statusName: "not_applicable" },
+      activeActorKeys: [104]
+    });
+    if (laneRoute === "canopy") {
+      const eavesguardRecovery = await exerciseTrainingRecovery({
+        name: "training-eavesguard-recovery",
+        objectiveId: "f1_objective_eavesguard_counter",
+        activeActorKey: 104,
+        previousProjection: eavesguardPhase
+      });
+      await moveF1PlayerTo(page, trainingBranch.mark.x, trainingBranch.mark.y);
+      await page.waitForFunction(
+        () => {
+          const state = window.__tgdTest?.getF1State();
+          return state?.playerActive === true && state.activeHostiles === 1 &&
+            state.questCompletedObjectives === 3 && state.incomingAttackTicks > 0;
+        },
+        undefined,
+        { timeout: 10_000 }
+      );
+      const rearmedAttack = await page.evaluate(() => window.__tgdTest.getF1State());
+      eavesguardRecovery.rearmedAttack = {
+        incomingAttackTicks: rearmedAttack.incomingAttackTicks,
+        questCompletedObjectives: rearmedAttack.questCompletedObjectives,
+        questSelectedChoices: rearmedAttack.questSelectedChoices,
+        activeHostiles: rearmedAttack.activeHostiles
+      };
+    }
+    const combatReadyPath = resolve(reportDirectory, `${target}-combat-ready.png`);
+    const combatActionPath = resolve(reportDirectory, `${target}-combat-action.png`);
+    const combatHitPath = resolve(reportDirectory, `${target}-combat-hit.png`);
+    const combatFlowerLightPath = resolve(reportDirectory, `${target}-combat-flower-light.png`);
+    const combatGuardPath = resolve(reportDirectory, `${target}-combat-guard.png`);
+    const combatDefeatedPath = resolve(reportDirectory, `${target}-combat-defeated.png`);
+    const combatRetriedPath = resolve(reportDirectory, `${target}-combat-retried.png`);
+    const combatReadyFrame = await captureRenderedFrame(
+      page,
+      canvas,
+      combatReadyPath,
+      `${target} combat ready`
+    );
+    const eavesguardProofBefore = await currentQuestUiMessageSequence();
+    await page.keyboard.down("Shift");
+    await page.waitForFunction(
+      () => {
+        const state = window.__tgdTest?.getF1State();
+        return state?.questBeatIndex === 1 && state.questCompletedObjectives >= 4;
+      },
+      undefined,
+      { timeout: 15_000 }
+    );
+    await captureRenderedFrame(
+      page,
+      canvas,
+      combatGuardPath,
+      `${target} eavesguard absorbed a real rig impact`
+    );
+    const guardedRigState = await page.evaluate(() => window.__tgdTest.getF1State());
+    assert.equal(guardedRigState.questCompletedObjectives, 4);
+    assert.equal(guardedRigState.activeHostiles, 1);
+    await waitForQuestUiProjection({
+      name: "eavesguard-trigger-accepted",
+      afterMessageSequence: eavesguardProofBefore,
+      sourceName: "combat_feedback",
+      objectiveId: "f1_objective_eavesguard_counter",
+      polarityName: "positive",
+      classificationName: "qualifying_combat_proof",
+      primary: {
+        id: "f1_trigger_eavesguard_counter",
+        statusName: "accepted"
+      },
+      secondary: { statusName: "not_applicable" },
+      activeActorKeys: [104]
+    });
+    await page.keyboard.up("Shift");
+    await page.waitForTimeout(120);
+
+    await page.keyboard.press("k");
+    await page.waitForTimeout(50);
+    const combatActionFrame = await captureRenderedFrame(
+      page,
+      canvas,
+      combatActionPath,
+      `${target} guarded eavesguard heavy startup`
+    );
+    const combatActionComparison = compareFrames(combatReadyFrame, combatActionFrame);
+    assert(
+      combatActionComparison.changedPixelRatio >= 0.0002 &&
+        combatActionComparison.changedPixelRatio <= 0.04,
+      `${target} heavy startup feedback changed ${(
+        combatActionComparison.changedPixelRatio * 100
+      ).toFixed(2)}% of the frame.`
+    );
+    await page.waitForTimeout(320);
+    const combatHitFrame = await captureRenderedFrame(
+      page,
+      canvas,
+      combatHitPath,
+      `${target} eavesguard proof target hit`
+    );
+    const combatHitComparison = compareFrames(combatReadyFrame, combatHitFrame);
+    assert(
+      combatHitComparison.changedPixelRatio >= 0.0002 &&
+        combatHitComparison.changedPixelRatio <= 0.04,
+      `${target} hit feedback changed ${(
+        combatHitComparison.changedPixelRatio * 100
+      ).toFixed(2)}% of the frame.`
+    );
+    assert.notEqual(
+      combatActionFrame.sha256,
+      combatHitFrame.sha256,
+      `${target} startup and hit frames must be visually distinct.`
+    );
+    await page.waitForFunction(
+      () => {
+        const state = window.__tgdTest?.getF1State();
+        return state?.questBeatIndex === 1 && state.questCompletedObjectives >= 5;
+      },
+      undefined,
+      { timeout: 5_000 }
+    );
+    let trainingState = await page.evaluate(() => window.__tgdTest.getF1State());
+    const eavesguardDeadline = Date.now() + 30_000;
+    while (trainingState.questCompletedObjectives < 6 && Date.now() < eavesguardDeadline) {
+      assert.equal(trainingState.playerActive, true, `${target} player fell during training.`);
+      if (
+        trainingState.incomingAttackTicks > 0 &&
+        trainingState.incomingAttackTicks <= 10 &&
+        !trainingState.playerBusy
+      ) {
+        await page.keyboard.press("c");
+      } else if (!trainingState.playerBusy) {
+        await page.keyboard.press("k");
+      }
+      await page.waitForTimeout(60);
+      trainingState = await page.evaluate(() => window.__tgdTest.getF1State());
+    }
+    assert.equal(
+      trainingState.questCompletedObjectives,
+      6,
+      `${target} did not defeat the eavesguard proof target.`
+    );
+
+    await moveF1PlayerTo(page, -5_000, -200);
+    await page.keyboard.press("f");
+    await page.waitForFunction(
+      () => {
+        const state = window.__tgdTest?.getF1State();
+        return state?.questCompletedObjectives === 7 && state.activeHostiles === 1;
+      },
+      undefined,
+      { timeout: 5_000 }
+    );
+    await page.keyboard.press("2");
+    await page.waitForFunction(
+      () => window.__tgdTest?.getF1State()?.questCompletedObjectives === 8,
+      undefined,
+      { timeout: 5_000 }
+    );
+    await moveF1PlayerTo(page, -3_400, -1_700);
+    const flowerPhaseBefore = await currentQuestUiMessageSequence();
+    await page.keyboard.press("f");
+    await page.waitForFunction(
+      () => window.__tgdTest?.getF1State()?.questCompletedObjectives === 9,
+      undefined,
+      { timeout: 5_000 }
+    );
+    const flowerPhase = await waitForQuestUiProjection({
+      name: "flower-turn-phase",
+      afterMessageSequence: flowerPhaseBefore,
+      sourceName: "objective_state",
+      objectiveId: "f1_objective_flower_turn_counter",
+      polarityName: "positive",
+      classificationName: "qualifying_training_risk",
+      primary: { statusName: "not_applicable" },
+      secondary: { statusName: "not_applicable" },
+      activeActorKeys: [108]
+    });
+    if (laneRoute === "drain") {
+      const flowerRecovery = await exerciseTrainingRecovery({
+        name: "training-flower-recovery",
+        objectiveId: "f1_objective_flower_turn_counter",
+        activeActorKey: 108,
+        previousProjection: flowerPhase
+      });
+      await moveF1PlayerTo(page, -3_400, -1_700);
+      await page.waitForFunction(
+        () => {
+          const state = window.__tgdTest?.getF1State();
+          return state?.playerActive === true && state.activeHostiles === 1 &&
+            state.questCompletedObjectives === 9 && state.incomingAttackTicks > 0;
+        },
+        undefined,
+        { timeout: 10_000 }
+      );
+      const rearmedAttack = await page.evaluate(() => window.__tgdTest.getF1State());
+      flowerRecovery.rearmedAttack = {
+        incomingAttackTicks: rearmedAttack.incomingAttackTicks,
+        questCompletedObjectives: rearmedAttack.questCompletedObjectives,
+        questSelectedChoices: rearmedAttack.questSelectedChoices,
+        activeHostiles: rearmedAttack.activeHostiles
+      };
+    }
+
+    const evadeDeadline = Date.now() + 20_000;
+    while (trainingState.questCompletedObjectives < 10 && Date.now() < evadeDeadline) {
+      trainingState = await page.evaluate(() => window.__tgdTest.getF1State());
+      assert.equal(trainingState.playerActive, true, `${target} player fell during flower drill.`);
+      if (
+        trainingState.incomingAttackTicks > 0 &&
+        trainingState.incomingAttackTicks <= 10 &&
+        !trainingState.playerBusy
+      ) {
+        await page.keyboard.press("c");
+      }
+      await page.waitForTimeout(40);
+    }
+    assert.equal(
+      trainingState.questCompletedObjectives,
+      10,
+      `${target} never evaded the active flower-turn rig.`
+    );
+    await page.waitForFunction(
+      () => {
+        const state = window.__tgdTest?.getF1State();
+        return state?.questCompletedObjectives === 10 && !state.playerBusy;
+      },
+      undefined,
+      { timeout: 5_000 }
+    );
+    await page.keyboard.press("j");
+    await page.waitForFunction(
+      () => window.__tgdTest?.getF1State()?.questCompletedObjectives === 11,
+      undefined,
+      { timeout: 5_000 }
+    );
+    await captureRenderedFrame(
+      page,
+      canvas,
+      combatFlowerLightPath,
+      `${target} flower-turn light response`
+    );
+    await page.waitForFunction(
+      () => {
+        const state = window.__tgdTest?.getF1State();
+        return state?.questCompletedObjectives === 11 && !state.playerBusy;
+      },
+      undefined,
+      { timeout: 5_000 }
+    );
+    const flowerWrongTargetBefore = await currentQuestUiMessageSequence();
+    await page.keyboard.press("k");
+    await page.waitForFunction(
+      () => window.__tgdTest?.getF1State()?.questCompletedObjectives === 12,
+      undefined,
+      { timeout: 5_000 }
+    );
+    await waitForQuestUiProjection({
+      name: "flower-heavy-wrong-target",
+      afterMessageSequence: flowerWrongTargetBefore,
+      sourceName: "combat_feedback",
+      objectiveId: "f1_objective_break_flower_turn_target",
+      polarityName: "negative",
+      classificationName: "qualifying_combat_feedback",
+      primary: {
+        id: "f1_trigger_flower_turn_heavy",
+        objectiveId: "f1_objective_commit_flower_turn_heavy",
+        statusName: "accepted"
+      },
+      secondary: {
+        id: "f1_outcome_break_flower_turn_target",
+        statusName: "rejected",
+        rejectionReasonName: "wrong_target"
+      },
+      activeActorKeys: [109],
+      inactiveActorKeys: [108]
+    });
+
+    const flowerTargetDeadline = Date.now() + 30_000;
+    trainingState = await page.evaluate(() => window.__tgdTest.getF1State());
+    while (trainingState.questCompletedObjectives < 13 && Date.now() < flowerTargetDeadline) {
+      assert.equal(trainingState.playerActive, true, `${target} player fell at flower target.`);
+      if (
+        trainingState.incomingAttackTicks > 0 &&
+        trainingState.incomingAttackTicks <= 10 &&
+        !trainingState.playerBusy
+      ) {
+        await page.keyboard.press("c");
+      } else if (!trainingState.playerBusy) {
+        await page.keyboard.press("j");
+      }
+      await page.waitForTimeout(50);
+      trainingState = await page.evaluate(() => window.__tgdTest.getF1State());
+    }
+    assert.equal(
+      trainingState.questCompletedObjectives,
+      13,
+      `${target} did not defeat the flower-turn proof target.`
+    );
+    await moveF1PlayerTo(page, -5_000, -200);
+    await page.keyboard.press("f");
+    await page.waitForFunction(
+      () => window.__tgdTest?.getF1State()?.questBeatIndex === 2,
+      undefined,
+      { timeout: 5_000 }
+    );
+    trainingState = await page.evaluate(() => window.__tgdTest.getF1State());
+    assert.equal(
+      trainingState.questBeatIndex,
+      2,
+      `${target} flower-turn evade never completed the training beat.`
+    );
+    assert.equal(
+      trainingState.activeHostiles,
+      2,
+      `${target} umbrella-lane doll wave did not replace the training rigs.`
+    );
+    await captureRenderedFrame(
+      page,
+      canvas,
+      resolve(reportDirectory, `${target}-training-complete.png`),
+      `${target} combat training complete`
+    );
+    await page.waitForTimeout(850);
+    await page.keyboard.press("j");
+    await page.waitForTimeout(50);
+    await captureRenderedFrame(
+      page,
+      canvas,
+      combatFlowerLightPath,
+      `${target} flower-turn light attack`
+    );
+    await page.waitForTimeout(850);
+    await page.keyboard.press("c");
+    await page.waitForTimeout(120);
+    await page.waitForFunction(
+      () => window.__tgdTest?.getF1State()?.playerActive === false,
+      undefined,
+      { timeout: 45_000 }
+    );
+    const defeatedState = await page.evaluate(() => window.__tgdTest.getF1State());
+    assert.equal(defeatedState.playerHealth, 0, `${target} defeat did not reach zero health.`);
+    assert(
+      defeatedState.activeHostiles > 0,
+      `${target} defeat did not come from an active encounter.`
+    );
+    const combatDefeatedFrame = await captureRenderedFrame(
+      page,
+      canvas,
+      combatDefeatedPath,
+      `${target} player defeated`
+    );
+    const laterRetryCount = defeatedState.retryCount;
+    await page.keyboard.press("r");
+    await page.waitForFunction(
+      (expectedRetryCount) => {
+        const state = window.__tgdTest?.getF1State();
+        return state?.playerActive === true && state.retryCount === expectedRetryCount;
+      },
+      laterRetryCount + 1,
+      { timeout: 5_000 }
+    );
+    const retryState = await page.evaluate(() => window.__tgdTest.getF1State());
+    assert.equal(retryState.playerHealth, 120, `${target} retry did not restore player health.`);
+    assert.equal(retryState.activeHostiles, 2, `${target} retry did not restore the active wave.`);
+    assert.equal(retryState.safePointPoseX, -5_600);
+    assert.equal(retryState.safePointPoseY, -1_200);
+    assert.equal(retryState.playerPoseX, retryState.safePointPoseX);
+    assert.equal(retryState.playerPoseY, retryState.safePointPoseY);
+    assert(
+      retryState.failureRetryTicks > defeatedState.failureRetryTicks,
+      `${target} failed attempt was not moved into the excluded retry bucket.`
+    );
+    assert.equal(retryState.playableTargetMet, false);
+    assert.equal(
+      retryState.questBeatIndex,
+      defeatedState.questBeatIndex,
+      `${target} retry discarded quest stage progress.`
+    );
+    assert.equal(
+      retryState.questCompletedObjectives,
+      defeatedState.questCompletedObjectives,
+      `${target} retry discarded completed quest objectives.`
+    );
+    assert.equal(retryState.questRequiredObjectives, defeatedState.questRequiredObjectives);
+    const combatRetriedFrame = await captureRenderedFrame(
+      page,
+      canvas,
+      combatRetriedPath,
+      `${target} encounter retried`
+    );
+    const retryFrameComparison = compareFrames(combatDefeatedFrame, combatRetriedFrame);
+    assert(
+      retryFrameComparison.changedPixelRatio >= 0.002 &&
+        retryFrameComparison.changedPixelRatio <= 0.08,
+      `${target} retry feedback changed ${(
+        retryFrameComparison.changedPixelRatio * 100
+      ).toFixed(2)}% of the frame.`
+    );
+
+    await page.keyboard.down("w");
+    await page.waitForTimeout(600);
+    await page.keyboard.up("w");
+    await page.keyboard.down("w");
+    await page.keyboard.down("d");
+    await page.waitForTimeout(1_800);
+    await page.keyboard.up("d");
+    await page.keyboard.up("w");
+    await page.waitForTimeout(150);
+    await page.keyboard.press("2");
+    await page.waitForTimeout(100);
+    let victoryState = await page.evaluate(() => window.__tgdTest.getF1State());
+    let readyToAttack = false;
+    let sawTelegraph = false;
+    const victoryDeadline = Date.now() + 45_000;
+    while (victoryState.activeHostiles > 0 && Date.now() < victoryDeadline) {
+      assert.equal(
+        victoryState.playerActive,
+        true,
+        `${target} player fell during telegraph-driven victory route: ${JSON.stringify(victoryState)}`
+      );
+      if (victoryState.incomingAttackTicks > 0) {
+        sawTelegraph = true;
+        if (victoryState.incomingAttackTicks <= 10 && !victoryState.playerBusy) {
+          await page.keyboard.press("c");
+          readyToAttack = true;
+        }
+      } else if (readyToAttack && !victoryState.playerBusy) {
+        await page.keyboard.press("j");
+        readyToAttack = false;
+      }
+      await page.waitForTimeout(40);
+      victoryState = await page.evaluate(() => window.__tgdTest.getF1State());
+    }
+    assert.equal(sawTelegraph, true, `${target} never exposed a hostile telegraph.`);
+    assert.equal(victoryState.activeHostiles, 0, `${target} did not clear the leaking-doll wave.`);
+    assert.equal(victoryState.questBeatIndex, 2);
+    assert.equal(victoryState.questCompletedObjectives, 1);
+    assert.equal(victoryState.questRequiredObjectives, 6);
+
+    const rainworksSteps = [
+      { x: -3_600, y: -1_700, completed: 2 },
+      { x: -2_700, y: -700, completed: 3 },
+      { x: -1_800, y: 500, completed: 4 }
+    ];
+    for (const step of rainworksSteps) {
+      await moveF1PlayerTo(page, step.x, step.y);
+      await page.keyboard.press("f");
+      await page.waitForFunction(
+        (completed) => window.__tgdTest?.getF1State()?.questCompletedObjectives === completed,
+        step.completed,
+        { timeout: 5_000 }
+      );
+      victoryState = await page.evaluate(() => window.__tgdTest.getF1State());
+      assert.equal(victoryState.questBeatIndex, 2);
+      assert.equal(victoryState.questRequiredObjectives, 6);
+      if (step.completed < 4) {
+        assert.equal(victoryState.activeHostiles, 0);
+      }
+      if (step.completed === 3) {
+        await captureRenderedFrame(
+          page,
+          canvas,
+          resolve(reportDirectory, `${target}-umbrella-lane-rainworks.png`),
+          `${target} umbrella-lane rainworks interlude`
+        );
+      }
+    }
+    await page.waitForFunction(
+      () => window.__tgdTest?.getF1State()?.activeHostiles === 1,
+      undefined,
+      { timeout: 5_000 }
+    );
+    victoryState = await page.evaluate(() => window.__tgdTest.getF1State());
+    assert.equal(victoryState.questCompletedObjectives, 4);
+    await captureRenderedFrame(
+      page,
+      canvas,
+      resolve(reportDirectory, `${target}-umbrella-lane-paper-egret-wave.png`),
+      `${target} umbrella-lane paper-egret wave`
+    );
+
+    await page.keyboard.press("2");
+    await page.waitForTimeout(100);
+    readyToAttack = false;
+    let sawPaperEgretTelegraph = false;
+    const paperEgretDeadline = Date.now() + 30_000;
+    while (victoryState.activeHostiles > 0 && Date.now() < paperEgretDeadline) {
+      assert.equal(
+        victoryState.playerActive,
+        true,
+        `${target} player fell during the paper-egret wave: ${JSON.stringify(victoryState)}`
+      );
+      if (victoryState.incomingAttackTicks > 0) {
+        sawPaperEgretTelegraph = true;
+        if (victoryState.incomingAttackTicks <= 10 && !victoryState.playerBusy) {
+          await page.keyboard.press("c");
+          readyToAttack = true;
+        } else if (readyToAttack && !victoryState.playerBusy) {
+          await page.keyboard.press("j");
+          readyToAttack = false;
+        }
+      } else if (sawPaperEgretTelegraph && !victoryState.playerBusy) {
+        await page.keyboard.press("j");
+        readyToAttack = false;
+      }
+      await page.waitForTimeout(40);
+      victoryState = await page.evaluate(() => window.__tgdTest.getF1State());
+    }
+    assert.equal(
+      sawPaperEgretTelegraph,
+      true,
+      `${target} paper-egret wave exposed no hostile telegraph.`
+    );
+    assert.equal(victoryState.activeHostiles, 0, `${target} did not clear the paper-egret wave.`);
+    assert.equal(victoryState.questBeatIndex, 2);
+    assert.equal(victoryState.questCompletedObjectives, 5);
+    assert.equal(victoryState.questRequiredObjectives, 6);
+
+    await moveF1PlayerTo(page, laneRoutePose.x, laneRoutePose.y);
+    const laneRouteChoiceProbe = await beginWorldChoice("umbrella-lane-route");
+    await page.keyboard.press("f");
+    await page.waitForFunction(
+      () => window.__tgdTest?.getF1State()?.questBeatIndex === 3,
+      undefined,
+      { timeout: 5_000 }
+    );
+    await finishWorldChoice(laneRouteChoiceProbe);
+    await captureRenderedFrame(
+      page,
+      canvas,
+      resolve(reportDirectory, `${target}-umbrella-lane-${laneRoute}-complete.png`),
+      `${target} umbrella-lane ${laneRoute} route complete`
+    );
+    let workbenchState = await page.evaluate(() => window.__tgdTest.getF1State());
+    assert.equal(workbenchState.questCompletedObjectives, 0);
+    assert.equal(workbenchState.questRequiredObjectives, 4);
+    assert.equal(workbenchState.questSelectedChoices, 4);
+
+    await moveF1PlayerTo(page, hiddenSpringTracePose.x, hiddenSpringTracePose.y);
+    await page.keyboard.press("f");
+    await page.waitForTimeout(200);
+    const hiddenRouteAttemptState = await page.evaluate(() => window.__tgdTest.getF1State());
+    assert.equal(
+      hiddenRouteAttemptState.questCompletedObjectives,
+      0,
+      `${target} exposed the spring-trace interaction for the unselected ${
+        laneRoute === "canopy" ? "drain" : "canopy"
+      } route.`
+    );
+
+    await moveF1PlayerTo(page, selectedSpringTracePose.x, selectedSpringTracePose.y);
+    await captureRenderedFrame(
+      page,
+      canvas,
+      resolve(reportDirectory, `${target}-workbench-${laneRoute}-entry.png`),
+      `${target} workbench ${laneRoute} route entry`
+    );
+    await page.keyboard.press("f");
+    await page.waitForFunction(
+      () => window.__tgdTest?.getF1State()?.questCompletedObjectives === 1,
+      undefined,
+      { timeout: 5_000 }
+    );
+    const selectedRouteEntryState = await page.evaluate(
+      () => window.__tgdTest.getF1State()
+    );
+    await moveF1PlayerTo(page, -3_100, -100);
+    await page.keyboard.press("f");
+    await page.waitForFunction(
+      () => window.__tgdTest?.getF1State()?.questCompletedObjectives === 2,
+      undefined,
+      { timeout: 5_000 }
+    );
+    await moveF1PlayerTo(page, -2_300, -100);
+    await page.keyboard.press("f");
+    await page.waitForFunction(
+      () => window.__tgdTest?.getF1State()?.questCompletedObjectives === 3,
+      undefined,
+      { timeout: 5_000 }
+    );
+    workbenchState = await page.evaluate(() => window.__tgdTest.getF1State());
+    assert.equal(workbenchState.questSelectedChoices, 4);
+
+    await moveF1PlayerTo(page, -1_500, ribCalibration === "spring" ? 400 : -600);
+    const calibrationChoiceProbe = await beginWorldChoice("rib-calibration");
+    await page.keyboard.press("f");
+    await page.waitForFunction(
+      () => {
+        const state = window.__tgdTest?.getF1State();
+        return state?.questBeatIndex === 4 && state.questSelectedChoices === 5;
+      },
+      undefined,
+      { timeout: 5_000 }
+    );
+    await finishWorldChoice(calibrationChoiceProbe);
+    workbenchState = await page.evaluate(() => window.__tgdTest.getF1State());
+    assert.equal(workbenchState.questCompletedObjectives, 0);
+    assert.equal(workbenchState.questRequiredObjectives, 4);
+    assert.equal(workbenchState.activeHostiles, 3);
+    assert.equal(workbenchState.playerHealth, 120);
+    assert.equal(workbenchState.safePointPoseX, -4_300);
+    assert.equal(workbenchState.safePointPoseY, -100);
+    await captureRenderedFrame(
+      page,
+      canvas,
+      resolve(reportDirectory, `${target}-return-formation-ready.png`),
+      `${target} authored return formation ready`
+    );
+    await moveF1PlayerTo(page, -3_500, -900);
+    await page.keyboard.press("f");
+    await page.waitForFunction(
+      () => {
+        const state = window.__tgdTest?.getF1State();
+        return state?.questCompletedObjectives === 1 && state.activeHostiles === 4;
+      },
+      undefined,
+      { timeout: 5_000 }
+    );
+    const reinforcementState = await page.evaluate(() => window.__tgdTest.getF1State());
+    assert.equal(reinforcementState.questBeatIndex, 4);
+    assert.equal(reinforcementState.questRequiredObjectives, 4);
+    await captureRenderedFrame(
+      page,
+      canvas,
+      resolve(reportDirectory, `${target}-return-reinforcement-ready.png`),
+      `${target} additive return reinforcement ready`
+    );
+    await page.waitForFunction(
+      () => {
+        const state = window.__tgdTest?.getF1State();
+        return state?.playerActive === true && state.playerBusy === false;
+      },
+      undefined,
+      { timeout: 5_000 }
+    );
+    await page.keyboard.press(ribCalibration === "spring" ? "1" : "2");
+    await page.waitForTimeout(100);
+    await page.waitForFunction(
+      () => {
+        const state = window.__tgdTest?.getF1State();
+        return state?.playerActive === true && state.playerBusy === false;
+      },
+      undefined,
+      { timeout: 5_000 }
+    );
+    await page.keyboard.press(ribCalibration === "spring" ? "k" : "j");
+    await page.waitForFunction(
+      () => window.__tgdTest?.getF1State()?.questCompletedObjectives === 2,
+      undefined,
+      { timeout: 5_000 }
+    );
+    const calibrationActionState = await page.evaluate(() => window.__tgdTest.getF1State());
+    assert.equal(calibrationActionState.questBeatIndex, 4);
+    assert.equal(calibrationActionState.questRequiredObjectives, 4);
+    assert.equal(calibrationActionState.activeHostiles, 4);
+    await captureRenderedFrame(
+      page,
+      canvas,
+      resolve(reportDirectory, `${target}-return-calibration-action.png`),
+      `${target} selected return calibration action`
+    );
+    await page.keyboard.press("2");
+    await page.waitForTimeout(100);
+
+    let returnState = calibrationActionState;
+    let returnReadyToAttack = false;
+    let returnSawTelegraph = false;
+    let returnGuardHeld = false;
+    let returnRetryAttempts = 0;
+    const maxReturnRetryAttempts = 1;
+    let returnDeadline = Date.now() + 60_000;
+    while (returnState.activeHostiles > 0 && Date.now() < returnDeadline) {
+      if (!returnState.playerActive) {
+        if (returnGuardHeld) {
+          await page.keyboard.up("Shift");
+          returnGuardHeld = false;
+        }
+        assert.ok(
+          returnRetryAttempts < maxReturnRetryAttempts,
+          `${target} exceeded the bounded return retry budget: ${JSON.stringify(returnState)}`
+        );
+        const previousRetryCount = returnState.retryCount;
+        await page.keyboard.press("r");
+        await page.waitForFunction(
+          (retryCount) => {
+            const state = window.__tgdTest?.getF1State();
+            return state?.playerActive === true && state.retryCount === retryCount + 1;
+          },
+          previousRetryCount,
+          { timeout: 5_000 }
+        );
+        returnState = await page.evaluate(() => window.__tgdTest.getF1State());
+        assert.equal(returnState.questBeatIndex, 4);
+        assert.equal(returnState.questCompletedObjectives, 2);
+        assert.equal(returnState.activeHostiles, 4);
+        await page.keyboard.press("2");
+        await page.waitForTimeout(100);
+        returnReadyToAttack = false;
+        returnRetryAttempts += 1;
+        returnDeadline = Date.now() + 60_000;
+        continue;
+      }
+      if (returnState.incomingAttackTicks > 0) {
+        returnSawTelegraph = true;
+        if (
+          returnState.incomingAttackTicks <= 10 &&
+          !returnState.playerBusy &&
+          !returnGuardHeld
+        ) {
+          await page.keyboard.down("Shift");
+          returnGuardHeld = true;
+        }
+      } else {
+        if (returnGuardHeld) {
+          await page.keyboard.up("Shift");
+          returnGuardHeld = false;
+          returnReadyToAttack = true;
+        } else if (returnReadyToAttack && !returnState.playerBusy) {
+          await page.keyboard.press("j");
+          returnReadyToAttack = false;
+        }
+      }
+      await page.waitForTimeout(40);
+      returnState = await page.evaluate(() => window.__tgdTest.getF1State());
+    }
+    if (returnGuardHeld) {
+      await page.keyboard.up("Shift");
+    }
+    assert.equal(returnSawTelegraph, true, `${target} return encounter exposed no telegraph.`);
+    assert.equal(
+      returnState.activeHostiles,
+      0,
+      `${target} did not clear the return encounter: ${JSON.stringify(returnState)}`
+    );
+    assert.equal(returnState.questBeatIndex, 4);
+    assert.equal(returnState.questCompletedObjectives, 3);
+    assert.equal(returnState.questRequiredObjectives, 4);
+    assert.equal(returnState.questSelectedChoices, 5);
+
+    await moveF1PlayerTo(page, -800, 400, 300);
+    await page.keyboard.press("f");
+    await page.waitForFunction(
+      () => window.__tgdTest?.getF1State()?.questBeatIndex === 5,
+      undefined,
+      { timeout: 5_000 }
+    );
+    returnState = await page.evaluate(() => window.__tgdTest.getF1State());
+    assert.equal(returnState.questCompletedObjectives, 0);
+    assert.equal(returnState.questRequiredObjectives, 4);
+    assert.equal(returnState.activeHostiles, 1);
+    assert.equal(returnState.safePointPoseX, 2_200);
+    assert.equal(returnState.safePointPoseY, 800);
+    const bossSpringPath = resolve(reportDirectory, `${target}-boss-spring-phase.png`);
+    const bossWinterPath = resolve(reportDirectory, `${target}-boss-winter-phase.png`);
+    const bossCompletePath = resolve(reportDirectory, `${target}-four-seasons-wraith-complete.png`);
+    const resolutionChoicePath = resolve(reportDirectory, `${target}-resolution-choice.png`);
+    const resolutionCompletePath = resolve(
+      reportDirectory,
+      `${target}-resolution-return-complete.png`
+    );
+    await captureRenderedFrame(
+      page,
+      canvas,
+      resolve(reportDirectory, `${target}-canopy-return-complete.png`),
+      `${target} canopy return beat complete`
+    );
+    await captureRenderedFrame(
+      page,
+      canvas,
+      bossSpringPath,
+      `${target} four-seasons wraith spring phase`
+    );
+    await page.keyboard.press("2");
+    await page.waitForTimeout(100);
+
+    let bossState = returnState;
+    let bossReadyToAttack = false;
+    let bossSawTelegraph = false;
+    let bossWinterCaptured = false;
+    let bossMaxCompletedObjectives = 0;
+    const bossDeadline = Date.now() + 90_000;
+    while (bossState.questBeatIndex === 5 && Date.now() < bossDeadline) {
+      assert.equal(
+        bossState.playerActive,
+        true,
+        `${target} player fell during the four-seasons wraith: ${JSON.stringify(bossState)}`
+      );
+      bossMaxCompletedObjectives = Math.max(
+        bossMaxCompletedObjectives,
+        bossState.questCompletedObjectives
+      );
+      if (bossState.questCompletedObjectives >= 3 && !bossWinterCaptured) {
+        await captureRenderedFrame(
+          page,
+          canvas,
+          bossWinterPath,
+          `${target} four-seasons wraith winter phase`
+        );
+        bossWinterCaptured = true;
+      }
+      if (bossState.incomingAttackTicks > 0) {
+        bossSawTelegraph = true;
+        if (bossState.incomingAttackTicks <= 10 && !bossState.playerBusy) {
+          await page.keyboard.press("c");
+          bossReadyToAttack = true;
+        }
+      } else if (bossReadyToAttack && !bossState.playerBusy) {
+        await page.keyboard.press("j");
+        bossReadyToAttack = false;
+      }
+      await page.waitForTimeout(40);
+      bossState = await page.evaluate(() => window.__tgdTest.getF1State());
+    }
+    assert.equal(bossSawTelegraph, true, `${target} boss exposed no readable telegraph.`);
+    assert.equal(
+      bossWinterCaptured,
+      true,
+      `${target} boss never exposed the authored winter phase.`
+    );
+    assert.equal(
+      bossMaxCompletedObjectives,
+      3,
+      `${target} boss did not progress through spring, summer, and autumn in order.`
+    );
+    assert.equal(bossState.questBeatIndex, 6, `${target} boss did not unlock resolution.`);
+    assert.equal(bossState.questCompletedObjectives, 0);
+    assert.equal(bossState.questRequiredObjectives, 2);
+    assert.equal(bossState.activeHostiles, 0);
+    assert.equal(bossState.safePointPoseX, 3_000);
+    assert.equal(bossState.safePointPoseY, 800);
+    await captureRenderedFrame(
+      page,
+      canvas,
+      bossCompletePath,
+      `${target} four-seasons wraith complete`
+    );
+    await moveF1PlayerTo(page, resolutionChoicePose.x, resolutionChoicePose.y);
+    await captureRenderedFrame(
+      page,
+      canvas,
+      resolutionChoicePath,
+      `${target} ${resolutionChoice} resolution choice`
+    );
+    const resolutionChoiceProbe = await beginWorldChoice("resolution");
+    await page.keyboard.press("f");
+    await page.waitForFunction(
+      () => {
+        const state = window.__tgdTest?.getF1State();
+        return state?.questBeatIndex === 6 && state.questCompletedObjectives === 1 &&
+          state.questSelectedChoices === 6;
+      },
+      undefined,
+      { timeout: 5_000 }
+    );
+    await finishWorldChoice(resolutionChoiceProbe);
+    const beforeRewardState = await page.evaluate(() => window.__tgdTest.getF1State());
+    const beforeRewardProfile = await page.evaluate(() => window.__tgdProfile.getState());
+    const rewardTraceStart = await page.evaluate(() => window.__tgdLifecycleTrace.length);
+    assert.equal(beforeRewardState.profileOperationCount, 0);
+    assert.equal(beforeRewardProfile.stateName, "ready");
+    assert.equal(beforeRewardProfile.logicalSequence, "4");
+    assert.deepEqual(await inspectProfileOperations(page), []);
+
+    if (rewardOffline) await page.context().setOffline(true);
+    await moveF1PlayerTo(page, -10_500, -600);
+    await page.keyboard.press("f");
+    await page.waitForFunction(
+      () => {
+        const state = window.__tgdTest?.getF1State();
+        return state?.questResolved === true && state.resolutionRewardReady === true;
+      },
+      undefined,
+      { timeout: 5_000 }
+    );
+
+    let rewardFailureState = null;
+    if (rewardStorageFault === "reward_abort_once") {
+      await page.waitForFunction(
+        () => window.__tgdProfile?.getState()?.stateName === "save_failed",
+        undefined,
+        { timeout: 15_000 }
+      );
+      rewardFailureState = {
+        profile: await page.evaluate(() => window.__tgdProfile.getState()),
+        f1: await page.evaluate(() => window.__tgdTest.getF1State()),
+        operations: await inspectProfileOperations(page),
+        displayText: await profileState.innerText()
+      };
+      assert.equal(rewardFailureState.profile.errorName, "storage_unavailable");
+      assert.equal(rewardFailureState.profile.hasPendingSave, true);
+      assert.equal(rewardFailureState.profile.logicalSequence, "4");
+      assert.equal(rewardFailureState.f1.rewardClaimCommitted, false);
+      assert.equal(rewardFailureState.f1.profileOperationCount, 0);
+      assert.deepEqual(rewardFailureState.operations, []);
+      assert.doesNotMatch(rewardFailureState.displayText, /已保存/);
+      await saveProfile.click();
+    } else if (rewardStorageFault === "reward_conflict_once") {
+      await page.waitForFunction(
+        () => window.__tgdProfile?.getState()?.stateName === "conflict_read_only",
+        undefined,
+        { timeout: 15_000 }
+      );
+      rewardFailureState = {
+        profile: await page.evaluate(() => window.__tgdProfile.getState()),
+        f1: await page.evaluate(() => window.__tgdTest.getF1State()),
+        operations: await inspectProfileOperations(page),
+        displayText: await profileState.innerText()
+      };
+      assert.equal(rewardFailureState.profile.errorName, "storage_conflict");
+      assert.equal(rewardFailureState.profile.hasPendingSave, true);
+      assert.equal(rewardFailureState.profile.logicalSequence, "4");
+      assert.equal(rewardFailureState.f1.rewardClaimCommitted, false);
+      assert.equal(rewardFailureState.f1.profileOperationCount, 0);
+      assert.deepEqual(rewardFailureState.operations, []);
+      assert.doesNotMatch(rewardFailureState.displayText, /已保存/);
+    }
+
+    if (rewardStorageFault !== "reward_conflict_once") {
+      await page.waitForFunction(
+        () => {
+          const f1 = window.__tgdTest?.getF1State();
+          const profile = window.__tgdProfile?.getState();
+          return f1?.rewardClaimCommitted === true && f1.profileOperationCount === 1 &&
+            profile?.stateName === "ready" && profile.logicalSequence === "5";
+        },
+        undefined,
+        { timeout: 15_000 }
+      );
+    }
+    if (rewardOffline) await page.context().setOffline(false);
+
+    const resolutionState = await page.evaluate(() => window.__tgdTest.getF1State());
+    assert.equal(resolutionState.questBeatIndex, 6);
+    assert.equal(resolutionState.questCompletedObjectives, 2);
+    assert.equal(resolutionState.questRequiredObjectives, 2);
+    assert.equal(resolutionState.questSelectedChoices, 6);
+    assert.equal(resolutionState.activeHostiles, 0);
+    assert.equal(resolutionState.questResolved, true);
+    assert.equal(resolutionState.resolutionRewardReady, true);
+    assert.equal(
+      resolutionState.rewardClaimCommitted,
+      rewardStorageFault !== "reward_conflict_once"
+    );
+    assert.equal(
+      resolutionState.profileOperationCount,
+      rewardStorageFault === "reward_conflict_once" ? 0 : 1
+    );
+    assert.equal(resolutionState.safePointPoseX, 3_000);
+    assert.equal(resolutionState.safePointPoseY, 800);
+    assert(resolutionState.eligiblePlayTicks > 0);
+    assert(resolutionState.failureRetryTicks > 0);
+    assert.equal(resolutionState.beatTargetsMet, 0);
+    assert.equal(
+      resolutionState.playableTargetMet,
+      false,
+      `${target} fast functional route must not masquerade as a one-hour playtest.`
+    );
+    const rewardOperations = await inspectProfileOperations(page);
+    if (rewardStorageFault === "reward_conflict_once") {
+      assert.deepEqual(rewardOperations, []);
+    } else {
+      assert.equal(rewardOperations.length, 1);
+      assert.match(rewardOperations[0].operationId, /^[0-9a-f]{32}$/);
+      assert.match(rewardOperations[0].deviceId, /^[0-9a-f]{32}$/);
+      assert.equal(rewardOperations[0].baseRevision, "00000000000000000004");
+      assert.equal(rewardOperations[0].logicalSequence, "00000000000000000005");
+      assert.equal(rewardOperations[0].domain, 1);
+      assert.equal(rewardOperations[0].payloadVersion, 1);
+      assert.equal(rewardOperations[0].sourceId, expectedResolutionReward.sourceId);
+      assert.equal(rewardOperations[0].rewardId, expectedResolutionReward.rewardId);
+      assert.equal(
+        rewardOperations[0].rewardDedupKey,
+        expectedResolutionReward.rewardDedupKey
+      );
+      assert.equal(rewardOperations[0].status, "pending");
+      assert.equal(rewardOperations[0].byteLength, 80);
+    }
+    const rewardReplayTraceStart = await page.evaluate(
+      () => window.__tgdLifecycleTrace.length
+    );
+    const rewardReplayProbe = await page.evaluate((replayCommitted) => ({
+      invalidSubmitted: window.__tgdTest.submitInvalidRewardClaim(),
+      replaySubmitted: replayCommitted ? window.__tgdTest.replayRewardClaim() : null
+    }), rewardStorageFault !== "reward_conflict_once");
+    assert.equal(rewardReplayProbe.invalidSubmitted, true);
+    if (rewardStorageFault !== "reward_conflict_once") {
+      assert.equal(rewardReplayProbe.replaySubmitted, true);
+    }
+    await page.waitForTimeout(150);
+    const rewardReplayProfile = await page.evaluate(() => window.__tgdProfile.getState());
+    const rewardReplayState = await page.evaluate(() => window.__tgdTest.getF1State());
+    assert.equal(
+      rewardReplayProfile.logicalSequence,
+      rewardStorageFault === "reward_conflict_once" ? "4" : "5"
+    );
+    assert.equal(
+      rewardReplayState.profileOperationCount,
+      rewardStorageFault === "reward_conflict_once" ? 0 : 1
+    );
+    assert.equal(
+      (await inspectProfileOperations(page)).length,
+      rewardStorageFault === "reward_conflict_once" ? 0 : 1
+    );
+    const rewardReplayTrace = await page.evaluate((start) =>
+      window.__tgdLifecycleTrace.slice(start).map((record) => ({ ...record })),
+    rewardReplayTraceStart);
+    assert.equal(
+      rewardReplayTrace.some(
+        (record) => record.event === "profile.state" && record.stateName === "saving"
+      ),
+      false,
+      `${target} duplicate or invalid reward claim started a second transaction.`
+    );
+    const rewardSaveTrace = await page.evaluate((start) => window.__tgdLifecycleTrace
+      .slice(start)
+      .filter((record) => record.event === "profile.state")
+      .map((record) => ({ ...record })), rewardTraceStart);
+    const rewardSavingIndex = rewardSaveTrace.findIndex(
+      (record) => record.stateName === "saving"
+    );
+    assert(rewardSavingIndex >= 0, `${target} reward omitted the pending UI state.`);
+    assert.doesNotMatch(rewardSaveTrace[rewardSavingIndex].displayText, /已保存/);
+    if (rewardStorageFault !== "reward_conflict_once") {
+      const rewardCommittedIndex = rewardSaveTrace.findIndex(
+        (record) => record.stateName === "ready" && record.logicalSequence === "5"
+      );
+      assert(
+        rewardCommittedIndex > rewardSavingIndex,
+        `${target} reward UI claimed persistence before transaction completion.`
+      );
+      assert.match(rewardSaveTrace[rewardCommittedIndex].displayText, /已保存/);
+    }
+    await captureRenderedFrame(
+      page,
+      canvas,
+      resolutionCompletePath,
+      `${target} resolution returned to Shen Yan`
+    );
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 45_000 });
+    await waitForText(page, status, "宿主已就绪", 45_000);
+    await page.waitForFunction(
+      () => window.__tgdProfile?.getState()?.stateName === "ready",
+      undefined,
+      { timeout: 45_000 }
+    );
+    const finalPersistedProfile = await page.evaluate(() => window.__tgdProfile.getState());
+    const restoredRewardState = await page.evaluate(() => window.__tgdTest.getF1State());
+    assert.equal(
+      finalPersistedProfile.logicalSequence,
+      rewardStorageFault === "reward_conflict_once" ? "4" : "5"
+    );
+    assert.equal(
+      restoredRewardState.profileOperationCount,
+      rewardStorageFault === "reward_conflict_once" ? 0 : 1
+    );
+    assert.equal(
+      (await inspectProfileOperations(page)).length,
+      rewardStorageFault === "reward_conflict_once" ? 0 : 1
+    );
+
+    if (rewardStorageFault === "") {
+      await page.evaluate(async () => {
+        const profile = window.__tgdProfile.getState();
+        const profileId = window.__tgdProfile.identity.profileId;
+        const database = await new Promise((resolveOpen, rejectOpen) => {
+          const request = indexedDB.open("tiangongdu.prototype_f1.internal.profile", 1);
+          request.onsuccess = () => resolveOpen(request.result);
+          request.onerror = () => rejectOpen(request.error);
+        });
+        const transaction = database.transaction("snapshots", "readwrite");
+        const transactionDone = new Promise((resolveTransaction, rejectTransaction) => {
+          transaction.oncomplete = resolveTransaction;
+          transaction.onabort = () => rejectTransaction(transaction.error);
+          transaction.onerror = () => rejectTransaction(transaction.error);
+        });
+        const store = transaction.objectStore("snapshots");
+        const record = await new Promise((resolveRecord, rejectRecord) => {
+          const request = store.get([profileId, profile.snapshotId]);
+          request.onsuccess = () => resolveRecord(request.result);
+          request.onerror = () => rejectRecord(request.error);
+        });
+        const corrupted = new Uint8Array(record.bytes);
+        corrupted[0] ^= 0xff;
+        record.bytes = corrupted.buffer;
+        store.put(record);
+        await transactionDone;
+        database.close();
+      });
+      await page.reload({ waitUntil: "domcontentloaded", timeout: 45_000 });
+      await waitForText(page, status, "宿主已就绪", 45_000);
+      await page.waitForFunction(
+        () => window.__tgdProfile?.getState()?.stateName === "recovery_required",
+        undefined,
+        { timeout: 45_000 }
+      );
+      const corruptProfile = await page.evaluate(() => window.__tgdProfile.getState());
+      assert.equal(corruptProfile.errorName, "storage_corrupt");
+      assert.equal(corruptProfile.committedSaveCount, "0");
+      assert.equal(await saveProfile.isDisabled(), true);
+      assert.doesNotMatch(await profileState.innerText(), /已保存/);
+      assert.equal(await page.getByTestId("export-profile").isEnabled(), true);
+      const recoveryExport = await page.evaluate(async () => {
+        const exported = await window.__tgdProfile.export();
+        return {
+          expectedProfileId: window.__tgdProfile.identity.profileId,
+          fileName: exported.fileName,
+          mediaType: exported.mediaType,
+          profileId: exported.profileId,
+          snapshotId: exported.snapshotId,
+          logicalSequence: exported.logicalSequence,
+          envelopeHash: exported.envelopeHash,
+          byteLength: exported.bytes.byteLength,
+          firstByte: exported.bytes[0]
+        };
+      });
+      assert.match(recoveryExport.fileName, /\.tgdprofile$/);
+      assert.equal(
+        recoveryExport.mediaType,
+        "application/vnd.tiangongdu.profile+octet-stream"
+      );
+      assert.equal(recoveryExport.profileId, recoveryExport.expectedProfileId);
+      assert.equal(recoveryExport.snapshotId, finalPersistedProfile.snapshotId);
+      assert.equal(recoveryExport.logicalSequence, "5");
+      assert.match(recoveryExport.envelopeHash, /^[0-9a-f]{64}$/);
+      assert(recoveryExport.byteLength > 176);
+      assert.notEqual(recoveryExport.firstByte, 0x54);
+    }
+    await canvas.focus();
+    await page.waitForTimeout(150);
+
+    const beforePath = resolve(reportDirectory, `${target}-before.png`);
+    const afterPath = resolve(reportDirectory, `${target}-after-context-restore.png`);
+    const beforeFrame = await captureRenderedFrame(
+      page,
+      canvas,
+      beforePath,
+      `${target} initial canvas`
+    );
+
+    const clickAndExpect = async (testId, expected, expectedEvent) => {
+      const previousEvent = (await lastEvent.innerText()).trim();
+      await button(testId).click();
+      const lastEventText = await waitForChangedText(
+        page,
+        lastEvent,
+        previousEvent,
+        expectedEvent
+      );
+      const stateText = await waitForText(
+        page,
+        state,
+        `${testId} · presentation: ${expected}`
+      );
+      const checkpoint = {
+        action: testId,
+        presentation: expected,
+        stateText,
+        lastEvent: lastEventText
+      };
+      checkpoints.push(checkpoint);
+      return checkpoint;
+    };
+
+    await clickAndExpect("qa-hide", "suspended", "document.hidden");
+    await clickAndExpect("qa-show", "running", "document.visible");
+    await clickAndExpect("qa-blur", "suspended", "window.blur");
+    await clickAndExpect("qa-focus", "running", "window.focus");
+    contextLossProbeActive = true;
+    await clickAndExpect("qa-context-lost", "context_lost", "webgl.context_lost");
+    await clickAndExpect("qa-hide", "context_lost", "document.hidden");
+    await clickAndExpect("qa-context-restored", "suspended", "webgl.context_restored");
+    await clickAndExpect("qa-show", "running", "document.visible");
+
+    // Axmol recreates buffers/programs asynchronously after the browser event.
+    await page.waitForTimeout(4_000);
+    contextLossProbeActive = false;
+    const afterFrame = await captureRenderedFrame(
+      page,
+      canvas,
+      afterPath,
+      `${target} restored canvas`
+    );
+    const frameComparison = compareFrames(beforeFrame, afterFrame);
+    assert(
+      frameComparison.changedPixelRatio <= 0.02,
+      `${target} restored canvas differs from the initial probe by ${(
+        frameComparison.changedPixelRatio * 100
+      ).toFixed(2)}%.`
+    );
+
+    assert.deepEqual(pageErrors, [], `${target} emitted page errors.`);
+    assert.deepEqual(requestFailures, [], `${target} had failed local requests.`);
+    assert.deepEqual(consoleProblems, [], `${target} emitted console warnings/errors.`);
+    const identity = lifecycle.find((record) => record.event === "runtime.initialize");
+    assert(identity, `${target} did not emit the embedded build identity.`);
+    if (expectedCommit) {
+      assert.equal(identity.commit, expectedCommit, `${target} embedded the wrong Git commit.`);
+    }
+
+    const replayUrl = `${origin}/tgd-replay-probe.html?qa=1`;
+    const replayResponse = await page.goto(replayUrl, {
+      waitUntil: "domcontentloaded",
+      timeout: 45_000
+    });
+    assert(
+      replayResponse?.ok(),
+      `${target} failed to load ${replayUrl}: HTTP ${replayResponse?.status()}`
+    );
+    const replayProbe = validateReplayProbe(
+      await waitForRecord(page, replayProbes, `${target} WASM replay result`),
+      target
+    );
+    assert.deepEqual(
+      replayProbe.build,
+      {
+        version: identity.version,
+        commit: identity.commit,
+        channel: identity.channel
+      },
+      `${target} host and replay probe came from different builds.`
+    );
+
+    assert.deepEqual(pageErrors, [], `${target} emitted page errors.`);
+    assert.deepEqual(requestFailures, [], `${target} had failed local requests.`);
+    assert.deepEqual(consoleProblems, [], `${target} emitted console warnings/errors.`);
+
+    return {
+      target,
+      status: "passed",
+      browserVersion: browser.version(),
+      graphicsMode: forceSoftwareGraphics ? "forced-software" : "browser-default",
+      webgl,
+      embeddedIdentity: {
+        version: identity.version,
+        commit: identity.commit,
+        channel: identity.channel
+      },
+      replayProbe,
+      checkpoints,
+      authoredChoiceCheckpoints,
+      worldChoiceCheckpoints,
+      questUiEmitterCheckpoints,
+      questUiRecoveryCheckpoints,
+      consoleProblems,
+      expectedConsoleDiagnostics,
+      pageErrors,
+      requestFailures,
+      beforeFrame: publicFrame(beforeFrame),
+      afterFrame: publicFrame(afterFrame),
+      movementComparison,
+      movementAttempts,
+      combatActionComparison,
+      combatHitComparison,
+      laneRoute,
+      ribCalibration,
+      resolutionChoice,
+      rewardStorageFault: rewardStorageFault || null,
+      rewardOffline,
+      rewardOperations,
+      rewardFailureState,
+      retryState,
+      hiddenRouteAttemptState,
+      selectedRouteEntryState,
+      workbenchState,
+      reinforcementState,
+      calibrationActionState,
+      returnState,
+      returnRetryAttempts,
+      bossState,
+      resolutionState,
+      bossMaxCompletedObjectives,
+      retryFrameComparison,
+      frameComparison,
+      screenshots: [
+        ...questUiRecoveryScreenshots,
+        projectPath(resolve(reportDirectory, `${target}-quest-interaction-ready.png`)),
+        projectPath(resolve(reportDirectory, `${target}-arrival-clue-choice.png`)),
+        projectPath(resolve(reportDirectory, `${target}-mooring-method-choice.png`)),
+        projectPath(resolve(reportDirectory, `${target}-quest-stage-advanced.png`)),
+        projectPath(resolve(reportDirectory, `${target}-training-lane-choice.png`)),
+        projectPath(resolve(reportDirectory, `${target}-training-complete.png`)),
+        projectPath(resolve(reportDirectory, `${target}-umbrella-lane-rainworks.png`)),
+        projectPath(
+          resolve(reportDirectory, `${target}-umbrella-lane-paper-egret-wave.png`)
+        ),
+        projectPath(
+          resolve(reportDirectory, `${target}-umbrella-lane-${laneRoute}-complete.png`)
+        ),
+        projectPath(resolve(reportDirectory, `${target}-workbench-${laneRoute}-entry.png`)),
+        projectPath(
+          resolve(reportDirectory, `${target}-return-formation-ready.png`)
+        ),
+        projectPath(
+          resolve(reportDirectory, `${target}-return-reinforcement-ready.png`)
+        ),
+        projectPath(
+          resolve(reportDirectory, `${target}-return-calibration-action.png`)
+        ),
+        projectPath(resolve(reportDirectory, `${target}-canopy-return-complete.png`)),
+        projectPath(bossSpringPath),
+        projectPath(bossWinterPath),
+        projectPath(bossCompletePath),
+        projectPath(resolutionChoicePath),
+        projectPath(resolutionCompletePath),
+        projectPath(combatReadyPath),
+        projectPath(combatActionPath),
+        projectPath(combatHitPath),
+        projectPath(combatFlowerLightPath),
+        projectPath(combatGuardPath),
+        projectPath(combatDefeatedPath),
+        projectPath(combatRetriedPath),
+        projectPath(beforePath),
+        projectPath(afterPath)
+      ]
+    };
+  } catch (error) {
+    const movementFailure = error && typeof error === "object"
+      ? error.f1MovementFailure
+      : null;
+    if (movementFailure && page) {
+      const screenshotPath = resolve(reportDirectory, `${target}-movement-failed.png`);
+      try {
+        await page.screenshot({
+          path: screenshotPath,
+          type: "png",
+          animations: "disabled",
+          fullPage: true
+        });
+        movementFailure.screenshot = projectPath(screenshotPath);
+      } catch (screenshotError) {
+        movementFailure.screenshotError = screenshotError instanceof Error
+          ? screenshotError.stack ?? screenshotError.message
+          : String(screenshotError);
+      }
+    }
+    throw error;
+  } finally {
+    await browser?.close();
+  }
+}
+
+await assertWebArtifacts();
+await mkdir(reportDirectory, { recursive: true });
+const server = await startStaticServer();
+const startedAt = new Date().toISOString();
+const results = [];
+
+try {
+  for (const target of targets) {
+    const started = Date.now();
+    try {
+      const result = await runBrowser(target, server.origin);
+      results.push({ ...result, durationMs: Date.now() - started });
+      console.log(`[browser-qa] ${target}: passed (${result.browserVersion})`);
+    } catch (error) {
+      results.push({
+        target,
+        status: "failed",
+        durationMs: Date.now() - started,
+        ...serializeF1MovementFailure(error),
+        error: error instanceof Error ? error.stack ?? error.message : String(error)
+      });
+      console.error(`[browser-qa] ${target}: failed`);
+    }
+  }
+} finally {
+  await server.close();
+}
+
+const report = {
+  schemaVersion: "1.0.0",
+  startedAt,
+  finishedAt: new Date().toISOString(),
+  platform: process.platform,
+  architecture: process.arch,
+  node: process.version,
+  graphicsMode: forceSoftwareGraphics ? "forced-software" : "browser-default",
+  distDirectory: projectPath(distDirectory),
+  expectedCommit,
+  laneRoute,
+  ribCalibration,
+  resolutionChoice,
+  rewardStorageFault: rewardStorageFault || null,
+  rewardOffline,
+  targets,
+  results
+};
+const reportPath = resolve(reportDirectory, "report.json");
+await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+console.log(`[browser-qa] report: ${projectPath(reportPath)}`);
+
+const failures = results.filter((result) => result.status !== "passed");
+if (failures.length > 0) {
+  throw new AggregateError(
+    failures.map((failure) => new Error(`${failure.target}: ${failure.error}`)),
+    `Browser lifecycle matrix failed for ${failures.map((failure) => failure.target).join(", ")}.`
+  );
+}

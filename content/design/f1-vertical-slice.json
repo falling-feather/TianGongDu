@@ -1,0 +1,2139 @@
+{
+  "$schema": "../schemas/f1-vertical-slice.schema.json",
+  "schemaVersion": "1.6.0",
+  "id": "f1_rainy_umbrella_trial",
+  "view": {
+    "model": "2.5d-oblique-panoramic",
+    "primaryGuidance": "douzhanshen",
+    "secondaryReference": "warm-snow-combat-readability",
+    "cameraMode": "author-controlled-oblique"
+  },
+  "timing": {
+    "playableTargetMinutes": 60,
+    "endToEndTestBudgetMinutes": 70,
+    "startupMinutes": 3,
+    "postResolutionPersistenceMinutes": 7,
+    "activityGraceTicks": 180,
+    "excludedFromPlayable": [
+      "title_loading",
+      "failure_retry",
+      "idle",
+      "post_resolution_persistence"
+    ]
+  },
+  "catalogReferences": {
+    "startFixtureId": "fixture_f1_rainy_umbrella_start",
+    "chapterId": "jn_chapter_02",
+    "subregionIds": ["jn_rain_ferry", "jn_umbrella_lane"],
+    "npcIds": ["npc_shen_yan"],
+    "enemyFamilyIds": [
+      "jn_enemy_leaking_umbrella_doll",
+      "jn_enemy_faded_paper_egret"
+    ],
+    "bossId": "jn_boss_umbrella_wraith"
+  },
+  "playerSeed": {
+    "actorKey": 1,
+    "initialPoseMm": {
+      "x": -12000,
+      "y": -1600,
+      "height": 0,
+      "floorLayer": 0
+    },
+    "moveSpeedMmPerSecond": 3600,
+    "jumpSpeedMmPerSecond": 4800,
+    "gravityMmPerSecondSquared": 9600,
+    "collisionRadiusMm": 260,
+    "collisionHeightMm": 1800,
+    "cameraBasisQ15": {
+      "screenRightWorld": { "x": 23170, "y": -23170 },
+      "screenForwardWorld": { "x": 23170, "y": 23170 },
+      "revision": 2
+    }
+  },
+  "combatBootstrap": {
+    "id": "f1_encounter_umbrella_lane_bootstrap",
+    "director": {
+      "playerActorKey": 1,
+      "aggroRangeMm": 5500,
+      "leashRangeMm": 9000,
+      "chaseSpeedMmPerSecond": 1800,
+      "formationRadiusMm": 1500,
+      "decisionIntervalTicks": 6,
+      "postAttackCooldownTicks": 30,
+      "maxSimultaneousAttackers": 1
+    },
+    "actors": [
+      {
+        "actorKey": 1,
+        "archetypeId": "actor_f1_player",
+        "faction": "player",
+        "poseMm": { "x": -12000, "y": -1600, "height": 0, "floorLayer": 0 },
+        "resources": {
+          "health": 120,
+          "healthMax": 120,
+          "stamina": 100,
+          "staminaMax": 100,
+          "poise": 80,
+          "poiseMax": 80,
+          "lantern": 30,
+          "lanternMax": 30,
+          "evidence": 0
+        },
+        "recovery": {
+          "staminaDelayTicks": 30,
+          "staminaIntervalTicks": 6,
+          "staminaPerInterval": 2,
+          "poiseDelayTicks": 120,
+          "poiseIntervalTicks": 12,
+          "poisePerInterval": 4
+        },
+        "stanceIds": ["stance_eavesguard", "stance_flower_turn"],
+        "initialStanceId": "stance_eavesguard",
+        "initiallyActive": true
+      },
+      {
+        "actorKey": 101,
+        "archetypeId": "jn_enemy_leaking_umbrella_doll",
+        "faction": "hostile",
+        "poseMm": { "x": -4000, "y": -2600, "height": 0, "floorLayer": 0 },
+        "resources": {
+          "health": 90,
+          "healthMax": 90,
+          "stamina": 80,
+          "staminaMax": 80,
+          "poise": 40,
+          "poiseMax": 40,
+          "lantern": 0,
+          "lanternMax": 0,
+          "evidence": 0
+        },
+        "recovery": {
+          "staminaDelayTicks": 45,
+          "staminaIntervalTicks": 10,
+          "staminaPerInterval": 2,
+          "poiseDelayTicks": 150,
+          "poiseIntervalTicks": 15,
+          "poisePerInterval": 3
+        },
+        "stanceIds": ["stance_umbrella_rust"],
+        "initialStanceId": "stance_umbrella_rust",
+        "initiallyActive": false
+      },
+      {
+        "actorKey": 102,
+        "archetypeId": "jn_enemy_leaking_umbrella_doll",
+        "faction": "hostile",
+        "poseMm": { "x": -3000, "y": -400, "height": 0, "floorLayer": 0 },
+        "resources": {
+          "health": 90,
+          "healthMax": 90,
+          "stamina": 80,
+          "staminaMax": 80,
+          "poise": 40,
+          "poiseMax": 40,
+          "lantern": 0,
+          "lanternMax": 0,
+          "evidence": 0
+        },
+        "recovery": {
+          "staminaDelayTicks": 45,
+          "staminaIntervalTicks": 10,
+          "staminaPerInterval": 2,
+          "poiseDelayTicks": 150,
+          "poiseIntervalTicks": 15,
+          "poisePerInterval": 3
+        },
+        "stanceIds": ["stance_umbrella_rust"],
+        "initialStanceId": "stance_umbrella_rust",
+        "initiallyActive": false
+      },
+      {
+        "actorKey": 103,
+        "archetypeId": "jn_enemy_faded_paper_egret",
+        "faction": "hostile",
+        "poseMm": { "x": -1500, "y": 900, "height": 700, "floorLayer": 0 },
+        "resources": {
+          "health": 70,
+          "healthMax": 70,
+          "stamina": 100,
+          "staminaMax": 100,
+          "poise": 28,
+          "poiseMax": 28,
+          "lantern": 0,
+          "lanternMax": 0,
+          "evidence": 0
+        },
+        "recovery": {
+          "staminaDelayTicks": 36,
+          "staminaIntervalTicks": 8,
+          "staminaPerInterval": 2,
+          "poiseDelayTicks": 120,
+          "poiseIntervalTicks": 12,
+          "poisePerInterval": 3
+        },
+        "stanceIds": ["stance_paper_egret"],
+        "initialStanceId": "stance_paper_egret",
+        "initiallyActive": false
+      },
+      {
+        "actorKey": 104,
+        "archetypeId": "f1_training_umbrella_rig",
+        "faction": "hostile",
+        "poseMm": { "x": -4100, "y": 2300, "height": 0, "floorLayer": 0 },
+        "resources": {
+          "health": 999,
+          "healthMax": 999,
+          "stamina": 100,
+          "staminaMax": 100,
+          "poise": 80,
+          "poiseMax": 80,
+          "lantern": 0,
+          "lanternMax": 0,
+          "evidence": 0
+        },
+        "recovery": {
+          "staminaDelayTicks": 45,
+          "staminaIntervalTicks": 10,
+          "staminaPerInterval": 2,
+          "poiseDelayTicks": 150,
+          "poiseIntervalTicks": 15,
+          "poisePerInterval": 3
+        },
+        "stanceIds": ["stance_umbrella_rust"],
+        "initialStanceId": "stance_umbrella_rust",
+        "initiallyActive": false
+      },
+      {
+        "actorKey": 105,
+        "archetypeId": "f1_training_egret_rig",
+        "faction": "hostile",
+        "poseMm": { "x": -5200, "y": -1600, "height": 700, "floorLayer": 0 },
+        "resources": {
+          "health": 70,
+          "healthMax": 70,
+          "stamina": 120,
+          "staminaMax": 120,
+          "poise": 60,
+          "poiseMax": 60,
+          "lantern": 0,
+          "lanternMax": 0,
+          "evidence": 0
+        },
+        "recovery": {
+          "staminaDelayTicks": 36,
+          "staminaIntervalTicks": 8,
+          "staminaPerInterval": 2,
+          "poiseDelayTicks": 120,
+          "poiseIntervalTicks": 12,
+          "poisePerInterval": 3
+        },
+        "stanceIds": ["stance_paper_egret"],
+        "initialStanceId": "stance_paper_egret",
+        "initiallyActive": false
+      },
+      {
+        "actorKey": 106,
+        "archetypeId": "jn_enemy_leaking_umbrella_doll",
+        "faction": "hostile",
+        "poseMm": { "x": -4600, "y": 1600, "height": 0, "floorLayer": 0 },
+        "resources": {
+          "health": 70,
+          "healthMax": 70,
+          "stamina": 80,
+          "staminaMax": 80,
+          "poise": 40,
+          "poiseMax": 40,
+          "lantern": 0,
+          "lanternMax": 0,
+          "evidence": 0
+        },
+        "recovery": {
+          "staminaDelayTicks": 45,
+          "staminaIntervalTicks": 10,
+          "staminaPerInterval": 2,
+          "poiseDelayTicks": 150,
+          "poiseIntervalTicks": 15,
+          "poisePerInterval": 3
+        },
+        "stanceIds": ["stance_umbrella_rust"],
+        "initialStanceId": "stance_umbrella_rust",
+        "initiallyActive": false
+      },
+      {
+        "actorKey": 107,
+        "archetypeId": "f1_training_eavesguard_target",
+        "faction": "hostile",
+        "poseMm": { "x": -4000, "y": 2000, "height": 0, "floorLayer": 0 },
+        "resources": {
+          "health": 120,
+          "healthMax": 120,
+          "stamina": 80,
+          "staminaMax": 80,
+          "poise": 48,
+          "poiseMax": 48,
+          "lantern": 0,
+          "lanternMax": 0,
+          "evidence": 0
+        },
+        "recovery": {
+          "staminaDelayTicks": 45,
+          "staminaIntervalTicks": 10,
+          "staminaPerInterval": 2,
+          "poiseDelayTicks": 150,
+          "poiseIntervalTicks": 15,
+          "poisePerInterval": 3
+        },
+        "stanceIds": ["stance_umbrella_rust"],
+        "initialStanceId": "stance_umbrella_rust",
+        "initiallyActive": false
+      },
+      {
+        "actorKey": 108,
+        "archetypeId": "f1_training_flower_turn_rig",
+        "faction": "hostile",
+        "poseMm": { "x": -3300, "y": 1200, "height": 700, "floorLayer": 0 },
+        "resources": {
+          "health": 999,
+          "healthMax": 999,
+          "stamina": 120,
+          "staminaMax": 120,
+          "poise": 80,
+          "poiseMax": 80,
+          "lantern": 0,
+          "lanternMax": 0,
+          "evidence": 0
+        },
+        "recovery": {
+          "staminaDelayTicks": 36,
+          "staminaIntervalTicks": 8,
+          "staminaPerInterval": 2,
+          "poiseDelayTicks": 120,
+          "poiseIntervalTicks": 12,
+          "poisePerInterval": 3
+        },
+        "stanceIds": ["stance_paper_egret"],
+        "initialStanceId": "stance_paper_egret",
+        "initiallyActive": false
+      },
+      {
+        "actorKey": 109,
+        "archetypeId": "f1_training_flower_turn_target",
+        "faction": "hostile",
+        "poseMm": { "x": -3000, "y": -800, "height": 700, "floorLayer": 0 },
+        "resources": {
+          "health": 120,
+          "healthMax": 120,
+          "stamina": 100,
+          "staminaMax": 100,
+          "poise": 42,
+          "poiseMax": 42,
+          "lantern": 0,
+          "lanternMax": 0,
+          "evidence": 0
+        },
+        "recovery": {
+          "staminaDelayTicks": 36,
+          "staminaIntervalTicks": 8,
+          "staminaPerInterval": 2,
+          "poiseDelayTicks": 120,
+          "poiseIntervalTicks": 12,
+          "poisePerInterval": 3
+        },
+        "stanceIds": ["stance_paper_egret"],
+        "initialStanceId": "stance_paper_egret",
+        "initiallyActive": false
+      },
+      {
+        "actorKey": 201,
+        "archetypeId": "jn_boss_umbrella_wraith",
+        "faction": "hostile",
+        "poseMm": { "x": 4000, "y": 1900, "height": 0, "floorLayer": 0 },
+        "resources": {
+          "health": 420,
+          "healthMax": 420,
+          "stamina": 240,
+          "staminaMax": 240,
+          "poise": 120,
+          "poiseMax": 120,
+          "lantern": 0,
+          "lanternMax": 0,
+          "evidence": 0
+        },
+        "recovery": {
+          "staminaDelayTicks": 24,
+          "staminaIntervalTicks": 6,
+          "staminaPerInterval": 4,
+          "poiseDelayTicks": 90,
+          "poiseIntervalTicks": 10,
+          "poisePerInterval": 5
+        },
+        "stanceIds": [
+          "stance_wraith_spring",
+          "stance_wraith_summer",
+          "stance_wraith_autumn",
+          "stance_wraith_winter"
+        ],
+        "initialStanceId": "stance_wraith_spring",
+        "initiallyActive": false
+      }
+    ],
+    "abilities": [
+      {
+        "id": "ability_eavesguard_light",
+        "trigger": "light_attack",
+        "requiredStanceId": "stance_eavesguard",
+        "staminaCost": 8,
+        "windupTicks": 12,
+        "activeTicks": 3,
+        "recoveryTicks": 12,
+        "rangeMm": 1800,
+        "heightToleranceMm": 700,
+        "healthDamage": 18,
+        "poiseDamage": 18,
+        "feedbackTags": ["light"]
+      },
+      {
+        "id": "ability_eavesguard_heavy",
+        "trigger": "heavy_attack",
+        "requiredStanceId": "stance_eavesguard",
+        "staminaCost": 18,
+        "windupTicks": 18,
+        "activeTicks": 4,
+        "recoveryTicks": 24,
+        "rangeMm": 2050,
+        "heightToleranceMm": 800,
+        "healthDamage": 30,
+        "poiseDamage": 46,
+        "feedbackTags": ["heavy"]
+      },
+      {
+        "id": "ability_flower_light",
+        "trigger": "light_attack",
+        "requiredStanceId": "stance_flower_turn",
+        "staminaCost": 10,
+        "windupTicks": 6,
+        "activeTicks": 4,
+        "recoveryTicks": 8,
+        "rangeMm": 2100,
+        "heightToleranceMm": 900,
+        "healthDamage": 30,
+        "poiseDamage": 14,
+        "feedbackTags": ["light"]
+      },
+      {
+        "id": "ability_flower_heavy",
+        "trigger": "heavy_attack",
+        "requiredStanceId": "stance_flower_turn",
+        "staminaCost": 22,
+        "windupTicks": 14,
+        "activeTicks": 6,
+        "recoveryTicks": 28,
+        "rangeMm": 2350,
+        "heightToleranceMm": 1000,
+        "healthDamage": 38,
+        "poiseDamage": 34,
+        "feedbackTags": ["heavy"]
+      },
+      {
+        "id": "ability_umbrella_rust_light",
+        "trigger": "light_attack",
+        "requiredStanceId": "stance_umbrella_rust",
+        "staminaCost": 6,
+        "windupTicks": 18,
+        "activeTicks": 4,
+        "recoveryTicks": 24,
+        "rangeMm": 1650,
+        "heightToleranceMm": 700,
+        "healthDamage": 12,
+        "poiseDamage": 16,
+        "feedbackTags": ["light"]
+      },
+      {
+        "id": "ability_umbrella_rust_heavy",
+        "trigger": "heavy_attack",
+        "requiredStanceId": "stance_umbrella_rust",
+        "staminaCost": 16,
+        "windupTicks": 32,
+        "activeTicks": 6,
+        "recoveryTicks": 40,
+        "rangeMm": 1900,
+        "heightToleranceMm": 800,
+        "healthDamage": 24,
+        "poiseDamage": 36,
+        "feedbackTags": ["heavy"]
+      },
+      {
+        "id": "ability_paper_egret_light",
+        "trigger": "light_attack",
+        "requiredStanceId": "stance_paper_egret",
+        "staminaCost": 8,
+        "windupTicks": 22,
+        "activeTicks": 6,
+        "recoveryTicks": 26,
+        "rangeMm": 2700,
+        "heightToleranceMm": 1300,
+        "healthDamage": 14,
+        "poiseDamage": 12,
+        "feedbackTags": ["light"]
+      },
+      {
+        "id": "ability_paper_egret_heavy",
+        "trigger": "heavy_attack",
+        "requiredStanceId": "stance_paper_egret",
+        "staminaCost": 20,
+        "windupTicks": 38,
+        "activeTicks": 8,
+        "recoveryTicks": 42,
+        "rangeMm": 3200,
+        "heightToleranceMm": 1500,
+        "healthDamage": 26,
+        "poiseDamage": 30,
+        "feedbackTags": ["heavy"]
+      },
+      {
+        "id": "ability_wraith_spring_light",
+        "trigger": "light_attack",
+        "requiredStanceId": "stance_wraith_spring",
+        "staminaCost": 8,
+        "windupTicks": 24,
+        "activeTicks": 5,
+        "recoveryTicks": 24,
+        "rangeMm": 2500,
+        "heightToleranceMm": 1100,
+        "healthDamage": 12,
+        "poiseDamage": 18,
+        "feedbackTags": ["light"]
+      },
+      {
+        "id": "ability_wraith_spring_heavy",
+        "trigger": "heavy_attack",
+        "requiredStanceId": "stance_wraith_spring",
+        "staminaCost": 20,
+        "windupTicks": 42,
+        "activeTicks": 8,
+        "recoveryTicks": 38,
+        "rangeMm": 3100,
+        "heightToleranceMm": 1300,
+        "healthDamage": 22,
+        "poiseDamage": 34,
+        "feedbackTags": ["heavy"]
+      },
+      {
+        "id": "ability_wraith_summer_light",
+        "trigger": "light_attack",
+        "requiredStanceId": "stance_wraith_summer",
+        "staminaCost": 10,
+        "windupTicks": 16,
+        "activeTicks": 6,
+        "recoveryTicks": 20,
+        "rangeMm": 2700,
+        "heightToleranceMm": 1200,
+        "healthDamage": 14,
+        "poiseDamage": 20,
+        "feedbackTags": ["light"]
+      },
+      {
+        "id": "ability_wraith_summer_heavy",
+        "trigger": "heavy_attack",
+        "requiredStanceId": "stance_wraith_summer",
+        "staminaCost": 22,
+        "windupTicks": 32,
+        "activeTicks": 9,
+        "recoveryTicks": 34,
+        "rangeMm": 3300,
+        "heightToleranceMm": 1400,
+        "healthDamage": 24,
+        "poiseDamage": 38,
+        "feedbackTags": ["heavy"]
+      },
+      {
+        "id": "ability_wraith_autumn_light",
+        "trigger": "light_attack",
+        "requiredStanceId": "stance_wraith_autumn",
+        "staminaCost": 11,
+        "windupTicks": 20,
+        "activeTicks": 6,
+        "recoveryTicks": 18,
+        "rangeMm": 2850,
+        "heightToleranceMm": 1200,
+        "healthDamage": 16,
+        "poiseDamage": 24,
+        "feedbackTags": ["light"]
+      },
+      {
+        "id": "ability_wraith_autumn_heavy",
+        "trigger": "heavy_attack",
+        "requiredStanceId": "stance_wraith_autumn",
+        "staminaCost": 24,
+        "windupTicks": 36,
+        "activeTicks": 10,
+        "recoveryTicks": 32,
+        "rangeMm": 3500,
+        "heightToleranceMm": 1500,
+        "healthDamage": 28,
+        "poiseDamage": 44,
+        "feedbackTags": ["heavy"]
+      },
+      {
+        "id": "ability_wraith_winter_light",
+        "trigger": "light_attack",
+        "requiredStanceId": "stance_wraith_winter",
+        "staminaCost": 12,
+        "windupTicks": 14,
+        "activeTicks": 7,
+        "recoveryTicks": 17,
+        "rangeMm": 3000,
+        "heightToleranceMm": 1300,
+        "healthDamage": 18,
+        "poiseDamage": 28,
+        "feedbackTags": ["light"]
+      },
+      {
+        "id": "ability_wraith_winter_heavy",
+        "trigger": "heavy_attack",
+        "requiredStanceId": "stance_wraith_winter",
+        "staminaCost": 26,
+        "windupTicks": 28,
+        "activeTicks": 11,
+        "recoveryTicks": 30,
+        "rangeMm": 3700,
+        "heightToleranceMm": 1600,
+        "healthDamage": 32,
+        "poiseDamage": 50,
+        "feedbackTags": ["heavy"]
+      },
+      {
+        "id": "ability_common_evade",
+        "trigger": "evade",
+        "staminaCost": 14,
+        "windupTicks": 0,
+        "activeTicks": 12,
+        "recoveryTicks": 22,
+        "rangeMm": 0,
+        "heightToleranceMm": 0,
+        "healthDamage": 0,
+        "poiseDamage": 0,
+        "feedbackTags": ["evade"]
+      }
+    ]
+  },
+  "cellIds": [
+    "f1_cell_rain_ferry",
+    "f1_cell_umbrella_lane_a",
+    "f1_cell_canopy_workstation",
+    "f1_cell_four_seasons_court",
+    "f1_cell_return_safe_point"
+  ],
+  "beats": [
+    {
+      "id": "f1_beat_rain_ferry_arrival",
+      "kind": "exploration",
+      "targetMinutes": 9,
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveIds": [
+        "f1_objective_inspect_travel_writ",
+        "f1_objective_choose_arrival_clue",
+        "f1_objective_read_ferry_condition",
+        "f1_objective_choose_mooring_method",
+        "f1_objective_secure_ferry_mooring",
+        "f1_objective_inspect_bilge_counterweight",
+        "f1_objective_release_ferry_bilge",
+        "f1_objective_raise_wayfinding_lantern",
+        "f1_objective_read_workshop_bell_code",
+        "f1_objective_sound_workshop_bell",
+        "f1_objective_reach_ferry_gate"
+      ],
+      "autoAdvance": false
+    },
+    {
+      "id": "f1_beat_shen_yan_training",
+      "kind": "training",
+      "targetMinutes": 8,
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveIds": [
+        "f1_objective_meet_shen_yan",
+        "f1_objective_choose_training_lane",
+        "f1_objective_take_eavesguard_mark",
+        "f1_objective_eavesguard_counter",
+        "f1_objective_commit_eavesguard_heavy",
+        "f1_objective_break_eavesguard_target",
+        "f1_objective_review_eavesguard_with_shen_yan",
+        "f1_objective_enter_flower_turn",
+        "f1_objective_cross_flower_turn_line",
+        "f1_objective_flower_turn_counter",
+        "f1_objective_commit_flower_turn_light",
+        "f1_objective_commit_flower_turn_heavy",
+        "f1_objective_break_flower_turn_target",
+        "f1_objective_finish_shen_yan_training"
+      ],
+      "autoAdvance": false
+    },
+    {
+      "id": "f1_beat_umbrella_lane_first_encounter",
+      "kind": "combat",
+      "targetMinutes": 12,
+      "cellId": "f1_cell_umbrella_lane_a",
+      "objectiveIds": [
+        "f1_objective_defeat_leaking_dolls",
+        "f1_objective_inspect_torn_canopy_seam",
+        "f1_objective_release_flooded_gutter",
+        "f1_objective_raise_paper_egret_lure",
+        "f1_objective_answer_paper_egret",
+        "f1_objective_choose_lane_route"
+      ],
+      "autoAdvance": false
+    },
+    {
+      "id": "f1_beat_shared_workbench_investigation",
+      "kind": "investigation",
+      "targetMinutes": 11,
+      "cellId": "f1_cell_canopy_workstation",
+      "objectiveIds": [
+        "f1_objective_reveal_spring_trace",
+        "f1_objective_reveal_winter_trace",
+        "f1_objective_review_shared_ledger",
+        "f1_objective_choose_rib_calibration"
+      ],
+      "autoAdvance": false
+    },
+    {
+      "id": "f1_beat_canopy_return_encounter",
+      "kind": "combat",
+      "targetMinutes": 7,
+      "cellId": "f1_cell_canopy_workstation",
+      "objectiveIds": [
+        "f1_objective_prime_return_calibration",
+        "f1_objective_demonstrate_rib_calibration",
+        "f1_objective_validate_calibration",
+        "f1_objective_open_return_shortcut"
+      ],
+      "autoAdvance": false
+    },
+    {
+      "id": "f1_beat_four_seasons_wraith",
+      "kind": "boss",
+      "targetMinutes": 10,
+      "cellId": "f1_cell_four_seasons_court",
+      "objectiveIds": [
+        "f1_objective_survive_spring_phase",
+        "f1_objective_survive_summer_phase",
+        "f1_objective_survive_autumn_phase",
+        "f1_objective_survive_winter_phase"
+      ],
+      "autoAdvance": false
+    },
+    {
+      "id": "f1_beat_resolution_and_return",
+      "kind": "resolution",
+      "targetMinutes": 3,
+      "cellId": "f1_cell_return_safe_point",
+      "objectiveIds": [
+        "f1_objective_choose_resolution",
+        "f1_objective_return_to_shen_yan"
+      ],
+      "autoAdvance": false
+    }
+  ],
+  "safePoints": [
+    {
+      "id": "f1_safe_point_rain_ferry_arrival",
+      "beatId": "f1_beat_rain_ferry_arrival",
+      "poseMm": { "x": -12000, "y": -1600, "height": 0, "floorLayer": 0 }
+    },
+    {
+      "id": "f1_safe_point_shen_yan_training",
+      "beatId": "f1_beat_shen_yan_training",
+      "poseMm": { "x": -6500, "y": -500, "height": 0, "floorLayer": 0 }
+    },
+    {
+      "id": "f1_safe_point_umbrella_lane",
+      "beatId": "f1_beat_umbrella_lane_first_encounter",
+      "poseMm": { "x": -5600, "y": -1200, "height": 0, "floorLayer": 0 }
+    },
+    {
+      "id": "f1_safe_point_shared_workbench",
+      "beatId": "f1_beat_shared_workbench_investigation",
+      "poseMm": { "x": -4300, "y": -100, "height": 0, "floorLayer": 0 }
+    },
+    {
+      "id": "f1_safe_point_canopy_return",
+      "beatId": "f1_beat_canopy_return_encounter",
+      "poseMm": { "x": -4300, "y": -100, "height": 0, "floorLayer": 0 }
+    },
+    {
+      "id": "f1_safe_point_four_seasons_court",
+      "beatId": "f1_beat_four_seasons_wraith",
+      "poseMm": { "x": 2200, "y": 800, "height": 0, "floorLayer": 0 }
+    },
+    {
+      "id": "f1_safe_point_resolution_return",
+      "beatId": "f1_beat_resolution_and_return",
+      "poseMm": { "x": 3000, "y": 800, "height": 0, "floorLayer": 0 }
+    }
+  ],
+  "questInteractions": [
+    {
+      "id": "f1_interaction_travel_writ",
+      "kind": "inspect",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_inspect_travel_writ",
+      "selectionId": null,
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -12000, "y": -1600, "height": 0, "floorLayer": 0 },
+      "radiusMm": 800,
+      "prerequisiteObjectiveIds": []
+    },
+    {
+      "id": "f1_interaction_arrival_clue_high_water_tags",
+      "kind": "choose",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_choose_arrival_clue",
+      "selectionId": "f1_choice_arrival_high_water_tags",
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -12200, "y": 900, "height": 0, "floorLayer": 0 },
+      "radiusMm": 600,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_inspect_travel_writ"
+      ]
+    },
+    {
+      "id": "f1_interaction_arrival_clue_drowned_manifest",
+      "kind": "choose",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_choose_arrival_clue",
+      "selectionId": "f1_choice_arrival_drowned_manifest",
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -11400, "y": -3100, "height": 0, "floorLayer": 0 },
+      "radiusMm": 600,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_inspect_travel_writ"
+      ]
+    },
+    {
+      "id": "f1_interaction_arrival_clue_follow_bell",
+      "kind": "choose",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_choose_arrival_clue",
+      "selectionId": "f1_choice_arrival_follow_bell",
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -10900, "y": -1000, "height": 0, "floorLayer": 0 },
+      "radiusMm": 700,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_inspect_travel_writ"
+      ]
+    },
+    {
+      "id": "f1_interaction_read_high_water_repairs",
+      "kind": "inspect",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_read_ferry_condition",
+      "selectionId": null,
+      "requiredSelectionObjectiveId": "f1_objective_choose_arrival_clue",
+      "requiredSelectionId": "f1_choice_arrival_high_water_tags",
+      "poseMm": { "x": -11100, "y": 1700, "height": 0, "floorLayer": 0 },
+      "radiusMm": 550,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_choose_arrival_clue"
+      ]
+    },
+    {
+      "id": "f1_interaction_read_manifest_waterline",
+      "kind": "inspect",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_read_ferry_condition",
+      "selectionId": null,
+      "requiredSelectionObjectiveId": "f1_objective_choose_arrival_clue",
+      "requiredSelectionId": "f1_choice_arrival_drowned_manifest",
+      "poseMm": { "x": -10600, "y": -2800, "height": 0, "floorLayer": 0 },
+      "radiusMm": 550,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_choose_arrival_clue"
+      ]
+    },
+    {
+      "id": "f1_interaction_read_main_flood_gauge",
+      "kind": "inspect",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_read_ferry_condition",
+      "selectionId": null,
+      "requiredSelectionObjectiveId": "f1_objective_choose_arrival_clue",
+      "requiredSelectionId": "f1_choice_arrival_follow_bell",
+      "poseMm": { "x": -10700, "y": -900, "height": 0, "floorLayer": 0 },
+      "radiusMm": 650,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_choose_arrival_clue"
+      ]
+    },
+    {
+      "id": "f1_interaction_choose_cross_belay",
+      "kind": "choose",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_choose_mooring_method",
+      "selectionId": "f1_choice_mooring_cross_belay",
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -10100, "y": 1200, "height": 0, "floorLayer": 0 },
+      "radiusMm": 600,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_read_ferry_condition"
+      ]
+    },
+    {
+      "id": "f1_interaction_choose_quick_hitch",
+      "kind": "choose",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_choose_mooring_method",
+      "selectionId": "f1_choice_mooring_quick_hitch",
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -10000, "y": -1700, "height": 0, "floorLayer": 0 },
+      "radiusMm": 600,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_read_ferry_condition"
+      ]
+    },
+    {
+      "id": "f1_interaction_lock_cross_belay",
+      "kind": "operate",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_secure_ferry_mooring",
+      "selectionId": null,
+      "requiredSelectionObjectiveId": "f1_objective_choose_mooring_method",
+      "requiredSelectionId": "f1_choice_mooring_cross_belay",
+      "poseMm": { "x": -9400, "y": 1900, "height": 0, "floorLayer": 0 },
+      "radiusMm": 550,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_choose_mooring_method"
+      ]
+    },
+    {
+      "id": "f1_interaction_correct_overloaded_quick_hitch",
+      "kind": "operate",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_secure_ferry_mooring",
+      "selectionId": null,
+      "requiredSelectionObjectiveId": "f1_objective_choose_mooring_method",
+      "requiredSelectionId": "f1_choice_mooring_quick_hitch",
+      "poseMm": { "x": -9200, "y": -2300, "height": 0, "floorLayer": 0 },
+      "radiusMm": 550,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_choose_mooring_method"
+      ]
+    },
+    {
+      "id": "f1_interaction_inspect_bilge_counterweight",
+      "kind": "inspect",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_inspect_bilge_counterweight",
+      "selectionId": null,
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -8700, "y": -800, "height": 0, "floorLayer": 0 },
+      "radiusMm": 550,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_secure_ferry_mooring"
+      ]
+    },
+    {
+      "id": "f1_interaction_release_ferry_bilge",
+      "kind": "operate",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_release_ferry_bilge",
+      "selectionId": null,
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -8400, "y": 1100, "height": 0, "floorLayer": 0 },
+      "radiusMm": 550,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_inspect_bilge_counterweight"
+      ]
+    },
+    {
+      "id": "f1_interaction_raise_wayfinding_lantern",
+      "kind": "operate",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_raise_wayfinding_lantern",
+      "selectionId": null,
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -7900, "y": -300, "height": 0, "floorLayer": 0 },
+      "radiusMm": 600,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_release_ferry_bilge"
+      ]
+    },
+    {
+      "id": "f1_interaction_read_workshop_bell_code",
+      "kind": "inspect",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_read_workshop_bell_code",
+      "selectionId": null,
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -7500, "y": 1300, "height": 0, "floorLayer": 0 },
+      "radiusMm": 550,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_raise_wayfinding_lantern"
+      ]
+    },
+    {
+      "id": "f1_interaction_sound_workshop_bell",
+      "kind": "operate",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_sound_workshop_bell",
+      "selectionId": null,
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -7100, "y": 300, "height": 0, "floorLayer": 0 },
+      "radiusMm": 600,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_read_workshop_bell_code"
+      ]
+    },
+    {
+      "id": "f1_interaction_ferry_gate",
+      "kind": "operate",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_reach_ferry_gate",
+      "selectionId": null,
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -6700, "y": -600, "height": 0, "floorLayer": 0 },
+      "radiusMm": 800,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_sound_workshop_bell"
+      ]
+    },
+    {
+      "id": "f1_interaction_meet_shen_yan",
+      "kind": "talk",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_meet_shen_yan",
+      "selectionId": null,
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -6500, "y": -500, "height": 0, "floorLayer": 0 },
+      "radiusMm": 800,
+      "prerequisiteObjectiveIds": []
+    },
+    {
+      "id": "f1_interaction_choose_training_windward_lane",
+      "kind": "choose",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_choose_training_lane",
+      "selectionId": "f1_choice_training_windward_lane",
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -6100, "y": 1600, "height": 0, "floorLayer": 0 },
+      "radiusMm": 600,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_meet_shen_yan"
+      ]
+    },
+    {
+      "id": "f1_interaction_choose_training_leeward_lane",
+      "kind": "choose",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_choose_training_lane",
+      "selectionId": "f1_choice_training_leeward_lane",
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -6000, "y": -2200, "height": 0, "floorLayer": 0 },
+      "radiusMm": 600,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_meet_shen_yan"
+      ]
+    },
+    {
+      "id": "f1_interaction_take_windward_eavesguard_mark",
+      "kind": "operate",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_take_eavesguard_mark",
+      "selectionId": null,
+      "requiredSelectionObjectiveId": "f1_objective_choose_training_lane",
+      "requiredSelectionId": "f1_choice_training_windward_lane",
+      "poseMm": { "x": -5400, "y": 1900, "height": 0, "floorLayer": 0 },
+      "radiusMm": 550,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_choose_training_lane"
+      ]
+    },
+    {
+      "id": "f1_interaction_take_leeward_eavesguard_mark",
+      "kind": "operate",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_take_eavesguard_mark",
+      "selectionId": null,
+      "requiredSelectionObjectiveId": "f1_objective_choose_training_lane",
+      "requiredSelectionId": "f1_choice_training_leeward_lane",
+      "poseMm": { "x": -5200, "y": -2400, "height": 0, "floorLayer": 0 },
+      "radiusMm": 550,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_choose_training_lane"
+      ]
+    },
+    {
+      "id": "f1_interaction_review_eavesguard_with_shen_yan",
+      "kind": "talk",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_review_eavesguard_with_shen_yan",
+      "selectionId": null,
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -5000, "y": -200, "height": 0, "floorLayer": 0 },
+      "radiusMm": 800,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_break_eavesguard_target"
+      ]
+    },
+    {
+      "id": "f1_interaction_cross_flower_turn_line",
+      "kind": "operate",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_cross_flower_turn_line",
+      "selectionId": null,
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -3400, "y": -1700, "height": 0, "floorLayer": 0 },
+      "radiusMm": 550,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_enter_flower_turn"
+      ]
+    },
+    {
+      "id": "f1_interaction_finish_shen_yan_training",
+      "kind": "talk",
+      "cellId": "f1_cell_rain_ferry",
+      "objectiveId": "f1_objective_finish_shen_yan_training",
+      "selectionId": null,
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -5000, "y": -200, "height": 0, "floorLayer": 0 },
+      "radiusMm": 800,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_break_flower_turn_target"
+      ]
+    },
+    {
+      "id": "f1_interaction_inspect_torn_canopy_seam",
+      "kind": "inspect",
+      "cellId": "f1_cell_umbrella_lane_a",
+      "objectiveId": "f1_objective_inspect_torn_canopy_seam",
+      "selectionId": null,
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -3600, "y": -1700, "height": 0, "floorLayer": 0 },
+      "radiusMm": 650,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_defeat_leaking_dolls"
+      ]
+    },
+    {
+      "id": "f1_interaction_release_flooded_gutter",
+      "kind": "operate",
+      "cellId": "f1_cell_umbrella_lane_a",
+      "objectiveId": "f1_objective_release_flooded_gutter",
+      "selectionId": null,
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -2700, "y": -700, "height": 0, "floorLayer": 0 },
+      "radiusMm": 650,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_inspect_torn_canopy_seam"
+      ]
+    },
+    {
+      "id": "f1_interaction_raise_paper_egret_lure",
+      "kind": "operate",
+      "cellId": "f1_cell_umbrella_lane_a",
+      "objectiveId": "f1_objective_raise_paper_egret_lure",
+      "selectionId": null,
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -1800, "y": 500, "height": 0, "floorLayer": 0 },
+      "radiusMm": 700,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_release_flooded_gutter"
+      ]
+    },
+    {
+      "id": "f1_interaction_choose_lane_route",
+      "kind": "choose",
+      "cellId": "f1_cell_umbrella_lane_a",
+      "objectiveId": "f1_objective_choose_lane_route",
+      "selectionId": "f1_choice_lane_canopy",
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -3900, "y": -100, "height": 0, "floorLayer": 0 },
+      "radiusMm": 1200,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_defeat_leaking_dolls",
+        "f1_objective_inspect_torn_canopy_seam",
+        "f1_objective_release_flooded_gutter",
+        "f1_objective_raise_paper_egret_lure",
+        "f1_objective_answer_paper_egret"
+      ]
+    },
+    {
+      "id": "f1_interaction_choose_lane_drain_route",
+      "kind": "choose",
+      "cellId": "f1_cell_umbrella_lane_a",
+      "objectiveId": "f1_objective_choose_lane_route",
+      "selectionId": "f1_choice_lane_drain",
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -800, "y": 900, "height": 0, "floorLayer": 0 },
+      "radiusMm": 900,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_defeat_leaking_dolls",
+        "f1_objective_inspect_torn_canopy_seam",
+        "f1_objective_release_flooded_gutter",
+        "f1_objective_raise_paper_egret_lure",
+        "f1_objective_answer_paper_egret"
+      ]
+    },
+    {
+      "id": "f1_interaction_reveal_spring_trace",
+      "kind": "inspect",
+      "cellId": "f1_cell_canopy_workstation",
+      "objectiveId": "f1_objective_reveal_spring_trace",
+      "selectionId": null,
+      "requiredSelectionObjectiveId": "f1_objective_choose_lane_route",
+      "requiredSelectionId": "f1_choice_lane_canopy",
+      "poseMm": { "x": -3900, "y": -100, "height": 0, "floorLayer": 0 },
+      "radiusMm": 650,
+      "prerequisiteObjectiveIds": []
+    },
+    {
+      "id": "f1_interaction_reveal_spring_trace_from_drain",
+      "kind": "inspect",
+      "cellId": "f1_cell_canopy_workstation",
+      "objectiveId": "f1_objective_reveal_spring_trace",
+      "selectionId": null,
+      "requiredSelectionObjectiveId": "f1_objective_choose_lane_route",
+      "requiredSelectionId": "f1_choice_lane_drain",
+      "poseMm": { "x": -2700, "y": -1700, "height": 0, "floorLayer": 0 },
+      "radiusMm": 650,
+      "prerequisiteObjectiveIds": []
+    },
+    {
+      "id": "f1_interaction_reveal_winter_trace",
+      "kind": "inspect",
+      "cellId": "f1_cell_canopy_workstation",
+      "objectiveId": "f1_objective_reveal_winter_trace",
+      "selectionId": null,
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -3100, "y": -100, "height": 0, "floorLayer": 0 },
+      "radiusMm": 650,
+      "prerequisiteObjectiveIds": []
+    },
+    {
+      "id": "f1_interaction_review_shared_ledger",
+      "kind": "inspect",
+      "cellId": "f1_cell_canopy_workstation",
+      "objectiveId": "f1_objective_review_shared_ledger",
+      "selectionId": null,
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -2300, "y": -100, "height": 0, "floorLayer": 0 },
+      "radiusMm": 650,
+      "prerequisiteObjectiveIds": []
+    },
+    {
+      "id": "f1_interaction_calibrate_rib_spring",
+      "kind": "choose",
+      "cellId": "f1_cell_canopy_workstation",
+      "objectiveId": "f1_objective_choose_rib_calibration",
+      "selectionId": "f1_choice_rib_spring_calibration",
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -1500, "y": 400, "height": 0, "floorLayer": 0 },
+      "radiusMm": 500,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_reveal_spring_trace",
+        "f1_objective_reveal_winter_trace",
+        "f1_objective_review_shared_ledger"
+      ]
+    },
+    {
+      "id": "f1_interaction_calibrate_rib_winter",
+      "kind": "choose",
+      "cellId": "f1_cell_canopy_workstation",
+      "objectiveId": "f1_objective_choose_rib_calibration",
+      "selectionId": "f1_choice_rib_winter_calibration",
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -1500, "y": -600, "height": 0, "floorLayer": 0 },
+      "radiusMm": 500,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_reveal_spring_trace",
+        "f1_objective_reveal_winter_trace",
+        "f1_objective_review_shared_ledger"
+      ]
+    },
+    {
+      "id": "f1_interaction_prime_return_calibration",
+      "kind": "operate",
+      "cellId": "f1_cell_canopy_workstation",
+      "objectiveId": "f1_objective_prime_return_calibration",
+      "selectionId": null,
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -3500, "y": -900, "height": 0, "floorLayer": 0 },
+      "radiusMm": 650,
+      "prerequisiteObjectiveIds": []
+    },
+    {
+      "id": "f1_interaction_open_return_shortcut",
+      "kind": "operate",
+      "cellId": "f1_cell_canopy_workstation",
+      "objectiveId": "f1_objective_open_return_shortcut",
+      "selectionId": null,
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -800, "y": 400, "height": 0, "floorLayer": 0 },
+      "radiusMm": 1400,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_validate_calibration"
+      ]
+    },
+    {
+      "id": "f1_interaction_resolution_subdue",
+      "kind": "choose",
+      "cellId": "f1_cell_return_safe_point",
+      "objectiveId": "f1_objective_choose_resolution",
+      "selectionId": "f1_choice_resolution_subdue",
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": 3300, "y": 1200, "height": 0, "floorLayer": 0 },
+      "radiusMm": 500,
+      "prerequisiteObjectiveIds": []
+    },
+    {
+      "id": "f1_interaction_resolution_restore_shared_mark",
+      "kind": "choose",
+      "cellId": "f1_cell_return_safe_point",
+      "objectiveId": "f1_objective_choose_resolution",
+      "selectionId": "f1_choice_resolution_restore_shared_mark",
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": 4200, "y": 2300, "height": 0, "floorLayer": 0 },
+      "radiusMm": 500,
+      "prerequisiteObjectiveIds": []
+    },
+    {
+      "id": "f1_interaction_return_to_shen_yan",
+      "kind": "talk",
+      "cellId": "f1_cell_return_safe_point",
+      "objectiveId": "f1_objective_return_to_shen_yan",
+      "selectionId": null,
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "poseMm": { "x": -10500, "y": -600, "height": 0, "floorLayer": 0 },
+      "radiusMm": 1000,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_choose_resolution"
+      ]
+    }
+  ],
+  "questEncounterActivations": [
+    {
+      "id": "f1_activation_training_windward_guard_rig",
+      "beatId": "f1_beat_shen_yan_training",
+      "triggerObjectiveId": "f1_objective_take_eavesguard_mark",
+      "requiredSelectionObjectiveId": "f1_objective_choose_training_lane",
+      "requiredSelectionId": "f1_choice_training_windward_lane",
+      "mode": "replace",
+      "encounterId": "f1_encounter_umbrella_lane_bootstrap",
+      "actorKeys": [104],
+      "actorPlacements": [
+        {
+          "actorKey": 104,
+          "poseMm": { "x": -4100, "y": 2300, "height": 0, "floorLayer": 0 },
+          "formationSlot": 0
+        }
+      ]
+    },
+    {
+      "id": "f1_activation_training_leeward_guard_rig",
+      "beatId": "f1_beat_shen_yan_training",
+      "triggerObjectiveId": "f1_objective_take_eavesguard_mark",
+      "requiredSelectionObjectiveId": "f1_objective_choose_training_lane",
+      "requiredSelectionId": "f1_choice_training_leeward_lane",
+      "mode": "replace",
+      "encounterId": "f1_encounter_umbrella_lane_bootstrap",
+      "actorKeys": [104],
+      "actorPlacements": [
+        {
+          "actorKey": 104,
+          "poseMm": { "x": -3900, "y": -2500, "height": 0, "floorLayer": 0 },
+          "formationSlot": 0
+        }
+      ]
+    },
+    {
+      "id": "f1_activation_training_windward_eavesguard_target",
+      "beatId": "f1_beat_shen_yan_training",
+      "triggerObjectiveId": "f1_objective_commit_eavesguard_heavy",
+      "requiredSelectionObjectiveId": "f1_objective_choose_training_lane",
+      "requiredSelectionId": "f1_choice_training_windward_lane",
+      "mode": "replace",
+      "encounterId": "f1_encounter_umbrella_lane_bootstrap",
+      "actorKeys": [107],
+      "actorPlacements": [
+        {
+          "actorKey": 107,
+          "poseMm": { "x": -4000, "y": 2000, "height": 0, "floorLayer": 0 },
+          "formationSlot": 0
+        }
+      ]
+    },
+    {
+      "id": "f1_activation_training_leeward_eavesguard_target",
+      "beatId": "f1_beat_shen_yan_training",
+      "triggerObjectiveId": "f1_objective_commit_eavesguard_heavy",
+      "requiredSelectionObjectiveId": "f1_objective_choose_training_lane",
+      "requiredSelectionId": "f1_choice_training_leeward_lane",
+      "mode": "replace",
+      "encounterId": "f1_encounter_umbrella_lane_bootstrap",
+      "actorKeys": [107],
+      "actorPlacements": [
+        {
+          "actorKey": 107,
+          "poseMm": { "x": -3800, "y": -2100, "height": 0, "floorLayer": 0 },
+          "formationSlot": 0
+        }
+      ]
+    },
+    {
+      "id": "f1_activation_training_flower_turn_rig",
+      "beatId": "f1_beat_shen_yan_training",
+      "triggerObjectiveId": "f1_objective_review_eavesguard_with_shen_yan",
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "mode": "replace",
+      "encounterId": "f1_encounter_umbrella_lane_bootstrap",
+      "actorKeys": [108],
+      "actorPlacements": [
+        {
+          "actorKey": 108,
+          "poseMm": { "x": -3300, "y": 1200, "height": 700, "floorLayer": 0 },
+          "formationSlot": 2
+        }
+      ]
+    },
+    {
+      "id": "f1_activation_training_flower_turn_target",
+      "beatId": "f1_beat_shen_yan_training",
+      "triggerObjectiveId": "f1_objective_commit_flower_turn_heavy",
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "mode": "replace",
+      "encounterId": "f1_encounter_umbrella_lane_bootstrap",
+      "actorKeys": [109],
+      "actorPlacements": [
+        {
+          "actorKey": 109,
+          "poseMm": { "x": -3000, "y": -800, "height": 700, "floorLayer": 0 },
+          "formationSlot": 2
+        }
+      ]
+    },
+    {
+      "id": "f1_activation_umbrella_lane_first_encounter",
+      "beatId": "f1_beat_umbrella_lane_first_encounter",
+      "triggerObjectiveId": null,
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "mode": "replace",
+      "encounterId": "f1_encounter_umbrella_lane_bootstrap",
+      "actorKeys": [101, 102],
+      "actorPlacements": [
+        {
+          "actorKey": 101,
+          "poseMm": { "x": -4000, "y": -2600, "height": 0, "floorLayer": 0 },
+          "formationSlot": 1
+        },
+        {
+          "actorKey": 102,
+          "poseMm": { "x": -3000, "y": -400, "height": 0, "floorLayer": 0 },
+          "formationSlot": 5
+        }
+      ]
+    },
+    {
+      "id": "f1_activation_umbrella_lane_paper_egret",
+      "beatId": "f1_beat_umbrella_lane_first_encounter",
+      "triggerObjectiveId": "f1_objective_raise_paper_egret_lure",
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "mode": "replace",
+      "encounterId": "f1_encounter_umbrella_lane_bootstrap",
+      "actorKeys": [103],
+      "actorPlacements": [
+        {
+          "actorKey": 103,
+          "poseMm": { "x": -1500, "y": 900, "height": 700, "floorLayer": 0 },
+          "formationSlot": 2
+        }
+      ]
+    },
+    {
+      "id": "f1_activation_canopy_return_encounter",
+      "beatId": "f1_beat_canopy_return_encounter",
+      "triggerObjectiveId": null,
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "mode": "replace",
+      "encounterId": "f1_encounter_umbrella_lane_bootstrap",
+      "actorKeys": [101, 102, 103],
+      "actorPlacements": [
+        {
+          "actorKey": 101,
+          "poseMm": { "x": -2500, "y": -1800, "height": 0, "floorLayer": 0 },
+          "formationSlot": 0
+        },
+        {
+          "actorKey": 102,
+          "poseMm": { "x": -900, "y": -300, "height": 0, "floorLayer": 0 },
+          "formationSlot": 3
+        },
+        {
+          "actorKey": 103,
+          "poseMm": { "x": -500, "y": 1700, "height": 700, "floorLayer": 0 },
+          "formationSlot": 6
+        }
+      ]
+    },
+    {
+      "id": "f1_activation_canopy_return_spring_reinforcement",
+      "beatId": "f1_beat_canopy_return_encounter",
+      "triggerObjectiveId": "f1_objective_prime_return_calibration",
+      "requiredSelectionObjectiveId": "f1_objective_choose_rib_calibration",
+      "requiredSelectionId": "f1_choice_rib_spring_calibration",
+      "mode": "reinforce",
+      "encounterId": "f1_encounter_umbrella_lane_bootstrap",
+      "actorKeys": [106],
+      "actorPlacements": [
+        {
+          "actorKey": 106,
+          "poseMm": { "x": 500, "y": 1400, "height": 0, "floorLayer": 0 },
+          "formationSlot": 5
+        }
+      ]
+    },
+    {
+      "id": "f1_activation_canopy_return_winter_reinforcement",
+      "beatId": "f1_beat_canopy_return_encounter",
+      "triggerObjectiveId": "f1_objective_prime_return_calibration",
+      "requiredSelectionObjectiveId": "f1_objective_choose_rib_calibration",
+      "requiredSelectionId": "f1_choice_rib_winter_calibration",
+      "mode": "reinforce",
+      "encounterId": "f1_encounter_umbrella_lane_bootstrap",
+      "actorKeys": [105],
+      "actorPlacements": [
+        {
+          "actorKey": 105,
+          "poseMm": { "x": 500, "y": 1400, "height": 700, "floorLayer": 0 },
+          "formationSlot": 5
+        }
+      ]
+    },
+    {
+      "id": "f1_activation_four_seasons_wraith",
+      "beatId": "f1_beat_four_seasons_wraith",
+      "triggerObjectiveId": null,
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "mode": "replace",
+      "encounterId": "f1_encounter_umbrella_lane_bootstrap",
+      "actorKeys": [201],
+      "actorPlacements": [
+        {
+          "actorKey": 201,
+          "poseMm": { "x": 4000, "y": 1900, "height": 0, "floorLayer": 0 },
+          "formationSlot": 4
+        }
+      ]
+    }
+  ],
+  "questBossPhases": [
+    {
+      "id": "f1_boss_phase_spring",
+      "objectiveId": "f1_objective_survive_spring_phase",
+      "actorKey": 201,
+      "healthPercent": 75,
+      "nextStanceId": "stance_wraith_summer"
+    },
+    {
+      "id": "f1_boss_phase_summer",
+      "objectiveId": "f1_objective_survive_summer_phase",
+      "actorKey": 201,
+      "healthPercent": 50,
+      "nextStanceId": "stance_wraith_autumn"
+    },
+    {
+      "id": "f1_boss_phase_autumn",
+      "objectiveId": "f1_objective_survive_autumn_phase",
+      "actorKey": 201,
+      "healthPercent": 25,
+      "nextStanceId": "stance_wraith_winter"
+    },
+    {
+      "id": "f1_boss_phase_winter",
+      "objectiveId": "f1_objective_survive_winter_phase",
+      "actorKey": 201,
+      "healthPercent": 0,
+      "nextStanceId": null
+    }
+  ],
+  "questResolutionRewards": [
+    {
+      "id": "f1_resolution_reward_subdue",
+      "objectiveId": "f1_objective_choose_resolution",
+      "selectionId": "f1_choice_resolution_subdue",
+      "rewardId": "f1_reward_sealed_mixed_umbrella",
+      "rewardDedupKey": "f1_claim_resolution_subdue"
+    },
+    {
+      "id": "f1_resolution_reward_restore_shared_mark",
+      "objectiveId": "f1_objective_choose_resolution",
+      "selectionId": "f1_choice_resolution_restore_shared_mark",
+      "rewardId": "f1_reward_joint_workshop_formula",
+      "rewardDedupKey": "f1_claim_resolution_restore_shared_mark"
+    }
+  ],
+  "questCombatTriggers": [
+    {
+      "id": "f1_trigger_eavesguard_counter",
+      "kind": "player_hit_guarded",
+      "objectiveId": "f1_objective_eavesguard_counter",
+      "requiredStanceId": "stance_eavesguard",
+      "requiredAbilityId": null,
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_take_eavesguard_mark"
+      ]
+    },
+    {
+      "id": "f1_trigger_eavesguard_heavy",
+      "kind": "player_ability_started",
+      "objectiveId": "f1_objective_commit_eavesguard_heavy",
+      "requiredStanceId": "stance_eavesguard",
+      "requiredAbilityId": "ability_eavesguard_heavy",
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_eavesguard_counter"
+      ]
+    },
+    {
+      "id": "f1_trigger_enter_flower_turn",
+      "kind": "player_stance_changed",
+      "objectiveId": "f1_objective_enter_flower_turn",
+      "requiredStanceId": "stance_flower_turn",
+      "requiredAbilityId": null,
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_review_eavesguard_with_shen_yan"
+      ]
+    },
+    {
+      "id": "f1_trigger_flower_turn_counter",
+      "kind": "player_hit_evaded",
+      "objectiveId": "f1_objective_flower_turn_counter",
+      "requiredStanceId": "stance_flower_turn",
+      "requiredAbilityId": null,
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_cross_flower_turn_line"
+      ]
+    },
+    {
+      "id": "f1_trigger_flower_turn_light",
+      "kind": "player_ability_started",
+      "objectiveId": "f1_objective_commit_flower_turn_light",
+      "requiredStanceId": "stance_flower_turn",
+      "requiredAbilityId": "ability_flower_light",
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_flower_turn_counter"
+      ]
+    },
+    {
+      "id": "f1_trigger_flower_turn_heavy",
+      "kind": "player_ability_started",
+      "objectiveId": "f1_objective_commit_flower_turn_heavy",
+      "requiredStanceId": "stance_flower_turn",
+      "requiredAbilityId": "ability_flower_heavy",
+      "requiredSelectionObjectiveId": null,
+      "requiredSelectionId": null,
+      "prerequisiteObjectiveIds": [
+        "f1_objective_commit_flower_turn_light"
+      ]
+    },
+    {
+      "id": "f1_trigger_return_spring_calibration_heavy",
+      "kind": "player_ability_started",
+      "objectiveId": "f1_objective_demonstrate_rib_calibration",
+      "requiredStanceId": "stance_eavesguard",
+      "requiredAbilityId": "ability_eavesguard_heavy",
+      "requiredSelectionObjectiveId": "f1_objective_choose_rib_calibration",
+      "requiredSelectionId": "f1_choice_rib_spring_calibration",
+      "prerequisiteObjectiveIds": [
+        "f1_objective_prime_return_calibration"
+      ]
+    },
+    {
+      "id": "f1_trigger_return_winter_calibration_light",
+      "kind": "player_ability_started",
+      "objectiveId": "f1_objective_demonstrate_rib_calibration",
+      "requiredStanceId": "stance_flower_turn",
+      "requiredAbilityId": "ability_flower_light",
+      "requiredSelectionObjectiveId": "f1_objective_choose_rib_calibration",
+      "requiredSelectionId": "f1_choice_rib_winter_calibration",
+      "prerequisiteObjectiveIds": [
+        "f1_objective_prime_return_calibration"
+      ]
+    }
+  ],
+  "questCombatOutcomes": [
+    {
+      "id": "f1_outcome_break_eavesguard_target",
+      "kind": "hostile_archetype_defeated",
+      "objectiveId": "f1_objective_break_eavesguard_target",
+      "archetypeId": "f1_training_eavesguard_target",
+      "requiredCount": 1
+    },
+    {
+      "id": "f1_outcome_break_flower_turn_target",
+      "kind": "hostile_archetype_defeated",
+      "objectiveId": "f1_objective_break_flower_turn_target",
+      "archetypeId": "f1_training_flower_turn_target",
+      "requiredCount": 1
+    },
+    {
+      "id": "f1_outcome_defeat_leaking_dolls",
+      "kind": "hostile_archetype_defeated",
+      "objectiveId": "f1_objective_defeat_leaking_dolls",
+      "archetypeId": "jn_enemy_leaking_umbrella_doll",
+      "requiredCount": 2
+    },
+    {
+      "id": "f1_outcome_answer_paper_egret",
+      "kind": "hostile_archetype_defeated",
+      "objectiveId": "f1_objective_answer_paper_egret",
+      "archetypeId": "jn_enemy_faded_paper_egret",
+      "requiredCount": 1
+    },
+    {
+      "id": "f1_outcome_validate_return_calibration",
+      "kind": "all_hostiles_defeated",
+      "objectiveId": "f1_objective_validate_calibration",
+      "archetypeId": null,
+      "requiredCount": 0
+    }
+  ],
+  "questUiCues": [
+    {
+      "id": "ui.f1.rain.choice.arrival-clue",
+      "beatId": "f1_beat_rain_ferry_arrival",
+      "sources": ["choice_available", "interaction_feedback"],
+      "objectiveIds": ["f1_objective_choose_arrival_clue"],
+      "resultSelectors": [],
+      "attemptEvidenceRules": [
+        {
+          "source": "choice_available",
+          "objectiveId": "f1_objective_choose_arrival_clue",
+          "primaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "secondaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "classification": "qualifying_first_visit"
+        },
+        {
+          "source": "interaction_feedback",
+          "objectiveId": "f1_objective_choose_arrival_clue",
+          "primaryResult": {
+            "resultId": "f1_interaction_arrival_clue_drowned_manifest",
+            "status": "ignored_repeat",
+            "rejectionReason": "selection_already_committed"
+          },
+          "secondaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "classification": "repeat_no_progress"
+        }
+      ]
+    },
+    {
+      "id": "ui.f1.rain.choice.mooring-method",
+      "beatId": "f1_beat_rain_ferry_arrival",
+      "sources": ["choice_available"],
+      "objectiveIds": ["f1_objective_choose_mooring_method"],
+      "resultSelectors": [],
+      "attemptEvidenceRules": [
+        {
+          "source": "choice_available",
+          "objectiveId": "f1_objective_choose_mooring_method",
+          "primaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "secondaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "classification": "qualifying_craft_decision"
+        }
+      ]
+    },
+    {
+      "id": "ui.f1.rain.mooring-load",
+      "beatId": "f1_beat_rain_ferry_arrival",
+      "sources": ["interaction_feedback"],
+      "objectiveIds": ["f1_objective_secure_ferry_mooring"],
+      "resultSelectors": [
+        {
+          "source": "interaction_feedback",
+          "objectiveId": "f1_objective_secure_ferry_mooring",
+          "primaryResultId": "f1_interaction_choose_quick_hitch",
+          "secondaryResultId": null,
+          "polarityOverride": "negative"
+        }
+      ],
+      "attemptEvidenceRules": [
+        {
+          "source": "interaction_feedback",
+          "objectiveId": "f1_objective_secure_ferry_mooring",
+          "primaryResult": {
+            "resultId": "f1_interaction_lock_cross_belay",
+            "status": "accepted",
+            "rejectionReason": "none"
+          },
+          "secondaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "classification": "qualifying_craft_decision"
+        },
+        {
+          "source": "interaction_feedback",
+          "objectiveId": "f1_objective_secure_ferry_mooring",
+          "primaryResult": {
+            "resultId": "f1_interaction_choose_quick_hitch",
+            "status": "accepted",
+            "rejectionReason": "none"
+          },
+          "secondaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "classification": "qualifying_error_feedback"
+        }
+      ]
+    },
+    {
+      "id": "ui.f1.rain.bell-feedback",
+      "beatId": "f1_beat_rain_ferry_arrival",
+      "sources": ["interaction_feedback"],
+      "objectiveIds": ["f1_objective_sound_workshop_bell"],
+      "resultSelectors": [],
+      "attemptEvidenceRules": [
+        {
+          "source": "interaction_feedback",
+          "objectiveId": "f1_objective_sound_workshop_bell",
+          "primaryResult": {
+            "resultId": "f1_interaction_sound_workshop_bell",
+            "status": "rejected",
+            "rejectionReason": "prerequisite_incomplete"
+          },
+          "secondaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "classification": "qualifying_wrong_order_feedback"
+        },
+        {
+          "source": "interaction_feedback",
+          "objectiveId": "f1_objective_sound_workshop_bell",
+          "primaryResult": {
+            "resultId": "f1_interaction_sound_workshop_bell",
+            "status": "accepted",
+            "rejectionReason": "none"
+          },
+          "secondaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "classification": "qualifying_craft_confirmation"
+        }
+      ]
+    },
+    {
+      "id": "ui.f1.training.choice.lane",
+      "beatId": "f1_beat_shen_yan_training",
+      "sources": ["choice_available"],
+      "objectiveIds": ["f1_objective_choose_training_lane"],
+      "resultSelectors": [],
+      "attemptEvidenceRules": [
+        {
+          "source": "choice_available",
+          "objectiveId": "f1_objective_choose_training_lane",
+          "primaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "secondaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "classification": "qualifying_dialogue_decision"
+        }
+      ]
+    },
+    {
+      "id": "ui.f1.training.phase",
+      "beatId": "f1_beat_shen_yan_training",
+      "sources": ["objective_state"],
+      "objectiveIds": [
+        "f1_objective_eavesguard_counter",
+        "f1_objective_flower_turn_counter"
+      ],
+      "resultSelectors": [],
+      "attemptEvidenceRules": [
+        {
+          "source": "objective_state",
+          "objectiveId": "f1_objective_eavesguard_counter",
+          "primaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "secondaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "classification": "qualifying_training_risk"
+        },
+        {
+          "source": "objective_state",
+          "objectiveId": "f1_objective_flower_turn_counter",
+          "primaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "secondaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "classification": "qualifying_training_risk"
+        }
+      ]
+    },
+    {
+      "id": "ui.f1.training.action-proof",
+      "beatId": "f1_beat_shen_yan_training",
+      "sources": ["combat_feedback"],
+      "objectiveIds": [
+        "f1_objective_eavesguard_counter",
+        "f1_objective_commit_eavesguard_heavy",
+        "f1_objective_break_eavesguard_target",
+        "f1_objective_enter_flower_turn",
+        "f1_objective_flower_turn_counter",
+        "f1_objective_commit_flower_turn_light",
+        "f1_objective_commit_flower_turn_heavy",
+        "f1_objective_break_flower_turn_target"
+      ],
+      "resultSelectors": [
+        {
+          "source": "combat_feedback",
+          "objectiveId": "f1_objective_break_eavesguard_target",
+          "primaryResultId": "f1_trigger_eavesguard_heavy",
+          "secondaryResultId": "f1_outcome_break_eavesguard_target",
+          "polarityOverride": "none"
+        },
+        {
+          "source": "combat_feedback",
+          "objectiveId": "f1_objective_break_flower_turn_target",
+          "primaryResultId": "f1_trigger_flower_turn_heavy",
+          "secondaryResultId": "f1_outcome_break_flower_turn_target",
+          "polarityOverride": "none"
+        }
+      ],
+      "attemptEvidenceRules": [
+        {
+          "source": "combat_feedback",
+          "objectiveId": "f1_objective_eavesguard_counter",
+          "primaryResult": {
+            "resultId": "f1_trigger_eavesguard_counter",
+            "status": "accepted",
+            "rejectionReason": "none"
+          },
+          "secondaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "classification": "qualifying_combat_proof"
+        },
+        {
+          "source": "combat_feedback",
+          "objectiveId": "f1_objective_break_flower_turn_target",
+          "primaryResult": {
+            "resultId": "f1_trigger_flower_turn_heavy",
+            "status": "accepted",
+            "rejectionReason": "none"
+          },
+          "secondaryResult": {
+            "resultId": "f1_outcome_break_flower_turn_target",
+            "status": "rejected",
+            "rejectionReason": "wrong_target"
+          },
+          "classification": "qualifying_combat_feedback"
+        }
+      ]
+    },
+    {
+      "id": "ui.f1.training.recovery",
+      "beatId": "f1_beat_shen_yan_training",
+      "sources": ["recovery_offer", "recovery_resume"],
+      "objectiveIds": [
+        "f1_objective_eavesguard_counter",
+        "f1_objective_flower_turn_counter"
+      ],
+      "resultSelectors": [],
+      "attemptEvidenceRules": [
+        {
+          "source": "recovery_offer",
+          "objectiveId": "f1_objective_eavesguard_counter",
+          "primaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "secondaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "classification": "failure_retry_excluded"
+        },
+        {
+          "source": "recovery_resume",
+          "objectiveId": "f1_objective_eavesguard_counter",
+          "primaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "secondaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "classification": "resume_no_duplicate_progress"
+        },
+        {
+          "source": "recovery_offer",
+          "objectiveId": "f1_objective_flower_turn_counter",
+          "primaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "secondaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "classification": "failure_retry_excluded"
+        },
+        {
+          "source": "recovery_resume",
+          "objectiveId": "f1_objective_flower_turn_counter",
+          "primaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "secondaryResult": {
+            "resultId": null,
+            "status": "not_applicable",
+            "rejectionReason": "none"
+          },
+          "classification": "resume_no_duplicate_progress"
+        }
+      ]
+    }
+  ],
+  "paddingPolicy": {
+    "repeatableCombatCountsTowardTarget": false,
+    "forcedWaitingCountsTowardTarget": false,
+    "failureRetryCountsTowardTarget": false
+  },
+  "ports": [
+    {
+      "name": "IContentDefinitionProvider",
+      "owner": "content-core",
+      "status": "bootstrap_implemented"
+    },
+    { "name": "IWorldCellSource", "owner": "runtime", "status": "reserved" },
+    {
+      "name": "ICombatResolver",
+      "owner": "gameplay",
+      "status": "bootstrap_implemented"
+    },
+    {
+      "name": "ICombatEventSink",
+      "owner": "gameplay",
+      "status": "bootstrap_implemented"
+    },
+    {
+      "name": "IEncounterDirector",
+      "owner": "gameplay",
+      "status": "bootstrap_implemented"
+    },
+    {
+      "name": "IQuestRuntime",
+      "owner": "gameplay",
+      "status": "bootstrap_implemented"
+    },
+    { "name": "ISnapshotContributor", "owner": "runtime", "status": "reserved" },
+    {
+      "name": "IPresentationEventSink",
+      "owner": "presentation",
+      "status": "reserved"
+    },
+    { "name": "IAssetResolver", "owner": "presentation", "status": "reserved" }
+  ]
+}

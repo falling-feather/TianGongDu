@@ -1,0 +1,239 @@
+{
+  "$schema": "./toolchain-lock.schema.json",
+  "schemaVersion": "1.0.0",
+  "status": "locked-and-validated",
+  "target": "windows-x86_64-web-single",
+  "g1EvidenceBuildId": "g1-gh-29152364317-1",
+  "policy": {
+    "cacheRoot": ".cache/toolchains",
+    "downloadsRoot": ".cache/downloads",
+    "officialSourcesOnly": true,
+    "exactVersionsOnly": true,
+    "persistentSystemMutation": "forbidden",
+    "selectionNotes": [
+      "Emscripten 3.1.73 is pinned to Axmol 2.11.4's documented Windows browser-debug compatibility line.",
+      "CMake 4.2.1 was rejected because it exited without diagnostics on this Unicode Windows source path; 4.3.1 passed MSVC and Clang Debug/Release and remains gated on the Axmol Web build.",
+      "axslcc 1.14.0 is the exact shader compiler declared by Axmol 2.11.4's immutable 1k/build.profiles.",
+      "MSVC 19.43.34809 is selected through the exact Visual Studio component and 14.43.34808 toolset directory. The VS 17.13 default component and VS 17.14 out-of-support component carry two observed, exact cl.exe hashes; both are allowlisted and any third hash is rejected."
+    ],
+    "promotionRequirements": [
+      "all-artifacts-sha256-verified",
+      "windows-msvc-debug-and-release-green",
+      "windows-clang-debug-and-release-green",
+      "web-single-debug-and-release-green",
+      "browser-lifecycle-and-context-restore-green",
+      "g1-evidence-build-id-recorded"
+    ]
+  },
+  "tools": {
+    "axmol": {
+      "version": "2.11.4",
+      "integrity": "sha256:eaab7130f6e48a72bec14dda6a34622784ee3545e8cad96d71bebd4d6fc9a03f",
+      "integrityScope": "archive",
+      "provenance": {
+        "kind": "official-release-archive",
+        "url": "https://github.com/axmolengine/axmol/releases/download/v2.11.4/axmol-2.11.4.zip",
+        "revision": "b14941e6f50a0ce12489bd8f57041e093fb58819",
+        "expectedSizeBytes": 243581478,
+        "parent": null
+      },
+      "cachePath": ".cache/downloads/axmol-2.11.4.zip",
+      "installRoot": ".cache/toolchains/axmol-2.11.4-release/axmol-2.11.4",
+      "executable": null,
+      "artifactVerified": true
+    },
+    "emscripten": {
+      "version": "3.1.73",
+      "integrity": "sha256:d76003fad2146ad1f2289e8b251fbc359406ced0857f141a41f15149c2138302",
+      "integrityScope": "archive",
+      "provenance": {
+        "kind": "official-release-archive",
+        "url": "https://storage.googleapis.com/webassembly/emscripten-releases-builds/win/b363a836e75a245c548b7a6a021822d8c9e4c6df/wasm-binaries.zip",
+        "revision": "b363a836e75a245c548b7a6a021822d8c9e4c6df",
+        "expectedSizeBytes": 527247772,
+        "parent": "emsdk-manager@3.1.73"
+      },
+      "cachePath": ".cache/toolchains/emsdk-manager-3.1.73/emsdk-3.1.73/downloads/b363a836e75a245c548b7a6a021822d8c9e4c6df-wasm-binaries.zip",
+      "installRoot": ".cache/toolchains/emsdk-manager-3.1.73/emsdk-3.1.73/upstream",
+      "executable": "emscripten/emcc.bat",
+      "artifactVerified": true
+    },
+    "cmake": {
+      "version": "4.3.1",
+      "integrity": "sha256:03a610be931546474e46a442d171ef10532f4fc847de9cf76b7a8065bbef6a23",
+      "integrityScope": "archive",
+      "provenance": {
+        "kind": "official-release-archive",
+        "url": "https://github.com/Kitware/CMake/releases/download/v4.3.1/cmake-4.3.1-windows-x86_64.zip",
+        "revision": "v4.3.1",
+        "expectedSizeBytes": 52955398,
+        "parent": null
+      },
+      "cachePath": ".cache/downloads/cmake-4.3.1-windows-x86_64.zip",
+      "installRoot": ".cache/toolchains/cmake-4.3.1-windows-x86_64/cmake-4.3.1-windows-x86_64",
+      "executable": "bin/cmake.exe",
+      "artifactVerified": true
+    },
+    "ninja": {
+      "version": "1.13.2",
+      "integrity": "sha256:07fc8261b42b20e71d1720b39068c2e14ffcee6396b76fb7a795fb460b78dc65",
+      "integrityScope": "archive",
+      "provenance": {
+        "kind": "official-release-archive",
+        "url": "https://github.com/ninja-build/ninja/releases/download/v1.13.2/ninja-win.zip",
+        "revision": "v1.13.2",
+        "expectedSizeBytes": 291570,
+        "parent": null
+      },
+      "cachePath": ".cache/downloads/ninja-1.13.2-win.zip",
+      "installRoot": ".cache/toolchains/ninja-1.13.2",
+      "executable": "ninja.exe",
+      "artifactVerified": true
+    },
+    "clang": {
+      "version": "19.1.7",
+      "integrity": "sha256:f19ae5bc4823ac69ec01dc2ded503ec80a04ad2208dda1595d1f0413c148ef90",
+      "integrityScope": "release-binary",
+      "provenance": {
+        "kind": "official-release-binary",
+        "url": "https://github.com/llvm/llvm-project/releases/download/llvmorg-19.1.7/LLVM-19.1.7-win64.exe",
+        "revision": "llvmorg-19.1.7",
+        "expectedSizeBytes": 352071563,
+        "parent": null
+      },
+      "cachePath": ".cache/downloads/LLVM-19.1.7-win64.exe",
+      "installRoot": ".cache/toolchains/llvm-19.1.7",
+      "executable": "bin/clang-cl.exe",
+      "artifactVerified": true
+    },
+    "msvc": {
+      "version": "19.43.34809",
+      "integrity": "sha256:249c9e0663ff869998971901ff102fefd01eb472f02de05c1f47909d9e2c9e8b",
+      "integrityAlternates": [
+        "sha256:9beec04038c74406e4c055593edc07ddda7b166272d77cbf85507d5a6be29ff0"
+      ],
+      "integrityScope": "executable",
+      "provenance": {
+        "kind": "installed-component",
+        "url": null,
+        "revision": "VS-2022-17.13.35828.75-default-or-17.14.37411.7-component/MSVC-14.43.34808",
+        "expectedSizeBytes": 867912,
+        "parent": null
+      },
+      "cachePath": null,
+      "installRoot": null,
+      "executable": "vswhere:VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/cl.exe",
+      "componentId": "Microsoft.VisualStudio.Component.VC.14.43.17.13.x86.x64",
+      "artifactVerified": true
+    },
+    "node": {
+      "version": "20.18.0",
+      "integrity": "sha256:35b7c95a379beb606f5798ed83081690df13190077630b234163c6607aa4cc94",
+      "integrityScope": "executable",
+      "provenance": {
+        "kind": "bundled-by-parent",
+        "url": null,
+        "revision": "node-v20.18.0-win-x64.zip",
+        "expectedSizeBytes": 69804184,
+        "parent": "emsdk-manager@3.1.73"
+      },
+      "cachePath": null,
+      "installRoot": ".cache/toolchains/emsdk-manager-3.1.73/emsdk-3.1.73/node/20.18.0_64bit",
+      "executable": "bin/node.exe",
+      "artifactVerified": true
+    },
+    "python": {
+      "version": "3.9.2-nuget",
+      "integrity": "sha256:786e68ded8af18f36274d78ea00ff11289c27107dd9f8fdd2f6b4732a3b8a2da",
+      "integrityScope": "executable",
+      "provenance": {
+        "kind": "bundled-by-parent",
+        "url": null,
+        "revision": "python-3.9.2-4-amd64+pywin32.zip",
+        "expectedSizeBytes": 101552,
+        "parent": "emsdk-manager@3.1.73"
+      },
+      "cachePath": null,
+      "installRoot": ".cache/toolchains/emsdk-manager-3.1.73/emsdk-3.1.73/python/3.9.2-nuget_64bit",
+      "executable": "python.exe",
+      "artifactVerified": true
+    }
+  },
+  "supportArtifacts": {
+    "emsdkManager": {
+      "version": "3.1.73",
+      "integrity": "sha256:d56a6da13b46e3962250113232a8019d52882996f05a252f4c6116cc3c19ef1c",
+      "integrityScope": "archive",
+      "provenance": {
+        "kind": "official-release-archive",
+        "url": "https://github.com/emscripten-core/emsdk/archive/refs/tags/3.1.73.zip",
+        "revision": "6abe5123c34a7751a2d5b679e856b2591ba04145",
+        "expectedSizeBytes": 146276,
+        "parent": null
+      },
+      "cachePath": ".cache/downloads/emsdk-manager-3.1.73.zip",
+      "installRoot": ".cache/toolchains/emsdk-manager-3.1.73/emsdk-3.1.73",
+      "artifactVerified": true
+    },
+    "llvmDetachedSignature": {
+      "version": "19.1.7-win64",
+      "integrity": "sha256:c6a4a4630dcdb3c0ff1675925a63892fa722af5e47cf8c624fac9d812e103d6b",
+      "integrityScope": "release-binary",
+      "provenance": {
+        "kind": "official-release-binary",
+        "url": "https://github.com/llvm/llvm-project/releases/download/llvmorg-19.1.7/LLVM-19.1.7-win64.exe.sig",
+        "revision": "signer:B6C8F98282B944E3B0D5C2530FC3042E345AD05D",
+        "expectedSizeBytes": 543,
+        "parent": "llvmReleaseKeys"
+      },
+      "cachePath": ".cache/downloads/LLVM-19.1.7-win64.exe.sig",
+      "installRoot": null,
+      "artifactVerified": true
+    },
+    "llvmReleaseKeys": {
+      "version": "snapshot-f38bd19b7f2d",
+      "integrity": "sha256:f38bd19b7f2d22cafa755841e6ce9375b9a2e6d41f7b974e4953d6b084839001",
+      "integrityScope": "release-binary",
+      "provenance": {
+        "kind": "official-release-binary",
+        "url": "https://releases.llvm.org/release-keys.asc",
+        "revision": "contains:B6C8F98282B944E3B0D5C2530FC3042E345AD05D",
+        "expectedSizeBytes": 13300,
+        "parent": null
+      },
+      "cachePath": ".cache/downloads/llvm-release-keys.asc",
+      "installRoot": null,
+      "artifactVerified": true
+    },
+    "sevenZip": {
+      "version": "23.01",
+      "integrity": "sha256:67339c1468e6180e2356bc6e077ff8ca577781d9a53cd604e4941b227c6127fc",
+      "integrityScope": "archive",
+      "provenance": {
+        "kind": "official-release-archive",
+        "url": "https://github.com/simdsoft/1kiss/releases/download/devtools/7z2301-x64.zip",
+        "revision": "axmol-2.11.4-1kiss-devtools",
+        "expectedSizeBytes": 2476550,
+        "parent": "axmol@2.11.4"
+      },
+      "cachePath": ".cache/downloads/7z2301-x64.zip",
+      "installRoot": ".cache/toolchains/7z2301-x64/7z2301-x64",
+      "artifactVerified": true
+    },
+    "axslcc": {
+      "version": "1.14.0",
+      "integrity": "sha256:5ea1ae25517a14a81b578836563837fddcb3feca005581761446f3e75986e828",
+      "integrityScope": "archive",
+      "provenance": {
+        "kind": "official-release-archive",
+        "url": "https://github.com/axmolengine/axslcc/releases/download/v1.14.0/axslcc-1.14.0-win64.zip",
+        "revision": "v1.14.0",
+        "expectedSizeBytes": 5796948,
+        "parent": "axmol@2.11.4"
+      },
+      "cachePath": ".cache/downloads/axslcc-1.14.0-win64.zip",
+      "installRoot": ".cache/toolchains/axmol-2.11.4-release/axmol-2.11.4/tools/external/axslcc",
+      "artifactVerified": true
+    }
+  }
+}

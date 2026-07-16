@@ -1,8 +1,17 @@
 {
   "$schema": "../schemas/technical-baseline.schema.json",
   "schemaVersion": "1.0.0",
-  "decisionVersion": "2.2.0",
+  "decisionVersion": "2.2.1",
   "productTarget": "browser-first-cross-platform-action-rpg",
+  "experiencePresentation": {
+    "viewModel": "2.5d-oblique-panoramic",
+    "primaryGuidance": "douzhanshen",
+    "secondaryReadabilityReference": "warm-snow",
+    "gameplaySpace": "ground-plane-xy-plus-elevation-and-floor-layer",
+    "groundPlaneDepthMovement": true,
+    "cameraControl": "fixed-or-authored-limited-no-free-orbit",
+    "referenceUseBoundary": "high-level-design-language-only"
+  },
   "gameCore": {
     "language": "C++20",
     "simulationHz": 60,
@@ -21,7 +30,7 @@
   "toolchainLock": {
     "requiredByGate": "G1",
     "manifestPath": "toolchains/toolchain-lock.json",
-    "status": "planned-not-locked"
+    "status": "locked-and-validated"
   },
   "browserVariants": [
     {

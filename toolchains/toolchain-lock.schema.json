@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tiangongdu.example/schemas/toolchain-lock.schema.json",
+  "title": "TianGongDu G1 Toolchain Lock",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "target",
+    "g1EvidenceBuildId",
+    "policy",
+    "tools",
+    "supportArtifacts"
+  ],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "const": "1.0.0" },
+    "status": {
+      "enum": ["candidate-being-validated", "locked-and-validated"]
+    },
+    "target": { "const": "windows-x86_64-web-single" },
+    "g1EvidenceBuildId": {
+      "type": ["string", "null"]
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cacheRoot",
+        "downloadsRoot",
+        "officialSourcesOnly",
+        "exactVersionsOnly",
+        "persistentSystemMutation",
+        "selectionNotes",
+        "promotionRequirements"
+      ],
+      "properties": {
+        "cacheRoot": { "const": ".cache/toolchains" },
+        "downloadsRoot": { "const": ".cache/downloads" },
+        "officialSourcesOnly": { "const": true },
+        "exactVersionsOnly": { "const": true },
+        "persistentSystemMutation": { "const": "forbidden" },
+        "selectionNotes": {
+          "type": "array",
+          "minItems": 2,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "promotionRequirements": {
+          "type": "array",
+          "minItems": 5,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "tools": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "axmol",
+        "emscripten",
+        "cmake",
+        "ninja",
+        "clang",
+        "msvc",
+        "node",
+        "python"
+      ],
+      "properties": {
+        "axmol": { "$ref": "#/$defs/tool" },
+        "emscripten": { "$ref": "#/$defs/tool" },
+        "cmake": { "$ref": "#/$defs/tool" },
+        "ninja": { "$ref": "#/$defs/tool" },
+        "clang": { "$ref": "#/$defs/tool" },
+        "msvc": { "$ref": "#/$defs/tool" },
+        "node": { "$ref": "#/$defs/tool" },
+        "python": { "$ref": "#/$defs/tool" }
+      }
+    },
+    "supportArtifacts": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/artifact" }
+    }
+  },
+  "$defs": {
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "url", "revision", "expectedSizeBytes", "parent"],
+      "properties": {
+        "kind": {
+          "enum": [
+            "official-release-archive",
+            "official-release-binary",
+            "installed-component",
+            "bundled-by-parent"
+          ]
+        },
+        "url": { "type": ["string", "null"] },
+        "revision": { "type": ["string", "null"] },
+        "expectedSizeBytes": { "type": ["integer", "null"], "minimum": 1 },
+        "parent": { "type": ["string", "null"] }
+      }
+    },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "integrity",
+        "integrityScope",
+        "provenance",
+        "cachePath",
+        "installRoot",
+        "executable",
+        "artifactVerified"
+      ],
+      "properties": {
+        "version": { "type": "string", "minLength": 1 },
+        "integrity": {
+          "type": "string",
+          "pattern": "^(sha256:[0-9a-f]{64}|pending:[a-z0-9-]+)$"
+        },
+        "integrityAlternates": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          }
+        },
+        "integrityScope": {
+          "enum": ["archive", "release-binary", "executable", "pending"]
+        },
+        "provenance": { "$ref": "#/$defs/provenance" },
+        "cachePath": { "type": ["string", "null"] },
+        "installRoot": { "type": ["string", "null"] },
+        "executable": { "type": ["string", "null"] },
+        "componentId": { "type": ["string", "null"] },
+        "artifactVerified": { "type": "boolean" }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "integrity",
+        "integrityScope",
+        "provenance",
+        "cachePath",
+        "installRoot",
+        "artifactVerified"
+      ],
+      "properties": {
+        "version": { "type": "string", "minLength": 1 },
+        "integrity": {
+          "type": "string",
+          "pattern": "^(sha256:[0-9a-f]{64}|pending:[a-z0-9-]+)$"
+        },
+        "integrityScope": {
+          "enum": ["archive", "release-binary", "executable", "pending"]
+        },
+        "provenance": { "$ref": "#/$defs/provenance" },
+        "cachePath": { "type": ["string", "null"] },
+        "installRoot": { "type": ["string", "null"] },
+        "artifactVerified": { "type": "boolean" }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "status": { "const": "locked-and-validated" } },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "g1EvidenceBuildId": { "type": "string", "minLength": 1 }
+        }
+      },
+      "else": {
+        "properties": {
+          "g1EvidenceBuildId": { "type": "null" }
+        }
+      }
+    }
+  ]
+}

@@ -7,7 +7,32 @@
     "node": ">=20"
   },
   "scripts": {
-    "test": "node tests/design-foundation.test.mjs",
-    "validate:design": "node tools/validate-design.mjs"
+    "generate:action-contract": "node tools/generate-action-contract.mjs",
+    "check:action-contract": "node tools/generate-action-contract.mjs --check",
+    "generate:web-abi": "node tools/generate-web-abi.mjs",
+    "check:web-abi": "node tools/generate-web-abi.mjs --check",
+    "generate:indexeddb-contract": "node tools/generate-indexeddb-contract.mjs",
+    "check:indexeddb-contract": "node tools/generate-indexeddb-contract.mjs --check",
+    "generate:f1-slice-contract": "node tools/generate-f1-slice-contract.mjs",
+    "check:f1-slice-contract": "node tools/generate-f1-slice-contract.mjs --check",
+    "bootstrap:toolchain": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/bootstrap-toolchain.ps1",
+    "test": "node --test tests/design-foundation.test.mjs tests/architecture.test.mjs tests/toolchain.test.mjs tests/action-contract.test.mjs tests/web-abi-contract.test.mjs tests/indexeddb-contract.test.mjs tests/quest-ui-renderer.test.mjs tests/f1-slice-contract.test.mjs tests/f1-ui-content-fixtures.test.mjs tests/f1-asset-requirements.test.mjs tests/f1-playtest-evidence.test.mjs && npm run test:content-workbench",
+    "test:content-workbench": "npm --prefix apps/content-workbench test",
+    "validate:design": "node tools/validate-design.mjs",
+    "validate:toolchain": "node tools/verify-toolchain.mjs",
+    "validate:toolchain:cache": "node tools/verify-toolchain.mjs --cache",
+    "lint:architecture": "node tools/check-architecture.mjs",
+    "test:cpp:msvc": "node tools/run-toolchain.mjs cmake --workflow --preset windows-msvc-debug",
+    "test:cpp:msvc:release": "node tools/run-toolchain.mjs cmake --workflow --preset windows-msvc-release",
+    "test:cpp:clang": "node tools/run-toolchain.mjs --vsdev cmake --workflow --preset windows-clang-debug",
+    "test:cpp:clang:release": "node tools/run-toolchain.mjs --vsdev cmake --workflow --preset windows-clang-release",
+    "test:browser": "node tests/browser/web-host-lifecycle.mjs",
+    "evidence:g1": "node tools/collect-g1-evidence.mjs",
+    "build:web:debug": "node tools/run-toolchain.mjs cmake --workflow --preset web-debug",
+    "build:web:release": "node tools/run-toolchain.mjs cmake --workflow --preset web-release-single"
+  },
+  "devDependencies": {
+    "playwright": "1.61.1",
+    "pngjs": "7.0.0"
   }
 }

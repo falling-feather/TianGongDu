@@ -184,11 +184,42 @@ test(
 
     await selectObject(page, "safePoints");
     const invalidInput = page.locator('input[name="x"]');
+    const editorBeforeInvalidField = running.controller.editorState;
+    const lastValidBeforeInvalidField =
+      running.controller.editorState.lastValidDocument;
+    let invalidFieldUpdateRequests = 0;
+    const countInvalidFieldUpdates = (request) => {
+      if (request.url().endsWith("/api/update")) {
+        invalidFieldUpdateRequests += 1;
+      }
+    };
+    page.on("request", countInvalidFieldUpdates);
     await invalidInput.fill("1.5");
     await page.locator("#apply-button").click();
     assert.equal(await page.locator("#revision-value").textContent(), "0");
     assert.equal(await page.locator("#dirty-value").textContent(), "否");
     assert.equal(await invalidInput.getAttribute("aria-invalid"), "true");
+    assert.equal(await focusLabel(page), "x");
+    assert.equal(
+      await page.locator("#apply-button").getAttribute("aria-busy"),
+      "false"
+    );
+    assert.equal(
+      await page.locator("#apply-button").getAttribute("aria-disabled"),
+      "false"
+    );
+    await invalidInput.press("Enter");
+    assert.equal(await focusLabel(page), "x");
+    assert.equal(await invalidInput.getAttribute("aria-invalid"), "true");
+    page.off("request", countInvalidFieldUpdates);
+    assert.equal(invalidFieldUpdateRequests, 0);
+    assert.strictEqual(running.controller.editorState, editorBeforeInvalidField);
+    assert.strictEqual(
+      running.controller.editorState.lastValidDocument,
+      lastValidBeforeInvalidField
+    );
+    assert.equal(await page.locator("#revision-value").textContent(), "0");
+    assert.equal(await page.locator("#dirty-value").textContent(), "否");
     assert.equal(await page.locator("#save-button").isDisabled(), true);
     liveTrace.push(await liveSnapshot(page, "invalid-buffer"));
 
@@ -454,6 +485,9 @@ test(
     t.diagnostic("focus trace: " + JSON.stringify(focusTrace));
     t.diagnostic("live-region trace: " + JSON.stringify(liveTrace));
     t.diagnostic("console errors: " + consoleErrors.length);
+    t.diagnostic(
+      "invalid-field /api/update requests: " + invalidFieldUpdateRequests
+    );
     t.diagnostic("duplicate-apply requests: " + duplicateApplyRequests);
     t.diagnostic("duplicate-save requests: " + duplicateSaveRequests);
     t.diagnostic("external-conflict 409 responses: " + externalConflictResponses);

@@ -872,6 +872,7 @@ elements.inspectorForm.addEventListener("submit", async (event) => {
   const submittedGroup = selectedGroup;
   const submittedId = selectedId;
   const submittedBufferKey = objectBufferKey();
+  let preserveInvalidFieldFocus = false;
   try {
     const raw = parseFormValues();
     state = await api("/api/update", {
@@ -890,6 +891,7 @@ elements.inspectorForm.addEventListener("submit", async (event) => {
     );
   } catch (error) {
     if (error.code === "local_invalid") {
+      preserveInvalidFieldFocus = true;
       setError(error.message);
     } else {
       presentError(error);
@@ -897,7 +899,9 @@ elements.inspectorForm.addEventListener("submit", async (event) => {
   } finally {
     applyInFlight = false;
     updateApplyAvailability();
-    elements.applyButton.focus();
+    if (!preserveInvalidFieldFocus) {
+      elements.applyButton.focus();
+    }
   }
 });
 

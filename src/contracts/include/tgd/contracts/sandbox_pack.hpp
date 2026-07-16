@@ -140,11 +140,123 @@ enum class SandboxDiagnosticCode : std::uint16_t {
     web_budget_exceeded = 32,
 };
 
+enum class SandboxDiagnosticSeverity : std::uint8_t {
+    error = 1,
+    warning = 2,
+    invalid = 255,
+};
+
+// Values 1..13 intentionally mirror SandboxPackSectionType. package identifies
+// an envelope- or package-wide diagnostic that has no single section record.
+enum class SandboxDiagnosticDomain : std::uint8_t {
+    package = 0,
+    strings = 1,
+    metadata = 2,
+    regions = 3,
+    assets = 4,
+    player = 5,
+    actors = 6,
+    ground_blockers = 7,
+    safe_points = 8,
+    interactions = 9,
+    mechanisms = 10,
+    waves = 11,
+    wave_spawns = 12,
+    objectives = 13,
+    invalid = 255,
+};
+
+// Stable leaf locator for diagnostics. none is valid only for a whole-record or
+// whole-domain failure; invalid represents an unknown or uninitialized field.
+enum class SandboxDiagnosticField : std::uint16_t {
+    none = 0,
+    id = 1,
+    min_x = 2,
+    max_x = 3,
+    min_y = 4,
+    max_y = 5,
+    min_height = 6,
+    max_height = 7,
+    min_floor_layer = 8,
+    max_floor_layer = 9,
+    region_id = 10,
+    asset_id = 11,
+    asset_kind = 12,
+    initial_safe_point_id = 13,
+    x = 14,
+    y = 15,
+    height = 16,
+    floor_layer = 17,
+    facing_millidegrees = 18,
+    predecessor_wave_id = 19,
+    trigger_kind = 20,
+    trigger_target_id = 21,
+    wave_id = 22,
+    actor_id = 23,
+    delay_ticks = 24,
+    spawn_order = 25,
+    predecessor_objective_id = 26,
+    completion_kind = 27,
+    completion_target_id = 28,
+    completion_objective_id = 29,
+    platform_variant = 30,
+    asset_metadata = 31,
+    asset_anchor = 32,
+    visual_distinction = 33,
+    placeholder = 34,
+    license = 35,
+    web_budget = 36,
+    invalid = 65'535,
+};
+
+[[nodiscard]] constexpr SandboxDiagnosticSeverity sandbox_diagnostic_severity(
+    SandboxDiagnosticCode code
+) noexcept {
+    switch (code) {
+        case SandboxDiagnosticCode::duplicate_id:
+        case SandboxDiagnosticCode::invalid_world_bounds:
+        case SandboxDiagnosticCode::invalid_region_bounds:
+        case SandboxDiagnosticCode::missing_region:
+        case SandboxDiagnosticCode::missing_asset:
+        case SandboxDiagnosticCode::asset_kind_mismatch:
+        case SandboxDiagnosticCode::missing_safe_point:
+        case SandboxDiagnosticCode::invalid_player:
+        case SandboxDiagnosticCode::invalid_actor:
+        case SandboxDiagnosticCode::invalid_blocker:
+        case SandboxDiagnosticCode::invalid_safe_point:
+        case SandboxDiagnosticCode::object_out_of_bounds:
+        case SandboxDiagnosticCode::player_start_blocked:
+        case SandboxDiagnosticCode::safe_point_blocked:
+        case SandboxDiagnosticCode::invalid_interaction:
+        case SandboxDiagnosticCode::invalid_mechanism:
+        case SandboxDiagnosticCode::invalid_wave:
+        case SandboxDiagnosticCode::invalid_wave_spawn:
+        case SandboxDiagnosticCode::invalid_objective:
+        case SandboxDiagnosticCode::capacity_exceeded:
+        case SandboxDiagnosticCode::missing_reference:
+        case SandboxDiagnosticCode::reference_kind_mismatch:
+        case SandboxDiagnosticCode::dependency_cycle:
+        case SandboxDiagnosticCode::unreachable_node:
+        case SandboxDiagnosticCode::retry_inconsistent:
+        case SandboxDiagnosticCode::missing_platform_variant:
+        case SandboxDiagnosticCode::missing_asset_metadata:
+        case SandboxDiagnosticCode::missing_asset_anchor:
+        case SandboxDiagnosticCode::color_only_distinction:
+        case SandboxDiagnosticCode::universal_placeholder_conflict:
+        case SandboxDiagnosticCode::license_blocked:
+        case SandboxDiagnosticCode::web_budget_exceeded:
+            return SandboxDiagnosticSeverity::error;
+    }
+    return SandboxDiagnosticSeverity::invalid;
+}
+
 struct SandboxDiagnostic final {
     SandboxDiagnosticCode code{SandboxDiagnosticCode::invalid_world_bounds};
     StableContentKey subject{};
     StableContentKey related{};
     std::uint32_t record_index{};
+    SandboxDiagnosticDomain domain{SandboxDiagnosticDomain::invalid};
+    SandboxDiagnosticField field{SandboxDiagnosticField::invalid};
 
     [[nodiscard]] friend constexpr bool operator==(
         const SandboxDiagnostic&,

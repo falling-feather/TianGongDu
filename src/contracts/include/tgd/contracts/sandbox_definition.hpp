@@ -56,6 +56,7 @@ enum class SandboxReferenceDomain : std::uint8_t {
     mechanism = 2,
     objective = 3,
     wave = 4,
+    invalid = 255,
 };
 
 [[nodiscard]] constexpr SandboxReferenceDomain sandbox_trigger_reference_domain(
@@ -73,7 +74,7 @@ enum class SandboxReferenceDomain : std::uint8_t {
         case SandboxTriggerKind::wave_completed:
             return SandboxReferenceDomain::wave;
     }
-    return SandboxReferenceDomain::none;
+    return SandboxReferenceDomain::invalid;
 }
 
 [[nodiscard]] constexpr SandboxReferenceDomain sandbox_completion_reference_domain(
@@ -87,7 +88,7 @@ enum class SandboxReferenceDomain : std::uint8_t {
         case SandboxObjectiveCompletionKind::wave_completed:
             return SandboxReferenceDomain::wave;
     }
-    return SandboxReferenceDomain::none;
+    return SandboxReferenceDomain::invalid;
 }
 
 struct SandboxTriggerDefinition final {

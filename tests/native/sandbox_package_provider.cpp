@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
@@ -425,6 +426,31 @@ void check_token_exclusivity_and_failure_preservation() {
            "moved-to token could not commit");
 }
 
+void check_same_storage_provider_lifetime_rejected() {
+    alignas(SandboxPackageProvider)
+        std::array<std::byte, sizeof(SandboxPackageProvider)> storage{};
+    auto* const provider_address =
+        reinterpret_cast<SandboxPackageProvider*>(storage.data());
+
+    auto* old_provider = std::construct_at(provider_address);
+    Fixture fixture;
+    auto old_lifetime_token = prepare_candidate(
+        *old_provider, old_provider->identity(), compile_candidate(fixture)
+    );
+    std::destroy_at(old_provider);
+
+    auto* new_provider = std::construct_at(provider_address);
+    expect(new_provider == old_provider,
+           "provider was not reconstructed at the identical address");
+    const auto before = snapshot(*new_provider);
+    expect(new_provider->commit(std::move(*old_lifetime_token)).status() ==
+               SandboxPackageCommitStatus::foreign_provider,
+           "same-address provider accepted a token from an old lifetime");
+    expect_preserved(*new_provider, before,
+                     "cross-lifetime token changed the reconstructed provider");
+    std::destroy_at(new_provider);
+}
+
 void check_generation_and_raw_status_boundaries() {
     constexpr auto first = sandbox_next_package_generation(0);
     static_assert(first.status() == SandboxPackageGenerationAdvanceStatus::advanced &&
@@ -462,6 +488,7 @@ int main() {
     check_determinism_and_same_checksum_republish();
     check_compile_and_prepare_failures_preserve();
     check_token_exclusivity_and_failure_preservation();
+    check_same_storage_provider_lifetime_rejected();
     check_generation_and_raw_status_boundaries();
     return EXIT_SUCCESS;
 }

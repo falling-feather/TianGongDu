@@ -5,13 +5,24 @@
 
 namespace tgd::content {
 
+namespace {
+
+[[nodiscard]] bool same_shared_owner(
+    const std::shared_ptr<const void>& lhs,
+    const std::shared_ptr<const void>& rhs
+) noexcept {
+    return !lhs.owner_before(rhs) && !rhs.owner_before(lhs);
+}
+
+}  // namespace
+
 SandboxPackagePreparedUpdate::SandboxPackagePreparedUpdate(
-    SandboxPackageProvider* provider,
+    std::shared_ptr<const void> provider_lifetime_capability,
     SandboxPackagePublicationIdentity expected_identity,
     SandboxPackagePublicationIdentity next_identity,
     std::unique_ptr<SandboxPackageCandidate> candidate
 ) noexcept
-    : provider_(provider),
+    : provider_lifetime_capability_(std::move(provider_lifetime_capability)),
       expected_identity_(expected_identity),
       next_identity_(next_identity),
       candidate_(std::move(candidate)) {}
@@ -19,7 +30,9 @@ SandboxPackagePreparedUpdate::SandboxPackagePreparedUpdate(
 SandboxPackagePreparedUpdate::SandboxPackagePreparedUpdate(
     SandboxPackagePreparedUpdate&& other
 ) noexcept
-    : provider_(std::exchange(other.provider_, nullptr)),
+    : provider_lifetime_capability_(
+          std::move(other.provider_lifetime_capability_)
+      ),
       expected_identity_(std::exchange(
           other.expected_identity_, SandboxPackagePublicationIdentity{}
       )),
@@ -32,7 +45,8 @@ SandboxPackagePreparedUpdate& SandboxPackagePreparedUpdate::operator=(
     SandboxPackagePreparedUpdate&& other
 ) noexcept {
     if (this != &other) {
-        provider_ = std::exchange(other.provider_, nullptr);
+        provider_lifetime_capability_ =
+            std::move(other.provider_lifetime_capability_);
         expected_identity_ = std::exchange(
             other.expected_identity_, SandboxPackagePublicationIdentity{}
         );
@@ -63,7 +77,7 @@ const SandboxPackageDocument* SandboxPackagePreparedUpdate::document() const noe
 }
 
 void SandboxPackagePreparedUpdate::invalidate() noexcept {
-    provider_ = nullptr;
+    provider_lifetime_capability_.reset();
     expected_identity_ = {};
     next_identity_ = {};
     candidate_.reset();
@@ -124,6 +138,11 @@ SandboxPackageCommitStatus SandboxPackageCommitResult::status() const noexcept {
     return status_;
 }
 
+SandboxPackageProvider::SandboxPackageProvider()
+    : lifetime_capability_(
+          std::make_shared<const std::uint8_t>(std::uint8_t{0})
+      ) {}
+
 const SandboxPackagePublicationIdentity& SandboxPackageProvider::identity() const noexcept {
     return identity_;
 }
@@ -158,7 +177,7 @@ SandboxPackagePrepareResult SandboxPackageProvider::prepare(
         advance.generation(), candidate->fingerprint()
     };
     SandboxPackagePreparedUpdate prepared_update{
-        this, expected_identity, next_identity, std::move(candidate)
+        lifetime_capability_, expected_identity, next_identity, std::move(candidate)
     };
     return {
         SandboxPackagePrepareStatus::prepared,
@@ -169,13 +188,16 @@ SandboxPackagePrepareResult SandboxPackageProvider::prepare(
 SandboxPackageCommitResult SandboxPackageProvider::commit(
     SandboxPackagePreparedUpdate&& prepared_update
 ) noexcept {
-    if (prepared_update.provider_ == nullptr || prepared_update.candidate_ == nullptr) {
+    if (prepared_update.provider_lifetime_capability_ == nullptr ||
+        prepared_update.candidate_ == nullptr) {
         prepared_update.invalidate();
         return SandboxPackageCommitResult{
             SandboxPackageCommitStatus::invalid_prepared_update
         };
     }
-    if (prepared_update.provider_ != this) {
+    if (!same_shared_owner(
+            prepared_update.provider_lifetime_capability_, lifetime_capability_
+        )) {
         prepared_update.invalidate();
         return SandboxPackageCommitResult{SandboxPackageCommitStatus::foreign_provider};
     }

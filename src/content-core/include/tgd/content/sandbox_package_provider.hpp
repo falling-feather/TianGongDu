@@ -166,7 +166,7 @@ class SandboxPackagePreparedUpdate final {
 
   private:
     SandboxPackagePreparedUpdate(
-        SandboxPackageProvider* provider,
+        std::shared_ptr<const void> provider_lifetime_capability,
         SandboxPackagePublicationIdentity expected_identity,
         SandboxPackagePublicationIdentity next_identity,
         std::unique_ptr<SandboxPackageCandidate> candidate
@@ -174,7 +174,7 @@ class SandboxPackagePreparedUpdate final {
 
     void invalidate() noexcept;
 
-    SandboxPackageProvider* provider_{};
+    std::shared_ptr<const void> provider_lifetime_capability_{};
     SandboxPackagePublicationIdentity expected_identity_{};
     SandboxPackagePublicationIdentity next_identity_{};
     std::unique_ptr<SandboxPackageCandidate> candidate_{};
@@ -226,7 +226,7 @@ class SandboxPackageCommitResult final {
 // commit replaces the publication.
 class SandboxPackageProvider final {
   public:
-    SandboxPackageProvider() noexcept = default;
+    SandboxPackageProvider();
     SandboxPackageProvider(const SandboxPackageProvider&) = delete;
     SandboxPackageProvider& operator=(const SandboxPackageProvider&) = delete;
     SandboxPackageProvider(SandboxPackageProvider&&) = delete;
@@ -246,6 +246,10 @@ class SandboxPackageProvider final {
     ) noexcept;
 
   private:
+    // Prepared tokens share this private control-block identity, so destroying
+    // and reconstructing a provider at the same address cannot authenticate an
+    // update from the old lifetime.
+    std::shared_ptr<const void> lifetime_capability_{};
     SandboxPackagePublicationIdentity identity_{};
     std::unique_ptr<SandboxPackageCandidate> candidate_{};
 };

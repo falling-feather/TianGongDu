@@ -101,6 +101,7 @@ tgd_add_static_layer(tgd_gameplay)
 target_sources(
   tgd_gameplay
   PRIVATE
+    src/gameplay/src/combat_action_intent.cpp
     src/gameplay/src/combat_resolver.cpp
     src/gameplay/src/encounter_director.cpp
     src/gameplay/src/layer_probe.cpp

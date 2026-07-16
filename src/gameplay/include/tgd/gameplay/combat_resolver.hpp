@@ -80,6 +80,11 @@ class ICombatResolver {
 
     [[nodiscard]] virtual contracts::TickIndex current_tick() const noexcept = 0;
     [[nodiscard]] virtual std::span<const contracts::CombatActorSnapshot> actors() const noexcept = 0;
+    [[nodiscard]] virtual contracts::CombatSkillCooldownResult query_skill_cooldown(
+        contracts::StableActorKey actor,
+        contracts::CombatSkillSlot slot,
+        contracts::StableContentKey expected_ability = 0
+    ) const noexcept = 0;
     [[nodiscard]] virtual std::uint64_t checksum() const noexcept = 0;
 };
 
@@ -118,6 +123,11 @@ class DeterministicCombatResolver final : public ICombatResolver {
     [[nodiscard]] CombatLifecycle lifecycle() const noexcept;
     [[nodiscard]] contracts::TickIndex current_tick() const noexcept override;
     [[nodiscard]] std::span<const contracts::CombatActorSnapshot> actors() const noexcept override;
+    [[nodiscard]] contracts::CombatSkillCooldownResult query_skill_cooldown(
+        contracts::StableActorKey actor,
+        contracts::CombatSkillSlot slot,
+        contracts::StableContentKey expected_ability = 0
+    ) const noexcept override;
     [[nodiscard]] std::uint64_t checksum() const noexcept override;
 
   private:
@@ -151,6 +161,14 @@ class DeterministicCombatResolver final : public ICombatResolver {
         contracts::CombatCommandType trigger,
         contracts::StableContentKey stance
     ) const noexcept;
+    [[nodiscard]] std::size_t ability_index(
+        contracts::StableContentKey ability
+    ) const noexcept;
+    [[nodiscard]] std::size_t skill_binding_index(
+        std::size_t actor_index,
+        contracts::StableContentKey stance,
+        contracts::CombatSkillSlot slot
+    ) const noexcept;
     [[nodiscard]] bool actor_allows_stance(
         std::size_t actor_index,
         contracts::StableContentKey stance
@@ -183,6 +201,11 @@ class DeterministicCombatResolver final : public ICombatResolver {
     std::size_t actor_count_{};
     std::array<contracts::AbilityDefinition, ability_capacity> abilities_{};
     std::size_t ability_count_{};
+    std::array<
+        std::array<contracts::TickIndex, contracts::combat_skill_binding_capacity>,
+        actor_capacity
+    > cooldown_ready_ticks_{};
+    bool has_skill_bindings_{};
     std::array<contracts::CombatCommand, command_capacity> commands_{};
     std::size_t command_count_{};
     std::array<contracts::CombatPoseUpdate, actor_capacity> pose_updates_{};

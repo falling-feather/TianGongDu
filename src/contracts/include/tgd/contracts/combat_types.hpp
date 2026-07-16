@@ -2,6 +2,7 @@
 
 #include <tgd/contracts/content_definition.hpp>
 #include <tgd/contracts/session_types.hpp>
+#include <tgd/contracts/skill_definition.hpp>
 
 #include <array>
 #include <cstdint>
@@ -22,6 +23,7 @@ enum class CombatCommandType : std::uint8_t {
     guard_ended,
     evade,
     switch_stance,
+    weapon_skill,
 };
 
 enum class CombatEventType : std::uint8_t {
@@ -84,6 +86,9 @@ struct CombatCommand final {
     CombatCommandType type{CombatCommandType::light_attack};
     StableActorKey target{};
     StableContentKey stance{};
+    // Platform never supplies an Ability ID. Gameplay maps ActionId to a slot;
+    // Combat resolves that slot through the actor's authored loadout.
+    CombatSkillSlot skill_slot{CombatSkillSlot::none};
 };
 
 struct CombatPoseUpdate final {
@@ -105,6 +110,23 @@ struct AbilityDefinition final {
     std::int32_t health_damage{};
     std::int32_t poise_damage{};
     std::uint32_t feedback_tags{};
+    AbilityTargetPolicy target_policy{AbilityTargetPolicy::trigger_default};
+    std::uint16_t cooldown_ticks{};
+    std::uint16_t initial_cooldown_ticks{};
+};
+
+enum class CombatSkillQueryError : std::uint8_t {
+    none,
+    unknown_actor,
+    invalid_slot,
+    slot_unbound,
+    ability_not_owned,
+};
+
+struct CombatSkillCooldownResult final {
+    CombatSkillQueryError error{CombatSkillQueryError::none};
+    StableContentKey ability{};
+    TickIndex ready_tick{};
 };
 
 struct CombatActorConfig final {
@@ -118,6 +140,8 @@ struct CombatActorConfig final {
     StableContentKey initial_stance{};
     CombatRecoveryDefinition recovery{};
     bool initially_active{true};
+    std::array<CombatSkillBindingDefinition, combat_skill_binding_capacity> skill_loadout{};
+    std::uint8_t skill_loadout_count{};
 };
 
 struct CombatActorSnapshot final {

@@ -2,7 +2,7 @@
 
 > 上级文档：[`../01-开发者文档.md`](../01-开发者文档.md)
 > 状态：Accepted Baseline
-> 最后更新：2026-07-14
+> 最后更新：2026-07-15
 > 维护者角色：C++ 核心负责人；Gameplay、AI、存档与表现 Owner 会签
 
 ## 1. 混合组件模型
@@ -395,3 +395,17 @@ Native 用例以实际 1.6 Definition 的独立训练状态覆盖檐守无候选
 当前 1.6 内容已为檐守和翻花两个精确 frontier 各作者化 offer/resume；cue 能力过滤只决定真实 focus 能否投射，绝不能反过来挑 Objective。此 gate 是 App freshness 边界，CombatResolver 仍独占 stance 真相，QuestRuntime 仍独占进度/选择/checksum。任一恢复子步骤或身份核对失败都不发 resume，但既有三个组件之间还没有 prepare/commit/rollback；因此失败后的部分组件回滚、跨组件 defeated history、离开返回、刷新恢复和完整 Encounter+Session+Combat 安全点快照仍为 Open。正式 recovery DOM Action、offer 首焦 retry、leave 可达也尚未由本节的 Canvas `R` 路径关闭。
 
 Native actual-Definition 用例以彼此独立的 Quest 快照覆盖线索重复、交叉系缆/快速结、鸣铃错序/接受、两训练阶段、檐守 trigger-only、翻花 accepted+wrong-target 双槽及两个 frontier 的 paired recovery，并断言 read-only disposition、重复 wrong-target、投射失败均无额外推进。额外 gate/Combat 正负例覆盖：实际 retry Tick 晚于倒地 Tick、早于倒地的非法 retry、重复 mark、三组件 Tick 任一不一致、非法/未生效 stance、需要切换却缺少后续 stance event、Quest/Objective 漂移，以及无需切姿态的檐守恢复不要求 event、也不会被翻花逻辑污染。浏览器高水痕/迎风路线在檐守 frontier、循钟声/背风路线在翻花 frontier 各走一次真实倒地→Canvas R→三组件重试→fresh resume，并在安全点正常移动回训练线标后看到敌人重新攻击；两者的 source/focus/classification、wire/projection sequence、Quest completed/selection/checksum 与 7 Beat 结算均受断言，fresh resume 后的重复 R 还必须在权威审计 Tick 推进后保持 retry count、消息与 Quest 身份不变。报告位于 `.tmp/f1-recovery-02-precommit-canopy/report.json` 与 `.tmp/f1-recovery-02-precommit-drain/report.json`；它们是 dirty-worktree pre-commit Chrome 候选，不是 exact-commit、远端三浏览器或真人时长证据。
+
+## 34. 数据化主动技能最小切片
+
+Action Registry 已有的 `weapon_skill` 是输入入口，但 Platform/Presentation 只提交稳定 Action sample，不提交 Ability ID、键码或技能归属。`DeterministicCombatActionIntentMapper` 接受 Gameplay 附加的 Actor 与 target context，把非重复 press edge 和单调 Platform sequence 映射为 `CombatSkillSlot::primary`；首切片只消费 primary，secondary/utility/special 仅冻结枚举与容量。未知 Action、release/repeat、空身份和重放 sequence 都不会替换上一份有效映射状态。`CombatCommand` 只携带 slot，不能携带调用方选择的 Ability。
+
+`CombatActorConfig` 以尾随默认字段保存固定容量 16 的 authored `skill_loadout` 与 count，对应最多 4 stance × 4 slot。空 loadout 保持 legacy 聚合初始化；有效项必须绑定 Actor 自己的 stance、合法且唯一的 `(stance, slot)`、存在的 `weapon_skill` Ability 和一致的 `required_stance`，同一 Actor 不能重复 Ability，count 之后必须全零。Resolver 只规范化私有配置副本，不改调用者输入；不同 Actor 可以共享同一 Definition，但拥有独立 cooldown。
+
+状态 Owner 只有 `DeterministicCombatResolver`。玩家与敌人沿同一路径，在命令执行 Tick 使用 Actor 当前 Combat-owned stance + slot 查找 owned Ability，再校验 target faction/active、stamina、active timeline 与 absolute ready Tick；未装备 slot、其他 Actor 的 Ability、资源或状态失败只产生 `command_ignored`，不回退全局 Ability 查找，也不扣资源、写 cooldown 或造成伤害。sequence 非零只约束 `weapon_skill`，legacy command 不在本切片收紧。
+
+`query_skill_cooldown` 返回结构化 `CombatSkillQueryError + ability + ready_tick`，明确区分 unknown actor、invalid slot、slot unbound、ability not owned 与合法 `ready_tick == 0`。运行时只为有效 binding 保存 ready Tick；有 binding 时 checksum 按稳定 Actor、规范化 binding、被引用 Definition 与对应 ready Tick进入独立 hash 域，全部 loadout 为空时不增加任何 legacy checksum 字节。
+
+Actor 倒地取消正在进行的技能但保留已经提交的 cooldown；retry、Encounter replace/reinforce 只为实际恢复的 Actor 清除瞬时技能状态，并从当前边界 Tick 重建其 authored initial cooldown，其他 Actor 的 ready Tick 不漂移。`opposing_actor` 继续进入既有命中/格挡/闪避/硬直管线；`self_actor` 与 `no_target` 当前只允许零直接伤害的受控时间线。
+
+`tests/native/combat_skill.cpp` 覆盖 Action→primary slot、同 stance 玩家/敌人归属隔离、共享 Definition 的 Actor-local cooldown、切 stance 后同 slot 解析变化、结构化查询、未装备与错误配置失败不变性、loadout/Definition 顺序归一、空 loadout legacy checksum、倒地保留以及 retry/reinforce 定向重建；旧 `combat_resolver`、`encounter_director` 与固定内容回放继续作为兼容门。该状态是 **Bootstrap Implemented / Not Authored In System Demo**：被动效果、增减益/持续效果、取消窗、连段、升级替换、AI 选槽、存档序列化、HUD、正式 Sandbox Definition/pack、平台玩家接线与手感验收仍为 Open。

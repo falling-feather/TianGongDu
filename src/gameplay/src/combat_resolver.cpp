@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstdlib>
+#include <limits>
 #include <tuple>
 #include <type_traits>
 
@@ -68,6 +69,51 @@ void hash_integer(std::uint64_t& hash, Integer value) noexcept {
            recovery.poise_interval_ticks > 0 && recovery.poise_per_interval > 0;
 }
 
+[[nodiscard]] bool valid_target_policy(
+    contracts::AbilityTargetPolicy policy
+) noexcept {
+    switch (policy) {
+        case contracts::AbilityTargetPolicy::trigger_default:
+        case contracts::AbilityTargetPolicy::opposing_actor:
+        case contracts::AbilityTargetPolicy::self_actor:
+        case contracts::AbilityTargetPolicy::no_target:
+            return true;
+    }
+    return false;
+}
+
+[[nodiscard]] bool valid_skill_slot(contracts::CombatSkillSlot slot) noexcept {
+    switch (slot) {
+        case contracts::CombatSkillSlot::primary:
+        case contracts::CombatSkillSlot::secondary:
+        case contracts::CombatSkillSlot::utility:
+        case contracts::CombatSkillSlot::special:
+            return true;
+        case contracts::CombatSkillSlot::none:
+            return false;
+    }
+    return false;
+}
+
+[[nodiscard]] contracts::AbilityTargetPolicy effective_target_policy(
+    const contracts::AbilityDefinition& ability
+) noexcept {
+    if (ability.target_policy != contracts::AbilityTargetPolicy::trigger_default) {
+        return ability.target_policy;
+    }
+    return ability.trigger == contracts::CombatCommandType::evade
+               ? contracts::AbilityTargetPolicy::no_target
+               : contracts::AbilityTargetPolicy::opposing_actor;
+}
+
+[[nodiscard]] contracts::TickIndex add_ticks_saturated(
+    contracts::TickIndex tick,
+    std::uint16_t duration
+) noexcept {
+    const auto maximum = std::numeric_limits<contracts::TickIndex>::max();
+    return duration > maximum - tick ? maximum : tick + duration;
+}
+
 }  // namespace
 
 CombatError DeterministicCombatResolver::initialize(
@@ -82,6 +128,15 @@ CombatError DeterministicCombatResolver::initialize(
         return validation;
     }
 
+    ability_count_ = abilities.size();
+    std::copy(abilities.begin(), abilities.end(), abilities_.begin());
+    std::sort(
+        abilities_.begin(),
+        abilities_.begin() + static_cast<std::ptrdiff_t>(ability_count_),
+        [](const contracts::AbilityDefinition& left, const contracts::AbilityDefinition& right) {
+            return left.id.key < right.id.key;
+        }
+    );
     actor_count_ = actors.size();
     std::copy(actors.begin(), actors.end(), actor_configs_.begin());
     std::sort(
@@ -92,18 +147,36 @@ CombatError DeterministicCombatResolver::initialize(
         }
     );
     for (std::size_t index = 0; index < actor_count_; ++index) {
-        restore_actor(index);
+        auto& config = actor_configs_[index];
+        std::sort(
+            config.skill_loadout.begin(),
+            config.skill_loadout.begin() +
+                static_cast<std::ptrdiff_t>(config.skill_loadout_count),
+            [](const contracts::CombatSkillBindingDefinition& left,
+               const contracts::CombatSkillBindingDefinition& right) {
+                return std::tuple{
+                           left.stance,
+                           static_cast<std::uint8_t>(left.slot),
+                           left.ability,
+                       } <
+                       std::tuple{
+                           right.stance,
+                           static_cast<std::uint8_t>(right.slot),
+                           right.ability,
+                       };
+            }
+        );
     }
-
-    ability_count_ = abilities.size();
-    std::copy(abilities.begin(), abilities.end(), abilities_.begin());
-    std::sort(
-        abilities_.begin(),
-        abilities_.begin() + static_cast<std::ptrdiff_t>(ability_count_),
-        [](const contracts::AbilityDefinition& left, const contracts::AbilityDefinition& right) {
-            return left.id.key < right.id.key;
+    has_skill_bindings_ = std::any_of(
+        actor_configs_.begin(),
+        actor_configs_.begin() + static_cast<std::ptrdiff_t>(actor_count_),
+        [](const contracts::CombatActorConfig& actor) {
+            return actor.skill_loadout_count > 0;
         }
     );
+    for (std::size_t index = 0; index < actor_count_; ++index) {
+        restore_actor(index);
+    }
     lifecycle_ = CombatLifecycle::ready;
     update_checksum();
     return CombatError::none;
@@ -140,6 +213,7 @@ CombatError DeterministicCombatResolver::destroy() noexcept {
     lifecycle_ = CombatLifecycle::destroyed;
     actor_count_ = 0;
     ability_count_ = 0;
+    has_skill_bindings_ = false;
     command_count_ = 0;
     pose_update_count_ = 0;
     event_count_ = 0;
@@ -390,6 +464,37 @@ std::span<const contracts::CombatActorSnapshot> DeterministicCombatResolver::act
     return std::span{actor_snapshots_}.first(actor_count_);
 }
 
+contracts::CombatSkillCooldownResult DeterministicCombatResolver::query_skill_cooldown(
+    contracts::StableActorKey actor,
+    contracts::CombatSkillSlot slot,
+    contracts::StableContentKey expected_ability
+) const noexcept {
+    const auto actor_value = actor_index(actor);
+    if (actor_value == actor_capacity) {
+        return {contracts::CombatSkillQueryError::unknown_actor};
+    }
+    if (!valid_skill_slot(slot)) {
+        return {contracts::CombatSkillQueryError::invalid_slot};
+    }
+    const auto binding_value = skill_binding_index(
+        actor_value,
+        actor_snapshots_[actor_value].stance,
+        slot
+    );
+    if (binding_value == contracts::combat_skill_binding_capacity) {
+        return {contracts::CombatSkillQueryError::slot_unbound};
+    }
+    const auto ability = actor_configs_[actor_value].skill_loadout[binding_value].ability;
+    if (expected_ability != 0 && expected_ability != ability) {
+        return {contracts::CombatSkillQueryError::ability_not_owned};
+    }
+    return {
+        contracts::CombatSkillQueryError::none,
+        ability,
+        cooldown_ready_ticks_[actor_value][binding_value],
+    };
+}
+
 std::uint64_t DeterministicCombatResolver::checksum() const noexcept {
     return checksum_;
 }
@@ -412,7 +517,8 @@ CombatError DeterministicCombatResolver::validate_config(
         if (actor.actor == 0 || actor.archetype_id.key == 0 ||
             actor.stance_count == 0 || actor.stance_count > actor.stance_ids.size() ||
             actor.initial_stance == 0 || !valid_resources(actor.initial_resources) ||
-            !valid_recovery(actor.recovery)) {
+            !valid_recovery(actor.recovery) ||
+            actor.skill_loadout_count > contracts::combat_skill_binding_capacity) {
             return CombatError::invalid_config;
         }
         if (actor.faction == contracts::CombatFaction::player && !actor.initially_active) {
@@ -441,10 +547,25 @@ CombatError DeterministicCombatResolver::validate_config(
     }
     for (std::size_t index = 0; index < abilities.size(); ++index) {
         const auto& ability = abilities[index];
-        if (ability.id.key == 0 || ability.id.name.empty() || ability.active_ticks == 0 ||
-            ability.stamina_cost < 0 || ability.range_mm < 0 ||
-            ability.height_tolerance_mm < 0 || ability.health_damage < 0 ||
+        if (ability.id.key == 0 || ability.id.name.empty() ||
+            ability.id.key != contracts::stable_content_key(ability.id.name) ||
+            ability.active_ticks == 0 ||
+            ability.stamina_cost < 0 ||
+            ability.stamina_cost > contracts::max_ability_stamina_cost ||
+            ability.windup_ticks > contracts::max_ability_phase_ticks ||
+            ability.active_ticks > contracts::max_ability_phase_ticks ||
+            ability.recovery_ticks > contracts::max_ability_phase_ticks ||
+            ability.range_mm < 0 ||
+            ability.range_mm > contracts::max_ability_range_mm ||
+            ability.height_tolerance_mm < 0 ||
+            ability.height_tolerance_mm > contracts::max_ability_range_mm ||
+            ability.health_damage < 0 ||
+            ability.health_damage > contracts::max_ability_damage ||
             ability.poise_damage < 0 ||
+            ability.poise_damage > contracts::max_ability_damage ||
+            !valid_target_policy(ability.target_policy) ||
+            ability.cooldown_ticks > contracts::max_ability_cooldown_ticks ||
+            ability.initial_cooldown_ticks > contracts::max_ability_cooldown_ticks ||
             (ability.trigger != contracts::CombatCommandType::evade &&
              ability.required_stance == 0) ||
             (ability.trigger == contracts::CombatCommandType::evade &&
@@ -453,16 +574,78 @@ CombatError DeterministicCombatResolver::validate_config(
         }
         if (ability.trigger != contracts::CombatCommandType::light_attack &&
             ability.trigger != contracts::CombatCommandType::heavy_attack &&
-            ability.trigger != contracts::CombatCommandType::evade) {
+            ability.trigger != contracts::CombatCommandType::evade &&
+            ability.trigger != contracts::CombatCommandType::weapon_skill) {
+            return CombatError::invalid_config;
+        }
+        const auto target_policy = effective_target_policy(ability);
+        const auto stance_authored = std::any_of(
+            actors.begin(),
+            actors.end(),
+            [&ability](const contracts::CombatActorConfig& actor) {
+                return std::find(
+                           actor.stance_ids.begin(),
+                           actor.stance_ids.begin() + actor.stance_count,
+                           ability.required_stance
+                       ) != actor.stance_ids.begin() + actor.stance_count;
+            }
+        );
+        if ((ability.trigger == contracts::CombatCommandType::weapon_skill &&
+             (ability.target_policy == contracts::AbilityTargetPolicy::trigger_default ||
+              ability.cooldown_ticks == 0 || !stance_authored)) ||
+            (ability.trigger != contracts::CombatCommandType::weapon_skill &&
+             (ability.target_policy != contracts::AbilityTargetPolicy::trigger_default ||
+              ability.cooldown_ticks != 0 || ability.initial_cooldown_ticks != 0)) ||
+            (target_policy != contracts::AbilityTargetPolicy::opposing_actor &&
+             (ability.health_damage != 0 || ability.poise_damage != 0))) {
             return CombatError::invalid_config;
         }
         for (std::size_t previous = 0; previous < index; ++previous) {
             if (abilities[previous].id.key == ability.id.key) {
                 return CombatError::duplicate_ability;
             }
-            if (abilities[previous].trigger == ability.trigger &&
+            if (ability.trigger != contracts::CombatCommandType::weapon_skill &&
+                abilities[previous].trigger == ability.trigger &&
                 abilities[previous].required_stance == ability.required_stance) {
                 return CombatError::duplicate_trigger;
+            }
+        }
+    }
+    for (const auto& actor : actors) {
+        const auto stance_end =
+            actor.stance_ids.begin() + static_cast<std::ptrdiff_t>(actor.stance_count);
+        for (std::size_t index = 0; index < actor.skill_loadout_count; ++index) {
+            const auto& binding = actor.skill_loadout[index];
+            if (binding.stance == 0 || binding.ability == 0 ||
+                !valid_skill_slot(binding.slot) ||
+                std::find(actor.stance_ids.begin(), stance_end, binding.stance) == stance_end) {
+                return CombatError::invalid_config;
+            }
+            const auto definition = std::find_if(
+                abilities.begin(),
+                abilities.end(),
+                [&binding](const contracts::AbilityDefinition& ability) {
+                    return ability.id.key == binding.ability;
+                }
+            );
+            if (definition == abilities.end() ||
+                definition->trigger != contracts::CombatCommandType::weapon_skill ||
+                definition->required_stance != binding.stance) {
+                return CombatError::invalid_config;
+            }
+            for (std::size_t previous = 0; previous < index; ++previous) {
+                const auto& prior = actor.skill_loadout[previous];
+                if ((prior.stance == binding.stance && prior.slot == binding.slot) ||
+                    prior.ability == binding.ability) {
+                    return CombatError::invalid_config;
+                }
+            }
+        }
+        for (std::size_t index = actor.skill_loadout_count;
+             index < actor.skill_loadout.size();
+             ++index) {
+            if (actor.skill_loadout[index] != contracts::CombatSkillBindingDefinition{}) {
+                return CombatError::invalid_config;
             }
         }
     }
@@ -480,14 +663,21 @@ bool DeterministicCombatResolver::valid_command(
         case contracts::CombatCommandType::light_attack:
         case contracts::CombatCommandType::heavy_attack:
             return command.target != 0 && command.target != command.actor && command.stance == 0 &&
+                   command.skill_slot == contracts::CombatSkillSlot::none &&
                    actor_index(command.target) != actor_capacity;
         case contracts::CombatCommandType::guard_started:
         case contracts::CombatCommandType::guard_ended:
         case contracts::CombatCommandType::evade:
-            return command.target == 0 && command.stance == 0;
+            return command.target == 0 && command.stance == 0 &&
+                   command.skill_slot == contracts::CombatSkillSlot::none;
         case contracts::CombatCommandType::switch_stance:
             return command.target == 0 && command.stance != 0 &&
+                   command.skill_slot == contracts::CombatSkillSlot::none &&
                    actor_allows_stance(source, command.stance);
+        case contracts::CombatCommandType::weapon_skill:
+            return command.sequence != 0 && command.stance == 0 &&
+                   valid_skill_slot(command.skill_slot) &&
+                   (command.target == 0 || actor_index(command.target) != actor_capacity);
     }
     return false;
 }
@@ -554,6 +744,32 @@ std::size_t DeterministicCombatResolver::ability_index(
     return ability_capacity;
 }
 
+std::size_t DeterministicCombatResolver::ability_index(
+    contracts::StableContentKey ability
+) const noexcept {
+    for (std::size_t index = 0; index < ability_count_; ++index) {
+        if (abilities_[index].id.key == ability) {
+            return index;
+        }
+    }
+    return ability_capacity;
+}
+
+std::size_t DeterministicCombatResolver::skill_binding_index(
+    std::size_t actor,
+    contracts::StableContentKey stance,
+    contracts::CombatSkillSlot slot
+) const noexcept {
+    const auto& config = actor_configs_[actor];
+    for (std::size_t index = 0; index < config.skill_loadout_count; ++index) {
+        const auto& binding = config.skill_loadout[index];
+        if (binding.stance == stance && binding.slot == slot) {
+            return index;
+        }
+    }
+    return contracts::combat_skill_binding_capacity;
+}
+
 bool DeterministicCombatResolver::actor_allows_stance(
     std::size_t index,
     contracts::StableContentKey stance
@@ -602,6 +818,16 @@ void DeterministicCombatResolver::restore_actor(std::size_t index) noexcept {
     };
     actor_runtime_[index] = {};
     actor_runtime_[index].active_ability = ability_capacity;
+    cooldown_ready_ticks_[index].fill(0);
+    for (std::size_t binding = 0;
+         binding < config.skill_loadout_count;
+         ++binding) {
+        const auto ability = ability_index(config.skill_loadout[binding].ability);
+        cooldown_ready_ticks_[index][binding] = add_ticks_saturated(
+            current_tick_,
+            abilities_[ability].initial_cooldown_ticks
+        );
+    }
 }
 
 void DeterministicCombatResolver::sort_commands() noexcept {
@@ -670,11 +896,40 @@ bool DeterministicCombatResolver::process_command(
     if (runtime.active_ability != ability_capacity) {
         return emit({command.tick, contracts::CombatEventType::command_ignored, command.actor});
     }
-    const auto selected = ability_index(command.type, actor.stance);
-    if (selected == ability_capacity || actor.resources.stamina < abilities_[selected].stamina_cost) {
+    auto skill_binding = contracts::combat_skill_binding_capacity;
+    auto selected = ability_capacity;
+    if (command.type == contracts::CombatCommandType::weapon_skill) {
+        skill_binding = skill_binding_index(source_index, actor.stance, command.skill_slot);
+        if (skill_binding == contracts::combat_skill_binding_capacity) {
+            return emit({command.tick, contracts::CombatEventType::command_ignored, command.actor});
+        }
+        selected = ability_index(actor_configs_[source_index].skill_loadout[skill_binding].ability);
+    } else {
+        selected = ability_index(command.type, actor.stance);
+    }
+    if (selected == ability_capacity) {
         return emit({command.tick, contracts::CombatEventType::command_ignored, command.actor});
     }
     const auto& ability = abilities_[selected];
+    const auto target_policy = effective_target_policy(ability);
+    const auto target_index = actor_index(command.target);
+    const bool stance_matches = ability.required_stance == actor.stance ||
+                                (ability.trigger == contracts::CombatCommandType::evade &&
+                                 ability.required_stance == 0);
+    const bool target_matches =
+        (target_policy == contracts::AbilityTargetPolicy::opposing_actor &&
+         target_index != actor_capacity && actor_snapshots_[target_index].active &&
+         !actor_snapshots_[target_index].defeated &&
+         actor_snapshots_[target_index].faction != actor.faction) ||
+        (target_policy == contracts::AbilityTargetPolicy::self_actor &&
+         command.target == actor.actor) ||
+        (target_policy == contracts::AbilityTargetPolicy::no_target && command.target == 0);
+    if (ability.trigger != command.type || !stance_matches || !target_matches ||
+        actor.resources.stamina < ability.stamina_cost ||
+        (skill_binding != contracts::combat_skill_binding_capacity &&
+         cooldown_ready_ticks_[source_index][skill_binding] > command.tick)) {
+        return emit({command.tick, contracts::CombatEventType::command_ignored, command.actor});
+    }
     actor.guarding = false;
     actor.resources.stamina -= ability.stamina_cost;
     if (ability.stamina_cost > 0) {
@@ -685,7 +940,13 @@ bool DeterministicCombatResolver::process_command(
     runtime.active_ability = static_cast<std::uint16_t>(selected);
     runtime.target = command.target;
     runtime.ability_started_tick = command.tick;
-    runtime.hit_applied = false;
+    runtime.hit_applied = target_policy != contracts::AbilityTargetPolicy::opposing_actor;
+    if (skill_binding != contracts::combat_skill_binding_capacity) {
+        cooldown_ready_ticks_[source_index][skill_binding] = add_ticks_saturated(
+            command.tick,
+            ability.cooldown_ticks
+        );
+    }
     if (command.type == contracts::CombatCommandType::evade) {
         runtime.evade_until_tick = command.tick + ability.active_ticks - 1U;
     }
@@ -717,7 +978,8 @@ bool DeterministicCombatResolver::resolve_actor(
     }
     const auto& ability = abilities_[runtime.active_ability];
     const auto hit_tick = runtime.ability_started_tick + ability.windup_ticks;
-    if (!runtime.hit_applied && ability.trigger != contracts::CombatCommandType::evade &&
+    if (!runtime.hit_applied &&
+        effective_target_policy(ability) == contracts::AbilityTargetPolicy::opposing_actor &&
         tick >= hit_tick) {
         runtime.hit_applied = true;
         const auto target = actor_index(runtime.target);
@@ -908,6 +1170,9 @@ void DeterministicCombatResolver::update_checksum() noexcept {
     if (last_boundary_sequence_ != 0) {
         hash_integer(hash, last_boundary_sequence_);
     }
+    if (has_skill_bindings_) {
+        hash_integer(hash, static_cast<std::uint8_t>(1));
+    }
     for (std::size_t index = 0; index < actor_count_; ++index) {
         const auto& actor = actor_snapshots_[index];
         const auto& runtime = actor_runtime_[index];
@@ -934,6 +1199,35 @@ void DeterministicCombatResolver::update_checksum() noexcept {
         hash_integer(hash, runtime.next_stamina_recovery_tick);
         hash_integer(hash, runtime.next_poise_recovery_tick);
         hash_byte(hash, runtime.hit_applied ? 1U : 0U);
+        if (has_skill_bindings_) {
+            const auto& config = actor_configs_[index];
+            hash_integer(hash, config.skill_loadout_count);
+            for (std::size_t binding = 0;
+                 binding < config.skill_loadout_count;
+                 ++binding) {
+                const auto& authored = config.skill_loadout[binding];
+                const auto& definition = abilities_[ability_index(authored.ability)];
+                hash_integer(hash, authored.stance);
+                hash_integer(hash, static_cast<std::uint8_t>(authored.slot));
+                hash_integer(hash, authored.ability);
+                hash_integer(hash, definition.id.key);
+                hash_integer(hash, static_cast<std::uint8_t>(definition.trigger));
+                hash_integer(hash, definition.required_stance);
+                hash_integer(hash, static_cast<std::uint8_t>(definition.target_policy));
+                hash_integer(hash, definition.stamina_cost);
+                hash_integer(hash, definition.windup_ticks);
+                hash_integer(hash, definition.active_ticks);
+                hash_integer(hash, definition.recovery_ticks);
+                hash_integer(hash, definition.cooldown_ticks);
+                hash_integer(hash, definition.initial_cooldown_ticks);
+                hash_integer(hash, definition.range_mm);
+                hash_integer(hash, definition.height_tolerance_mm);
+                hash_integer(hash, definition.health_damage);
+                hash_integer(hash, definition.poise_damage);
+                hash_integer(hash, definition.feedback_tags);
+                hash_integer(hash, cooldown_ready_ticks_[index][binding]);
+            }
+        }
     }
     checksum_ = hash;
 }

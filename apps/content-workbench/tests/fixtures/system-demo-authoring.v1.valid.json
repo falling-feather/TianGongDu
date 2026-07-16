@@ -1,0 +1,228 @@
+{
+  "format": "tgd.sandbox.authoring",
+  "schemaVersion": "1.1.0",
+  "runtime": {
+    "packageId": "system-demo",
+    "sandboxId": "system-demo",
+    "bounds": {
+      "minX": -10000,
+      "maxX": 10000,
+      "minY": -10000,
+      "maxY": 10000,
+      "minHeight": -1000,
+      "maxHeight": 5000,
+      "minFloorLayer": -2,
+      "maxFloorLayer": 2
+    },
+    "completionObjectiveId": "objective.complete",
+    "player": {
+      "id": "player.start",
+      "regionId": "region.demo",
+      "assetId": "asset.player",
+      "initialSafePointId": "safe.start",
+      "pose": {
+        "x": 0,
+        "y": 0,
+        "height": 0,
+        "floorLayer": 0
+      },
+      "facingMillidegrees": 0
+    },
+    "regions": [
+      {
+        "id": "region.demo",
+        "bounds": {
+          "minX": -10000,
+          "maxX": 10000,
+          "minY": -10000,
+          "maxY": 10000,
+          "minHeight": -1000,
+          "maxHeight": 5000,
+          "minFloorLayer": -2,
+          "maxFloorLayer": 2
+        }
+      }
+    ],
+    "assets": [
+      {
+        "id": "asset.safe",
+        "kind": "safe_point"
+      },
+      {
+        "id": "asset.player",
+        "kind": "player"
+      },
+      {
+        "id": "asset.mechanism",
+        "kind": "mechanism"
+      },
+      {
+        "id": "asset.interaction",
+        "kind": "interaction"
+      },
+      {
+        "id": "asset.blocker",
+        "kind": "obstacle"
+      },
+      {
+        "id": "asset.actor",
+        "kind": "actor"
+      }
+    ],
+    "actors": [
+      {
+        "id": "actor.demo",
+        "regionId": "region.demo",
+        "assetId": "asset.actor",
+        "pose": {
+          "x": 2200,
+          "y": 1000,
+          "height": 0,
+          "floorLayer": 0
+        },
+        "facingMillidegrees": 180000
+      }
+    ],
+    "groundBlockers": [
+      {
+        "id": "blocker.gate",
+        "regionId": "region.demo",
+        "assetId": "asset.blocker",
+        "minX": 1000,
+        "maxX": 1600,
+        "minY": -500,
+        "maxY": 500,
+        "minHeight": 0,
+        "maxHeight": 2500,
+        "floorLayer": 0
+      }
+    ],
+    "safePoints": [
+      {
+        "id": "safe.start",
+        "regionId": "region.demo",
+        "assetId": "asset.safe",
+        "pose": {
+          "x": -1000,
+          "y": 0,
+          "height": 0,
+          "floorLayer": 0
+        },
+        "facingMillidegrees": 0
+      }
+    ],
+    "interactions": [
+      {
+        "id": "interaction.console",
+        "regionId": "region.demo",
+        "assetId": "asset.interaction",
+        "pose": {
+          "x": 500,
+          "y": 0,
+          "height": 900,
+          "floorLayer": 0
+        },
+        "facingMillidegrees": 0
+      }
+    ],
+    "mechanisms": [
+      {
+        "id": "mechanism.gate",
+        "regionId": "region.demo",
+        "assetId": "asset.mechanism",
+        "pose": {
+          "x": 1300,
+          "y": 0,
+          "height": 0,
+          "floorLayer": 0
+        },
+        "facingMillidegrees": 0
+      }
+    ],
+    "waves": [
+      {
+        "id": "wave.demo",
+        "regionId": "region.demo",
+        "predecessorWaveId": "",
+        "trigger": {
+          "kind": "session_started",
+          "targetId": ""
+        }
+      }
+    ],
+    "waveSpawns": [
+      {
+        "waveId": "wave.demo",
+        "actorId": "actor.demo",
+        "delayTicks": 0,
+        "spawnOrder": 0
+      }
+    ],
+    "objectives": [
+      {
+        "id": "objective.complete",
+        "regionId": "region.demo",
+        "predecessorObjectiveId": "",
+        "completion": {
+          "kind": "wave_completed",
+          "targetId": "wave.demo"
+        }
+      }
+    ],
+    "interactionBindings": [
+      {
+        "interactionId": "interaction.console",
+        "operation": "operate",
+        "rangeMm": 1200,
+        "targetMechanismId": "mechanism.gate"
+      }
+    ],
+    "mechanismBindings": [
+      {
+        "mechanismId": "mechanism.gate",
+        "activation": "one_shot_activate",
+        "targetGroundBlockerId": "blocker.gate"
+      }
+    ]
+  },
+  "editor": {
+    "version": 1,
+    "items": [
+      {
+        "id": "objective.complete",
+        "label": "完成演示",
+        "ordinal": 4,
+        "canvasX": 720,
+        "canvasY": 120
+      },
+      {
+        "id": "wave.demo",
+        "label": "敌人波次",
+        "ordinal": 3,
+        "canvasX": 560,
+        "canvasY": 120
+      },
+      {
+        "id": "mechanism.gate",
+        "label": "一次性闸门机关",
+        "ordinal": 2,
+        "canvasX": 400,
+        "canvasY": 120
+      },
+      {
+        "id": "interaction.console",
+        "label": "操作台",
+        "ordinal": 1,
+        "canvasX": 240,
+        "canvasY": 120
+      },
+      {
+        "id": "player.start",
+        "label": "玩家起点",
+        "ordinal": 0,
+        "canvasX": 80,
+        "canvasY": 40
+      }
+    ]
+  }
+}

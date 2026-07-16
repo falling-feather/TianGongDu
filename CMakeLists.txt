@@ -162,6 +162,7 @@ target_sources(
     src/content-core/src/content_definition_provider.cpp
     src/content-core/src/layer_probe.cpp
     src/content-core/src/sandbox_package.cpp
+    src/content-core/src/sandbox_package_compiler.cpp
 )
 target_include_directories(
   tgd_content_core

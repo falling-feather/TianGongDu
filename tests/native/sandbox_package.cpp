@@ -218,6 +218,22 @@ bool has_diagnostic(const SandboxPackageValidation& validation,
                        });
 }
 
+bool has_exact_diagnostic(const SandboxPackageValidation& validation,
+                          SandboxDiagnosticCode code,
+                          SandboxDiagnosticDomain domain,
+                          std::uint32_t record_index,
+                          SandboxDiagnosticField field,
+                          StableContentKey subject,
+                          StableContentKey related = 0) {
+    return std::any_of(validation.diagnostics.begin(), validation.diagnostics.end(),
+                       [=](const auto& value) {
+                           return value.code == code && value.domain == domain &&
+                                  value.record_index == record_index &&
+                                  value.field == field && value.subject == subject &&
+                                  value.related == related;
+                       });
+}
+
 void check_core_validation() {
     Fixture fixture;
     fixture.actors[0].id = wave_id;
@@ -240,6 +256,85 @@ void check_core_validation() {
     expect(has_diagnostic(validation, SandboxDiagnosticCode::duplicate_id,
                           SandboxDiagnosticField::sandbox_id),
            "metadata duplicate was not precisely located");
+
+    fixture = Fixture{};
+    fixture.rebind();
+    fixture.regions[0].bounds.max_y = 10'001;
+    fixture.definition.regions = fixture.regions;
+    validation = validate_sandbox_package(fixture.definition, fixture.binding);
+    expect(has_exact_diagnostic(validation,
+                                SandboxDiagnosticCode::invalid_region_bounds,
+                                SandboxDiagnosticDomain::regions, 0,
+                                SandboxDiagnosticField::max_y, region_id.key,
+                                sandbox_id.key),
+           "region world overflow did not identify max_y");
+
+    fixture = Fixture{};
+    fixture.rebind();
+    fixture.definition.player.pose.height = 2'500;
+    validation = validate_sandbox_package(fixture.definition, fixture.binding);
+    expect(has_exact_diagnostic(validation,
+                                SandboxDiagnosticCode::object_out_of_bounds,
+                                SandboxDiagnosticDomain::player, 0,
+                                SandboxDiagnosticField::height, player_id.key,
+                                region_id.key),
+           "placement region overflow did not identify height");
+    const auto direct_height_validation = validation;
+    Fixture encoded_fixture;
+    auto encoded_height =
+        encode_sandbox_package(encoded_fixture.definition, encoded_fixture.binding);
+    expect(encoded_height.validation.valid(),
+           "semantic revalidation fixture failed to encode");
+    const auto player_offset = read_le<std::uint32_t>(
+        encoded_height.bytes, directory_entry(5) + 16
+    );
+    patch_le(encoded_height.bytes, player_offset + 56, std::int32_t{2'500});
+    reseal(encoded_height.bytes);
+    const auto decoded_height = decode_sandbox_package(encoded_height.bytes);
+    expect(decoded_height.validation.error ==
+               SandboxPackageError::semantic_validation_failed,
+           "decoder did not revalidate placement height");
+    expect(decoded_height.document == nullptr,
+           "semantic decode failure exposed a partial document");
+    expect(decoded_height.validation.diagnostics ==
+               direct_height_validation.diagnostics,
+           "direct and decoded validation produced different locators");
+
+    fixture = Fixture{};
+    fixture.rebind();
+    fixture.definition.player.pose.floor_layer = 1;
+    validation = validate_sandbox_package(fixture.definition, fixture.binding);
+    expect(has_exact_diagnostic(validation,
+                                SandboxDiagnosticCode::object_out_of_bounds,
+                                SandboxDiagnosticDomain::player, 0,
+                                SandboxDiagnosticField::floor_layer, player_id.key,
+                                region_id.key),
+           "placement region overflow did not identify floor_layer");
+
+    fixture = Fixture{};
+    fixture.rebind();
+    fixture.blockers[0].min_x = -6'000;
+    fixture.definition.ground_blockers = fixture.blockers;
+    validation = validate_sandbox_package(fixture.definition, fixture.binding);
+    expect(has_exact_diagnostic(validation,
+                                SandboxDiagnosticCode::invalid_blocker,
+                                SandboxDiagnosticDomain::ground_blockers, 0,
+                                SandboxDiagnosticField::min_x, blocker_id.key,
+                                region_id.key),
+           "blocker region overflow did not identify min_x");
+
+    fixture = Fixture{};
+    fixture.rebind();
+    fixture.definition.wave_spawns = {};
+    validation = validate_sandbox_package(fixture.definition, fixture.binding);
+    expect(has_exact_diagnostic(validation, SandboxDiagnosticCode::unreachable_node,
+                                SandboxDiagnosticDomain::waves, 0,
+                                SandboxDiagnosticField::id, wave_id.key),
+           "wave without a spawn used an imprecise locator");
+    expect(has_exact_diagnostic(validation, SandboxDiagnosticCode::unreachable_node,
+                                SandboxDiagnosticDomain::actors, 0,
+                                SandboxDiagnosticField::id, actor_id.key),
+           "actor without a spawn used an imprecise locator");
 
     fixture = Fixture{};
     fixture.rebind();

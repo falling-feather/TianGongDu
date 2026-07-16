@@ -118,14 +118,55 @@ template <typename Definition>
            inner.max_floor_layer <= outer.max_floor_layer;
 }
 
-[[nodiscard]] bool contains_pose(
+[[nodiscard]] SandboxDiagnosticField first_outside_bounds_field(
+    const contracts::SandboxBoundsMm& outer,
+    const contracts::SandboxBoundsMm& inner
+) noexcept {
+    if (inner.min_x < outer.min_x) {
+        return SandboxDiagnosticField::min_x;
+    }
+    if (inner.max_x > outer.max_x) {
+        return SandboxDiagnosticField::max_x;
+    }
+    if (inner.min_y < outer.min_y) {
+        return SandboxDiagnosticField::min_y;
+    }
+    if (inner.max_y > outer.max_y) {
+        return SandboxDiagnosticField::max_y;
+    }
+    if (inner.min_height < outer.min_height) {
+        return SandboxDiagnosticField::min_height;
+    }
+    if (inner.max_height > outer.max_height) {
+        return SandboxDiagnosticField::max_height;
+    }
+    if (inner.min_floor_layer < outer.min_floor_layer) {
+        return SandboxDiagnosticField::min_floor_layer;
+    }
+    if (inner.max_floor_layer > outer.max_floor_layer) {
+        return SandboxDiagnosticField::max_floor_layer;
+    }
+    return SandboxDiagnosticField::none;
+}
+
+[[nodiscard]] SandboxDiagnosticField first_outside_pose_field(
     const contracts::SandboxBoundsMm& bounds,
     contracts::GroundPoseMm pose
 ) noexcept {
-    return pose.x >= bounds.min_x && pose.x <= bounds.max_x && pose.y >= bounds.min_y &&
-           pose.y <= bounds.max_y && pose.height >= bounds.min_height &&
-           pose.height <= bounds.max_height && pose.floor_layer >= bounds.min_floor_layer &&
-           pose.floor_layer <= bounds.max_floor_layer;
+    if (pose.x < bounds.min_x || pose.x > bounds.max_x) {
+        return SandboxDiagnosticField::x;
+    }
+    if (pose.y < bounds.min_y || pose.y > bounds.max_y) {
+        return SandboxDiagnosticField::y;
+    }
+    if (pose.height < bounds.min_height || pose.height > bounds.max_height) {
+        return SandboxDiagnosticField::height;
+    }
+    if (pose.floor_layer < bounds.min_floor_layer ||
+        pose.floor_layer > bounds.max_floor_layer) {
+        return SandboxDiagnosticField::floor_layer;
+    }
+    return SandboxDiagnosticField::none;
 }
 
 [[nodiscard]] bool valid_asset_kind(contracts::SandboxAssetKind kind) noexcept {
@@ -396,9 +437,17 @@ void sort_diagnostics(std::vector<SandboxDiagnostic>& diagnostics) {
     for (std::size_t index = 0; index < definition.regions.size(); ++index) {
         const auto& value = definition.regions[index];
         validate_required_id(diagnostics, value.id, SandboxDiagnosticCode::invalid_region_bounds, SandboxDiagnosticDomain::regions, index, SandboxDiagnosticField::id);
-        if (!valid_bounds(value.bounds) ||
-            (valid_bounds(definition.bounds) && !contains_bounds(definition.bounds, value.bounds))) {
-            add_diagnostic(diagnostics, SandboxDiagnosticCode::invalid_region_bounds, SandboxDiagnosticDomain::regions, index, valid_bounds(value.bounds) ? SandboxDiagnosticField::none : invalid_bounds_field(value.bounds), value.id.key, definition.id.key);
+        if (!valid_bounds(value.bounds)) {
+            add_diagnostic(diagnostics, SandboxDiagnosticCode::invalid_region_bounds,
+                           SandboxDiagnosticDomain::regions, index,
+                           invalid_bounds_field(value.bounds), value.id.key,
+                           definition.id.key);
+        } else if (valid_bounds(definition.bounds) &&
+                   !contains_bounds(definition.bounds, value.bounds)) {
+            add_diagnostic(diagnostics, SandboxDiagnosticCode::invalid_region_bounds,
+                           SandboxDiagnosticDomain::regions, index,
+                           first_outside_bounds_field(definition.bounds, value.bounds),
+                           value.id.key, definition.id.key);
         }
     }
 
@@ -433,9 +482,17 @@ void sort_diagnostics(std::vector<SandboxDiagnostic>& diagnostics) {
         if (facing >= 360'000U) {
             add_diagnostic(diagnostics, invalid_code, domain, index, SandboxDiagnosticField::facing_millidegrees, id.key);
         }
-        if ((valid_bounds(definition.bounds) && !contains_pose(definition.bounds, pose)) ||
-            (region != nullptr && !contains_pose(region->bounds, pose))) {
-            add_diagnostic(diagnostics, SandboxDiagnosticCode::object_out_of_bounds, domain, index, SandboxDiagnosticField::x, id.key, region_id.key);
+        auto outside_field = SandboxDiagnosticField::none;
+        if (valid_bounds(definition.bounds)) {
+            outside_field = first_outside_pose_field(definition.bounds, pose);
+        }
+        if (outside_field == SandboxDiagnosticField::none && region != nullptr &&
+            valid_bounds(region->bounds)) {
+            outside_field = first_outside_pose_field(region->bounds, pose);
+        }
+        if (outside_field != SandboxDiagnosticField::none) {
+            add_diagnostic(diagnostics, SandboxDiagnosticCode::object_out_of_bounds,
+                           domain, index, outside_field, id.key, region_id.key);
         }
     };
 
@@ -483,8 +540,25 @@ void sort_diagnostics(std::vector<SandboxDiagnostic>& diagnostics) {
             add_diagnostic(diagnostics, SandboxDiagnosticCode::asset_kind_mismatch, SandboxDiagnosticDomain::ground_blockers, index, SandboxDiagnosticField::asset_id, value.id.key, value.asset_id.key);
         }
         const contracts::SandboxBoundsMm bounds{value.min_x, value.max_x, value.min_y, value.max_y, value.min_height, value.max_height, value.floor_layer, value.floor_layer};
-        if (!valid_bounds(bounds) || (valid_bounds(definition.bounds) && !contains_bounds(definition.bounds, bounds)) || (region != nullptr && !contains_bounds(region->bounds, bounds))) {
-            add_diagnostic(diagnostics, SandboxDiagnosticCode::invalid_blocker, SandboxDiagnosticDomain::ground_blockers, index, valid_bounds(bounds) ? SandboxDiagnosticField::none : invalid_bounds_field(bounds), value.id.key, value.region_id.key);
+        if (!valid_bounds(bounds)) {
+            add_diagnostic(diagnostics, SandboxDiagnosticCode::invalid_blocker,
+                           SandboxDiagnosticDomain::ground_blockers, index,
+                           invalid_bounds_field(bounds), value.id.key,
+                           value.region_id.key);
+        } else {
+            auto outside_field = SandboxDiagnosticField::none;
+            if (valid_bounds(definition.bounds)) {
+                outside_field = first_outside_bounds_field(definition.bounds, bounds);
+            }
+            if (outside_field == SandboxDiagnosticField::none && region != nullptr &&
+                valid_bounds(region->bounds)) {
+                outside_field = first_outside_bounds_field(region->bounds, bounds);
+            }
+            if (outside_field != SandboxDiagnosticField::none) {
+                add_diagnostic(diagnostics, SandboxDiagnosticCode::invalid_blocker,
+                               SandboxDiagnosticDomain::ground_blockers, index,
+                               outside_field, value.id.key, value.region_id.key);
+            }
         }
     }
 
@@ -561,7 +635,7 @@ void sort_diagnostics(std::vector<SandboxDiagnostic>& diagnostics) {
                          [&wave](const auto& spawn) { return spawn.wave_id == wave.id; })) {
             add_diagnostic(diagnostics, SandboxDiagnosticCode::unreachable_node,
                            SandboxDiagnosticDomain::waves, index,
-                           SandboxDiagnosticField::wave_id, wave.id.key);
+                           SandboxDiagnosticField::id, wave.id.key);
         }
     }
     for (std::size_t index = 0; index < definition.actors.size(); ++index) {
@@ -570,7 +644,7 @@ void sort_diagnostics(std::vector<SandboxDiagnostic>& diagnostics) {
                          [&actor](const auto& spawn) { return spawn.actor_id == actor.id; })) {
             add_diagnostic(diagnostics, SandboxDiagnosticCode::unreachable_node,
                            SandboxDiagnosticDomain::actors, index,
-                           SandboxDiagnosticField::actor_id, actor.id.key);
+                           SandboxDiagnosticField::id, actor.id.key);
         }
     }
 

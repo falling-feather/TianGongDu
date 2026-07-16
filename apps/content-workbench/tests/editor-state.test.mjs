@@ -215,3 +215,37 @@ test("invalid mutations and stale revisions preserve document/revision/lastValid
   assert.strictEqual(stale.lastValidDocument, state.lastValidDocument);
   assertUnchanged(before, stale);
 });
+
+test("nested symbol and non-enumerable unknown fields survive cloning and fail closed", () => {
+  const decorators = [
+    (pose) => {
+      pose[Symbol("unknown-pose-field")] = 1;
+    },
+    (pose) => {
+      Object.defineProperty(pose, "hiddenUnknownPoseField", {
+        value: 1,
+        enumerable: false
+      });
+    }
+  ];
+
+  for (const decorate of decorators) {
+    const state = createSandboxEditorState(fixture());
+    const before = snapshot(state);
+    const pose = { ...state.document.runtime.safePoints[0].pose };
+    decorate(pose);
+
+    const failed = reduceSandboxEditorState(state, {
+      type: "entity.update",
+      expectedRevision: 0,
+      collection: "safePoints",
+      key: "safe.start",
+      patch: { pose }
+    });
+
+    assert.equal(failed.lastError.code, "invalid_document");
+    assert.strictEqual(failed.document, state.document);
+    assert.strictEqual(failed.lastValidDocument, state.lastValidDocument);
+    assertUnchanged(before, failed);
+  }
+});

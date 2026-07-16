@@ -99,17 +99,28 @@ function expectWaveSpawnKey(value) {
 }
 
 function cloneValue(value) {
-  if (Array.isArray(value)) {
-    return value.map(cloneValue);
-  }
   if (value !== null && typeof value === "object") {
-    const clone = {};
-    for (const key of Object.keys(value)) {
+    const isArray = Array.isArray(value);
+    const clone = isArray ? [] : Object.create(Object.getPrototypeOf(value));
+    for (const key of Reflect.ownKeys(value)) {
+      if (isArray && key === "length") {
+        continue;
+      }
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (Object.prototype.hasOwnProperty.call(descriptor, "value")) {
+        Object.defineProperty(clone, key, {
+          value: cloneValue(descriptor.value),
+          enumerable: descriptor.enumerable,
+          configurable: true,
+          writable: true
+        });
+        continue;
+      }
       Object.defineProperty(clone, key, {
-        value: cloneValue(value[key]),
-        enumerable: true,
+        get: descriptor.get,
+        set: descriptor.set,
+        enumerable: descriptor.enumerable,
         configurable: true,
-        writable: true
       });
     }
     return clone;

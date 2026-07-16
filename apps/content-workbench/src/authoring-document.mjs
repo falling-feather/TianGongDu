@@ -299,8 +299,8 @@ function normalizePlayer(value, path) {
     facingMillidegrees: expectInteger(
       source.facingMillidegrees,
       path + ".facingMillidegrees",
-      INT32_MIN,
-      INT32_MAX
+      0,
+      UINT32_MAX
     )
   };
 }
@@ -321,8 +321,8 @@ function normalizePlacement(value, path) {
     facingMillidegrees: expectInteger(
       source.facingMillidegrees,
       path + ".facingMillidegrees",
-      INT32_MIN,
-      INT32_MAX
+      0,
+      UINT32_MAX
     )
   };
 }

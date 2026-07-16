@@ -136,6 +136,32 @@ test("migration is identity-only for 1.1.0", () => {
   });
 });
 
+test("fixture metadata Stable IDs are exact and globally distinct", () => {
+  const source = fixture();
+  assert.equal(source.runtime.packageId, "system-demo.package");
+  assert.equal(source.runtime.sandboxId, "system-demo.sandbox");
+
+  const recordIds = [
+    source.runtime.packageId,
+    source.runtime.sandboxId,
+    source.runtime.player.id
+  ];
+  for (const collection of [
+    "regions",
+    "assets",
+    "actors",
+    "groundBlockers",
+    "safePoints",
+    "interactions",
+    "mechanisms",
+    "waves",
+    "objectives"
+  ]) {
+    recordIds.push(...source.runtime[collection].map((record) => record.id));
+  }
+  assert.equal(new Set(recordIds).size, recordIds.length);
+});
+
 test("generic drafts may keep gameplay collections empty", () => {
   const source = fixture();
   for (const collection of [
@@ -196,6 +222,31 @@ test("unknown enums, unsafe integers, and capacities fail closed", () => {
       id: "actor.capacity." + index
     }));
   });
+});
+
+test("player and placement facing use the uint32 structural range", () => {
+  const maximum = 4294967295;
+  for (const value of [0, maximum]) {
+    const source = fixture();
+    source.runtime.player.facingMillidegrees = value;
+    source.runtime.actors[0].facingMillidegrees = value;
+    assert.doesNotThrow(() => normalizeSandboxAuthoringDocument(source));
+  }
+
+  for (const [owner, value] of [
+    ["player", -1],
+    ["player", maximum + 1],
+    ["placement", -1],
+    ["placement", maximum + 1]
+  ]) {
+    expectFormatFailure((source) => {
+      if (owner === "player") {
+        source.runtime.player.facingMillidegrees = value;
+      } else {
+        source.runtime.actors[0].facingMillidegrees = value;
+      }
+    });
+  }
 });
 
 test("GroundPose accepts only x/y/height/floorLayer", () => {

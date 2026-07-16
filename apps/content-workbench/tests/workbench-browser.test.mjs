@@ -76,15 +76,22 @@ test(
     const liveTrace = [];
     const consoleErrors = [];
     const expectedConflictConsole = [];
+    const expectedStaleSaveConsole = [];
     const expectedInvalidLoadConsole = [];
     const pageErrors = [];
     const requestErrors = [];
     const unexpectedResponses = [];
     let externalConflictResponses = 0;
+    let ignoredStaleSaveResponses = 0;
+    let staleSaveFailureActive = false;
     page.on("console", (message) => {
       if (message.type() === "error") {
         if (message.text().includes("status of 409 (Conflict)")) {
-          expectedConflictConsole.push(message.text());
+          if (staleSaveFailureActive) {
+            expectedStaleSaveConsole.push(message.text());
+          } else {
+            expectedConflictConsole.push(message.text());
+          }
         } else if (message.text().includes("status of 400 (Bad Request)")) {
           expectedInvalidLoadConsole.push(message.text());
         } else {
@@ -101,7 +108,11 @@ test(
         response.status() === 409 &&
         response.url().endsWith("/api/save")
       ) {
-        externalConflictResponses += 1;
+        if (staleSaveFailureActive) {
+          ignoredStaleSaveResponses += 1;
+        } else {
+          externalConflictResponses += 1;
+        }
       }
       if (
         response.status() >= 400 &&
@@ -247,6 +258,14 @@ test(
     let interceptedApply;
     let releaseApply;
     let duplicateApplyRequests = 0;
+    let applyPendingSaveRequests = 0;
+    const saveButton = page.locator("#save-button");
+    const countApplyPendingSaves = (request) => {
+      if (request.url().endsWith("/api/save")) {
+        applyPendingSaveRequests += 1;
+      }
+    };
+    page.on("request", countApplyPendingSaves);
     const applyIntercepted = new Promise((resolve) => {
       interceptedApply = resolve;
     });
@@ -274,17 +293,201 @@ test(
     assert.equal(await applyButton.getAttribute("aria-busy"), "true");
     assert.equal(await applyButton.getAttribute("aria-disabled"), "true");
     assert.equal(await focusLabel(page), "apply-button");
+    await page.evaluate(() => document.querySelector("#save-button").click());
     releaseApply();
     await doubleApply;
     await waitForRevision(page, 1);
     await page.unroute("**/api/update", holdApplyRoute);
+    page.off("request", countApplyPendingSaves);
     assert.equal(duplicateApplyRequests, 1);
+    assert.equal(applyPendingSaveRequests, 0);
     assert.equal(await page.locator("#revision-value").textContent(), "1");
     assert.equal(await page.locator("#dirty-value").textContent(), "是");
     assert.equal(await page.locator("#error-live").textContent(), "");
     assert.equal(await applyButton.getAttribute("aria-busy"), "false");
     assert.equal(await applyButton.getAttribute("aria-disabled"), "false");
     assert.equal(await focusLabel(page), "apply-button");
+
+    let delayedSaveSuccessSeen;
+    let releaseDelayedSaveSuccess;
+    let delayedSaveSuccessRequests = 0;
+    let delayedSaveSuccessUpdates = 0;
+    const delayedSaveSuccessReady = new Promise((resolve) => {
+      delayedSaveSuccessSeen = resolve;
+    });
+    const delayedSaveSuccessReleased = new Promise((resolve) => {
+      releaseDelayedSaveSuccess = resolve;
+    });
+    const countDelayedSaveSuccessUpdates = (request) => {
+      if (request.url().endsWith("/api/update")) {
+        delayedSaveSuccessUpdates += 1;
+      }
+    };
+    const holdSuccessfulSaveResponse = async (route) => {
+      delayedSaveSuccessRequests += 1;
+      const response = await route.fetch();
+      delayedSaveSuccessSeen();
+      await delayedSaveSuccessReleased;
+      await route.fulfill({ response });
+    };
+    page.on("request", countDelayedSaveSuccessUpdates);
+    await page.route("**/api/save", holdSuccessfulSaveResponse);
+    await saveButton.click();
+    await delayedSaveSuccessReady;
+    assert.equal(running.controller.editorState.revision, 1);
+    assert.equal(running.controller.editorState.savedRevision, 1);
+    assert.equal(running.controller.editorState.dirty, false);
+    assert.equal(
+      running.controller.editorState.document.runtime.player.pose.x,
+      101
+    );
+    assert.equal(
+      JSON.parse(await readFile(path.join(root, "demo.json"), "utf8")).runtime.player.pose.x,
+      101
+    );
+    await page.locator('input[name="x"]').fill("102");
+    await applyButton.click();
+    await waitForRevision(page, 2);
+    assert.equal(await focusLabel(page), "apply-button");
+    releaseDelayedSaveSuccess();
+    await page.waitForFunction(
+      () => document.querySelector("#save-button")?.getAttribute("aria-busy") === "false"
+    );
+    await page.unroute("**/api/save", holdSuccessfulSaveResponse);
+    page.off("request", countDelayedSaveSuccessUpdates);
+    assert.equal(delayedSaveSuccessRequests, 1);
+    assert.equal(delayedSaveSuccessUpdates, 1);
+    assert.equal(await page.locator("#revision-value").textContent(), "2");
+    assert.equal(await page.locator("#saved-revision-value").textContent(), "1");
+    assert.equal(await page.locator("#dirty-value").textContent(), "是");
+    assert.equal(await page.locator('input[name="x"]').inputValue(), "102");
+    assert.equal(await focusLabel(page), "apply-button");
+    assert.equal(await page.locator("#conflict-banner").isHidden(), true);
+    assert.equal(await page.locator("#error-live").textContent(), "");
+    assert.equal(running.controller.editorState.revision, 2);
+    assert.equal(running.controller.editorState.savedRevision, 1);
+    assert.equal(running.controller.editorState.dirty, true);
+    assert.equal(
+      running.controller.editorState.document.runtime.player.pose.x,
+      102
+    );
+    assert.equal(
+      running.controller.editorState.lastValidDocument.runtime.player.pose.x,
+      102
+    );
+    assert.equal(
+      JSON.parse(await readFile(path.join(root, "demo.json"), "utf8")).runtime.player.pose.x,
+      101
+    );
+
+    let staleSaveFailureSeen;
+    let releaseStaleSaveFailure;
+    let staleSaveFailureRequests = 0;
+    let staleSaveFailureUpdates = 0;
+    const staleSaveFailureReady = new Promise((resolve) => {
+      staleSaveFailureSeen = resolve;
+    });
+    const staleSaveFailureReleased = new Promise((resolve) => {
+      releaseStaleSaveFailure = resolve;
+    });
+    const countStaleSaveFailureUpdates = (request) => {
+      if (request.url().endsWith("/api/update")) {
+        staleSaveFailureUpdates += 1;
+      }
+    };
+    const holdStaleSaveRequest = async (route) => {
+      staleSaveFailureRequests += 1;
+      staleSaveFailureSeen();
+      await staleSaveFailureReleased;
+      await route.continue();
+    };
+    page.on("request", countStaleSaveFailureUpdates);
+    await page.route("**/api/save", holdStaleSaveRequest);
+    staleSaveFailureActive = true;
+    await saveButton.click();
+    await staleSaveFailureReady;
+    await page.locator('input[name="x"]').fill("103");
+    await applyButton.click();
+    await waitForRevision(page, 3);
+    releaseStaleSaveFailure();
+    await page.waitForFunction(
+      () => document.querySelector("#save-button")?.getAttribute("aria-busy") === "false"
+    );
+    staleSaveFailureActive = false;
+    await page.unroute("**/api/save", holdStaleSaveRequest);
+    page.off("request", countStaleSaveFailureUpdates);
+    assert.equal(staleSaveFailureRequests, 1);
+    assert.equal(staleSaveFailureUpdates, 1);
+    assert.equal(ignoredStaleSaveResponses, 1);
+    assert.equal(await page.locator("#revision-value").textContent(), "3");
+    assert.equal(await page.locator("#saved-revision-value").textContent(), "1");
+    assert.equal(await page.locator("#dirty-value").textContent(), "是");
+    assert.equal(await page.locator('input[name="x"]').inputValue(), "103");
+    assert.equal(await focusLabel(page), "apply-button");
+    assert.equal(await page.locator("#conflict-banner").isHidden(), true);
+    assert.equal(await page.locator("#error-live").textContent(), "");
+
+    let bufferedSaveSeen;
+    let releaseBufferedSave;
+    let bufferedSaveRequests = 0;
+    let bufferedSaveUpdates = 0;
+    const bufferedSaveReady = new Promise((resolve) => {
+      bufferedSaveSeen = resolve;
+    });
+    const bufferedSaveReleased = new Promise((resolve) => {
+      releaseBufferedSave = resolve;
+    });
+    const countBufferedSaveUpdates = (request) => {
+      if (request.url().endsWith("/api/update")) {
+        bufferedSaveUpdates += 1;
+      }
+    };
+    const holdBufferedSaveResponse = async (route) => {
+      bufferedSaveRequests += 1;
+      const response = await route.fetch();
+      bufferedSaveSeen();
+      await bufferedSaveReleased;
+      await route.fulfill({ response });
+    };
+    page.on("request", countBufferedSaveUpdates);
+    await page.route("**/api/save", holdBufferedSaveResponse);
+    await saveButton.click();
+    await bufferedSaveReady;
+    const bufferedX = page.locator('input[name="x"]');
+    await bufferedX.fill("104");
+    await page.locator('input[name="y"]').focus();
+    assert.equal(await focusLabel(page), "y");
+    releaseBufferedSave();
+    await page.waitForFunction(
+      () => document.querySelector("#save-button")?.getAttribute("aria-busy") === "false"
+    );
+    await page.unroute("**/api/save", holdBufferedSaveResponse);
+    page.off("request", countBufferedSaveUpdates);
+    assert.equal(bufferedSaveRequests, 1);
+    assert.equal(bufferedSaveUpdates, 0);
+    assert.equal(await page.locator("#revision-value").textContent(), "3");
+    assert.equal(await page.locator("#saved-revision-value").textContent(), "3");
+    assert.equal(await page.locator("#dirty-value").textContent(), "否");
+    assert.equal(await bufferedX.inputValue(), "104");
+    assert.equal(await focusLabel(page), "y");
+    assert.equal(running.controller.editorState.revision, 3);
+    assert.equal(running.controller.editorState.savedRevision, 3);
+    assert.equal(running.controller.editorState.dirty, false);
+    assert.equal(
+      running.controller.editorState.document.runtime.player.pose.x,
+      103
+    );
+    assert.equal(
+      running.controller.editorState.lastValidDocument.runtime.player.pose.x,
+      103
+    );
+    assert.equal(
+      JSON.parse(await readFile(path.join(root, "demo.json"), "utf8")).runtime.player.pose.x,
+      103
+    );
+    await bufferedX.focus();
+    await bufferedX.press("Escape");
+    assert.equal(await bufferedX.inputValue(), "103");
 
     const edits = [
       ["actors", "x", "2201"],
@@ -293,7 +496,7 @@ test(
       ["interactions", "x", "501"],
       ["mechanisms", "x", "1301"]
     ];
-    let revision = 1;
+    let revision = 3;
     for (const [kind, field, value] of edits) {
       await selectObject(page, kind);
       const idInput = page.locator('input[name="id"]');
@@ -321,7 +524,6 @@ test(
       await route.continue();
     };
     await page.route("**/api/save", holdSaveRoute);
-    const saveButton = page.locator("#save-button");
     await saveButton.scrollIntoViewIfNeeded();
     const saveBox = await saveButton.boundingBox();
     assert.ok(saveBox);
@@ -358,7 +560,7 @@ test(
     );
     assert.equal(await focusLabel(page), "object-tree");
     await selectObject(page, "player");
-    assert.equal(await page.locator('input[name="x"]').inputValue(), "101");
+    assert.equal(await page.locator('input[name="x"]').inputValue(), "103");
 
     const cdp = await page.context().newCDPSession(page);
     await cdp.send("Emulation.setPageScaleFactor", { pageScaleFactor: 2 });
@@ -415,7 +617,7 @@ test(
     await selectObject(page, "actors");
     await page.locator('input[name="x"]').fill("2202");
     await page.locator("#apply-button").click();
-    await waitForRevision(page, 7);
+    await waitForRevision(page, 9);
     page.once("dialog", async (dialog) => {
       assert.equal(dialog.type(), "confirm");
       await dialog.dismiss();
@@ -431,6 +633,7 @@ test(
     external.editor.items[0].label = "外部修改";
     const externalBytes = JSON.stringify(external, null, 2) + "\n";
     await writeFile(path.join(root, "demo.json"), externalBytes, "utf8");
+    assert.equal(await page.locator("#save-button").isDisabled(), false);
     await page.locator("#save-button").click();
     await page.waitForFunction(
       () => document.querySelector("#conflict-banner")?.hidden === false
@@ -490,9 +693,30 @@ test(
     );
     t.diagnostic("duplicate-apply requests: " + duplicateApplyRequests);
     t.diagnostic("duplicate-save requests: " + duplicateSaveRequests);
+    t.diagnostic(
+      "stale-save success requests/update requests: " +
+        delayedSaveSuccessRequests +
+        "/" +
+        delayedSaveSuccessUpdates
+    );
+    t.diagnostic(
+      "stale-save failure requests/update requests: " +
+        staleSaveFailureRequests +
+        "/" +
+        staleSaveFailureUpdates
+    );
+    t.diagnostic(
+      "buffered-save requests/update requests: " +
+        bufferedSaveRequests +
+        "/" +
+        bufferedSaveUpdates
+    );
     t.diagnostic("external-conflict 409 responses: " + externalConflictResponses);
     t.diagnostic(
       "expected conflict console entries: " + expectedConflictConsole.length
+    );
+    t.diagnostic(
+      "expected stale-save console entries: " + expectedStaleSaveConsole.length
     );
     t.diagnostic(
       "expected invalid-load console entries: " +
@@ -503,6 +727,7 @@ test(
     t.diagnostic("unexpected HTTP errors: " + unexpectedResponses.length);
     assert.deepEqual(consoleErrors, []);
     assert.equal(expectedConflictConsole.length, 1);
+    assert.equal(expectedStaleSaveConsole.length, 1);
     assert.equal(expectedInvalidLoadConsole.length, 1);
     assert.deepEqual(pageErrors, []);
     assert.deepEqual(requestErrors, []);

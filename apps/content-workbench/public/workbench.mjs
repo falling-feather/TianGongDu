@@ -127,11 +127,15 @@ async function api(path, options = {}) {
   });
   const payload = await response.json();
   if (!response.ok) {
-    if (payload.state) {
-      state = payload.state;
-    }
     const error = new Error(userMessage(payload.error?.code));
     error.code = payload.error?.code ?? "request_failed";
+    if (payload.state) {
+      if (options.deferErrorState) {
+        error.state = payload.state;
+      } else {
+        state = payload.state;
+      }
+    }
     throw error;
   }
   return payload.state;
@@ -743,6 +747,43 @@ async function reloadDocument(confirmFromConflict = false) {
   }
 }
 
+function captureFocusedControl() {
+  const active = document.activeElement;
+  if (!(active instanceof HTMLElement)) {
+    return null;
+  }
+  return {
+    id: active.id,
+    name: active.getAttribute("name") ?? "",
+    selectionStart:
+      typeof active.selectionStart === "number" ? active.selectionStart : null,
+    selectionEnd: typeof active.selectionEnd === "number" ? active.selectionEnd : null
+  };
+}
+
+function restoreFocusedControl(snapshot) {
+  if (!snapshot) {
+    return;
+  }
+  let target = snapshot.id ? document.getElementById(snapshot.id) : null;
+  if (!target && snapshot.name) {
+    target = Array.from(elements.inspectorForm.elements).find(
+      (element) => element.getAttribute("name") === snapshot.name
+    );
+  }
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+  target.focus();
+  if (
+    snapshot.selectionStart !== null &&
+    snapshot.selectionEnd !== null &&
+    typeof target.setSelectionRange === "function"
+  ) {
+    target.setSelectionRange(snapshot.selectionStart, snapshot.selectionEnd);
+  }
+}
+
 async function saveDocument() {
   if (!state.opened || state.conflict || saveInFlight) {
     return;
@@ -752,19 +793,27 @@ async function saveDocument() {
     return;
   }
   clearFeedback();
-  const savingRevision = state.revision;
+  const savingState = state;
+  const savingRevision = savingState.revision;
   saveInFlight = true;
   updateSaveAvailability();
   elements.saveButton.focus();
   try {
-    state = await api("/api/save", {
+    const savedState = await api("/api/save", {
       method: "POST",
+      deferErrorState: true,
       body: {
-        expectedRevision: state.revision,
-        expectedCas: state.cas
+        expectedRevision: savingState.revision,
+        expectedCas: savingState.cas
       }
     });
+    if (state !== savingState) {
+      return;
+    }
+    const focusedControl = captureFocusedControl();
+    state = savedState;
     render();
+    restoreFocusedControl(focusedControl);
     if (state.dirty) {
       setStatus(
         "磁盘已保存 revision " +
@@ -775,12 +824,19 @@ async function saveDocument() {
       setStatus("已保存 revision " + state.savedRevision + "。");
     }
   } catch (error) {
+    if (state !== savingState) {
+      return;
+    }
+    const focusedControl = captureFocusedControl();
+    if (error.state) {
+      state = error.state;
+    }
     render();
+    restoreFocusedControl(focusedControl);
     presentError(error);
   } finally {
     saveInFlight = false;
     updateSaveAvailability();
-    elements.saveButton.focus();
   }
 }
 

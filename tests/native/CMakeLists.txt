@@ -60,6 +60,16 @@ add_test(
   COMMAND tgd_native_sandbox_package_contract
 )
 
+add_executable(tgd_native_sandbox_gameplay_binding sandbox_gameplay_binding.cpp)
+target_compile_features(tgd_native_sandbox_gameplay_binding PRIVATE cxx_std_20)
+tgd_enable_strict_warnings(tgd_native_sandbox_gameplay_binding)
+target_link_libraries(tgd_native_sandbox_gameplay_binding PRIVATE tgd_contracts)
+
+add_test(
+  NAME tgd.native.sandbox-gameplay-binding
+  COMMAND tgd_native_sandbox_gameplay_binding
+)
+
 add_executable(tgd_native_profile_progress profile_progress.cpp)
 target_compile_features(tgd_native_profile_progress PRIVATE cxx_std_20)
 tgd_enable_strict_warnings(tgd_native_profile_progress)

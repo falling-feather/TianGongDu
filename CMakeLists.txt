@@ -110,6 +110,7 @@ target_sources(
     src/gameplay/src/quest_condition.cpp
     src/gameplay/src/quest_runtime.cpp
     src/gameplay/src/quest_ui_projection.cpp
+    src/gameplay/src/sandbox_session.cpp
     src/gameplay/src/session_input_state.cpp
     src/gameplay/src/vertical_slice_session.cpp
 )

@@ -1,0 +1,924 @@
+const INT16_MIN = -32768;
+const INT16_MAX = 32767;
+const INT32_MIN = -2147483648;
+const INT32_MAX = 2147483647;
+const UINT32_MAX = 4294967295;
+
+const USER_MESSAGES = Object.freeze({
+  invalid_document: "文件字段格式不符合当前编辑器要求。当前草稿保持不变。",
+  invalid_path: "请选择工作区内既有的相对 JSON 文件。",
+  path_escape: "该路径不在当前工作区的安全范围内。",
+  not_found: "未找到该作者文档。",
+  access_denied: "当前用户无法读取或保存该文件。",
+  document_too_large: "该作者文档超过当前编辑器允许的大小。",
+  invalid_encoding: "该作者文档不是有效的 UTF-8 文本。",
+  stale_revision: "草稿已在其他操作中更新，请检查当前字段后重试。",
+  external_change: "磁盘文件已被外部修改，当前内存草稿没有被覆盖。",
+  dirty_confirmation_required: "请明确确认是否丢弃当前未保存修改。",
+  unknown_entity: "选中的对象已不存在，当前草稿保持不变。",
+  invalid_request: "当前操作包含无法接受的字段值。",
+  io_error: "文件操作未完成，原文件与当前草稿均保持不变。",
+  save_failed: "保存未完成，当前草稿仍处于未保存状态。",
+  no_document: "请先打开一个作者文档。"
+});
+
+const elements = {
+  workspaceForm: document.querySelector("#workspace-form"),
+  pathInput: document.querySelector("#path-input"),
+  openButton: document.querySelector("#open-button"),
+  reloadButton: document.querySelector("#reload-button"),
+  saveButton: document.querySelector("#save-button"),
+  schema: document.querySelector("#schema-value"),
+  revision: document.querySelector("#revision-value"),
+  savedRevision: document.querySelector("#saved-revision-value"),
+  dirty: document.querySelector("#dirty-value"),
+  openedPath: document.querySelector("#opened-path"),
+  conflict: document.querySelector("#conflict-banner"),
+  resolveConflictButton: document.querySelector("#resolve-conflict-button"),
+  conflictDialog: document.querySelector("#conflict-dialog"),
+  continueEditingButton: document.querySelector("#continue-editing-button"),
+  loadDiskButton: document.querySelector("#load-disk-button"),
+  objectTree: document.querySelector("#object-tree"),
+  selectionSummary: document.querySelector("#selection-summary"),
+  inspectorForm: document.querySelector("#inspector-form"),
+  inspectorFieldset: document.querySelector("#inspector-fieldset"),
+  fieldGrid: document.querySelector("#field-grid"),
+  applyButton: document.querySelector("#apply-button"),
+  status: document.querySelector("#status-live"),
+  error: document.querySelector("#error-live")
+};
+
+const GROUPS = [
+  { key: "player", label: "Player", records: (runtime) => [runtime.player] },
+  { key: "actors", label: "Actors", records: (runtime) => runtime.actors },
+  {
+    key: "groundBlockers",
+    label: "Ground Blockers",
+    records: (runtime) => runtime.groundBlockers
+  },
+  {
+    key: "safePoints",
+    label: "Safe Points",
+    records: (runtime) => runtime.safePoints
+  },
+  {
+    key: "interactions",
+    label: "Interactions",
+    records: (runtime) => runtime.interactions
+  },
+  {
+    key: "mechanisms",
+    label: "Mechanisms",
+    records: (runtime) => runtime.mechanisms
+  }
+];
+
+let state = {
+  opened: false,
+  relativePath: null,
+  cas: null,
+  conflict: false,
+  document: null,
+  revision: null,
+  savedRevision: null,
+  dirty: false,
+  lastError: null
+};
+let selectedGroup = "player";
+let selectedId = null;
+let treeActiveKey = "group:player";
+let conflictTrigger = null;
+let activeFields = [];
+const expandedGroups = new Set(GROUPS.map((group) => group.key));
+const fieldBuffers = new Map();
+
+function clearFeedback() {
+  elements.error.textContent = "";
+}
+
+function setStatus(message) {
+  elements.status.textContent = message;
+}
+
+function setError(message) {
+  elements.error.textContent = message;
+}
+
+function userMessage(code) {
+  return USER_MESSAGES[code] ?? "操作未完成，当前草稿保持不变。";
+}
+
+function presentError(error) {
+  if (error.code === "external_change" && state.conflict) {
+    setError("");
+    setStatus("检测到磁盘文件变化。内存草稿仍保留，请打开冲突处理。");
+    return;
+  }
+  setError(userMessage(error.code));
+}
+
+async function api(path, options = {}) {
+  const response = await fetch(path, {
+    method: options.method ?? "GET",
+    headers: options.body ? { "Content-Type": "application/json" } : {},
+    body: options.body ? JSON.stringify(options.body) : undefined
+  });
+  const payload = await response.json();
+  if (!response.ok) {
+    if (payload.state) {
+      state = payload.state;
+    }
+    const error = new Error(userMessage(payload.error?.code));
+    error.code = payload.error?.code ?? "request_failed";
+    throw error;
+  }
+  return payload.state;
+}
+
+function groupByKey(key) {
+  return GROUPS.find((group) => group.key === key);
+}
+
+function recordsFor(group) {
+  return state.document ? group.records(state.document.runtime) : [];
+}
+
+function editorLabel(id) {
+  return (
+    state.document?.editor.items.find((item) => item.id === id)?.label ?? id
+  );
+}
+
+function currentRecord() {
+  if (!state.document) {
+    return null;
+  }
+  const group = groupByKey(selectedGroup);
+  return recordsFor(group).find((record) => record.id === selectedId) ?? null;
+}
+
+function objectBufferKey(group = selectedGroup, id = selectedId) {
+  return group + "\u0000" + id;
+}
+
+function hasFieldBuffers() {
+  return [...fieldBuffers.values()].some((buffer) => buffer.size > 0);
+}
+
+function updateSaveAvailability() {
+  const nativeDisabled = !state.opened || hasFieldBuffers();
+  elements.saveButton.disabled = nativeDisabled;
+  elements.saveButton.setAttribute(
+    "aria-disabled",
+    String(nativeDisabled || state.conflict)
+  );
+}
+
+function bufferedEntry(field) {
+  return fieldBuffers.get(objectBufferKey())?.get(field.name) ?? null;
+}
+
+function recordFieldBuffer(field, input, invalid = false) {
+  const key = objectBufferKey();
+  let buffer = fieldBuffers.get(key);
+  const original = String(field.value);
+  if (input.value === original) {
+    buffer?.delete(field.name);
+    if (buffer?.size === 0) {
+      fieldBuffers.delete(key);
+    }
+  } else {
+    if (!buffer) {
+      buffer = new Map();
+      fieldBuffers.set(key, buffer);
+    }
+    buffer.set(field.name, { value: input.value, invalid });
+  }
+  updateSaveAvailability();
+}
+
+function clearCurrentBuffer() {
+  fieldBuffers.delete(objectBufferKey());
+}
+
+function addSection(label) {
+  const heading = document.createElement("p");
+  heading.className = "field-section";
+  heading.textContent = label;
+  elements.fieldGrid.append(heading);
+}
+
+function textField(name, label, value, options = {}) {
+  return {
+    name,
+    label,
+    value,
+    kind: options.kind ?? "text",
+    min: options.min,
+    max: options.max,
+    readonly: options.readonly ?? false,
+    options: options.options ?? null,
+    wide: options.wide ?? false
+  };
+}
+
+function placementFields(record) {
+  return [
+    textField("regionId", "Region ID", record.regionId),
+    textField("assetId", "Asset ID", record.assetId),
+    textField("x", "Pose X", record.pose.x, {
+      kind: "integer",
+      min: INT32_MIN,
+      max: INT32_MAX
+    }),
+    textField("y", "Pose Y", record.pose.y, {
+      kind: "integer",
+      min: INT32_MIN,
+      max: INT32_MAX
+    }),
+    textField("height", "Height", record.pose.height, {
+      kind: "integer",
+      min: INT32_MIN,
+      max: INT32_MAX
+    }),
+    textField("floorLayer", "Floor Layer", record.pose.floorLayer, {
+      kind: "integer",
+      min: INT16_MIN,
+      max: INT16_MAX
+    }),
+    textField(
+      "facingMillidegrees",
+      "Facing (millidegrees)",
+      record.facingMillidegrees,
+      { kind: "integer", min: 0, max: UINT32_MAX }
+    )
+  ];
+}
+
+function fieldsFor(group, record) {
+  const fields = [
+    textField("id", "Stable ID（只读，可复制）", record.id, {
+      readonly: true,
+      wide: true
+    })
+  ];
+
+  if (group.key === "groundBlockers") {
+    fields.push(
+      textField("regionId", "Region ID", record.regionId),
+      textField("assetId", "Asset ID", record.assetId),
+      ...[
+        ["minX", "Min X", INT32_MIN, INT32_MAX],
+        ["maxX", "Max X", INT32_MIN, INT32_MAX],
+        ["minY", "Min Y", INT32_MIN, INT32_MAX],
+        ["maxY", "Max Y", INT32_MIN, INT32_MAX],
+        ["minHeight", "Min Height", INT32_MIN, INT32_MAX],
+        ["maxHeight", "Max Height", INT32_MIN, INT32_MAX],
+        ["floorLayer", "Floor Layer", INT16_MIN, INT16_MAX]
+      ].map(([name, label, min, max]) =>
+        textField(name, label, record[name], { kind: "integer", min, max })
+      )
+    );
+    return fields;
+  }
+
+  fields.push(...placementFields(record));
+  if (group.key === "player") {
+    fields.splice(
+      3,
+      0,
+      textField(
+        "initialSafePointId",
+        "Initial Safe Point ID",
+        record.initialSafePointId
+      )
+    );
+  }
+
+  if (group.key === "interactions") {
+    const binding = state.document.runtime.interactionBindings.find(
+      (value) => value.interactionId === record.id
+    );
+    if (binding) {
+      fields.push({ section: "Interaction Binding（既有记录）" });
+      fields.push(
+        textField("operation", "Operation", binding.operation, {
+          kind: "enum",
+          options: ["operate"]
+        }),
+        textField("rangeMm", "Range (mm)", binding.rangeMm, {
+          kind: "integer",
+          min: 500,
+          max: 3000
+        }),
+        textField(
+          "targetMechanismId",
+          "Target Mechanism ID",
+          binding.targetMechanismId,
+          {
+            kind: "enum",
+            options: state.document.runtime.mechanisms.map((value) => value.id)
+          }
+        )
+      );
+    }
+  }
+
+  if (group.key === "mechanisms") {
+    const binding = state.document.runtime.mechanismBindings.find(
+      (value) => value.mechanismId === record.id
+    );
+    if (binding) {
+      fields.push({ section: "Mechanism Binding（既有记录）" });
+      fields.push(
+        textField("activation", "Activation", binding.activation, {
+          kind: "enum",
+          options: ["one_shot_activate"]
+        }),
+        textField(
+          "targetGroundBlockerId",
+          "Target Ground Blocker ID",
+          binding.targetGroundBlockerId,
+          {
+            kind: "enum",
+            options: state.document.runtime.groundBlockers.map(
+              (value) => value.id
+            )
+          }
+        )
+      );
+    }
+  }
+  return fields;
+}
+
+function renderField(field) {
+  if (field.section) {
+    addSection(field.section);
+    return;
+  }
+  const label = document.createElement("label");
+  label.className = "form-field" + (field.wide ? " wide" : "");
+  label.textContent = field.label;
+
+  let input;
+  if (field.kind === "enum") {
+    input = document.createElement("select");
+    const options = [...field.options];
+    if (!options.includes(String(field.value))) {
+      options.unshift(String(field.value));
+    }
+    for (const value of options) {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = value;
+      input.append(option);
+    }
+  } else {
+    input = document.createElement("input");
+    input.type = "text";
+    input.inputMode = field.kind === "integer" ? "numeric" : "text";
+    input.autocomplete = "off";
+    input.spellcheck = false;
+  }
+  const buffered = bufferedEntry(field);
+  input.name = field.name;
+  input.value = buffered?.value ?? String(field.value);
+  input.readOnly = field.readonly;
+  input.setAttribute("aria-describedby", "error-live");
+  if (buffered?.invalid) {
+    input.setAttribute("aria-invalid", "true");
+  }
+  input.addEventListener("input", () => {
+    input.removeAttribute("aria-invalid");
+    recordFieldBuffer(field, input, false);
+    clearFeedback();
+  });
+  input.addEventListener("change", () => {
+    input.removeAttribute("aria-invalid");
+    recordFieldBuffer(field, input, false);
+    clearFeedback();
+  });
+  input.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || field.readonly) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    input.value = String(field.value);
+    input.removeAttribute("aria-invalid");
+    recordFieldBuffer(field, input, false);
+    clearFeedback();
+    setStatus("已撤销当前字段的未应用输入。");
+  });
+  label.append(input);
+  elements.fieldGrid.append(label);
+}
+
+function activeTreeItem() {
+  return elements.objectTree.querySelector(
+    '[data-tree-key="' + CSS.escape(treeActiveKey) + '"]'
+  );
+}
+
+function visibleTreeItems() {
+  return [...elements.objectTree.querySelectorAll('[role="treeitem"]')].filter(
+    (item) => !item.closest('[role="group"][hidden]')
+  );
+}
+
+function updateTreeActiveVisual() {
+  for (const item of elements.objectTree.querySelectorAll('[role="treeitem"]')) {
+    item.classList.toggle("tree-active", item.dataset.treeKey === treeActiveKey);
+  }
+  const active = activeTreeItem();
+  if (active) {
+    elements.objectTree.setAttribute("aria-activedescendant", active.id);
+  } else {
+    elements.objectTree.removeAttribute("aria-activedescendant");
+  }
+}
+
+function setTreeActive(key) {
+  treeActiveKey = key;
+  updateTreeActiveVisual();
+}
+
+function selectObject(groupKey, id) {
+  selectedGroup = groupKey;
+  selectedId = id;
+  treeActiveKey = "object:" + groupKey + ":" + id;
+  clearFeedback();
+  render();
+  elements.objectTree.focus();
+}
+
+function selectGroup(groupKey) {
+  selectedGroup = groupKey;
+  selectedId = recordsFor(groupByKey(groupKey))[0]?.id ?? null;
+  treeActiveKey = "group:" + groupKey;
+  clearFeedback();
+  render();
+  elements.objectTree.focus();
+}
+
+function renderTree() {
+  elements.objectTree.replaceChildren();
+  let nodeIndex = 0;
+  for (const group of GROUPS) {
+    const records = recordsFor(group);
+    const groupItem = document.createElement("li");
+    const groupKey = "group:" + group.key;
+    groupItem.id = "tree-node-" + nodeIndex;
+    nodeIndex += 1;
+    groupItem.className = "tree-item tree-group";
+    groupItem.dataset.treeKey = groupKey;
+    groupItem.dataset.nodeType = "group";
+    groupItem.dataset.groupKey = group.key;
+    groupItem.setAttribute("role", "treeitem");
+    groupItem.setAttribute("aria-level", "1");
+    groupItem.setAttribute(
+      "aria-expanded",
+      String(expandedGroups.has(group.key))
+    );
+
+    const groupRow = document.createElement("div");
+    groupRow.className = "tree-row";
+    groupRow.textContent = group.label;
+    const count = document.createElement("span");
+    count.textContent = String(records.length);
+    count.setAttribute("aria-label", records.length + " records");
+    groupRow.append(count);
+    groupRow.addEventListener("click", () => selectGroup(group.key));
+    groupItem.append(groupRow);
+
+    const childGroup = document.createElement("ul");
+    childGroup.className = "tree-children";
+    childGroup.setAttribute("role", "group");
+    childGroup.hidden = !expandedGroups.has(group.key);
+    for (const record of records) {
+      const objectItem = document.createElement("li");
+      const objectKey = "object:" + group.key + ":" + record.id;
+      objectItem.id = "tree-node-" + nodeIndex;
+      nodeIndex += 1;
+      objectItem.className = "tree-item tree-object";
+      objectItem.dataset.treeKey = objectKey;
+      objectItem.dataset.nodeType = "object";
+      objectItem.dataset.groupKey = group.key;
+      objectItem.dataset.objectKind = group.key;
+      objectItem.dataset.objectId = record.id;
+      objectItem.setAttribute("role", "treeitem");
+      objectItem.setAttribute("aria-level", "2");
+      objectItem.setAttribute(
+        "aria-selected",
+        String(selectedGroup === group.key && selectedId === record.id)
+      );
+      const objectRow = document.createElement("div");
+      objectRow.className = "tree-row";
+      const label = document.createElement("span");
+      label.textContent = editorLabel(record.id);
+      const stableId = document.createElement("small");
+      stableId.textContent = record.id;
+      objectRow.append(label, stableId);
+      objectRow.addEventListener("click", () =>
+        selectObject(group.key, record.id)
+      );
+      objectItem.append(objectRow);
+      childGroup.append(objectItem);
+    }
+    groupItem.append(childGroup);
+    elements.objectTree.append(groupItem);
+  }
+
+  if (!activeTreeItem()) {
+    treeActiveKey = state.opened
+      ? "object:" + selectedGroup + ":" + selectedId
+      : "group:player";
+  }
+  updateTreeActiveVisual();
+}
+
+function renderInspector() {
+  elements.fieldGrid.replaceChildren();
+  activeFields = [];
+  const record = currentRecord();
+  if (!record) {
+    elements.inspectorFieldset.disabled = true;
+    elements.selectionSummary.textContent = state.opened
+      ? "当前分类没有记录"
+      : "选择一个对象开始编辑";
+    return;
+  }
+
+  elements.inspectorFieldset.disabled = false;
+  elements.selectionSummary.textContent =
+    selectedGroup +
+    " / " +
+    record.id +
+    (fieldBuffers.get(objectBufferKey())?.size ? " / 有未应用输入" : "");
+  activeFields = fieldsFor(groupByKey(selectedGroup), record);
+  for (const field of activeFields) {
+    renderField(field);
+  }
+}
+
+function render() {
+  const documentValue = state.document;
+  elements.schema.textContent = documentValue
+    ? documentValue.schemaVersion
+    : "未打开";
+  elements.revision.textContent = state.revision ?? "-";
+  elements.savedRevision.textContent = state.savedRevision ?? "-";
+  elements.dirty.textContent = state.dirty ? "是" : "否";
+  elements.openedPath.textContent = state.relativePath ?? "未打开";
+  elements.conflict.hidden = !state.conflict;
+  elements.reloadButton.disabled = !state.opened;
+  if (state.relativePath && document.activeElement !== elements.pathInput) {
+    elements.pathInput.value = state.relativePath;
+  }
+  renderTree();
+  renderInspector();
+  updateSaveAvailability();
+}
+
+function parseFormValues() {
+  const raw = {};
+  let firstInvalid = null;
+  for (const field of activeFields) {
+    if (field.section || field.readonly) {
+      continue;
+    }
+    const input = elements.inspectorForm.elements.namedItem(field.name);
+    input.removeAttribute("aria-invalid");
+    if (field.kind === "integer") {
+      const source = input.value.trim();
+      const value = /^-?\d+$/.test(source) ? Number(source) : Number.NaN;
+      if (
+        !Number.isSafeInteger(value) ||
+        value < field.min ||
+        value > field.max
+      ) {
+        input.setAttribute("aria-invalid", "true");
+        recordFieldBuffer(field, input, true);
+        firstInvalid ??= input;
+        continue;
+      }
+      raw[field.name] = value;
+    } else {
+      raw[field.name] = input.value;
+    }
+  }
+  if (firstInvalid) {
+    firstInvalid.focus();
+    const error = new Error(
+      "请输入字段允许范围内的十进制整数；无效值尚未写入草稿。"
+    );
+    error.code = "local_invalid";
+    throw error;
+  }
+  return raw;
+}
+
+function requestValues(raw) {
+  if (selectedGroup === "groundBlockers") {
+    return raw;
+  }
+  const values = {
+    regionId: raw.regionId,
+    assetId: raw.assetId,
+    pose: {
+      x: raw.x,
+      y: raw.y,
+      height: raw.height,
+      floorLayer: raw.floorLayer
+    },
+    facingMillidegrees: raw.facingMillidegrees
+  };
+  if (selectedGroup === "player") {
+    values.initialSafePointId = raw.initialSafePointId;
+  }
+  if (selectedGroup === "interactions") {
+    values.binding = Object.prototype.hasOwnProperty.call(raw, "operation")
+      ? {
+          operation: raw.operation,
+          rangeMm: raw.rangeMm,
+          targetMechanismId: raw.targetMechanismId
+        }
+      : null;
+  }
+  if (selectedGroup === "mechanisms") {
+    values.binding = Object.prototype.hasOwnProperty.call(raw, "activation")
+      ? {
+          activation: raw.activation,
+          targetGroundBlockerId: raw.targetGroundBlockerId
+        }
+      : null;
+  }
+  return values;
+}
+
+function needsDiscardConfirmation() {
+  return state.dirty || hasFieldBuffers();
+}
+
+async function openDocument() {
+  clearFeedback();
+  const hadLocalChanges = needsDiscardConfirmation();
+  const confirmDiscard = hadLocalChanges
+    ? window.confirm(
+        "当前有未保存修改或未应用输入。确认打开其他文档并丢弃这些内容吗？"
+      )
+    : false;
+  if (hadLocalChanges && !confirmDiscard) {
+    setStatus("已取消打开，内存草稿和表单输入保持不变。");
+    return;
+  }
+  try {
+    state = await api("/api/open", {
+      method: "POST",
+      body: {
+        relativePath: elements.pathInput.value,
+        confirmDiscard
+      }
+    });
+    fieldBuffers.clear();
+    selectedGroup = "player";
+    selectedId = state.document.runtime.player.id;
+    treeActiveKey = "object:player:" + selectedId;
+    render();
+    setStatus("已打开 " + state.relativePath + "。字段格式可保存，内容尚未校验。");
+    elements.objectTree.focus();
+  } catch (error) {
+    if (state.relativePath) {
+      elements.pathInput.value = state.relativePath;
+    }
+    render();
+    presentError(error);
+  }
+}
+
+async function reloadDocument(confirmFromConflict = false) {
+  clearFeedback();
+  const hadLocalChanges = needsDiscardConfirmation();
+  const confirmDiscard = confirmFromConflict
+    ? true
+    : hadLocalChanges
+      ? window.confirm(
+          "重新加载会丢弃当前未保存修改和未应用输入，是否继续？"
+        )
+      : false;
+  if (hadLocalChanges && !confirmDiscard) {
+    setStatus("已取消重新加载，内存草稿和表单输入保持不变。");
+    return false;
+  }
+  try {
+    state = await api("/api/reload", {
+      method: "POST",
+      body: { confirmDiscard }
+    });
+    fieldBuffers.clear();
+    const records = recordsFor(groupByKey(selectedGroup));
+    if (!records.some((record) => record.id === selectedId)) {
+      selectedGroup = "player";
+      selectedId = state.document.runtime.player.id;
+    }
+    treeActiveKey = "object:" + selectedGroup + ":" + selectedId;
+    render();
+    setStatus("已从磁盘重新加载 " + state.relativePath + "。");
+    elements.objectTree.focus();
+    return true;
+  } catch (error) {
+    render();
+    presentError(error);
+    return false;
+  }
+}
+
+async function saveDocument() {
+  if (!state.opened || state.conflict) {
+    return;
+  }
+  if (hasFieldBuffers()) {
+    setError("请先应用属性，或在字段中按 Escape 撤销未应用输入。");
+    return;
+  }
+  clearFeedback();
+  const savingRevision = state.revision;
+  try {
+    state = await api("/api/save", {
+      method: "POST",
+      body: {
+        expectedRevision: state.revision,
+        expectedCas: state.cas
+      }
+    });
+    render();
+    if (state.dirty) {
+      setStatus(
+        "磁盘已保存 revision " +
+          savingRevision +
+          " 快照；较新的内存修改仍未保存。"
+      );
+    } else {
+      setStatus("已保存 revision " + state.savedRevision + "。");
+    }
+    elements.saveButton.focus();
+  } catch (error) {
+    render();
+    presentError(error);
+  }
+}
+
+elements.objectTree.addEventListener("keydown", (event) => {
+  const items = visibleTreeItems();
+  const active = activeTreeItem() ?? items[0];
+  if (!active || items.length === 0) {
+    return;
+  }
+  const index = items.indexOf(active);
+  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    event.preventDefault();
+    const direction = event.key === "ArrowUp" ? -1 : 1;
+    const target = items[Math.max(0, Math.min(items.length - 1, index + direction))];
+    setTreeActive(target.dataset.treeKey);
+    return;
+  }
+  if (event.key === "Home" || event.key === "End") {
+    event.preventDefault();
+    const target = event.key === "Home" ? items[0] : items.at(-1);
+    setTreeActive(target.dataset.treeKey);
+    return;
+  }
+  if (event.key === "ArrowRight") {
+    event.preventDefault();
+    if (active.dataset.nodeType === "group") {
+      const groupKey = active.dataset.groupKey;
+      if (!expandedGroups.has(groupKey)) {
+        expandedGroups.add(groupKey);
+        renderTree();
+      } else {
+        const firstChild = active.querySelector('[role="treeitem"]');
+        if (firstChild) {
+          setTreeActive(firstChild.dataset.treeKey);
+        }
+      }
+    }
+    return;
+  }
+  if (event.key === "ArrowLeft") {
+    event.preventDefault();
+    if (active.dataset.nodeType === "object") {
+      setTreeActive("group:" + active.dataset.groupKey);
+    } else if (expandedGroups.has(active.dataset.groupKey)) {
+      expandedGroups.delete(active.dataset.groupKey);
+      renderTree();
+    }
+    return;
+  }
+  if (event.key === "Enter") {
+    event.preventDefault();
+    if (active.dataset.nodeType === "object") {
+      selectObject(active.dataset.groupKey, active.dataset.objectId);
+    } else {
+      const groupKey = active.dataset.groupKey;
+      if (expandedGroups.has(groupKey)) {
+        expandedGroups.delete(groupKey);
+      } else {
+        expandedGroups.add(groupKey);
+      }
+      renderTree();
+      elements.objectTree.focus();
+    }
+  }
+});
+
+elements.workspaceForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  void openDocument();
+});
+
+elements.reloadButton.addEventListener("click", () => {
+  void reloadDocument(false);
+});
+
+elements.saveButton.addEventListener("click", () => {
+  void saveDocument();
+});
+
+elements.inspectorForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  clearFeedback();
+  try {
+    const raw = parseFormValues();
+    state = await api("/api/update", {
+      method: "POST",
+      body: {
+        kind: selectedGroup,
+        id: selectedId,
+        values: requestValues(raw),
+        expectedRevision: state.revision
+      }
+    });
+    const changedId = selectedId;
+    clearCurrentBuffer();
+    render();
+    setStatus(
+      "已应用 " + changedId + " 的属性，revision " + state.revision + "。"
+    );
+  } catch (error) {
+    if (error.code === "local_invalid") {
+      setError(error.message);
+    } else {
+      presentError(error);
+    }
+  }
+});
+
+elements.resolveConflictButton.addEventListener("click", () => {
+  conflictTrigger = elements.resolveConflictButton;
+  elements.conflictDialog.showModal();
+  requestAnimationFrame(() => elements.continueEditingButton.focus());
+});
+
+elements.continueEditingButton.addEventListener("click", () => {
+  elements.conflictDialog.close("continue");
+});
+
+elements.loadDiskButton.addEventListener("click", async () => {
+  const loaded = await reloadDocument(true);
+  if (loaded) {
+    conflictTrigger = elements.objectTree;
+    elements.conflictDialog.close("reload");
+  }
+});
+
+elements.conflictDialog.addEventListener("close", () => {
+  const target = conflictTrigger;
+  conflictTrigger = null;
+  requestAnimationFrame(() => target?.focus());
+});
+
+document.addEventListener("keydown", (event) => {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+    event.preventDefault();
+    void saveDocument();
+  }
+});
+
+try {
+  state = await api("/api/state");
+  if (state.opened) {
+    selectedId = state.document.runtime.player.id;
+    treeActiveKey = "object:player:" + selectedId;
+  }
+  render();
+  if (state.opened) {
+    elements.objectTree.focus();
+  } else {
+    elements.openButton.focus();
+  }
+} catch (error) {
+  setError("无法连接本地工作台。当前页面没有修改任何文件。");
+  render();
+  elements.openButton.focus();
+}

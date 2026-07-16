@@ -79,7 +79,22 @@ function editableValues(document, kind, id) {
 }
 
 async function openedController(root, options = {}) {
-  const workspace = await createLocalWorkspace({ rootPath: root, ...options });
+  const { observeRead, ...workspaceOptions } = options;
+  const localWorkspace = await createLocalWorkspace({
+    rootPath: root,
+    ...workspaceOptions
+  });
+  const workspace = observeRead
+    ? {
+        read(...args) {
+          observeRead(...args);
+          return localWorkspace.read(...args);
+        },
+        save(...args) {
+          return localWorkspace.save(...args);
+        }
+      }
+    : localWorkspace;
   const controller = createWorkbenchController({ workspace });
   await controller.open({ relativePath: "demo.json", confirmDiscard: false });
   return controller;
@@ -603,7 +618,11 @@ test("slash aliases wait for the pending save and keep its CAS saveable", async 
   const release = new Promise((resolve) => {
     releaseReplace = resolve;
   });
+  const readCalls = [];
   const controller = await openedController(root, {
+    observeRead(relativePath) {
+      readCalls.push(relativePath);
+    },
     async faultInjector(name) {
       if (name === "replace") {
         reachedReplace();
@@ -615,6 +634,7 @@ test("slash aliases wait for the pending save and keep its CAS saveable", async 
     relativePath: "dir/demo.json",
     confirmDiscard: false
   });
+  readCalls.length = 0;
   const first = editableValues(
     controller.editorState.document,
     "player",
@@ -632,15 +652,24 @@ test("slash aliases wait for the pending save and keep its CAS saveable", async 
     expectedCas: controller.view().cas
   });
   await atReplace;
+  let openSettled = false;
   const openingAlias = controller.open({
     relativePath: "dir\\demo.json",
     confirmDiscard: true
+  }).finally(() => {
+    openSettled = true;
   });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(readCalls, []);
+  assert.equal(openSettled, false);
   releaseReplace();
-  await pendingSave;
+  const completedSave = await pendingSave;
   const openedAlias = await openingAlias;
 
+  assert.deepEqual(readCalls, ["dir\\demo.json"]);
+  assert.equal(openSettled, true);
   assert.equal(openedAlias.relativePath, "dir/demo.json");
+  assert.equal(openedAlias.cas, completedSave.cas);
   assert.equal(openedAlias.revision, 0);
   assert.equal(openedAlias.dirty, false);
   assert.equal(openedAlias.conflict, false);
@@ -684,7 +713,11 @@ test("a failed save releases the document-switch barrier", async (t) => {
   const release = new Promise((resolve) => {
     releaseReplace = resolve;
   });
+  const readCalls = [];
   const controller = await openedController(root, {
+    observeRead(relativePath) {
+      readCalls.push(relativePath);
+    },
     async faultInjector(name) {
       if (name === "replace" && failNextReplace) {
         failNextReplace = false;
@@ -694,6 +727,7 @@ test("a failed save releases the document-switch barrier", async (t) => {
       }
     }
   });
+  readCalls.length = 0;
   const first = editableValues(
     controller.editorState.document,
     "player",
@@ -717,13 +751,21 @@ test("a failed save releases the document-switch barrier", async (t) => {
       return error;
     });
   await atReplace;
+  let openSettled = false;
   const opening = controller.open({
     relativePath: "other.json",
     confirmDiscard: true
+  }).finally(() => {
+    openSettled = true;
   });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(readCalls, []);
+  assert.equal(openSettled, false);
   releaseReplace();
   const [failure, opened] = await Promise.all([failedSave, opening]);
 
+  assert.deepEqual(readCalls, ["other.json"]);
+  assert.equal(openSettled, true);
   assert.equal(saveRejected, true);
   assert.ok(failure instanceof Error);
   assert.equal(opened.relativePath, "other.json");

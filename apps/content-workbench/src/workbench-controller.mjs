@@ -233,6 +233,8 @@ export function createWorkbenchController({ workspace }) {
   let relativePath = null;
   let cas = null;
   let conflict = false;
+  let documentEpoch = 0;
+  let pendingSave = null;
 
   function view() {
     return {
@@ -265,6 +267,14 @@ export function createWorkbenchController({ workspace }) {
     }
   }
 
+  async function waitForPendingSave(relativePathToRead) {
+    const pending = pendingSave;
+    if (pending?.relativePath !== relativePathToRead) {
+      return;
+    }
+    await pending.completion;
+  }
+
   async function open(request) {
     expectExactObject(
       request,
@@ -272,6 +282,7 @@ export function createWorkbenchController({ workspace }) {
       "open request"
     );
     requireDiscardConfirmation(request.confirmDiscard);
+    await waitForPendingSave(request.relativePath);
 
     let loaded;
     let nextState;
@@ -286,6 +297,7 @@ export function createWorkbenchController({ workspace }) {
     relativePath = loaded.relativePath;
     cas = loaded.cas;
     conflict = false;
+    documentEpoch += 1;
     return view();
   }
 
@@ -293,6 +305,7 @@ export function createWorkbenchController({ workspace }) {
     expectExactObject(request, ["confirmDiscard"], "reload request");
     requireOpen();
     requireDiscardConfirmation(request.confirmDiscard);
+    await waitForPendingSave(relativePath);
 
     let loaded;
     let nextState;
@@ -306,6 +319,7 @@ export function createWorkbenchController({ workspace }) {
     editorState = nextState;
     cas = loaded.cas;
     conflict = false;
+    documentEpoch += 1;
     return view();
   }
 
@@ -364,28 +378,54 @@ export function createWorkbenchController({ workspace }) {
       fail("external_change", "document CAS no longer matches", 409);
     }
 
+    const savingEpoch = documentEpoch;
+    const savingPath = relativePath;
+    const savingCas = cas;
     const serialized = serializeSandboxEditorState(editorState);
-    let saved;
+    let completePendingSave;
+    const operation = {
+      relativePath: savingPath,
+      completion: new Promise((resolve) => {
+        completePendingSave = resolve;
+      })
+    };
+    pendingSave = operation;
     try {
-      saved = await workspace.save({
-        relativePath,
-        expectedCas: cas,
-        text: serialized
-      });
-    } catch (error) {
-      if (error?.code === "external_change") {
-        conflict = true;
+      let saved;
+      try {
+        saved = await workspace.save({
+          relativePath: savingPath,
+          expectedCas: savingCas,
+          text: serialized
+        });
+      } catch (error) {
+        if (
+          error?.code === "external_change" &&
+          documentEpoch === savingEpoch
+        ) {
+          conflict = true;
+        }
+        throw convertExternalError(error, "save_failed");
       }
-      throw convertExternalError(error, "save_failed");
-    }
 
-    cas = saved.cas;
-    conflict = false;
-    editorState = reduceSandboxEditorState(editorState, {
-      type: "document.mark_saved",
-      expectedRevision: revision
-    });
-    return view();
+      if (documentEpoch !== savingEpoch) {
+        return view();
+      }
+      cas = saved.cas;
+      conflict = false;
+      if (editorState.revision === revision) {
+        editorState = reduceSandboxEditorState(editorState, {
+          type: "document.mark_saved",
+          expectedRevision: revision
+        });
+      }
+      return view();
+    } finally {
+      completePendingSave();
+      if (pendingSave === operation) {
+        pendingSave = null;
+      }
+    }
   }
 
   return Object.freeze({

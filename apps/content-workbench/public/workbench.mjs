@@ -90,6 +90,7 @@ let treeActiveKey = "group:player";
 let conflictTrigger = null;
 let applyInFlight = false;
 let saveInFlight = false;
+let documentEpoch = 0;
 let activeFields = [];
 const expandedGroups = new Set(GROUPS.map((group) => group.key));
 const fieldBuffers = new Map();
@@ -694,6 +695,7 @@ async function openDocument() {
         confirmDiscard
       }
     });
+    documentEpoch += 1;
     fieldBuffers.clear();
     selectedGroup = "player";
     selectedId = state.document.runtime.player.id;
@@ -729,6 +731,7 @@ async function reloadDocument(confirmFromConflict = false) {
       method: "POST",
       body: { confirmDiscard }
     });
+    documentEpoch += 1;
     fieldBuffers.clear();
     const records = recordsFor(groupByKey(selectedGroup));
     if (!records.some((record) => record.id === selectedId)) {
@@ -795,6 +798,7 @@ async function saveDocument() {
   clearFeedback();
   const savingState = state;
   const savingRevision = savingState.revision;
+  const savingEpoch = documentEpoch;
   saveInFlight = true;
   updateSaveAvailability();
   elements.saveButton.focus();
@@ -807,7 +811,10 @@ async function saveDocument() {
         expectedCas: savingState.cas
       }
     });
-    if (state !== savingState) {
+    if (
+      documentEpoch !== savingEpoch ||
+      savedState.revision !== state.revision
+    ) {
       return;
     }
     const focusedControl = captureFocusedControl();
@@ -824,7 +831,10 @@ async function saveDocument() {
       setStatus("已保存 revision " + state.savedRevision + "。");
     }
   } catch (error) {
-    if (state !== savingState) {
+    if (
+      documentEpoch !== savingEpoch ||
+      state.revision !== savingRevision
+    ) {
       return;
     }
     const focusedControl = captureFocusedControl();
@@ -995,6 +1005,7 @@ document.addEventListener("keydown", (event) => {
 try {
   state = await api("/api/state");
   if (state.opened) {
+    documentEpoch += 1;
     selectedId = state.document.runtime.player.id;
     treeActiveKey = "object:player:" + selectedId;
   }

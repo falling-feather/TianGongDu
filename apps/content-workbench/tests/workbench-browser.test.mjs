@@ -57,8 +57,15 @@ test(
   async (t) => {
     const root = await mkdtemp(path.join(tmpdir(), "tgd-browser-workbench-"));
     await copyFile(fixtureUrl, path.join(root, "demo.json"));
+    await copyFile(fixtureUrl, path.join(root, "other.json"));
     await writeFile(path.join(root, "malformed.json"), "{", "utf8");
-    const running = await startWorkbenchServer({ workspaceRoot: root });
+    let workspaceFaultInjector = null;
+    const running = await startWorkbenchServer({
+      workspaceRoot: root,
+      async faultInjector(name) {
+        await workspaceFaultInjector?.(name);
+      }
+    });
     let browser = null;
     t.after(async () => {
       if (browser) {
@@ -489,6 +496,182 @@ test(
     await bufferedX.press("Escape");
     assert.equal(await bufferedX.inputValue(), "103");
 
+    await page.locator('input[name="x"]').fill("105");
+    await applyButton.click();
+    await waitForRevision(page, 4);
+    let serverReplaceSeen;
+    let releaseServerReplace;
+    let delayServerReplace = true;
+    let serverDelayedSaveRequests = 0;
+    let serverDelayedSaveUpdates = 0;
+    const serverReplaceReady = new Promise((resolve) => {
+      serverReplaceSeen = resolve;
+    });
+    const serverReplaceReleased = new Promise((resolve) => {
+      releaseServerReplace = resolve;
+    });
+    workspaceFaultInjector = async (name) => {
+      if (delayServerReplace && name === "replace") {
+        delayServerReplace = false;
+        serverReplaceSeen();
+        await serverReplaceReleased;
+      }
+    };
+    const countServerDelayedRequests = (request) => {
+      if (request.url().endsWith("/api/save")) {
+        serverDelayedSaveRequests += 1;
+      }
+      if (request.url().endsWith("/api/update")) {
+        serverDelayedSaveUpdates += 1;
+      }
+    };
+    page.on("request", countServerDelayedRequests);
+    await saveButton.click();
+    await serverReplaceReady;
+    await page.locator('input[name="x"]').fill("106");
+    await applyButton.click();
+    await waitForRevision(page, 5);
+    assert.equal(await focusLabel(page), "apply-button");
+    releaseServerReplace();
+    await page.waitForFunction(
+      () => document.querySelector("#save-button")?.getAttribute("aria-busy") === "false"
+    );
+    workspaceFaultInjector = null;
+    assert.equal(await page.locator("#revision-value").textContent(), "5");
+    assert.equal(await page.locator("#saved-revision-value").textContent(), "3");
+    assert.equal(await page.locator("#dirty-value").textContent(), "是");
+    assert.equal(await page.locator('input[name="x"]').inputValue(), "106");
+    assert.equal(await focusLabel(page), "apply-button");
+    assert.equal(running.controller.editorState.revision, 5);
+    assert.equal(running.controller.editorState.savedRevision, 3);
+    assert.equal(running.controller.editorState.dirty, true);
+    assert.equal(
+      running.controller.editorState.document.runtime.player.pose.x,
+      106
+    );
+    assert.equal(
+      running.controller.editorState.lastValidDocument.runtime.player.pose.x,
+      106
+    );
+    assert.equal(
+      JSON.parse(await readFile(path.join(root, "demo.json"), "utf8")).runtime.player.pose.x,
+      105
+    );
+    assert.equal(externalConflictResponses, 0);
+    await saveButton.click();
+    await page.waitForFunction(
+      () => document.querySelector("#dirty-value")?.textContent === "否"
+    );
+    page.off("request", countServerDelayedRequests);
+    assert.equal(serverDelayedSaveRequests, 2);
+    assert.equal(serverDelayedSaveUpdates, 1);
+    assert.equal(externalConflictResponses, 0);
+    assert.equal(
+      JSON.parse(await readFile(path.join(root, "demo.json"), "utf8")).runtime.player.pose.x,
+      106
+    );
+
+    await page.locator('input[name="x"]').fill("107");
+    await applyButton.click();
+    await waitForRevision(page, 6);
+    let lateOpenSaveSeen;
+    let releaseLateOpenSave;
+    let lateOpenSaveRequests = 0;
+    const lateOpenSaveReady = new Promise((resolve) => {
+      lateOpenSaveSeen = resolve;
+    });
+    const lateOpenSaveReleased = new Promise((resolve) => {
+      releaseLateOpenSave = resolve;
+    });
+    const holdSaveResponseAcrossOpen = async (route) => {
+      lateOpenSaveRequests += 1;
+      const response = await route.fetch();
+      lateOpenSaveSeen();
+      await lateOpenSaveReleased;
+      await route.fulfill({ response });
+    };
+    await page.route("**/api/save", holdSaveResponseAcrossOpen);
+    await saveButton.click();
+    await lateOpenSaveReady;
+    page.once("dialog", async (dialog) => {
+      assert.equal(dialog.type(), "confirm");
+      await dialog.accept();
+    });
+    await page.locator("#path-input").fill("other.json");
+    await page.locator("#path-input").press("Enter");
+    await page.waitForFunction(
+      () => document.querySelector("#opened-path")?.textContent === "other.json"
+    );
+    assert.equal(await focusLabel(page), "object-tree");
+    releaseLateOpenSave();
+    await page.waitForFunction(
+      () => document.querySelector("#save-button")?.getAttribute("aria-busy") === "false"
+    );
+    await page.unroute("**/api/save", holdSaveResponseAcrossOpen);
+    assert.equal(lateOpenSaveRequests, 1);
+    assert.equal(await page.locator("#opened-path").textContent(), "other.json");
+    assert.equal(await page.locator("#revision-value").textContent(), "0");
+    assert.equal(await page.locator("#dirty-value").textContent(), "否");
+    assert.equal(await page.locator('input[name="x"]').inputValue(), "0");
+    assert.equal(await focusLabel(page), "object-tree");
+    assert.equal(running.controller.view().relativePath, "other.json");
+    assert.equal(running.controller.view().conflict, false);
+
+    await page.locator('input[name="x"]').fill("201");
+    await applyButton.click();
+    await waitForRevision(page, 1);
+    let lateReloadSaveSeen;
+    let releaseLateReloadSave;
+    let lateReloadSaveRequests = 0;
+    const lateReloadSaveReady = new Promise((resolve) => {
+      lateReloadSaveSeen = resolve;
+    });
+    const lateReloadSaveReleased = new Promise((resolve) => {
+      releaseLateReloadSave = resolve;
+    });
+    const holdSaveResponseAcrossReload = async (route) => {
+      lateReloadSaveRequests += 1;
+      const response = await route.fetch();
+      lateReloadSaveSeen();
+      await lateReloadSaveReleased;
+      await route.fulfill({ response });
+    };
+    await page.route("**/api/save", holdSaveResponseAcrossReload);
+    await saveButton.click();
+    await lateReloadSaveReady;
+    page.once("dialog", async (dialog) => {
+      assert.equal(dialog.type(), "confirm");
+      await dialog.accept();
+    });
+    await page.locator("#reload-button").click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#revision-value")?.textContent === "0" &&
+        document.querySelector('input[name="x"]')?.value === "201"
+    );
+    assert.equal(await focusLabel(page), "object-tree");
+    releaseLateReloadSave();
+    await page.waitForFunction(
+      () => document.querySelector("#save-button")?.getAttribute("aria-busy") === "false"
+    );
+    await page.unroute("**/api/save", holdSaveResponseAcrossReload);
+    assert.equal(lateReloadSaveRequests, 1);
+    assert.equal(await page.locator("#opened-path").textContent(), "other.json");
+    assert.equal(await page.locator("#revision-value").textContent(), "0");
+    assert.equal(await page.locator("#dirty-value").textContent(), "否");
+    assert.equal(await page.locator('input[name="x"]').inputValue(), "201");
+    assert.equal(await focusLabel(page), "object-tree");
+    assert.equal(running.controller.view().relativePath, "other.json");
+    assert.equal(running.controller.view().conflict, false);
+
+    await page.locator("#path-input").fill("demo.json");
+    await page.locator("#path-input").press("Enter");
+    await page.waitForFunction(
+      () => document.querySelector("#opened-path")?.textContent === "demo.json"
+    );
+    await selectObject(page, "player");
+    assert.equal(await page.locator('input[name="x"]').inputValue(), "107");
+
     const edits = [
       ["actors", "x", "2201"],
       ["groundBlockers", "minX", "999"],
@@ -496,7 +679,7 @@ test(
       ["interactions", "x", "501"],
       ["mechanisms", "x", "1301"]
     ];
-    let revision = 3;
+    let revision = 0;
     for (const [kind, field, value] of edits) {
       await selectObject(page, kind);
       const idInput = page.locator('input[name="id"]');
@@ -560,7 +743,7 @@ test(
     );
     assert.equal(await focusLabel(page), "object-tree");
     await selectObject(page, "player");
-    assert.equal(await page.locator('input[name="x"]').inputValue(), "103");
+    assert.equal(await page.locator('input[name="x"]').inputValue(), "107");
 
     const cdp = await page.context().newCDPSession(page);
     await cdp.send("Emulation.setPageScaleFactor", { pageScaleFactor: 2 });
@@ -617,7 +800,7 @@ test(
     await selectObject(page, "actors");
     await page.locator('input[name="x"]').fill("2202");
     await page.locator("#apply-button").click();
-    await waitForRevision(page, 9);
+    await waitForRevision(page, 6);
     page.once("dialog", async (dialog) => {
       assert.equal(dialog.type(), "confirm");
       await dialog.dismiss();
@@ -710,6 +893,18 @@ test(
         bufferedSaveRequests +
         "/" +
         bufferedSaveUpdates
+    );
+    t.diagnostic(
+      "server-delayed save requests/update requests: " +
+        serverDelayedSaveRequests +
+        "/" +
+        serverDelayedSaveUpdates
+    );
+    t.diagnostic(
+      "document-epoch late save requests: open=" +
+        lateOpenSaveRequests +
+        ", reload=" +
+        lateReloadSaveRequests
     );
     t.diagnostic("external-conflict 409 responses: " + externalConflictResponses);
     t.diagnostic(

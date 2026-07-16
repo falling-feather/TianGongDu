@@ -105,8 +105,11 @@ function apiError(error, controller) {
   };
 }
 
-export async function startWorkbenchServer({ workspaceRoot }) {
-  const workspace = await createLocalWorkspace({ rootPath: workspaceRoot });
+export async function startWorkbenchServer({ workspaceRoot, faultInjector }) {
+  const workspace = await createLocalWorkspace({
+    rootPath: workspaceRoot,
+    faultInjector
+  });
   const controller = createWorkbenchController({ workspace });
   const sessionToken = randomBytes(24).toString("base64url");
   let origin = null;

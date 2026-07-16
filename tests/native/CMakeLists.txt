@@ -50,6 +50,16 @@ target_link_libraries(tgd_native_save_envelope PRIVATE tgd_contracts)
 
 add_test(NAME tgd.native.save-envelope COMMAND tgd_native_save_envelope)
 
+add_executable(tgd_native_sandbox_package_contract sandbox_package_contract.cpp)
+target_compile_features(tgd_native_sandbox_package_contract PRIVATE cxx_std_20)
+tgd_enable_strict_warnings(tgd_native_sandbox_package_contract)
+target_link_libraries(tgd_native_sandbox_package_contract PRIVATE tgd_contracts)
+
+add_test(
+  NAME tgd.native.sandbox-package-contract
+  COMMAND tgd_native_sandbox_package_contract
+)
+
 add_executable(tgd_native_profile_progress profile_progress.cpp)
 target_compile_features(tgd_native_profile_progress PRIVATE cxx_std_20)
 tgd_enable_strict_warnings(tgd_native_profile_progress)

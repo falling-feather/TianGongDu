@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-export const systemDemoEvidenceContractVersion = "1.0.0";
+export const systemDemoEvidenceContractVersion = "1.0.1";
 
 const sha256Pattern = /^[0-9a-f]{64}$/;
 const sourceCommitPattern = /^[0-9a-f]{40}$/;
@@ -12,7 +12,7 @@ const diagnosticCodePattern = /^[A-Z][A-Z0-9_]{2,63}$/;
 const maximumIdentityStringBytes = 256;
 const maximumDiagnostics = 64;
 const contractOnlyCanonicalSha256 =
-  "d7e40b921aee9cb1ab1886d13491c6721877fc2abe2a44250d0ea49ea7393dbe";
+  "5a52f08ee5d5cf9ea78231570b74830e3d98762d14c8bc1e954da68f82f3ac2c";
 const failurePhases = ["authoring", "compiler", "decode", "session", "reload"];
 const browserOrder = ["chrome", "edge", "firefox"];
 const lastValidKeys = [
@@ -409,7 +409,6 @@ function assertOutcome(value, path) {
   assertOneOf(value.phase, ["complete", ...failurePhases], `${path}.phase`);
   assertSha256(value.attemptedIdentitySha256, `${path}.attemptedIdentitySha256`);
   assertLastValid(value.previousLastValid, `${path}.previousLastValid`);
-  assertCoherentLastValid(value.previousLastValid, `${path}.previousLastValid`);
 
   if (Array.isArray(value.diagnostics) && value.diagnostics.length > maximumDiagnostics) {
     fail(
@@ -480,12 +479,8 @@ function assertFailureClosure(lastValid, outcome) {
 }
 
 function assertCurrentLayerBindings(lastValid, outcome) {
-  if (outcome.status === "passed" || ["authoring", "reload"].includes(outcome.phase)) {
+  if (outcome.status === "passed") {
     assertCoherentLastValid(lastValid, "$.lastValid");
-    return;
-  }
-  if (["compiler", "decode"].includes(outcome.phase)) {
-    assertPackageSessionBinding(lastValid, "$.lastValid");
     return;
   }
   if (outcome.phase === "session") {
@@ -650,41 +645,84 @@ function createContractOnlySample() {
   };
 }
 
-function createFailedContractOnlySample(phase) {
+function bindPlatformsToRunningSession(manifest) {
+  const runningPreviewSession = manifest.lastValid.runningPreviewSession;
+  manifest.platforms.windows.session = structuredClone(runningPreviewSession);
+  for (const browser of manifest.platforms.web.browsers) {
+    browser.session = structuredClone(runningPreviewSession);
+  }
+}
+
+function advanceDocument(lastValid, label) {
+  const document = lastValid.lastValidDocument;
+  document.canonicalJsonSha256 = sha256Label(`${label}:authoring-json`);
+  document.runtimeProjectionSha256 = sha256Label(`${label}:runtime-projection`);
+  document.revision += 1;
+  document.savedRevision = document.revision;
+}
+
+function bindPackageToDocument(lastValid, label) {
+  const document = lastValid.lastValidDocument;
+  const owningPackage = lastValid.validatedOwningPackage;
+  owningPackage.sourceCanonicalJsonSha256 = document.canonicalJsonSha256;
+  owningPackage.runtimeProjectionSha256 = document.runtimeProjectionSha256;
+  owningPackage.fingerprintSha256 = sha256Label(`${label}:package-fingerprint`);
+  owningPackage.packageSha256 = sha256Label(`${label}:package-bytes`);
+  owningPackage.byteLength += 1;
+  owningPackage.compiler.artifactSha256 = sha256Label(`${label}:compiler-artifact`);
+}
+
+function bindSessionToPackage(lastValid, label) {
+  const session = lastValid.runningPreviewSession;
+  session.packageSha256 = lastValid.validatedOwningPackage.packageSha256;
+  session.generation += 1;
+  session.checksum = sha256Label(`${label}:session-checksum`).slice(0, 16);
+  session.commandSequence += 1;
+  session.eventSequence += 1;
+}
+
+function createFailedContractOnlySample(phase, priorLastValid = null, label = phase) {
   const manifest = createContractOnlySample();
-  const previousLastValid = structuredClone(manifest.lastValid);
+  const previousLastValid = structuredClone(priorLastValid ?? manifest.lastValid);
+  manifest.lastValid = structuredClone(previousLastValid);
   manifest.outcome = {
     status: "failed",
     phase,
-    attemptedIdentitySha256: sha256Label(`${phase}:attempt`),
+    attemptedIdentitySha256: sha256Label(`${label}:attempt`),
     previousLastValid,
     diagnostics: [
       {
         phase,
         code: `SYSTEM_DEMO_${phase.toUpperCase()}_FAILED`,
         severity: "error",
-        messageSha256: sha256Label(`${phase}:diagnostic`)
+        messageSha256: sha256Label(`${label}:diagnostic`)
       }
     ]
   };
 
   if (["compiler", "decode", "session"].includes(phase)) {
-    manifest.lastValid.lastValidDocument.canonicalJsonSha256 = sha256Label(`${phase}:new-json`);
-    manifest.lastValid.lastValidDocument.runtimeProjectionSha256 = sha256Label(
-      `${phase}:new-projection`
-    );
-    manifest.lastValid.lastValidDocument.revision += 1;
+    advanceDocument(manifest.lastValid, label);
   }
   if (phase === "session") {
-    const owningPackage = manifest.lastValid.validatedOwningPackage;
-    owningPackage.sourceCanonicalJsonSha256 =
-      manifest.lastValid.lastValidDocument.canonicalJsonSha256;
-    owningPackage.runtimeProjectionSha256 =
-      manifest.lastValid.lastValidDocument.runtimeProjectionSha256;
-    owningPackage.fingerprintSha256 = sha256Label("session:new-fingerprint");
-    owningPackage.packageSha256 = sha256Label("session:new-package");
-    owningPackage.byteLength += 1;
+    bindPackageToDocument(manifest.lastValid, label);
   }
+  bindPlatformsToRunningSession(manifest);
+  return manifest;
+}
+
+function createPassedContractOnlySample(priorLastValid, label) {
+  const manifest = createContractOnlySample();
+  manifest.lastValid = structuredClone(priorLastValid);
+  bindPackageToDocument(manifest.lastValid, label);
+  bindSessionToPackage(manifest.lastValid, label);
+  bindPlatformsToRunningSession(manifest);
+  manifest.outcome = {
+    status: "passed",
+    phase: "complete",
+    attemptedIdentitySha256: sha256Label(`${label}:attempt`),
+    previousLastValid: structuredClone(priorLastValid),
+    diagnostics: []
+  };
   return manifest;
 }
 
@@ -712,7 +750,7 @@ export function runSystemDemoEvidenceContractSelfTest() {
   assert.equal(
     validResult.sha256,
     contractOnlyCanonicalSha256,
-    "capacity checks changed the canonical bytes of a valid manifest"
+    "contract-only canonical manifest identity changed without an explicit update"
   );
 
   const reordered = reverseRecordOrder(valid);
@@ -727,6 +765,101 @@ export function runSystemDemoEvidenceContractSelfTest() {
     const failed = validateSystemDemoEvidenceManifest(createFailedContractOnlySample(phase));
     assert.equal(failed.ok, true, `${phase}: ${JSON.stringify(failed.diagnostics)}`);
   }
+
+  const sessionFailureBBA = createFailedContractOnlySample(
+    "session",
+    valid.lastValid,
+    "sequence:b"
+  );
+  assert.equal(validateSystemDemoEvidenceManifest(sessionFailureBBA).ok, true);
+  assert.equal(
+    sessionFailureBBA.lastValid.validatedOwningPackage.sourceCanonicalJsonSha256,
+    sessionFailureBBA.lastValid.lastValidDocument.canonicalJsonSha256
+  );
+  assert.equal(
+    recordsEqual(
+      sessionFailureBBA.lastValid.runningPreviewSession,
+      valid.lastValid.runningPreviewSession
+    ),
+    true,
+    "session failure must retain the A running Session while document/package advance to B"
+  );
+
+  const compilerFailureCBA = createFailedContractOnlySample(
+    "compiler",
+    sessionFailureBBA.lastValid,
+    "sequence:c:compiler"
+  );
+  assert.equal(validateSystemDemoEvidenceManifest(compilerFailureCBA).ok, true);
+  assert.equal(
+    recordsEqual(
+      compilerFailureCBA.lastValid.validatedOwningPackage,
+      sessionFailureBBA.lastValid.validatedOwningPackage
+    ),
+    true,
+    "compiler failure must retain the B package"
+  );
+  assert.equal(
+    recordsEqual(
+      compilerFailureCBA.lastValid.runningPreviewSession,
+      valid.lastValid.runningPreviewSession
+    ),
+    true,
+    "compiler failure must retain the A running Session"
+  );
+
+  const decodeFailureCBA = createFailedContractOnlySample(
+    "decode",
+    sessionFailureBBA.lastValid,
+    "sequence:c:decode"
+  );
+  assert.equal(validateSystemDemoEvidenceManifest(decodeFailureCBA).ok, true);
+  assert.equal(
+    recordsEqual(
+      decodeFailureCBA.lastValid.validatedOwningPackage,
+      sessionFailureBBA.lastValid.validatedOwningPackage
+    ),
+    true,
+    "decode failure must retain the B package"
+  );
+  assert.equal(
+    recordsEqual(
+      decodeFailureCBA.lastValid.runningPreviewSession,
+      valid.lastValid.runningPreviewSession
+    ),
+    true,
+    "decode failure must retain the A running Session"
+  );
+
+  const reloadFailureCBA = createFailedContractOnlySample(
+    "reload",
+    compilerFailureCBA.lastValid,
+    "sequence:c:reload"
+  );
+  assert.equal(validateSystemDemoEvidenceManifest(reloadFailureCBA).ok, true);
+  assert.equal(recordsEqual(reloadFailureCBA.lastValid, compilerFailureCBA.lastValid), true);
+
+  const authoringFailureCBA = createFailedContractOnlySample(
+    "authoring",
+    compilerFailureCBA.lastValid,
+    "sequence:c:authoring"
+  );
+  assert.equal(validateSystemDemoEvidenceManifest(authoringFailureCBA).ok, true);
+  assert.equal(recordsEqual(authoringFailureCBA.lastValid, compilerFailureCBA.lastValid), true);
+
+  const passedCCC = createPassedContractOnlySample(
+    authoringFailureCBA.lastValid,
+    "sequence:c:complete"
+  );
+  assert.equal(validateSystemDemoEvidenceManifest(passedCCC).ok, true);
+  assert.equal(
+    passedCCC.lastValid.validatedOwningPackage.sourceCanonicalJsonSha256,
+    passedCCC.lastValid.lastValidDocument.canonicalJsonSha256
+  );
+  assert.equal(
+    passedCCC.lastValid.runningPreviewSession.packageSha256,
+    passedCCC.lastValid.validatedOwningPackage.packageSha256
+  );
 
   const missingField = createContractOnlySample();
   delete missingField.platforms.web.browsers[0].evidence.videoSha256;
@@ -760,13 +893,41 @@ export function runSystemDemoEvidenceContractSelfTest() {
     "session/package identity confusion"
   );
 
-  const failedReloadOverwroteLastValid = createFailedContractOnlySample("reload");
-  failedReloadOverwroteLastValid.lastValid.lastValidDocument.revision += 1;
+  const sessionFailureWithMismatchedPackage = createFailedContractOnlySample("session");
+  sessionFailureWithMismatchedPackage.lastValid.validatedOwningPackage.sourceCanonicalJsonSha256 =
+    sha256Label("session:mismatched-document");
   expectInvalid(
-    failedReloadOverwroteLastValid,
-    "failed_stage_overwrote_last_valid",
-    "failed reload overwrote last-valid"
+    sessionFailureWithMismatchedPackage,
+    "identity_layer_confusion",
+    "session failure accepted a package for another document"
   );
+
+  const failureOverwriteMutation = {
+    authoring: (manifest) => {
+      manifest.lastValid.lastValidDocument.revision += 1;
+    },
+    compiler: (manifest) => {
+      manifest.lastValid.validatedOwningPackage.byteLength += 1;
+    },
+    decode: (manifest) => {
+      manifest.lastValid.validatedOwningPackage.byteLength += 1;
+    },
+    session: (manifest) => {
+      manifest.lastValid.runningPreviewSession.commandSequence += 1;
+    },
+    reload: (manifest) => {
+      manifest.lastValid.lastValidDocument.revision += 1;
+    }
+  };
+  for (const phase of failurePhases) {
+    const failedOverwrite = createFailedContractOnlySample(phase);
+    failureOverwriteMutation[phase](failedOverwrite);
+    expectInvalid(
+      failedOverwrite,
+      "failed_stage_overwrote_last_valid",
+      `failed ${phase} overwrote a preserved last-valid layer`
+    );
+  }
 
   const missingFailureDiagnostic = createFailedContractOnlySample("compiler");
   missingFailureDiagnostic.outcome.diagnostics = [];
@@ -779,6 +940,14 @@ export function runSystemDemoEvidenceContractSelfTest() {
   const coreCTestAsPreview = createContractOnlySample();
   coreCTestAsPreview.platforms.windows.surface = "core-ctest";
   expectInvalid(coreCTestAsPreview, "invalid_visible_preview", "Core CTest as visible Preview");
+
+  const failedPlatformSessionMismatch = createFailedContractOnlySample("session");
+  failedPlatformSessionMismatch.platforms.windows.session.commandSequence += 1;
+  expectInvalid(
+    failedPlatformSessionMismatch,
+    "runtime_last_valid_mismatch",
+    "platform evidence bound to another running Session"
+  );
 
   const browserArrayWithOwnField = createContractOnlySample();
   browserArrayWithOwnField.platforms.web.browsers.contractBypass = true;
@@ -829,8 +998,8 @@ export function runSystemDemoEvidenceContractSelfTest() {
 
   return {
     contractVersion: systemDemoEvidenceContractVersion,
-    positiveManifests: 3 + failurePhases.length,
-    negativeCases: 12,
+    positiveManifests: 9 + failurePhases.length,
+    negativeCases: 18,
     browserOrder,
     canonicalSha256: validResult.sha256
   };

@@ -163,6 +163,7 @@ target_sources(
     src/content-core/src/layer_probe.cpp
     src/content-core/src/sandbox_package.cpp
     src/content-core/src/sandbox_package_compiler.cpp
+    src/content-core/src/sandbox_package_provider.cpp
 )
 target_include_directories(
   tgd_content_core

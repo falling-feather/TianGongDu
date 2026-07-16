@@ -43,3 +43,26 @@ set_target_properties(
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/dist/web"
     SUFFIX ".html"
 )
+
+# Build and execute the same last-valid publication probe on Web so provider
+# move/lifetime and failure-preservation semantics cannot silently drift.
+add_executable(
+  tgd_web_sandbox_package_provider
+  ../native/sandbox_package_provider.cpp
+)
+target_compile_features(tgd_web_sandbox_package_provider PRIVATE cxx_std_20)
+tgd_enable_strict_warnings(tgd_web_sandbox_package_provider)
+target_link_libraries(
+  tgd_web_sandbox_package_provider
+  PRIVATE
+    tgd_contracts
+    tgd_content_core
+)
+target_link_options(tgd_web_sandbox_package_provider PRIVATE "-sEXIT_RUNTIME=1")
+set_target_properties(
+  tgd_web_sandbox_package_provider
+  PROPERTIES
+    OUTPUT_NAME "tgd-sandbox-package-provider-probe"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/dist/web"
+    SUFFIX ".html"
+)

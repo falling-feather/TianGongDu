@@ -80,6 +80,7 @@ test(
     const pageErrors = [];
     const requestErrors = [];
     const unexpectedResponses = [];
+    let externalConflictResponses = 0;
     page.on("console", (message) => {
       if (message.type() === "error") {
         if (message.text().includes("status of 409 (Conflict)")) {
@@ -96,6 +97,12 @@ test(
       requestErrors.push(request.url() + ": " + request.failure()?.errorText)
     );
     page.on("response", (response) => {
+      if (
+        response.status() === 409 &&
+        response.url().endsWith("/api/save")
+      ) {
+        externalConflictResponses += 1;
+      }
       if (
         response.status() >= 400 &&
         !(
@@ -206,15 +213,56 @@ test(
     assert.equal(await page.locator('input[name="x"]').inputValue(), "-1000");
     assert.equal(await page.locator("#save-button").isDisabled(), false);
 
+    let interceptedApply;
+    let releaseApply;
+    let duplicateApplyRequests = 0;
+    const applyIntercepted = new Promise((resolve) => {
+      interceptedApply = resolve;
+    });
+    const applyReleased = new Promise((resolve) => {
+      releaseApply = resolve;
+    });
+    const holdApplyRoute = async (route) => {
+      duplicateApplyRequests += 1;
+      interceptedApply();
+      await applyReleased;
+      await route.continue();
+    };
+    await page.route("**/api/update", holdApplyRoute);
+    await selectObject(page, "player");
+    await page.locator('input[name="x"]').fill("101");
+    const applyButton = page.locator("#apply-button");
+    await applyButton.scrollIntoViewIfNeeded();
+    const applyBox = await applyButton.boundingBox();
+    assert.ok(applyBox);
+    const doubleApply = page.mouse.dblclick(
+      applyBox.x + applyBox.width / 2,
+      applyBox.y + applyBox.height / 2
+    );
+    await applyIntercepted;
+    assert.equal(await applyButton.getAttribute("aria-busy"), "true");
+    assert.equal(await applyButton.getAttribute("aria-disabled"), "true");
+    assert.equal(await focusLabel(page), "apply-button");
+    releaseApply();
+    await doubleApply;
+    await waitForRevision(page, 1);
+    await page.unroute("**/api/update", holdApplyRoute);
+    assert.equal(duplicateApplyRequests, 1);
+    assert.equal(await page.locator("#revision-value").textContent(), "1");
+    assert.equal(await page.locator("#dirty-value").textContent(), "是");
+    assert.equal(await page.locator("#error-live").textContent(), "");
+    assert.equal(await applyButton.getAttribute("aria-busy"), "false");
+    assert.equal(await applyButton.getAttribute("aria-disabled"), "false");
+    assert.equal(await focusLabel(page), "apply-button");
+
     const edits = [
-      ["player", "x", "101"],
       ["actors", "x", "2201"],
       ["groundBlockers", "minX", "999"],
       ["safePoints", "x", "-999"],
       ["interactions", "x", "501"],
       ["mechanisms", "x", "1301"]
     ];
-    let revision = 0;
+    let revision = 1;
     for (const [kind, field, value] of edits) {
       await selectObject(page, kind);
       const idInput = page.locator('input[name="id"]');
@@ -226,10 +274,49 @@ test(
     }
     assert.equal(await page.locator("#dirty-value").textContent(), "是");
 
-    await page.locator("#save-button").click();
+    let interceptedSave;
+    let releaseSave;
+    let duplicateSaveRequests = 0;
+    const saveIntercepted = new Promise((resolve) => {
+      interceptedSave = resolve;
+    });
+    const saveReleased = new Promise((resolve) => {
+      releaseSave = resolve;
+    });
+    const holdSaveRoute = async (route) => {
+      duplicateSaveRequests += 1;
+      interceptedSave();
+      await saveReleased;
+      await route.continue();
+    };
+    await page.route("**/api/save", holdSaveRoute);
+    const saveButton = page.locator("#save-button");
+    await saveButton.scrollIntoViewIfNeeded();
+    const saveBox = await saveButton.boundingBox();
+    assert.ok(saveBox);
+    const doubleClick = page.mouse.dblclick(
+      saveBox.x + saveBox.width / 2,
+      saveBox.y + saveBox.height / 2
+    );
+    await saveIntercepted;
+    assert.equal(await saveButton.getAttribute("aria-busy"), "true");
+    assert.equal(await saveButton.getAttribute("aria-disabled"), "true");
+    assert.equal(await focusLabel(page), "save-button");
+    await page.keyboard.press("Control+s");
+    releaseSave();
+    await doubleClick;
     await page.waitForFunction(
       () => document.querySelector("#dirty-value")?.textContent === "否"
     );
+    await page.unroute("**/api/save", holdSaveRoute);
+    assert.equal(duplicateSaveRequests, 1);
+    assert.equal(
+      await page.locator("#saved-revision-value").textContent(),
+      await page.locator("#revision-value").textContent()
+    );
+    assert.equal(await page.locator("#conflict-banner").isHidden(), true);
+    assert.equal(await saveButton.getAttribute("aria-busy"), "false");
+    assert.equal(await saveButton.getAttribute("aria-disabled"), "false");
     focusTrace.push("saved:" + (await focusLabel(page)));
     assert.equal(await focusLabel(page), "save-button");
     liveTrace.push(await liveSnapshot(page, "saved"));
@@ -305,6 +392,8 @@ test(
     await page.locator("#reload-button").click();
     assert.equal(await page.locator("#dirty-value").textContent(), "是");
 
+    const lastValidBeforeExternalConflict =
+      running.controller.editorState.lastValidDocument;
     const external = JSON.parse(
       await readFile(path.join(root, "demo.json"), "utf8")
     );
@@ -320,6 +409,11 @@ test(
     assert.equal(await page.locator("#conflict-dialog").getAttribute("open"), null);
     assert.equal(await readFile(path.join(root, "demo.json"), "utf8"), externalBytes);
     assert.equal(await page.locator("#save-button").isDisabled(), true);
+    assert.equal(externalConflictResponses, 1);
+    assert.strictEqual(
+      running.controller.editorState.lastValidDocument,
+      lastValidBeforeExternalConflict
+    );
     assert.equal(await page.locator("#error-live").textContent(), "");
     assert.equal(
       await page.locator('[role="alert"]:visible').evaluateAll((nodes) =>
@@ -360,6 +454,9 @@ test(
     t.diagnostic("focus trace: " + JSON.stringify(focusTrace));
     t.diagnostic("live-region trace: " + JSON.stringify(liveTrace));
     t.diagnostic("console errors: " + consoleErrors.length);
+    t.diagnostic("duplicate-apply requests: " + duplicateApplyRequests);
+    t.diagnostic("duplicate-save requests: " + duplicateSaveRequests);
+    t.diagnostic("external-conflict 409 responses: " + externalConflictResponses);
     t.diagnostic(
       "expected conflict console entries: " + expectedConflictConsole.length
     );

@@ -88,6 +88,8 @@ let selectedGroup = "player";
 let selectedId = null;
 let treeActiveKey = "group:player";
 let conflictTrigger = null;
+let applyInFlight = false;
+let saveInFlight = false;
 let activeFields = [];
 const expandedGroups = new Set(GROUPS.map((group) => group.key));
 const fieldBuffers = new Map();
@@ -170,8 +172,14 @@ function updateSaveAvailability() {
   elements.saveButton.disabled = nativeDisabled;
   elements.saveButton.setAttribute(
     "aria-disabled",
-    String(nativeDisabled || state.conflict)
+    String(nativeDisabled || state.conflict || saveInFlight)
   );
+  elements.saveButton.setAttribute("aria-busy", String(saveInFlight));
+}
+
+function updateApplyAvailability() {
+  elements.applyButton.setAttribute("aria-disabled", String(applyInFlight));
+  elements.applyButton.setAttribute("aria-busy", String(applyInFlight));
 }
 
 function bufferedEntry(field) {
@@ -579,6 +587,7 @@ function render() {
   renderTree();
   renderInspector();
   updateSaveAvailability();
+  updateApplyAvailability();
 }
 
 function parseFormValues() {
@@ -735,7 +744,7 @@ async function reloadDocument(confirmFromConflict = false) {
 }
 
 async function saveDocument() {
-  if (!state.opened || state.conflict) {
+  if (!state.opened || state.conflict || saveInFlight) {
     return;
   }
   if (hasFieldBuffers()) {
@@ -744,6 +753,9 @@ async function saveDocument() {
   }
   clearFeedback();
   const savingRevision = state.revision;
+  saveInFlight = true;
+  updateSaveAvailability();
+  elements.saveButton.focus();
   try {
     state = await api("/api/save", {
       method: "POST",
@@ -762,10 +774,13 @@ async function saveDocument() {
     } else {
       setStatus("已保存 revision " + state.savedRevision + "。");
     }
-    elements.saveButton.focus();
   } catch (error) {
     render();
     presentError(error);
+  } finally {
+    saveInFlight = false;
+    updateSaveAvailability();
+    elements.saveButton.focus();
   }
 }
 
@@ -847,23 +862,31 @@ elements.saveButton.addEventListener("click", () => {
 
 elements.inspectorForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (applyInFlight) {
+    return;
+  }
+  applyInFlight = true;
+  updateApplyAvailability();
+  elements.applyButton.focus();
   clearFeedback();
+  const submittedGroup = selectedGroup;
+  const submittedId = selectedId;
+  const submittedBufferKey = objectBufferKey();
   try {
     const raw = parseFormValues();
     state = await api("/api/update", {
       method: "POST",
       body: {
-        kind: selectedGroup,
-        id: selectedId,
+        kind: submittedGroup,
+        id: submittedId,
         values: requestValues(raw),
         expectedRevision: state.revision
       }
     });
-    const changedId = selectedId;
-    clearCurrentBuffer();
+    fieldBuffers.delete(submittedBufferKey);
     render();
     setStatus(
-      "已应用 " + changedId + " 的属性，revision " + state.revision + "。"
+      "已应用 " + submittedId + " 的属性，revision " + state.revision + "。"
     );
   } catch (error) {
     if (error.code === "local_invalid") {
@@ -871,6 +894,10 @@ elements.inspectorForm.addEventListener("submit", async (event) => {
     } else {
       presentError(error);
     }
+  } finally {
+    applyInFlight = false;
+    updateApplyAvailability();
+    elements.applyButton.focus();
   }
 });
 

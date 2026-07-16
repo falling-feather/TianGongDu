@@ -473,15 +473,16 @@ test("open during save isolates the new document epoch and CAS", async (t) => {
   });
   await atReplace;
 
-  const opened = await controller.open({
+  const opening = controller.open({
     relativePath: "other.json",
     confirmDiscard: true
   });
+  releaseReplace();
+  await oldSave;
+  const opened = await opening;
   const openedCas = opened.cas;
   assert.equal(opened.relativePath, "other.json");
   assert.equal(opened.revision, 0);
-  releaseReplace();
-  await oldSave;
 
   assert.equal(controller.view().relativePath, "other.json");
   assert.equal(controller.view().cas, openedCas);
@@ -587,5 +588,169 @@ test("reload during save waits for the current file CAS and remains saveable", a
   assert.equal(
     JSON.parse(await readFile(path.join(root, "demo.json"), "utf8")).runtime.player.pose.x,
     422
+  );
+});
+
+test("slash aliases wait for the pending save and keep its CAS saveable", async (t) => {
+  const root = await temporaryWorkspace(t);
+  await mkdir(path.join(root, "dir"));
+  await copyFile(fixtureUrl, path.join(root, "dir", "demo.json"));
+  let reachedReplace;
+  let releaseReplace;
+  const atReplace = new Promise((resolve) => {
+    reachedReplace = resolve;
+  });
+  const release = new Promise((resolve) => {
+    releaseReplace = resolve;
+  });
+  const controller = await openedController(root, {
+    async faultInjector(name) {
+      if (name === "replace") {
+        reachedReplace();
+        await release;
+      }
+    }
+  });
+  await controller.open({
+    relativePath: "dir/demo.json",
+    confirmDiscard: false
+  });
+  const first = editableValues(
+    controller.editorState.document,
+    "player",
+    "player.start"
+  );
+  first.pose.x = 511;
+  controller.updateObject({
+    kind: "player",
+    id: "player.start",
+    values: first,
+    expectedRevision: 0
+  });
+  const pendingSave = controller.save({
+    expectedRevision: 1,
+    expectedCas: controller.view().cas
+  });
+  await atReplace;
+  const openingAlias = controller.open({
+    relativePath: "dir\\demo.json",
+    confirmDiscard: true
+  });
+  releaseReplace();
+  await pendingSave;
+  const openedAlias = await openingAlias;
+
+  assert.equal(openedAlias.relativePath, "dir/demo.json");
+  assert.equal(openedAlias.revision, 0);
+  assert.equal(openedAlias.dirty, false);
+  assert.equal(openedAlias.conflict, false);
+  assert.equal(controller.editorState.document.runtime.player.pose.x, 511);
+  assert.equal(controller.editorState.lastError, null);
+
+  const second = editableValues(
+    controller.editorState.document,
+    "player",
+    "player.start"
+  );
+  second.pose.x = 522;
+  controller.updateObject({
+    kind: "player",
+    id: "player.start",
+    values: second,
+    expectedRevision: 0
+  });
+  const saved = await controller.save({
+    expectedRevision: 1,
+    expectedCas: openedAlias.cas
+  });
+  assert.equal(saved.dirty, false);
+  assert.equal(saved.conflict, false);
+  assert.equal(controller.editorState.lastError, null);
+  assert.equal(
+    JSON.parse(await readFile(path.join(root, "dir", "demo.json"), "utf8")).runtime.player.pose.x,
+    522
+  );
+});
+
+test("a failed save releases the document-switch barrier", async (t) => {
+  const root = await temporaryWorkspace(t);
+  await copyFile(fixtureUrl, path.join(root, "other.json"));
+  let reachedReplace;
+  let releaseReplace;
+  let failNextReplace = true;
+  const atReplace = new Promise((resolve) => {
+    reachedReplace = resolve;
+  });
+  const release = new Promise((resolve) => {
+    releaseReplace = resolve;
+  });
+  const controller = await openedController(root, {
+    async faultInjector(name) {
+      if (name === "replace" && failNextReplace) {
+        failNextReplace = false;
+        reachedReplace();
+        await release;
+        throw new Error("injected replace failure");
+      }
+    }
+  });
+  const first = editableValues(
+    controller.editorState.document,
+    "player",
+    "player.start"
+  );
+  first.pose.x = 611;
+  controller.updateObject({
+    kind: "player",
+    id: "player.start",
+    values: first,
+    expectedRevision: 0
+  });
+  let saveRejected = false;
+  const failedSave = controller
+    .save({
+      expectedRevision: 1,
+      expectedCas: controller.view().cas
+    })
+    .catch((error) => {
+      saveRejected = true;
+      return error;
+    });
+  await atReplace;
+  const opening = controller.open({
+    relativePath: "other.json",
+    confirmDiscard: true
+  });
+  releaseReplace();
+  const [failure, opened] = await Promise.all([failedSave, opening]);
+
+  assert.equal(saveRejected, true);
+  assert.ok(failure instanceof Error);
+  assert.equal(opened.relativePath, "other.json");
+  assert.equal(opened.revision, 0);
+  assert.equal(opened.conflict, false);
+  assert.equal(controller.editorState.lastError, null);
+
+  const second = editableValues(
+    controller.editorState.document,
+    "player",
+    "player.start"
+  );
+  second.pose.x = 622;
+  controller.updateObject({
+    kind: "player",
+    id: "player.start",
+    values: second,
+    expectedRevision: 0
+  });
+  const saved = await controller.save({
+    expectedRevision: 1,
+    expectedCas: opened.cas
+  });
+  assert.equal(saved.dirty, false);
+  assert.equal(saved.conflict, false);
+  assert.equal(
+    JSON.parse(await readFile(path.join(root, "other.json"), "utf8")).runtime.player.pose.x,
+    622
   );
 });

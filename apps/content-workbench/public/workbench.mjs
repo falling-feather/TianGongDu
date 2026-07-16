@@ -700,6 +700,7 @@ async function openDocument() {
     selectedGroup = "player";
     selectedId = state.document.runtime.player.id;
     treeActiveKey = "object:player:" + selectedId;
+    clearFeedback();
     render();
     setStatus("已打开 " + state.relativePath + "。字段格式可保存，内容尚未校验。");
     elements.objectTree.focus();
@@ -739,6 +740,7 @@ async function reloadDocument(confirmFromConflict = false) {
       selectedId = state.document.runtime.player.id;
     }
     treeActiveKey = "object:" + selectedGroup + ":" + selectedId;
+    clearFeedback();
     render();
     setStatus("已从磁盘重新加载 " + state.relativePath + "。");
     elements.objectTree.focus();

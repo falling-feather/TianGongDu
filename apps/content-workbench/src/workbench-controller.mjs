@@ -267,9 +267,9 @@ export function createWorkbenchController({ workspace }) {
     }
   }
 
-  async function waitForPendingSave(relativePathToRead) {
+  async function waitForPendingSave() {
     const pending = pendingSave;
-    if (pending?.relativePath !== relativePathToRead) {
+    if (!pending) {
       return;
     }
     await pending.completion;
@@ -282,7 +282,7 @@ export function createWorkbenchController({ workspace }) {
       "open request"
     );
     requireDiscardConfirmation(request.confirmDiscard);
-    await waitForPendingSave(request.relativePath);
+    await waitForPendingSave();
 
     let loaded;
     let nextState;
@@ -305,7 +305,7 @@ export function createWorkbenchController({ workspace }) {
     expectExactObject(request, ["confirmDiscard"], "reload request");
     requireOpen();
     requireDiscardConfirmation(request.confirmDiscard);
-    await waitForPendingSave(relativePath);
+    await waitForPendingSave();
 
     let loaded;
     let nextState;

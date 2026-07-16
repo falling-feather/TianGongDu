@@ -664,11 +664,158 @@ test(
     assert.equal(running.controller.view().relativePath, "other.json");
     assert.equal(running.controller.view().conflict, false);
 
+    await page.locator('input[name="x"]').fill("202");
+    await applyButton.click();
+    await waitForRevision(page, 1);
+    let reloadErrorSaveSeen;
+    let releaseReloadErrorSave;
+    let reloadErrorResponseSeen;
+    let releaseReloadErrorResponse;
+    let reloadErrorSaveRequests = 0;
+    const reloadErrorSaveReady = new Promise((resolve) => {
+      reloadErrorSaveSeen = resolve;
+    });
+    const reloadErrorSaveReleased = new Promise((resolve) => {
+      releaseReloadErrorSave = resolve;
+    });
+    const reloadErrorResponseReady = new Promise((resolve) => {
+      reloadErrorResponseSeen = resolve;
+    });
+    const reloadErrorResponseReleased = new Promise((resolve) => {
+      releaseReloadErrorResponse = resolve;
+    });
+    const holdSaveErrorAcrossReload = async (route) => {
+      reloadErrorSaveRequests += 1;
+      const response = await route.fetch();
+      const savedState = await response.json();
+      reloadErrorSaveSeen();
+      await reloadErrorSaveReleased;
+      await route.fulfill({
+        status: 409,
+        contentType: "application/json",
+        body: JSON.stringify({
+          error: {
+            code: "stale_revision",
+            message: "injected late save error"
+          },
+          state: savedState
+        })
+      });
+    };
+    const holdReloadAfterSaveError = async (route) => {
+      const response = await route.fetch();
+      reloadErrorResponseSeen();
+      await reloadErrorResponseReleased;
+      await route.fulfill({ response });
+    };
+    await page.route("**/api/save", holdSaveErrorAcrossReload);
+    await page.route("**/api/reload", holdReloadAfterSaveError);
+    await saveButton.click();
+    await reloadErrorSaveReady;
+    page.once("dialog", async (dialog) => {
+      assert.equal(dialog.type(), "confirm");
+      await dialog.accept();
+    });
+    await page.locator("#reload-button").click();
+    await reloadErrorResponseReady;
+    staleSaveFailureActive = true;
+    releaseReloadErrorSave();
+    await page.waitForFunction(
+      () => document.querySelector("#error-live")?.textContent.trim().length > 0
+    );
+    staleSaveFailureActive = false;
+    releaseReloadErrorResponse();
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#revision-value")?.textContent === "0" &&
+        document.querySelector('input[name="x"]')?.value === "202" &&
+        document.querySelector("#error-live")?.textContent === ""
+    );
+    await page.unroute("**/api/save", holdSaveErrorAcrossReload);
+    await page.unroute("**/api/reload", holdReloadAfterSaveError);
+    assert.equal(reloadErrorSaveRequests, 1);
+    assert.equal(await page.locator("#opened-path").textContent(), "other.json");
+    assert.equal(await page.locator("#dirty-value").textContent(), "否");
+    assert.equal(await focusLabel(page), "object-tree");
+    assert.equal(running.controller.view().relativePath, "other.json");
+    assert.equal(running.controller.view().conflict, false);
+
+    await page.locator('input[name="x"]').fill("203");
+    await applyButton.click();
+    await waitForRevision(page, 1);
+    let openErrorSaveSeen;
+    let releaseOpenErrorSave;
+    let openErrorResponseSeen;
+    let releaseOpenErrorResponse;
+    let openErrorSaveRequests = 0;
+    const openErrorSaveReady = new Promise((resolve) => {
+      openErrorSaveSeen = resolve;
+    });
+    const openErrorSaveReleased = new Promise((resolve) => {
+      releaseOpenErrorSave = resolve;
+    });
+    const openErrorResponseReady = new Promise((resolve) => {
+      openErrorResponseSeen = resolve;
+    });
+    const openErrorResponseReleased = new Promise((resolve) => {
+      releaseOpenErrorResponse = resolve;
+    });
+    const holdSaveErrorAcrossOpen = async (route) => {
+      openErrorSaveRequests += 1;
+      const response = await route.fetch();
+      const savedState = await response.json();
+      openErrorSaveSeen();
+      await openErrorSaveReleased;
+      await route.fulfill({
+        status: 409,
+        contentType: "application/json",
+        body: JSON.stringify({
+          error: {
+            code: "stale_revision",
+            message: "injected late save error"
+          },
+          state: savedState
+        })
+      });
+    };
+    const holdOpenAfterSaveError = async (route) => {
+      const response = await route.fetch();
+      openErrorResponseSeen();
+      await openErrorResponseReleased;
+      await route.fulfill({ response });
+    };
+    await page.route("**/api/save", holdSaveErrorAcrossOpen);
+    await page.route("**/api/open", holdOpenAfterSaveError);
+    await saveButton.click();
+    await openErrorSaveReady;
+    page.once("dialog", async (dialog) => {
+      assert.equal(dialog.type(), "confirm");
+      await dialog.accept();
+    });
     await page.locator("#path-input").fill("demo.json");
     await page.locator("#path-input").press("Enter");
+    await openErrorResponseReady;
+    staleSaveFailureActive = true;
+    releaseOpenErrorSave();
     await page.waitForFunction(
-      () => document.querySelector("#opened-path")?.textContent === "demo.json"
+      () => document.querySelector("#error-live")?.textContent.trim().length > 0
     );
+    staleSaveFailureActive = false;
+    releaseOpenErrorResponse();
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#opened-path")?.textContent === "demo.json" &&
+        document.querySelector("#error-live")?.textContent === ""
+    );
+    await page.unroute("**/api/save", holdSaveErrorAcrossOpen);
+    await page.unroute("**/api/open", holdOpenAfterSaveError);
+    assert.equal(openErrorSaveRequests, 1);
+    assert.equal(await page.locator("#revision-value").textContent(), "0");
+    assert.equal(await page.locator("#dirty-value").textContent(), "否");
+    assert.equal(await focusLabel(page), "object-tree");
+    assert.equal(running.controller.view().relativePath, "demo.json");
+    assert.equal(running.controller.view().conflict, false);
+
     await selectObject(page, "player");
     assert.equal(await page.locator('input[name="x"]').inputValue(), "107");
 
@@ -906,6 +1053,12 @@ test(
         ", reload=" +
         lateReloadSaveRequests
     );
+    t.diagnostic(
+      "document-switch late save errors: open=" +
+        openErrorSaveRequests +
+        ", reload=" +
+        reloadErrorSaveRequests
+    );
     t.diagnostic("external-conflict 409 responses: " + externalConflictResponses);
     t.diagnostic(
       "expected conflict console entries: " + expectedConflictConsole.length
@@ -922,7 +1075,7 @@ test(
     t.diagnostic("unexpected HTTP errors: " + unexpectedResponses.length);
     assert.deepEqual(consoleErrors, []);
     assert.equal(expectedConflictConsole.length, 1);
-    assert.equal(expectedStaleSaveConsole.length, 1);
+    assert.equal(expectedStaleSaveConsole.length, 3);
     assert.equal(expectedInvalidLoadConsole.length, 1);
     assert.deepEqual(pageErrors, []);
     assert.deepEqual(requestErrors, []);

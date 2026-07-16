@@ -124,6 +124,11 @@ static_assert(sandbox_pack_objective_record_bytes == 64);
 static_assert(static_cast<std::uint16_t>(SandboxDiagnosticCode::duplicate_id) == 1);
 static_assert(static_cast<std::uint16_t>(SandboxDiagnosticCode::retry_inconsistent) == 25);
 static_assert(static_cast<std::uint16_t>(SandboxDiagnosticCode::web_budget_exceeded) == 32);
+static_assert(static_cast<std::uint16_t>(SandboxDiagnosticCode::invalid_stable_id) == 33);
+static_assert(
+    sandbox_diagnostic_severity(SandboxDiagnosticCode::invalid_stable_id) ==
+    SandboxDiagnosticSeverity::error
+);
 static_assert(static_cast<std::uint8_t>(SandboxReferenceDomain::none) == 0);
 static_assert(static_cast<std::uint8_t>(SandboxReferenceDomain::invalid) == 255);
 static_assert(
@@ -184,7 +189,7 @@ static_assert(static_cast<std::uint16_t>(SandboxDiagnosticField::invalid) == 65'
 static_assert(!HasDiagnosticSeverityState<SandboxDiagnostic>);
 
 [[nodiscard]] constexpr bool all_sandbox_diagnostic_severities_are_mapped() noexcept {
-    for (std::uint16_t raw = 1; raw <= 32; ++raw) {
+    for (std::uint16_t raw = 1; raw <= 33; ++raw) {
         if (sandbox_diagnostic_severity(static_cast<SandboxDiagnosticCode>(raw)) !=
             SandboxDiagnosticSeverity::error) {
             return false;
@@ -199,7 +204,7 @@ static_assert(
     SandboxDiagnosticSeverity::invalid
 );
 static_assert(
-    sandbox_diagnostic_severity(static_cast<SandboxDiagnosticCode>(33)) ==
+    sandbox_diagnostic_severity(static_cast<SandboxDiagnosticCode>(34)) ==
     SandboxDiagnosticSeverity::invalid
 );
 static_assert(

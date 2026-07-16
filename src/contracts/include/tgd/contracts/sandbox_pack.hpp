@@ -14,11 +14,11 @@ inline constexpr std::array<std::uint8_t, 8> sandbox_pack_magic{
     'T', 'G', 'D', 'S', 'B', 'X', 0, 0,
 };
 inline constexpr std::uint16_t sandbox_pack_format_major = 1;
-inline constexpr std::uint16_t sandbox_pack_format_minor = 0;
+inline constexpr std::uint16_t sandbox_pack_format_minor = 1;
 inline constexpr std::uint16_t sandbox_content_api_major = 1;
 inline constexpr std::uint16_t sandbox_content_api_minor = 0;
 inline constexpr std::uint16_t sandbox_authoring_schema_major = 1;
-inline constexpr std::uint16_t sandbox_authoring_schema_minor = 0;
+inline constexpr std::uint16_t sandbox_authoring_schema_minor = 1;
 inline constexpr std::uint16_t sandbox_authoring_schema_patch = 0;
 inline constexpr std::size_t sandbox_pack_header_bytes = 96;
 inline constexpr std::size_t sandbox_pack_directory_entry_bytes = 24;
@@ -30,6 +30,7 @@ inline constexpr std::size_t sandbox_pack_max_sections = 32;
 inline constexpr std::size_t sandbox_pack_max_strings = 2'048;
 inline constexpr std::size_t sandbox_pack_max_string_bytes = 256U * 1024U;
 inline constexpr std::size_t sandbox_pack_max_id_bytes = 96;
+inline constexpr std::uint32_t sandbox_pack_no_string_index = 0xffff'ffffU;
 
 enum class SandboxPackByteOrder : std::uint8_t {
     little_endian = 1,
@@ -67,6 +68,8 @@ enum class SandboxPackSectionType : std::uint16_t {
     waves = 11,
     wave_spawns = 12,
     objectives = 13,
+    interaction_gameplay_bindings = 14,
+    mechanism_gameplay_bindings = 15,
 };
 
 inline constexpr std::uint32_t sandbox_pack_metadata_record_bytes = 64;
@@ -81,6 +84,8 @@ inline constexpr std::uint32_t sandbox_pack_mechanism_record_bytes = 64;
 inline constexpr std::uint32_t sandbox_pack_wave_record_bytes = 64;
 inline constexpr std::uint32_t sandbox_pack_wave_spawn_record_bytes = 32;
 inline constexpr std::uint32_t sandbox_pack_objective_record_bytes = 64;
+inline constexpr std::uint32_t sandbox_pack_interaction_gameplay_binding_record_bytes = 32;
+inline constexpr std::uint32_t sandbox_pack_mechanism_gameplay_binding_record_bytes = 32;
 
 enum class SandboxPackageError : std::uint8_t {
     none,
@@ -101,6 +106,8 @@ enum class SandboxPackageError : std::uint8_t {
     invalid_string_table,
     invalid_stable_id,
     semantic_validation_failed,
+    gameplay_binding_validation_failed,
+    invalid = 255,
 };
 
 // Shared producer/decoder/compiler diagnostics. Values are append-only so tools
@@ -138,6 +145,7 @@ enum class SandboxDiagnosticCode : std::uint16_t {
     universal_placeholder_conflict = 30,
     license_blocked = 31,
     web_budget_exceeded = 32,
+    invalid_stable_id = 33,
 };
 
 enum class SandboxDiagnosticSeverity : std::uint8_t {
@@ -206,6 +214,8 @@ enum class SandboxDiagnosticField : std::uint16_t {
     placeholder = 34,
     license = 35,
     web_budget = 36,
+    package_id = 37,
+    sandbox_id = 38,
     invalid = 65'535,
 };
 
@@ -245,6 +255,7 @@ enum class SandboxDiagnosticField : std::uint16_t {
         case SandboxDiagnosticCode::universal_placeholder_conflict:
         case SandboxDiagnosticCode::license_blocked:
         case SandboxDiagnosticCode::web_budget_exceeded:
+        case SandboxDiagnosticCode::invalid_stable_id:
             return SandboxDiagnosticSeverity::error;
     }
     return SandboxDiagnosticSeverity::invalid;

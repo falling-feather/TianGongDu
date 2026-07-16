@@ -29,9 +29,14 @@ const EXPECTED_NEW_SOURCE_IDS = Object.freeze(NEW_SOURCE_ASSETS.map((entry) => e
 const REQUIRED_METADATA_GROUPS = Object.freeze(["source", "import", "license", "runtime", "preview", "budget"]);
 const EXPECTED_MANUAL_PATHS = Object.freeze([
   "README.md",
+  "runtime/README.md",
+  "runtime/runtime-import-manifest.json",
   "tests/system-sandbox-blockout-contract.test.mjs",
+  "tests/system-sandbox-runtime-assets.test.mjs",
   "tools/generate-system-sandbox-blockouts.mjs",
+  "tools/generate-system-sandbox-runtime-assets.mjs",
   "tools/system-sandbox-blockout-spec.mjs",
+  "tools/validate-system-sandbox-runtime-assets.mjs",
   "tools/validate-system-sandbox-blockouts.mjs"
 ]);
 const FORBIDDEN_NORMALIZED_KEYS = new Set([

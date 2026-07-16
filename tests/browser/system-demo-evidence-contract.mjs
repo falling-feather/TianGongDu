@@ -9,6 +9,10 @@ const sha256Pattern = /^[0-9a-f]{64}$/;
 const sourceCommitPattern = /^[0-9a-f]{40}$/;
 const checksumPattern = /^[0-9a-f]{16}$/;
 const diagnosticCodePattern = /^[A-Z][A-Z0-9_]{2,63}$/;
+const maximumIdentityStringBytes = 256;
+const maximumDiagnostics = 64;
+const contractOnlyCanonicalSha256 =
+  "d7e40b921aee9cb1ab1886d13491c6721877fc2abe2a44250d0ea49ea7393dbe";
 const failurePhases = ["authoring", "compiler", "decode", "session", "reload"];
 const browserOrder = ["chrome", "edge", "firefox"];
 const lastValidKeys = [
@@ -111,8 +115,19 @@ function assertDenseArray(value, path, expectedLength = null) {
 }
 
 function assertNonEmptyString(value, path) {
-  if (typeof value !== "string" || value.trim() !== value || value.length === 0) {
+  if (typeof value !== "string") {
     fail("invalid_string", path, "must be a non-empty trimmed string");
+  }
+  const byteLength = Buffer.byteLength(value, "utf8");
+  if (byteLength === 0 || value.trim() !== value) {
+    fail("invalid_string", path, "must be a non-empty trimmed string");
+  }
+  if (byteLength > maximumIdentityStringBytes) {
+    fail(
+      "identity_string_too_long",
+      path,
+      `must contain at most ${maximumIdentityStringBytes} UTF-8 bytes`
+    );
   }
 }
 
@@ -396,6 +411,13 @@ function assertOutcome(value, path) {
   assertLastValid(value.previousLastValid, `${path}.previousLastValid`);
   assertCoherentLastValid(value.previousLastValid, `${path}.previousLastValid`);
 
+  if (Array.isArray(value.diagnostics) && value.diagnostics.length > maximumDiagnostics) {
+    fail(
+      "diagnostics_capacity_exceeded",
+      `${path}.diagnostics`,
+      `must contain at most ${maximumDiagnostics} entries`
+    );
+  }
   assertDenseArray(value.diagnostics, `${path}.diagnostics`);
   value.diagnostics.forEach((diagnostic, index) => {
     const diagnosticPath = `${path}.diagnostics[${index}]`;
@@ -687,6 +709,11 @@ export function runSystemDemoEvidenceContractSelfTest() {
   const validResult = validateSystemDemoEvidenceManifest(valid);
   assert.equal(validResult.ok, true, JSON.stringify(validResult.diagnostics));
   assert.match(validResult.sha256, sha256Pattern);
+  assert.equal(
+    validResult.sha256,
+    contractOnlyCanonicalSha256,
+    "capacity checks changed the canonical bytes of a valid manifest"
+  );
 
   const reordered = reverseRecordOrder(valid);
   assert.equal(
@@ -768,10 +795,42 @@ export function runSystemDemoEvidenceContractSelfTest() {
     "non-enumerable manifest bypass"
   );
 
+  const maximumIdentity = createContractOnlySample();
+  maximumIdentity.platforms.web.browsers[0].version = `${"a".repeat(254)}é`;
+  assert.equal(Buffer.byteLength(maximumIdentity.platforms.web.browsers[0].version), 256);
+  assert.equal(validateSystemDemoEvidenceManifest(maximumIdentity).ok, true);
+
+  const overlongIdentity = createContractOnlySample();
+  overlongIdentity.platforms.web.browsers[0].version = `${"a".repeat(255)}é`;
+  assert.equal(Buffer.byteLength(overlongIdentity.platforms.web.browsers[0].version), 257);
+  expectInvalid(overlongIdentity, "identity_string_too_long", "257-byte identity string");
+
+  const maximumDiagnosticsManifest = createFailedContractOnlySample("compiler");
+  maximumDiagnosticsManifest.outcome.diagnostics = Array.from({ length: 64 }, (_, index) => ({
+    phase: "compiler",
+    code: "SYSTEM_DEMO_COMPILER_FAILED",
+    severity: "error",
+    messageSha256: sha256Label(`compiler:maximum-diagnostic:${index}`)
+  }));
+  assert.equal(validateSystemDemoEvidenceManifest(maximumDiagnosticsManifest).ok, true);
+
+  const tooManyDiagnostics = createFailedContractOnlySample("compiler");
+  tooManyDiagnostics.outcome.diagnostics = Array.from({ length: 65 }, (_, index) => ({
+    phase: "compiler",
+    code: "SYSTEM_DEMO_COMPILER_FAILED",
+    severity: "error",
+    messageSha256: sha256Label(`compiler:diagnostic:${index}`)
+  }));
+  expectInvalid(
+    tooManyDiagnostics,
+    "diagnostics_capacity_exceeded",
+    "65 failure diagnostics"
+  );
+
   return {
     contractVersion: systemDemoEvidenceContractVersion,
-    positiveManifests: 1 + failurePhases.length,
-    negativeCases: 10,
+    positiveManifests: 3 + failurePhases.length,
+    negativeCases: 12,
     browserOrder,
     canonicalSha256: validResult.sha256
   };

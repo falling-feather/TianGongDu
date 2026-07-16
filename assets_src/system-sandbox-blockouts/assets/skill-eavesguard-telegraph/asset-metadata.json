@@ -1,0 +1,150 @@
+{
+  "schemaVersion": "system-sandbox-blockout-metadata-1.0",
+  "taskId": "ART-002",
+  "authoringBase": "99a4093c51b99bc8067e10364f591011efe328ab",
+  "authoritativeRoot": "27fb87c8af74b48e0bfb8f4ef6da2f8e96d6560e",
+  "stableAssetId": "asset.system_demo.skill.eavesguard.telegraph",
+  "sandboxAssetKind": "effect",
+  "displayName": "檐守技能攻击提示灰盒",
+  "owner": "ART",
+  "package": "system_demo.presentation.blockouts",
+  "status": "Blockout",
+  "integrationStatus": "not-integrated",
+  "fallbackIdentity": {
+    "id": "fallback.system_demo.skill.eavesguard.telegraph",
+    "exportName": "skill-eavesguard-telegraph",
+    "artifactPath": "fallbacks/skill-eavesguard-telegraph.svg",
+    "independentPerStableAsset": true,
+    "sha256": "6324bd3e5aa4d8b2a82b4fb38a6182040d5db8468049adf435008827cb2b0adf",
+    "bytes": 1371
+  },
+  "source": {
+    "mode": "new-source",
+    "file": "assets/skill-eavesguard-telegraph/source.svg",
+    "kind": "deterministic-project-svg",
+    "generationMethod": "project-local deterministic vector generation with no external image input",
+    "externalInputs": [],
+    "aiAssisted": true,
+    "sha256": "604a6b4e307783a3649fa3861fd146b39dcc8d55c7ce4b87934a4ec625cf4d97",
+    "bytes": 3082
+  },
+  "import": {
+    "status": "planned",
+    "artifact": "not-produced",
+    "validation": "not-validated",
+    "unit": "millimeter",
+    "axes": {
+      "right": "+x",
+      "forward": "+y",
+      "up": "+height"
+    },
+    "facingConvention": "visual forward is +y; authored facing is consumed from the external sandbox definition",
+    "canonicalRoot": "root_visual",
+    "anchors": [
+      {
+        "name": "source_foot_visual",
+        "localMm": {
+          "x": 0,
+          "y": 0,
+          "height": 0
+        },
+        "role": "presentation source point"
+      },
+      {
+        "name": "forward_axis_visual",
+        "localMm": {
+          "x": 0,
+          "y": 600,
+          "height": 0
+        },
+        "role": "presentation direction marker"
+      }
+    ],
+    "visualBoundsMm": null,
+    "nominalPresentationExtentMm": {
+      "forward": 1200,
+      "lateral": 900,
+      "height": 0
+    },
+    "trimPolicy": "preserve root_visual, every named anchor, silhouette breaks, and fallback export identity"
+  },
+  "license": {
+    "status": "review-recorded-not-release-cleared",
+    "rightsHolder": "TianGongDu project",
+    "externalAssetLicenses": [],
+    "aiGenerationDisclosure": "Codex-assisted deterministic SVG using project-owned visual grammar; no external image input",
+    "permittedUse": "internal system Demo evaluation and production planning",
+    "releaseGate": "rights-holder sign-off, similarity review, runtime artifact report, and package policy confirmation"
+  },
+  "runtime": {
+    "status": "planned",
+    "artifact": "not-produced",
+    "validation": "not-validated",
+    "integrationStatus": "not-integrated",
+    "authorityBoundary": "Presentation-only output; all gameplay state and spatial truth remain external",
+    "stableAssetIdChangesByPlatform": false,
+    "platformVariants": {
+      "web": {
+        "variantState": "not-built",
+        "integrationState": "not-integrated",
+        "carrierPlan": "small opaque or alpha-clip presentation artifact behind a future resolver"
+      },
+      "windows": {
+        "variantState": "not-built",
+        "integrationState": "not-integrated",
+        "carrierPlan": "small opaque or alpha-clip presentation artifact behind a future resolver"
+      }
+    },
+    "fallbackWhenMissing": "fallback.system_demo.skill.eavesguard.telegraph"
+  },
+  "preview": {
+    "status": "planned",
+    "runtimeCapture": "not-produced",
+    "validation": "not-validated",
+    "artifactType": "review-board-only",
+    "reviewBoards": [
+      "previews/readability-1280x720.svg",
+      "previews/readability-1920x1080.svg",
+      "previews/readability-1230x692.svg"
+    ],
+    "actorThumbnailHeightPx": null,
+    "requiredChecks": [
+      "grayscale silhouette",
+      "anchor marker",
+      "non-color distinction",
+      "no platform integration claim"
+    ]
+  },
+  "budget": {
+    "runtimeTargetsAreEstimates": true,
+    "measuredSourceBytes": 3082,
+    "measuredFallbackBytes": 1371,
+    "commitItemLimitBytes": 32768,
+    "packageCommitLimitBytes": 1500000,
+    "targetTransportKiB": 220,
+    "targetGpuTextureMiB": 2.665,
+    "targetDrawCalls": 2,
+    "peakTransparentCoveragePercent": 8,
+    "peakLayerCount": 2
+  },
+  "states": [
+    "early-visual",
+    "late-visual",
+    "boundary-visual"
+  ],
+  "accessibility": {
+    "colorOnly": false,
+    "audioOnly": false,
+    "shapeToken": "solid-wedge-inward-ribs",
+    "nonColorChannels": [
+      "solid brace wedge",
+      "three inward ribs",
+      "edge compression increases over time"
+    ]
+  },
+  "dependencies": [
+    "external ability geometry",
+    "external ability phase",
+    "future presentation resolver"
+  ]
+}

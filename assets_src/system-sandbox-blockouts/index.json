@@ -1,0 +1,168 @@
+{
+  "schemaVersion": "system-sandbox-blockout-index-1.0",
+  "taskId": "ART-002",
+  "authoringBase": "99a4093c51b99bc8067e10364f591011efe328ab",
+  "authoritativeRoot": "27fb87c8af74b48e0bfb8f4ef6da2f8e96d6560e",
+  "lineage": {
+    "assetCommit": "f95454c9fa51bdaf593dc354ac21a6ed770ee31c",
+    "bindingTree": "e02ff077c0d1d57923064a2273fc9a049ec475eb",
+    "ledgerCommit": "99a4093c51b99bc8067e10364f591011efe328ab"
+  },
+  "package": "system_demo.presentation.blockouts",
+  "status": "Blockout",
+  "integrationStatus": "not-integrated",
+  "previewReady": false,
+  "slots": [
+    {
+      "stableAssetId": "asset.system_demo.player",
+      "sandboxAssetKind": "player",
+      "status": "Blockout",
+      "integrationStatus": "not-integrated",
+      "sourceMode": "project-grammar-reuse",
+      "source": null,
+      "metadata": "assets/player/asset-metadata.json",
+      "fallbackArtifact": "fallbacks/player.svg",
+      "fallbackId": "fallback.system_demo.player",
+      "shapeToken": "upright-lantern-diagonal"
+    },
+    {
+      "stableAssetId": "asset.system_demo.enemy.pressure",
+      "sandboxAssetKind": "actor",
+      "status": "Blockout",
+      "integrationStatus": "not-integrated",
+      "sourceMode": "project-grammar-reuse",
+      "source": null,
+      "metadata": "assets/enemy-pressure/asset-metadata.json",
+      "fallbackArtifact": "fallbacks/enemy-pressure.svg",
+      "fallbackId": "fallback.system_demo.enemy.pressure",
+      "shapeToken": "broken-triangle-radial-ribs"
+    },
+    {
+      "stableAssetId": "asset.system_demo.enemy.flanker",
+      "sandboxAssetKind": "actor",
+      "status": "Blockout",
+      "integrationStatus": "not-integrated",
+      "sourceMode": "new-source",
+      "source": "assets/enemy-flanker/source.svg",
+      "metadata": "assets/enemy-flanker/asset-metadata.json",
+      "fallbackArtifact": "fallbacks/enemy-flanker.svg",
+      "fallbackId": "fallback.system_demo.enemy.flanker",
+      "shapeToken": "asymmetric-high-zigzag-shadow"
+    },
+    {
+      "stableAssetId": "asset.system_demo.enemy.elite",
+      "sandboxAssetKind": "actor",
+      "status": "Blockout",
+      "integrationStatus": "not-integrated",
+      "sourceMode": "new-source",
+      "source": "assets/enemy-elite/source.svg",
+      "metadata": "assets/enemy-elite/asset-metadata.json",
+      "fallbackArtifact": "fallbacks/enemy-elite.svg",
+      "fallbackId": "fallback.system_demo.enemy.elite",
+      "shapeToken": "split-canopy-counterweight-triad"
+    },
+    {
+      "stableAssetId": "asset.system_demo.obstacle.tension_gate",
+      "sandboxAssetKind": "obstacle",
+      "status": "Blockout",
+      "integrationStatus": "not-integrated",
+      "sourceMode": "new-source",
+      "source": "assets/obstacle-tension-gate/source.svg",
+      "metadata": "assets/obstacle-tension-gate/asset-metadata.json",
+      "fallbackArtifact": "fallbacks/obstacle-tension-gate.svg",
+      "fallbackId": "fallback.system_demo.obstacle.tension_gate",
+      "shapeToken": "solid-threshold-cross-brace"
+    },
+    {
+      "stableAssetId": "asset.system_demo.interaction.console",
+      "sandboxAssetKind": "interaction",
+      "status": "Blockout",
+      "integrationStatus": "not-integrated",
+      "sourceMode": "project-grammar-reuse",
+      "source": null,
+      "metadata": "assets/interaction-console/asset-metadata.json",
+      "fallbackArtifact": "fallbacks/interaction-console.svg",
+      "fallbackId": "fallback.system_demo.interaction.console",
+      "shapeToken": "clipped-console-hand-slot"
+    },
+    {
+      "stableAssetId": "asset.system_demo.mechanism.gate",
+      "sandboxAssetKind": "mechanism",
+      "status": "Blockout",
+      "integrationStatus": "not-integrated",
+      "sourceMode": "project-grammar-reuse",
+      "source": null,
+      "metadata": "assets/mechanism-gate/asset-metadata.json",
+      "fallbackArtifact": "fallbacks/mechanism-gate.svg",
+      "fallbackId": "fallback.system_demo.mechanism.gate",
+      "shapeToken": "offset-gate-link-counterweight"
+    },
+    {
+      "stableAssetId": "asset.system_demo.safe_point.lamp_shelter",
+      "sandboxAssetKind": "safe_point",
+      "status": "Blockout",
+      "integrationStatus": "not-integrated",
+      "sourceMode": "new-source",
+      "source": "assets/safe-point-lamp-shelter/source.svg",
+      "metadata": "assets/safe-point-lamp-shelter/asset-metadata.json",
+      "fallbackArtifact": "fallbacks/safe-point-lamp-shelter.svg",
+      "fallbackId": "fallback.system_demo.safe_point.lamp_shelter",
+      "shapeToken": "closed-double-ring-tripod-lamp"
+    },
+    {
+      "stableAssetId": "asset.system_demo.skill.eavesguard.telegraph",
+      "sandboxAssetKind": "effect",
+      "status": "Blockout",
+      "integrationStatus": "not-integrated",
+      "sourceMode": "new-source",
+      "source": "assets/skill-eavesguard-telegraph/source.svg",
+      "metadata": "assets/skill-eavesguard-telegraph/asset-metadata.json",
+      "fallbackArtifact": "fallbacks/skill-eavesguard-telegraph.svg",
+      "fallbackId": "fallback.system_demo.skill.eavesguard.telegraph",
+      "shapeToken": "solid-wedge-inward-ribs"
+    },
+    {
+      "stableAssetId": "asset.system_demo.skill.eavesguard.hit",
+      "sandboxAssetKind": "effect",
+      "status": "Blockout",
+      "integrationStatus": "not-integrated",
+      "sourceMode": "new-source",
+      "source": "assets/skill-eavesguard-hit/source.svg",
+      "metadata": "assets/skill-eavesguard-hit/asset-metadata.json",
+      "fallbackArtifact": "fallbacks/skill-eavesguard-hit.svg",
+      "fallbackId": "fallback.system_demo.skill.eavesguard.hit",
+      "shapeToken": "stacked-compression-bars"
+    },
+    {
+      "stableAssetId": "asset.system_demo.skill.flower_turn.telegraph",
+      "sandboxAssetKind": "effect",
+      "status": "Blockout",
+      "integrationStatus": "not-integrated",
+      "sourceMode": "new-source",
+      "source": "assets/skill-flower-turn-telegraph/source.svg",
+      "metadata": "assets/skill-flower-turn-telegraph/asset-metadata.json",
+      "fallbackArtifact": "fallbacks/skill-flower-turn-telegraph.svg",
+      "fallbackId": "fallback.system_demo.skill.flower_turn.telegraph",
+      "shapeToken": "broken-double-arc-diagonal"
+    },
+    {
+      "stableAssetId": "asset.system_demo.skill.flower_turn.hit",
+      "sandboxAssetKind": "effect",
+      "status": "Blockout",
+      "integrationStatus": "not-integrated",
+      "sourceMode": "new-source",
+      "source": "assets/skill-flower-turn-hit/source.svg",
+      "metadata": "assets/skill-flower-turn-hit/asset-metadata.json",
+      "fallbackArtifact": "fallbacks/skill-flower-turn-hit.svg",
+      "fallbackId": "fallback.system_demo.skill.flower_turn.hit",
+      "shapeToken": "crossed-shear-cuts"
+    }
+  ],
+  "summary": {
+    "stableAssetSlots": 12,
+    "newSourceAssets": 8,
+    "independentFallbackArtifacts": 12,
+    "allSlotsTargetTransportKiB": 4490,
+    "newSourcesTargetTransportKiB": 2720
+  }
+}

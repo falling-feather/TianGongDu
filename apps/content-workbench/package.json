@@ -8,7 +8,7 @@
   },
   "scripts": {
     "start": "node src/workbench-server.mjs",
-    "test": "node --test tests/authoring-document.test.mjs tests/editor-state.test.mjs tests/workspace-editor.test.mjs tests/sandbox-package-service-client.test.mjs",
+    "test": "node --test tests/authoring-document.test.mjs tests/editor-state.test.mjs tests/workspace-editor.test.mjs tests/sandbox-package-service-client.test.mjs tests/sandbox-package-service-loader.test.mjs",
     "test:browser": "node --test tests/workbench-browser.test.mjs"
   }
 }

@@ -115,6 +115,24 @@ add_test(
   COMMAND tgd_native_sandbox_package_provider
 )
 
+add_executable(
+  tgd_native_sandbox_package_service_abi
+  sandbox_package_service_abi.cpp
+)
+target_compile_features(tgd_native_sandbox_package_service_abi PRIVATE cxx_std_20)
+tgd_enable_strict_warnings(tgd_native_sandbox_package_service_abi)
+target_link_libraries(
+  tgd_native_sandbox_package_service_abi
+  PRIVATE
+    tgd_contracts
+    tgd_content_core
+)
+
+add_test(
+  NAME tgd.native.sandbox-package-service-abi
+  COMMAND tgd_native_sandbox_package_service_abi
+)
+
 add_executable(tgd_native_sandbox_session sandbox_session.cpp)
 target_compile_features(tgd_native_sandbox_session PRIVATE cxx_std_20)
 tgd_enable_strict_warnings(tgd_native_sandbox_session)

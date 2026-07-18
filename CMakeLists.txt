@@ -164,6 +164,7 @@ target_sources(
     src/content-core/src/sandbox_package.cpp
     src/content-core/src/sandbox_package_compiler.cpp
     src/content-core/src/sandbox_package_provider.cpp
+    src/content-core/src/sandbox_package_service_abi.cpp
 )
 target_include_directories(
   tgd_content_core

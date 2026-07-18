@@ -31,6 +31,20 @@ function minimalResult() {
   return bytes;
 }
 
+function artifactResult(packageBytes = Uint8Array.of(0x54, 0x47, 0x44, 0x53)) {
+  const bytes = new Uint8Array(136 + packageBytes.length);
+  bytes.set(minimalResult(), 0);
+  const data = new DataView(bytes.buffer);
+  data.setUint32(68, 136, true);
+  data.setUint32(72, 136, true);
+  data.setUint32(76, bytes.length, true);
+  data.setUint16(82, 1, true);
+  data.setUint32(120, 136, true);
+  data.setUint32(124, packageBytes.length, true);
+  bytes.set(packageBytes, 136);
+  return bytes;
+}
+
 function diagnosticResult() {
   const bytes = new Uint8Array(120 + 48 + 7);
   bytes.set(minimalResult(), 0);
@@ -94,7 +108,7 @@ function growingMock({ assetLimit = Infinity, failMallocAt = 0 } = {}) {
       return pointer;
     },
     _free(pointer) { counters.frees.push(pointer); },
-    _tgd_sandbox_compiler_service_abi_version() { return 0x00010000; },
+    _tgd_sandbox_compiler_service_abi_version() { return 0x00010001; },
     _tgd_sandbox_compiler_service_create(output) {
       memory.grow(1);
       module.HEAPU8 = new Uint8Array(memory.buffer);
@@ -129,7 +143,7 @@ function growingMock({ assetLimit = Infinity, failMallocAt = 0 } = {}) {
     _tgd_sandbox_compile_request_submit(_service, _request, output, _capacity, written) {
       counters.submit += 1;
       generation += 1;
-      const result = minimalResult();
+      const result = artifactResult();
       new DataView(result.buffer).setUint32(4, generation, true);
       module.HEAPU8.set(result, output);
       new DataView(memory.buffer).setUint32(written, result.length, true);
@@ -158,6 +172,73 @@ test("Sandbox service result decoder accepts only a complete ABI 1.0 result", ()
   assert.equal(decoded.identity.generation, 1);
   assert.deepEqual(decoded.diagnostics, []);
   assert.equal(decoded.bindingValidation.code, 1);
+  assert.equal(decoded.packageBytes, null);
+});
+
+test("client accepts ABI 1.0 without inventing a canonical artifact", async () => {
+  const module = growingMock();
+  module._tgd_sandbox_compiler_service_abi_version = () => 0x00010000;
+  module._tgd_sandbox_compile_request_submit = (_service, _request, output, _capacity, written) => {
+    module.counters.submit += 1;
+    const result = minimalResult();
+    module.HEAPU8.set(result, output);
+    new DataView(module.HEAPU8.buffer).setUint32(written, result.length, true);
+    return 1;
+  };
+  const client = SandboxPackageServiceClient.create(module);
+  const result = client.publish(await validRuntime());
+  assert.equal(result.packageBytes, null);
+  client.destroy();
+
+  for (const version of [0x00000001, 0x00010002, 0x00020000]) {
+    const rejected = growingMock();
+    rejected._tgd_sandbox_compiler_service_abi_version = () => version;
+    assert.throws(() => SandboxPackageServiceClient.create(rejected),
+      SandboxPackageServiceTransportError);
+  }
+});
+
+test("ABI 1.1 decoder returns owning canonical package bytes and rejects bad coverage", () => {
+  const source = artifactResult(Uint8Array.of(1, 2, 3, 4));
+  const decoded = decodeSandboxPackageServiceResult(source);
+  assert.deepEqual(decoded.packageBytes, Uint8Array.of(1, 2, 3, 4));
+  source.fill(0);
+  assert.deepEqual(decoded.packageBytes, Uint8Array.of(1, 2, 3, 4));
+
+  const mutations = [
+    (data) => data.setUint32(120, 135, true),
+    (data) => data.setUint32(124, 0, true),
+    (data) => data.setUint32(124, 5, true),
+    (data) => data.setUint32(128, 1, true),
+    (data) => data.setUint8(1, 2)
+  ];
+  for (const mutate of mutations) {
+    const bytes = artifactResult();
+    mutate(new DataView(bytes.buffer));
+    assert.throws(
+      () => decodeSandboxPackageServiceResult(bytes),
+      SandboxPackageServiceTransportError
+    );
+  }
+
+  const maximum = artifactResult(new Uint8Array(4 * 1024 * 1024));
+  assert.equal(decodeSandboxPackageServiceResult(maximum).packageBytes.length,
+    4 * 1024 * 1024);
+  assert.throws(
+    () => decodeSandboxPackageServiceResult(
+      artifactResult(new Uint8Array(4 * 1024 * 1024 + 1))),
+    SandboxPackageServiceTransportError
+  );
+
+  const commitRejected = artifactResult().slice(0, 136);
+  const rejectedData = new DataView(commitRejected.buffer);
+  rejectedData.setUint8(1, 7);
+  rejectedData.setUint32(120, 0, true);
+  rejectedData.setUint32(124, 0, true);
+  rejectedData.setUint32(76, 136, true);
+  const rejected = decodeSandboxPackageServiceResult(commitRejected);
+  assert.equal(rejected.outcome, 7);
+  assert.equal(rejected.packageBytes, null);
 });
 
 test("Sandbox service result decoder exposes no partial diagnostic result", () => {
@@ -217,6 +298,8 @@ test("client survives memory growth during create and every UTF-8 copy", async (
   const result = client.publish(await validRuntime());
   assert.equal(result.complete, true);
   assert.equal(result.identity.generation, 1);
+  assert.ok(result.packageBytes instanceof Uint8Array);
+  assert.ok(result.packageBytes.length > 0);
   assert.equal(module.counters.requestCreate, 1);
   assert.ok(module.counters.copyUtf8 > 0);
   assert.ok(module.counters.append > 0);
@@ -366,14 +449,19 @@ test("generated Web evidence module executes the common probe and service client
   assert.equal(first.complete, true);
   assert.equal(first.outcome, 1);
   assert.equal(first.identity.generation, 1);
+  assert.ok(first.packageBytes instanceof Uint8Array);
+  assert.ok(first.packageBytes.length > 0);
+  assert.notEqual(first.packageBytes.buffer, module.HEAPU8.buffer);
   const second = client.publish(runtime, first.identity);
   assert.equal(second.outcome, 1);
   assert.equal(second.identity.generation, 2);
   assert.deepEqual(second.identity.checksum, first.identity.checksum);
+  assert.deepEqual(second.packageBytes, first.packageBytes);
 
   const staleGeneration = client.publish(runtime, first.identity);
   assert.equal(staleGeneration.complete, true);
   assert.equal(staleGeneration.outcome, 3);
+  assert.equal(staleGeneration.packageBytes, null);
   assert.deepEqual(staleGeneration.identity, second.identity);
   assert.deepEqual(client.identity(), second.identity);
 
@@ -385,6 +473,7 @@ test("generated Web evidence module executes the common probe and service client
   });
   assert.equal(staleChecksum.complete, true);
   assert.equal(staleChecksum.outcome, 4);
+  assert.equal(staleChecksum.packageBytes, null);
   assert.deepEqual(staleChecksum.identity, second.identity);
   assert.deepEqual(client.identity(), second.identity);
 
@@ -392,6 +481,7 @@ test("generated Web evidence module executes the common probe and service client
   missingReference.player.regionId = "sandbox.region.missing";
   const missingResult = client.publish(missingReference, second.identity);
   assert.equal(missingResult.outcome, 2);
+  assert.equal(missingResult.packageBytes, null);
   assert.ok(missingResult.diagnostics.length > 0);
   assert.equal(client.identity().generation, 2);
 
@@ -399,6 +489,7 @@ test("generated Web evidence module executes the common probe and service client
   invalidBinding.interactionBindings[0].rangeMm = 499;
   const bindingResult = client.publish(invalidBinding, second.identity);
   assert.equal(bindingResult.outcome, 2);
+  assert.equal(bindingResult.packageBytes, null);
   assert.notEqual(bindingResult.bindingValidation.code, 1);
   assert.equal(client.identity().generation, 2);
 

@@ -353,9 +353,13 @@ void append_key(std::vector<std::uint8_t>& bytes, StableContentKey key) {
     SandboxPackageCompileStatus compile_status,
     const SandboxPackageValidation& validation,
     const SandboxPackagePublicationIdentity& identity,
-    const OwnedRequest& request
+    const OwnedRequest& request,
+    std::span<const std::uint8_t> package_bytes = {}
 ) {
-    std::vector<std::uint8_t> bytes(TGD_SANDBOX_COMPILER_SERVICE_RESULT_HEADER_BYTES, 0);
+    if ((outcome == TGD_SANDBOX_SERVICE_PUBLISHED) != !package_bytes.empty()) {
+        throw std::length_error("sandbox compiler service artifact invariant");
+    }
+    std::vector<std::uint8_t> bytes(TGD_SANDBOX_COMPILER_SERVICE_RESULT_PREFIX_BYTES, 0);
     std::vector<std::pair<std::string_view, std::string_view>> ids;
     ids.reserve(validation.diagnostics.size());
     for (const auto& diagnostic : validation.diagnostics) {
@@ -409,6 +413,18 @@ void append_key(std::vector<std::uint8_t>& bytes, StableContentKey key) {
         patch_u32(bytes, 100, static_cast<std::uint32_t>(binding_related_id.size()));
         bytes.insert(bytes.end(), binding_related_id.begin(), binding_related_id.end());
     }
+    std::uint32_t package_offset = 0;
+    if (!package_bytes.empty()) {
+        if (package_bytes.size() >
+                TGD_SANDBOX_COMPILER_SERVICE_MAX_CANONICAL_PACKAGE_BYTES ||
+            bytes.size() > TGD_SANDBOX_COMPILER_SERVICE_MAX_RESULT_BYTES ||
+            package_bytes.size() >
+            TGD_SANDBOX_COMPILER_SERVICE_MAX_RESULT_BYTES - bytes.size()) {
+            throw std::length_error("sandbox compiler service result too large");
+        }
+        package_offset = static_cast<std::uint32_t>(bytes.size());
+        bytes.insert(bytes.end(), package_bytes.begin(), package_bytes.end());
+    }
     if (bytes.size() > TGD_SANDBOX_COMPILER_SERVICE_MAX_RESULT_BYTES ||
         validation.diagnostics.size() > std::numeric_limits<std::uint32_t>::max()) {
         throw std::length_error("sandbox compiler service result too large");
@@ -434,6 +450,10 @@ void append_key(std::vector<std::uint8_t>& bytes, StableContentKey key) {
     bytes[82] = static_cast<std::uint8_t>(TGD_SANDBOX_COMPILER_SERVICE_ABI_MINOR);
     bytes[84] = static_cast<std::uint8_t>(binding_flags);
     bytes[85] = static_cast<std::uint8_t>(binding_flags >> 8U);
+    patch_u32(bytes, TGD_SANDBOX_COMPILER_SERVICE_RESULT_HEADER_BYTES,
+              package_offset);
+    patch_u32(bytes, TGD_SANDBOX_COMPILER_SERVICE_RESULT_HEADER_BYTES + 4U,
+              static_cast<std::uint32_t>(package_bytes.size()));
     return bytes;
 }
 
@@ -731,18 +751,35 @@ int32_t tgd_sandbox_compile_request_submit(
         const auto* update = prepared.prepared_update();
         const auto planned_identity = update == nullptr ? service_value->provider.identity()
                                                         : update->next_identity();
-        auto result = serialize_result(outcome, compile_status, validation, planned_identity, *owned);
+        std::span<const std::uint8_t> package_bytes{};
+        if (update != nullptr) {
+            const auto* prepared_candidate = update->candidate();
+            if (!validation.valid() || !validation.diagnostics.empty() ||
+                prepared_candidate == nullptr ||
+                prepared_candidate->fingerprint() != planned_identity.checksum()) {
+                return TGD_SANDBOX_SERVICE_TRANSPORT_INTERNAL_FAILURE;
+            }
+            package_bytes = prepared_candidate->bytes();
+        }
+        auto result = serialize_result(
+            outcome, compile_status, validation, planned_identity, *owned, package_bytes
+        );
+        auto commit_rejected = serialize_result(
+            TGD_SANDBOX_SERVICE_COMMIT_REJECTED, compile_status, validation,
+            service_value->provider.identity(), *owned
+        );
         *output_bytes = static_cast<std::uint32_t>(result.size());
         if (output_capacity < result.size()) return TGD_SANDBOX_SERVICE_TRANSPORT_OUTPUT_TOO_SMALL;
         if (update != nullptr) {
             auto token = std::move(prepared).take_prepared_update();
             const auto committed = service_value->provider.commit(std::move(*token));
             if (committed.status() != SandboxPackageCommitStatus::committed) {
-                result = serialize_result(TGD_SANDBOX_SERVICE_COMMIT_REJECTED,
-                    compile_status, validation, service_value->provider.identity(), *owned);
+                result = std::move(commit_rejected);
             }
         }
         std::memcpy(output, result.data(), result.size());
+        // A failed commit selects the smaller preflighted rejection result.
+        // Always report the bytes actually copied, never the planned publish size.
         *output_bytes = static_cast<std::uint32_t>(result.size());
         return TGD_SANDBOX_SERVICE_TRANSPORT_SUCCEEDED;
     } catch (const std::bad_alloc&) {

@@ -1,6 +1,10 @@
-const ABI_VERSION = 0x00010000;
-const MAX_RESULT_BYTES = 1024 * 1024;
+const ABI_VERSION_1_0 = 0x00010000;
+const ABI_VERSION_1_1 = 0x00010001;
+const MAX_CANONICAL_PACKAGE_BYTES = 4 * 1024 * 1024;
 const HEADER_BYTES = 120;
+const ARTIFACT_BYTES = 16;
+const ABI_1_1_PREFIX_BYTES = HEADER_BYTES + ARTIFACT_BYTES;
+const MAX_RESULT_BYTES = MAX_CANONICAL_PACKAGE_BYTES + ABI_1_1_PREFIX_BYTES;
 const DIAGNOSTIC_BYTES = 48;
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder("utf-8", { fatal: true });
@@ -57,8 +61,8 @@ function idAt(bytes, offset, length, total) {
 
 export function decodeSandboxPackageServiceResult(source) {
   const bytes = source instanceof Uint8Array ? source : new Uint8Array(source);
-  if (bytes.byteLength < HEADER_BYTES) {
-    throw new SandboxPackageServiceTransportError(9, "truncated result header");
+  if (bytes.byteLength < HEADER_BYTES || bytes.byteLength > MAX_RESULT_BYTES) {
+    throw new SandboxPackageServiceTransportError(9, "result size out of range");
   }
   const data = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const total = data.getUint32(76, true);
@@ -71,12 +75,16 @@ export function decodeSandboxPackageServiceResult(source) {
   const bindingCode = data.getUint8(44);
   const bindingDomain = data.getUint8(45);
   const bindingField = data.getUint16(46, true);
+  const abiMajor = data.getUint16(80, true);
+  const abiMinor = data.getUint16(82, true);
+  const prefixBytes = abiMinor === 0 ? HEADER_BYTES : ABI_1_1_PREFIX_BYTES;
   if (
     data.getUint8(0) !== 1 ||
-    data.getUint16(80, true) !== 1 ||
-    data.getUint16(82, true) !== 0 ||
+    abiMajor !== 1 ||
+    (abiMinor !== 0 && abiMinor !== 1) ||
+    bytes.byteLength < prefixBytes ||
     total !== bytes.byteLength ||
-    diagnosticsOffset !== HEADER_BYTES ||
+    diagnosticsOffset !== prefixBytes ||
     count > Math.floor((idBytesOffset - diagnosticsOffset) / DIAGNOSTIC_BYTES) ||
     diagnosticsOffset + count * DIAGNOSTIC_BYTES !== idBytesOffset
   ) {
@@ -95,6 +103,17 @@ export function decodeSandboxPackageServiceResult(source) {
   for (let index = 104; index < 120; index += 1) {
     if (data.getUint8(index) !== 0) {
       throw new SandboxPackageServiceTransportError(9, "non-zero result reserved bytes");
+    }
+  }
+  let packageOffset = 0;
+  let packageLength = 0;
+  if (abiMinor === 1) {
+    packageOffset = data.getUint32(120, true);
+    packageLength = data.getUint32(124, true);
+    for (let index = 128; index < ABI_1_1_PREFIX_BYTES; index += 1) {
+      if (data.getUint8(index) !== 0) {
+        throw new SandboxPackageServiceTransportError(9, "non-zero artifact reserved bytes");
+      }
     }
   }
   const diagnostics = [];
@@ -188,8 +207,19 @@ export function decodeSandboxPackageServiceResult(source) {
     }
     nextIdOffset = end;
   }
-  if (nextIdOffset !== total) {
-    throw new SandboxPackageServiceTransportError(9, "trailing diagnostic ID bytes");
+  let packageBytes = null;
+  if (abiMinor === 1 && outcome === 1) {
+    if (packageLength === 0 || packageOffset !== nextIdOffset ||
+        packageOffset > total || packageLength > total - packageOffset ||
+        packageOffset + packageLength !== total) {
+      throw new SandboxPackageServiceTransportError(9, "invalid canonical package coverage");
+    }
+    packageBytes = bytesAt(bytes, packageOffset, packageLength, total);
+  } else {
+    if ((abiMinor === 1 && (packageOffset !== 0 || packageLength !== 0)) ||
+        nextIdOffset !== total) {
+      throw new SandboxPackageServiceTransportError(9, "unexpected package or trailing bytes");
+    }
   }
   return Object.freeze({
     complete: true,
@@ -201,7 +231,8 @@ export function decodeSandboxPackageServiceResult(source) {
       checksum: Object.freeze(Array.from(bytes.slice(12, 44)))
     }),
     diagnostics: Object.freeze(diagnostics),
-    bindingValidation
+    bindingValidation,
+    packageBytes
   });
 }
 
@@ -458,7 +489,8 @@ export class SandboxPackageServiceClient {
   }
 
   static create(module) {
-    if (call(module, "tgd_sandbox_compiler_service_abi_version") !== ABI_VERSION) {
+    const abiVersion = call(module, "tgd_sandbox_compiler_service_abi_version");
+    if (abiVersion !== ABI_VERSION_1_0 && abiVersion !== ABI_VERSION_1_1) {
       throw new SandboxPackageServiceTransportError(9, "incompatible ABI");
     }
     const pointer = allocate(module, 8);

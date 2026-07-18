@@ -67,9 +67,10 @@ set_target_properties(
     SUFFIX ".html"
 )
 
-# Build the exact Native service contract probe as a modular Node-targeted
-# WebAssembly evidence module and execute it through the service client. This is
-# not the production Workbench loader/deployment path; link-only is not a pass.
+# Build the exact Native service/artifact contract probe as a modular
+# Node-targeted WebAssembly evidence module and execute it through the service
+# client. This is not the production Workbench loader/deployment path;
+# link-only is not a pass.
 add_executable(
   tgd_web_sandbox_package_service_abi
   ../native/sandbox_package_service_abi.cpp

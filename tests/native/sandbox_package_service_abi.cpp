@@ -1,7 +1,10 @@
 #include <tgd/content/sandbox_package_service_abi.h>
 
+#include <tgd/content/sandbox_package.hpp>
+
 #include <tgd/contracts/sandbox_definition.hpp>
 #include <tgd/contracts/sandbox_gameplay_binding.hpp>
+#include <tgd/contracts/sandbox_pack.hpp>
 
 #include <algorithm>
 #include <array>
@@ -34,12 +37,16 @@ static_assert(sizeof(tgd_sandbox_service_objective) == 20);
 static_assert(sizeof(tgd_sandbox_service_interaction_binding) == 16);
 static_assert(sizeof(tgd_sandbox_service_mechanism_binding) == 12);
 static_assert(sizeof(tgd_sandbox_service_result_header) == 120);
+static_assert(sizeof(tgd_sandbox_service_result_artifact) == 16);
 static_assert(sizeof(tgd_sandbox_service_diagnostic) == 48);
 static_assert(offsetof(tgd_sandbox_service_result_header, checksum) == 12);
 static_assert(offsetof(tgd_sandbox_service_result_header, diagnostics_offset) == 68);
 static_assert(offsetof(tgd_sandbox_service_result_header, total_bytes) == 76);
 static_assert(offsetof(tgd_sandbox_service_result_header, binding_flags) == 84);
 static_assert(offsetof(tgd_sandbox_service_result_header, binding_subject_id_offset) == 88);
+static_assert(offsetof(tgd_sandbox_service_result_artifact, package_bytes_offset) == 0);
+static_assert(offsetof(tgd_sandbox_service_result_artifact, package_bytes_length) == 4);
+static_assert(offsetof(tgd_sandbox_service_result_artifact, reserved) == 8);
 static_assert(offsetof(tgd_sandbox_service_diagnostic, subject_key_low) == 12);
 static_assert(offsetof(tgd_sandbox_service_diagnostic, subject_id_offset) == 28);
 static_assert(offsetof(tgd_sandbox_service_diagnostic, reserved) == 44);
@@ -48,6 +55,11 @@ static_assert(TGD_SANDBOX_SERVICE_TRANSPORT_INVALID == 255);
 static_assert(TGD_SANDBOX_SERVICE_PUBLISHED == 1);
 static_assert(TGD_SANDBOX_SERVICE_PUBLISH_INVALID == 255);
 static_assert(TGD_SANDBOX_COMPILER_SERVICE_MAX_STRING_REFS == 4096);
+static_assert(TGD_SANDBOX_COMPILER_SERVICE_MAX_CANONICAL_PACKAGE_BYTES ==
+              sandbox_pack_max_bytes);
+static_assert(TGD_SANDBOX_COMPILER_SERVICE_MAX_RESULT_BYTES ==
+              sandbox_pack_max_bytes +
+                  TGD_SANDBOX_COMPILER_SERVICE_RESULT_PREFIX_BYTES);
 
 [[noreturn]] void fail(std::string_view message) {
     std::cerr << message << '\n';
@@ -68,6 +80,7 @@ template <typename Value>
 
 struct Result final {
     tgd_sandbox_service_result_header header{};
+    tgd_sandbox_service_result_artifact artifact{};
     std::vector<std::uint8_t> bytes{};
 
     [[nodiscard]] tgd_sandbox_service_diagnostic diagnostic(std::size_t index) const {
@@ -82,7 +95,21 @@ struct Result final {
                "diagnostic Stable ID bytes were truncated");
         return {reinterpret_cast<const char*>(bytes.data() + offset), length};
     }
+
+    [[nodiscard]] std::span<const std::uint8_t> package_bytes() const {
+        expect(static_cast<std::size_t>(artifact.package_bytes_offset) +
+                   artifact.package_bytes_length <= bytes.size(),
+               "canonical package bytes were truncated");
+        return {bytes.data() + artifact.package_bytes_offset,
+                artifact.package_bytes_length};
+    }
 };
+
+void expect_no_package(const Result& result, std::string_view message) {
+    expect(result.artifact.package_bytes_offset == 0 &&
+               result.artifact.package_bytes_length == 0,
+           message);
+}
 
 [[nodiscard]] tgd_sandbox_service_identity identity(tgd_sandbox_service_handle service) {
     tgd_sandbox_service_identity value{};
@@ -251,8 +278,17 @@ struct Builder final {
         expect(status == TGD_SANDBOX_SERVICE_TRANSPORT_SUCCEEDED, "request submit failed");
         result.bytes.resize(written);
         result.header = read_pod<tgd_sandbox_service_result_header>(result.bytes, 0);
+        result.artifact = read_pod<tgd_sandbox_service_result_artifact>(
+            result.bytes, TGD_SANDBOX_COMPILER_SERVICE_RESULT_HEADER_BYTES
+        );
         expect(result.header.complete == 1 && result.header.total_bytes == written,
                "service returned an incomplete result");
+        expect(result.header.abi_major == 1 && result.header.abi_minor == 1 &&
+                   result.header.diagnostics_offset ==
+                       TGD_SANDBOX_COMPILER_SERVICE_RESULT_PREFIX_BYTES,
+               "service returned a non-1.1 result prefix");
+        expect(result.artifact.reserved[0] == 0 && result.artifact.reserved[1] == 0,
+               "service returned non-zero artifact reserved bytes");
         expect(result.header.diagnostic_count * sizeof(tgd_sandbox_service_diagnostic) +
                    result.header.diagnostics_offset <= result.header.id_bytes_offset,
                "diagnostic count does not fit the result");
@@ -272,6 +308,14 @@ void check_publish_and_determinism() {
     expect(published.header.outcome == TGD_SANDBOX_SERVICE_PUBLISHED &&
                published.header.generation == 1 && published.header.diagnostic_count == 0,
            "first package was not published");
+    expect(published.artifact.package_bytes_length != 0,
+           "published result omitted canonical package bytes");
+    const auto decoded = tgd::content::decode_sandbox_package(published.package_bytes());
+    expect(decoded.validation.valid() && decoded.document != nullptr &&
+               std::equal(decoded.document->fingerprint().begin(),
+                          decoded.document->fingerprint().end(),
+                          std::begin(published.header.checksum)),
+           "published package did not decode to its publication checksum");
     const auto generation_one = identity(service);
     expect(generation_one.generation == 1 &&
                std::equal(std::begin(generation_one.checksum), std::end(generation_one.checksum),
@@ -287,6 +331,8 @@ void check_publish_and_determinism() {
                           std::end(republished.header.checksum),
                           std::begin(published.header.checksum)),
            "equivalent reordered package changed its checksum");
+    expect(std::ranges::equal(republished.package_bytes(), published.package_bytes()),
+           "same-checksum republish changed canonical package bytes");
     expect(tgd_sandbox_compiler_service_destroy(service) == 1, "service destroy failed");
 }
 
@@ -301,6 +347,7 @@ void check_diagnostic_fidelity_and_preservation() {
     expect(rejected.header.outcome == TGD_SANDBOX_SERVICE_COMPILER_REJECTED &&
                rejected.header.diagnostic_count != 0,
            "semantic failure did not return diagnostics");
+    expect_no_package(rejected, "semantic failure exposed package bytes");
     bool found = false;
     for (std::size_t index = 0; index < rejected.header.diagnostic_count; ++index) {
         const auto diagnostic = rejected.diagnostic(index);
@@ -331,6 +378,7 @@ void check_binding_diagnostic_fidelity() {
                rejected.header.binding_code == static_cast<std::uint8_t>(
                    SandboxGameplayBindingValidationCode::invalid_operate_range),
            "binding diagnostic code was not preserved");
+    expect_no_package(rejected, "binding failure exposed package bytes");
     expect((rejected.header.binding_flags &
                TGD_SANDBOX_SERVICE_DIAGNOSTIC_HAS_SUBJECT_ID) != 0,
            "binding diagnostic subject Stable ID was not resolved");
@@ -390,17 +438,20 @@ void check_stale_competing_and_output_failure() {
     expect(published.header.outcome == TGD_SANDBOX_SERVICE_PUBLISHED &&
                stale.header.outcome == TGD_SANDBOX_SERVICE_STALE_GENERATION,
            "competing request did not fail stale");
+    expect_no_package(stale, "stale request exposed package bytes");
     const auto after_stale = identity(service);
     expect(std::memcmp(&stable, &after_stale, sizeof(stable)) == 0,
            "stale request changed publication");
 
     Builder undersized{service, stable}; undersized.populate();
-    std::array<std::uint8_t, 8> tiny{};
+    std::vector<std::uint8_t> tiny(published.bytes.size() - 1U, UINT8_C(0xa5));
     std::uint32_t required{};
     expect(tgd_sandbox_compile_request_submit(
                service, undersized.request, tiny.data(),
                static_cast<std::uint32_t>(tiny.size()), &required
-           ) == TGD_SANDBOX_SERVICE_TRANSPORT_OUTPUT_TOO_SMALL && required > tiny.size(),
+           ) == TGD_SANDBOX_SERVICE_TRANSPORT_OUTPUT_TOO_SMALL &&
+               required == published.bytes.size() &&
+               std::ranges::all_of(tiny, [](std::uint8_t byte) { return byte == 0xa5; }),
            "undersized output did not fail closed");
     expect(tgd_sandbox_compile_request_submit(
                service, undersized.request, tiny.data(),
@@ -577,12 +628,13 @@ void check_invalid_utf8_diagnostic_output() {
     const auto result = invalid_utf8_result();
     expect(result.header.total_bytes == result.bytes.size(),
            "invalid UTF-8 result was incomplete");
+    expect_no_package(result, "invalid UTF-8 failure exposed package bytes");
 }
 
 }  // namespace
 
 extern "C" std::int32_t tgd_sandbox_service_run_contract_probe() {
-    expect(tgd_sandbox_compiler_service_abi_version() == 0x0001'0000U,
+    expect(tgd_sandbox_compiler_service_abi_version() == 0x0001'0001U,
            "compiler service ABI version mismatch");
     check_publish_and_determinism();
     check_diagnostic_fidelity_and_preservation();

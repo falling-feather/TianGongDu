@@ -4,13 +4,16 @@
 #include <stdint.h>
 
 #define TGD_SANDBOX_COMPILER_SERVICE_ABI_MAJOR UINT16_C(1)
-#define TGD_SANDBOX_COMPILER_SERVICE_ABI_MINOR UINT16_C(0)
+#define TGD_SANDBOX_COMPILER_SERVICE_ABI_MINOR UINT16_C(1)
 #define TGD_SANDBOX_COMPILER_SERVICE_MAX_SERVICES UINT32_C(8)
 #define TGD_SANDBOX_COMPILER_SERVICE_MAX_REQUESTS UINT32_C(32)
 #define TGD_SANDBOX_COMPILER_SERVICE_MAX_STRING_REFS UINT32_C(4096)
 #define TGD_SANDBOX_COMPILER_SERVICE_MAX_COPIED_UTF8_BYTES UINT32_C(262144)
-#define TGD_SANDBOX_COMPILER_SERVICE_MAX_RESULT_BYTES UINT32_C(1048576)
+#define TGD_SANDBOX_COMPILER_SERVICE_MAX_CANONICAL_PACKAGE_BYTES UINT32_C(4194304)
 #define TGD_SANDBOX_COMPILER_SERVICE_RESULT_HEADER_BYTES UINT32_C(120)
+#define TGD_SANDBOX_COMPILER_SERVICE_RESULT_ARTIFACT_BYTES UINT32_C(16)
+#define TGD_SANDBOX_COMPILER_SERVICE_RESULT_PREFIX_BYTES UINT32_C(136)
+#define TGD_SANDBOX_COMPILER_SERVICE_MAX_RESULT_BYTES UINT32_C(4194440)
 #define TGD_SANDBOX_COMPILER_SERVICE_DIAGNOSTIC_BYTES UINT32_C(48)
 
 typedef uint64_t tgd_sandbox_service_handle;
@@ -184,6 +187,15 @@ typedef struct tgd_sandbox_service_result_header {
     uint32_t binding_related_id_length;
     uint8_t reserved[16];
 } tgd_sandbox_service_result_header;
+
+// ABI 1.1 appends this descriptor after the unchanged ABI 1.0 result header.
+// A published result owns package_bytes_length canonical .tgdsbx bytes at
+// package_bytes_offset. Every non-published result stores zero for both fields.
+typedef struct tgd_sandbox_service_result_artifact {
+    uint32_t package_bytes_offset;
+    uint32_t package_bytes_length;
+    uint32_t reserved[2];
+} tgd_sandbox_service_result_artifact;
 
 #define TGD_SANDBOX_SERVICE_DIAGNOSTIC_HAS_SUBJECT_ID UINT16_C(1)
 #define TGD_SANDBOX_SERVICE_DIAGNOSTIC_HAS_RELATED_ID UINT16_C(2)

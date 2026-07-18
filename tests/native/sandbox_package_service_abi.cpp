@@ -47,6 +47,7 @@ static_assert(TGD_SANDBOX_SERVICE_TRANSPORT_SUCCEEDED == 1);
 static_assert(TGD_SANDBOX_SERVICE_TRANSPORT_INVALID == 255);
 static_assert(TGD_SANDBOX_SERVICE_PUBLISHED == 1);
 static_assert(TGD_SANDBOX_SERVICE_PUBLISH_INVALID == 255);
+static_assert(TGD_SANDBOX_COMPILER_SERVICE_MAX_STRING_REFS == 4096);
 
 [[noreturn]] void fail(std::string_view message) {
     std::cerr << message << '\n';
@@ -470,6 +471,78 @@ void check_malformed_and_reserved() {
     expect(tgd_sandbox_compiler_service_destroy(service) == 1, "service destroy failed");
 }
 
+void check_copied_string_bounds() {
+    tgd_sandbox_service_handle service{};
+    expect(tgd_sandbox_compiler_service_create(&service) == 1, "service create failed");
+    const auto stable = identity(service);
+    const std::uint8_t byte = 'x';
+
+    tgd_sandbox_request_handle huge_length{};
+    expect(tgd_sandbox_compile_request_create(service, &stable, &huge_length) == 1,
+           "huge-length request create failed");
+    tgd_sandbox_request_string_ref ref{};
+    expect(tgd_sandbox_compile_request_copy_utf8(
+               service, huge_length, &byte, 1, &ref
+           ) == TGD_SANDBOX_SERVICE_TRANSPORT_SUCCEEDED,
+           "initial copied byte was rejected");
+    tgd_sandbox_request_string_ref unchanged = UINT32_MAX;
+    expect(tgd_sandbox_compile_request_copy_utf8(
+               service, huge_length, &byte, UINT32_MAX, &unchanged
+           ) == TGD_SANDBOX_SERVICE_TRANSPORT_CAPACITY_EXCEEDED,
+           "UINT32_MAX copied length did not fail before reading input");
+    expect(unchanged == UINT32_MAX, "failed huge-length copy changed the output ref");
+    expect(tgd_sandbox_compile_request_cancel(service, huge_length) == 1,
+           "huge-length request was not safely cancellable");
+
+    tgd_sandbox_request_handle byte_limit{};
+    expect(tgd_sandbox_compile_request_create(service, &stable, &byte_limit) == 1,
+           "byte-limit request create failed");
+    expect(tgd_sandbox_compile_request_copy_utf8(
+               service, byte_limit, &byte, 1, &ref
+           ) == TGD_SANDBOX_SERVICE_TRANSPORT_SUCCEEDED,
+           "byte-limit initial byte was rejected");
+    std::vector<std::uint8_t> remaining(
+        TGD_SANDBOX_COMPILER_SERVICE_MAX_COPIED_UTF8_BYTES - 1U, byte);
+    expect(tgd_sandbox_compile_request_copy_utf8(
+               service, byte_limit, remaining.data(),
+               static_cast<std::uint32_t>(remaining.size()), &ref
+           ) == TGD_SANDBOX_SERVICE_TRANSPORT_SUCCEEDED,
+           "exact remaining copied-byte capacity was rejected");
+    unchanged = UINT32_MAX;
+    expect(tgd_sandbox_compile_request_copy_utf8(
+               service, byte_limit, &byte, 1, &unchanged
+           ) == TGD_SANDBOX_SERVICE_TRANSPORT_CAPACITY_EXCEEDED,
+           "copied-byte capacity +1 was accepted");
+    expect(unchanged == UINT32_MAX, "byte-capacity failure changed the output ref");
+    expect(tgd_sandbox_compile_request_cancel(service, byte_limit) == 1,
+           "byte-limit request was not safely cancellable");
+
+    tgd_sandbox_request_handle ref_limit{};
+    expect(tgd_sandbox_compile_request_create(service, &stable, &ref_limit) == 1,
+           "string-ref limit request create failed");
+    for (std::uint32_t index = 0;
+         index < TGD_SANDBOX_COMPILER_SERVICE_MAX_STRING_REFS; ++index) {
+        expect(tgd_sandbox_compile_request_copy_utf8(
+                   service, ref_limit, nullptr, 0, &ref
+               ) == TGD_SANDBOX_SERVICE_TRANSPORT_SUCCEEDED,
+               "null+zero string ref below the limit was rejected");
+        expect(ref == index + 1U, "string refs were not stable one-based values");
+    }
+    unchanged = UINT32_MAX;
+    expect(tgd_sandbox_compile_request_copy_utf8(
+               service, ref_limit, nullptr, 0, &unchanged
+           ) == TGD_SANDBOX_SERVICE_TRANSPORT_CAPACITY_EXCEEDED,
+           "string-ref capacity +1 was accepted");
+    expect(unchanged == UINT32_MAX, "string-ref capacity failure changed the output ref");
+    expect(tgd_sandbox_compile_request_cancel(service, ref_limit) == 1,
+           "string-ref limit request was not safely cancellable");
+
+    const auto after = identity(service);
+    expect(std::memcmp(&stable, &after, sizeof(stable)) == 0,
+           "copied string boundary failures changed publication identity");
+    expect(tgd_sandbox_compiler_service_destroy(service) == 1, "service destroy failed");
+}
+
 [[nodiscard]] Result invalid_utf8_result() {
     tgd_sandbox_service_handle service{};
     expect(tgd_sandbox_compiler_service_create(&service) == 1, "service create failed");
@@ -517,6 +590,7 @@ extern "C" std::int32_t tgd_sandbox_service_run_contract_probe() {
     check_stale_competing_and_output_failure();
     check_foreign_and_same_storage_lifetime();
     check_malformed_and_reserved();
+    check_copied_string_bounds();
     check_invalid_utf8_diagnostic_output();
     return 0;
 }

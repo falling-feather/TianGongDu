@@ -371,6 +371,23 @@ test("generated Web evidence module executes the common probe and service client
   assert.equal(second.identity.generation, 2);
   assert.deepEqual(second.identity.checksum, first.identity.checksum);
 
+  const staleGeneration = client.publish(runtime, first.identity);
+  assert.equal(staleGeneration.complete, true);
+  assert.equal(staleGeneration.outcome, 3);
+  assert.deepEqual(staleGeneration.identity, second.identity);
+  assert.deepEqual(client.identity(), second.identity);
+
+  const wrongChecksum = [...second.identity.checksum];
+  wrongChecksum[0] ^= 0xff;
+  const staleChecksum = client.publish(runtime, {
+    generation: second.identity.generation,
+    checksum: wrongChecksum
+  });
+  assert.equal(staleChecksum.complete, true);
+  assert.equal(staleChecksum.outcome, 4);
+  assert.deepEqual(staleChecksum.identity, second.identity);
+  assert.deepEqual(client.identity(), second.identity);
+
   const missingReference = structuredClone(runtime);
   missingReference.player.regionId = "sandbox.region.missing";
   const missingResult = client.publish(missingReference, second.identity);

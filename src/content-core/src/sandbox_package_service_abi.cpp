@@ -573,8 +573,11 @@ int32_t tgd_sandbox_compile_request_copy_utf8(
     if (owned == nullptr) return status;
     if ((bytes == nullptr && length != 0) || output == nullptr)
         return TGD_SANDBOX_SERVICE_TRANSPORT_MALFORMED_REQUEST;
-    if (owned->copied_utf8_bytes + length > TGD_SANDBOX_COMPILER_SERVICE_MAX_COPIED_UTF8_BYTES ||
-        owned->strings.size() >= UINT32_MAX)
+    constexpr auto max_copied_bytes =
+        static_cast<std::size_t>(TGD_SANDBOX_COMPILER_SERVICE_MAX_COPIED_UTF8_BYTES);
+    if (owned->strings.size() >= TGD_SANDBOX_COMPILER_SERVICE_MAX_STRING_REFS ||
+        owned->copied_utf8_bytes > max_copied_bytes ||
+        static_cast<std::size_t>(length) > max_copied_bytes - owned->copied_utf8_bytes)
         return TGD_SANDBOX_SERVICE_TRANSPORT_CAPACITY_EXCEEDED;
     try {
         if (length == 0) owned->strings.emplace_back();
@@ -584,6 +587,8 @@ int32_t tgd_sandbox_compile_request_copy_utf8(
         return TGD_SANDBOX_SERVICE_TRANSPORT_SUCCEEDED;
     } catch (const std::bad_alloc&) {
         return TGD_SANDBOX_SERVICE_TRANSPORT_ALLOCATION_FAILED;
+    } catch (const std::length_error&) {
+        return TGD_SANDBOX_SERVICE_TRANSPORT_CAPACITY_EXCEEDED;
     }
 }
 

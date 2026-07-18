@@ -241,6 +241,43 @@ test("ABI 1.1 decoder returns owning canonical package bytes and rejects bad cov
   assert.equal(rejected.packageBytes, null);
 });
 
+test("result decoding owns Buffer and byteOffset-view bytes after source mutation", () => {
+  const bufferedArtifactSource = Buffer.from(
+    artifactResult(Uint8Array.of(5, 4, 3, 2))
+  );
+  const bufferedArtifact = decodeSandboxPackageServiceResult(bufferedArtifactSource);
+  bufferedArtifactSource.fill(0);
+  assert.deepEqual(bufferedArtifact.packageBytes, Uint8Array.of(5, 4, 3, 2));
+
+  const bufferedSource = Buffer.from(diagnosticResult());
+  for (let index = 0; index < 32; index += 1) bufferedSource[12 + index] = index + 1;
+  const buffered = decodeSandboxPackageServiceResult(bufferedSource);
+  bufferedSource.fill(0);
+  assert.deepEqual(buffered.identity.checksum,
+    Array.from({ length: 32 }, (_, index) => index + 1));
+  assert.equal(buffered.diagnostics[0].subjectId, "one");
+  assert.equal(buffered.diagnostics[0].relatedId, "-two");
+
+  const artifact = artifactResult(Uint8Array.of(9, 8, 7, 6));
+  const parent = new Uint8Array(artifact.length + 23);
+  const offset = 11;
+  parent.set(artifact, offset);
+  const offsetView = parent.subarray(offset, offset + artifact.length);
+  const viewed = decodeSandboxPackageServiceResult(offsetView);
+  parent.fill(0xff);
+  assert.deepEqual(viewed.packageBytes, Uint8Array.of(9, 8, 7, 6));
+  assert.deepEqual(viewed.identity.checksum, Array(32).fill(0));
+
+  const diagnostic = diagnosticResult();
+  const diagnosticParent = new Uint8Array(diagnostic.length + 17);
+  diagnosticParent.set(diagnostic, 7);
+  const diagnosticView = diagnosticParent.subarray(7, 7 + diagnostic.length);
+  const viewedDiagnostic = decodeSandboxPackageServiceResult(diagnosticView);
+  diagnosticParent.fill(0);
+  assert.equal(viewedDiagnostic.diagnostics[0].subjectId, "one");
+  assert.equal(viewedDiagnostic.diagnostics[0].relatedId, "-two");
+});
+
 test("Sandbox service result decoder exposes no partial diagnostic result", () => {
   const truncated = minimalResult().slice(0, 119);
   assert.throws(

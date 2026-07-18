@@ -52,7 +52,9 @@ function bytesAt(bytes, offset, length, total) {
   if (offset > total || length > total - offset) {
     throw new SandboxPackageServiceTransportError(9, "truncated result bytes");
   }
-  return bytes.slice(offset, offset + length);
+  const owned = new Uint8Array(length);
+  owned.set(new Uint8Array(bytes.buffer, bytes.byteOffset + offset, length));
+  return owned;
 }
 
 function idAt(bytes, offset, length, total) {

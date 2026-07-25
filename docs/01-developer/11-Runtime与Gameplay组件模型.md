@@ -429,3 +429,17 @@ checksum 使用独立域和逐字段小端哈希，覆盖 generation、显式 pl
 `initialize_sandbox_session_from_blueprint` 继续调用既有 `SandboxSession::initialize` 和唯一 gameplay-binding validator。Adapter 先构造私有候选 Session，只有完整成功后才一次替换 destination；builder、player binding 或 initialize 失败都保留旧 generation、command/event sequence、snapshot 与 checksum。Package compiler/decoder/validator 仍是 package-wide ID、图与引用规则的唯一 Owner，adapter 只防御自身容量、owned ID view 和 move 生命周期。
 
 当前状态是 **Adapter Bootstrap Implemented / Not Preview-ready**。本笔没有 provider、hot reload、last-valid package 管理或 player movement pose 同步入口；operate 仍只消费 standalone Session 当前 pose。Actor Runtime、dynamic collision、Objective/Wave/Encounter/Combat 聚合 retry、Platform、Presentation、Preview、资产与内容实例接入均为 Open，standalone retry 也不是完整安全点恢复事务。
+
+## 37. Sandbox Host Runtime Candidate Bootstrap
+
+`SandboxRuntimeCoordinator` 消费按值拥有的 canonical `.tgdsbx` bytes 与 DEV publication identity。它先调用唯一 package decoder 并核对 fingerprint，再在不可见的 aggregate 中依次准备 owned document、`SandboxSessionBlueprint`/私有 `SandboxSession`、按 region 分组的初始 `StaticCollisionWorld`，以及复制完整 UTF-8 ID bytes/key/kind 的资产集合。candidate、document、blueprint、JS/WASM view、span、`string_view`、provider token 与外部地址都不会跨 publish 留存；最后发布点仅是 `unique_ptr` aggregate 的 noexcept swap，之后不再校验、分配、回调或发布 gameplay event。
+
+package generation/checksum、Host runtime generation 与 standalone Session generation/checksum 是三个独立身份域。更旧 package generation 失败关闭；同 generation 异 checksum 是冲突；合法 same-checksum republish 返回 `unchanged`，并完整保留旧 aggregate、旧 package generation 和 Session 状态，不镜像 provider 的新 generation。changed package 只有在 Session、Collision 和 Asset Set 全部准备成功后才让 Host runtime generation 前进；任一 decode/fingerprint/player binding/candidate 失败都保留旧 document、Session、collision、asset set、identity、snapshot 与 checksum。
+
+碰撞候选只复制 authored 初始 solid blocker，按 blocker Stable key 分配稳定 shape ID，并按 region 建静态 world；不接动态 mechanism blocker 状态或 player movement。资产候选只拥有 ID bytes/key/kind，不解析路径、加载模型/纹理或宣称 ART 已集成。Native 与 Web 的共同 probe 只读取由可信 JS/WASM compiler/provider 从唯一 `content/design/system-demo.sandbox.json` 生成的 ignored 临时 canonical package；准备门锁定 source SHA-256 `67a1be5216edc7cebfbe7a2433a8daa5425fb6ded15ee632b741302b0b57221d`、package SHA-256 `89a7c36ff185867fabb0aab79cb68f4f428a4a62179dadfb8d229eedee8d7ff6` 与 provider checksum `c84aedeefc1e77b881906e2ed51d0e9d9beaf9be3375e428f0a9eda5ac09cef8`，不提交第二份 artifact 或测试 JSON parser。
+
+当前状态是 **Host Candidate Bootstrap Implemented / Not Preview-ready**。唯一内容实例中的 player spawn 与 initial safe point 都在 console authored range 外，这是合法的“先移动再 operate”布局；测试专用 proof point `(-1500,-1500,0,floor0)` 仅证明同层 1000 mm eligible，不写回 JSON。真实 player movement、dynamic collision、资产 resolver/renderer、Objective/Wave/Encounter/Combat 执行、Actor gameplay binding、聚合死亡/retry、Platform、Presentation 与完整 Preview 均仍 Open。
+
+## GAME-003 Web consumer stack budget（Bootstrap）
+
+当前 Emscripten 实际探针为既有 fixed-capacity standalone adapter 构造预留 128 KiB 固定栈：SandboxSessionBlueprint 为 40096 bytes，builder callee 局部对象与 caller BuildResult 的同时存活峰值已客观超过默认 64 KiB。Host coordinator 已移除 `take_blueprint()` 形成的第二份 40096-byte blueprint，直接借用同一 BuildResult 内的只读 blueprint 完成私有 Session prepare；128 KiB 仅覆盖剩余 accepted adapter 构造峰值，不代表正式 Preview host 的最终 Web 栈预算。正式 Preview consumer、player movement、Objective/Wave/Encounter/Combat 聚合与完整恢复仍为 Open。

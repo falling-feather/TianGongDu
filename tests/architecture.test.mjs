@@ -47,3 +47,38 @@ test("Sandbox integration 拒绝 Runtime、Platform、Presentation 与 Sync 直�
   assert.match(errors[2], /cannot include project layer presentation/);
   assert.match(errors[3], /cannot include project layer sync/);
 });
+
+test("Sandbox runtime integration 只组合 Contracts、Content、Gameplay、Integration 与 Runtime", () => {
+  const source = `
+#include <tgd/contracts/sandbox_pack.hpp>
+#include <tgd/content/sandbox_package.hpp>
+#include <tgd/gameplay/sandbox_session.hpp>
+#include <tgd/integration/sandbox_session_adapter.hpp>
+#include <tgd/runtime/collision_world.hpp>
+`;
+  assert.deepEqual(
+    inspectSource(
+      "sandbox_runtime_integration",
+      source,
+      "src/sandbox-runtime-integration/src/allowed.cpp",
+    ),
+    [],
+  );
+});
+
+test("Sandbox runtime integration 拒绝 Platform、Presentation 与 Sync 直连", () => {
+  const source = `
+#include <tgd/platform/web_platform_bridge.hpp>
+#include <tgd/presentation/presentation_lifecycle.hpp>
+#include <tgd/sync/save_sync.hpp>
+`;
+  const errors = inspectSource(
+    "sandbox_runtime_integration",
+    source,
+    "src/sandbox-runtime-integration/src/forbidden.cpp",
+  );
+  assert.equal(errors.length, 3);
+  assert.match(errors[0], /cannot include project layer platform/);
+  assert.match(errors[1], /cannot include project layer presentation/);
+  assert.match(errors[2], /cannot include project layer sync/);
+});

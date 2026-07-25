@@ -196,6 +196,32 @@ tgd_register_layer(
     tgd_gameplay
 )
 
+tgd_add_static_layer(tgd_sandbox_runtime_integration)
+target_sources(
+  tgd_sandbox_runtime_integration
+  PRIVATE
+    src/sandbox-runtime-integration/src/sandbox_runtime_coordinator.cpp
+)
+target_include_directories(
+  tgd_sandbox_runtime_integration
+  PUBLIC
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/sandbox-runtime-integration/include>"
+)
+target_link_libraries(
+  tgd_sandbox_runtime_integration
+  PUBLIC
+    tgd_content_core
+    tgd_runtime
+    tgd_sandbox_integration
+)
+tgd_register_layer(
+  tgd_sandbox_runtime_integration
+  ALLOW
+    tgd_content_core
+    tgd_runtime
+    tgd_sandbox_integration
+)
+
 tgd_add_static_layer(tgd_sync_contracts)
 target_sources(tgd_sync_contracts PRIVATE src/sync-contracts/src/layer_probe.cpp)
 target_link_libraries(tgd_sync_contracts PUBLIC tgd_contracts)

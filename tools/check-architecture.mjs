@@ -42,6 +42,11 @@ const rules = {
     projectIncludes: new Set(["contracts", "content", "gameplay", "integration"]),
     privateExternalIncludes: [],
   },
+  sandbox_runtime_integration: {
+    roots: ["src/sandbox-runtime-integration"],
+    projectIncludes: new Set(["contracts", "content", "gameplay", "integration", "runtime"]),
+    privateExternalIncludes: [],
+  },
   sync_contracts: {
     roots: ["src/sync-contracts"],
     projectIncludes: new Set(["contracts", "sync"]),

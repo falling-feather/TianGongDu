@@ -161,6 +161,50 @@ add_test(
   COMMAND tgd_native_sandbox_session_adapter
 )
 
+add_executable(
+  tgd_native_sandbox_runtime_coordinator
+  sandbox_runtime_coordinator.cpp
+)
+target_compile_features(
+  tgd_native_sandbox_runtime_coordinator
+  PRIVATE cxx_std_20
+)
+tgd_enable_strict_warnings(tgd_native_sandbox_runtime_coordinator)
+target_link_libraries(
+  tgd_native_sandbox_runtime_coordinator
+  PRIVATE tgd_sandbox_runtime_integration
+)
+
+set(
+  TGD_SYSTEM_DEMO_CANONICAL_PACKAGE
+  ""
+  CACHE FILEPATH
+  "Canonical system-demo .tgdsbx emitted by the trusted Web compiler/provider"
+)
+set(
+  TGD_SYSTEM_DEMO_CHANGED_CANONICAL_PACKAGE
+  ""
+  CACHE FILEPATH
+  "Changed system-demo .tgdsbx emitted by the trusted Web compiler/provider"
+)
+if(
+  TGD_SYSTEM_DEMO_CANONICAL_PACKAGE
+  AND TGD_SYSTEM_DEMO_CHANGED_CANONICAL_PACKAGE
+)
+  add_test(
+    NAME tgd.native.sandbox-runtime-coordinator
+    COMMAND
+      tgd_native_sandbox_runtime_coordinator
+      "${TGD_SYSTEM_DEMO_CANONICAL_PACKAGE}"
+      "${TGD_SYSTEM_DEMO_CHANGED_CANONICAL_PACKAGE}"
+  )
+else()
+  message(
+    STATUS
+    "tgd.native.sandbox-runtime-coordinator requires the two trusted generated package paths"
+  )
+endif()
+
 add_executable(tgd_native_profile_progress profile_progress.cpp)
 target_compile_features(tgd_native_profile_progress PRIVATE cxx_std_20)
 tgd_enable_strict_warnings(tgd_native_profile_progress)

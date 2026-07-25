@@ -20,7 +20,7 @@ await mkdir(temporaryParent, { recursive: true });
 after(async () => rm(temporaryParent, { recursive: true, force: true }));
 
 const fixtureSource = await readFile(
-  new URL("fixtures/system-demo-authoring.v1.valid.json", import.meta.url),
+  new URL("../../../content/design/system-demo.sandbox.json", import.meta.url),
   "utf8"
 );
 
@@ -260,5 +260,7 @@ test("repository generated-WASM module loads through the production loader", {
   const result = service.compileAndPublish(validRuntime());
   assert.equal(result.complete, true);
   assert.equal(result.outcome, 1);
+  assert.ok(result.packageBytes instanceof Uint8Array);
+  assert.ok(result.packageBytes.length > 0);
   service.close();
 });

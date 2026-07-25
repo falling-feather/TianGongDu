@@ -74,7 +74,10 @@ function diagnosticResult() {
 }
 
 async function validRuntime() {
-  const fixtureUrl = new URL("fixtures/system-demo-authoring.v1.valid.json", import.meta.url);
+  const fixtureUrl = new URL(
+    "../../../content/design/system-demo.sandbox.json",
+    import.meta.url
+  );
   const source = JSON.parse(await readFile(fixtureUrl, "utf8"));
   return projectSandboxRuntimeDocument(normalizeSandboxAuthoringDocument(source));
 }
@@ -476,6 +479,12 @@ test("generated Web evidence module executes the common probe and service client
   assert.equal(module._tgd_sandbox_service_run_contract_probe(), 0);
 
   const runtime = await validRuntime();
+  assert.equal(runtime.packageId, "system-demo.package");
+  assert.equal(runtime.sandboxId, "system-demo.sandbox");
+  assert.equal(
+    runtime.completionObjectiveId,
+    "objective.system_demo.terminal"
+  );
   const client = SandboxPackageServiceClient.create(module);
   assert.equal(typeof client.serviceHandle, "bigint");
   assert.deepEqual(client.identity(), {
@@ -528,6 +537,17 @@ test("generated Web evidence module executes the common probe and service client
   assert.equal(bindingResult.outcome, 2);
   assert.equal(bindingResult.packageBytes, null);
   assert.notEqual(bindingResult.bindingValidation.code, 1);
+  assert.equal(client.identity().generation, 2);
+
+  const invalidGraph = structuredClone(runtime);
+  const terminalObjective = invalidGraph.objectives.find(
+    ({ id }) => id === "objective.system_demo.terminal"
+  );
+  terminalObjective.predecessorObjectiveId = terminalObjective.id;
+  const graphResult = client.publish(invalidGraph, second.identity);
+  assert.equal(graphResult.outcome, 2);
+  assert.equal(graphResult.packageBytes, null);
+  assert.ok(graphResult.diagnostics.length > 0);
   assert.equal(client.identity().generation, 2);
 
   const vector = module._malloc(1048576);

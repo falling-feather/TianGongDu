@@ -9,7 +9,7 @@ import { chromium } from "playwright";
 import { startWorkbenchServer } from "../src/workbench-server.mjs";
 
 const fixtureUrl = new URL(
-  "./fixtures/system-demo-authoring.v1.valid.json",
+  "../../../content/design/system-demo.sandbox.json",
   import.meta.url
 );
 
@@ -191,7 +191,10 @@ test(
     assert.equal(await page.locator("#path-input").inputValue(), "demo.json");
     assert.equal(await page.locator("#revision-value").textContent(), "0");
     assert.equal(await page.locator("#dirty-value").textContent(), "否");
-    assert.match(await page.locator("#selection-summary").textContent(), /actors \/ actor\.demo/);
+    assert.match(
+      await page.locator("#selection-summary").textContent(),
+      /actors \/ actor\.system_demo\.entry\.slot_a/
+    );
     assert.equal(
       await page.locator('[role="alert"]:visible').evaluateAll((nodes) =>
         nodes.filter((node) => node.textContent.trim().length > 0).length
@@ -259,7 +262,7 @@ test(
     );
     assert.equal(await page.locator('input[name="x"]').inputValue(), "1.5");
     await page.locator('input[name="x"]').press("Escape");
-    assert.equal(await page.locator('input[name="x"]').inputValue(), "-1000");
+    assert.equal(await page.locator('input[name="x"]').inputValue(), "-1250");
     assert.equal(await page.locator("#save-button").isDisabled(), false);
 
     let interceptedApply;

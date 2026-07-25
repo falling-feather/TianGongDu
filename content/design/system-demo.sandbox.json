@@ -1,0 +1,380 @@
+{
+  "format": "tgd.sandbox.authoring",
+  "schemaVersion": "1.1.0",
+  "runtime": {
+    "packageId": "system-demo.package",
+    "sandboxId": "system-demo.sandbox",
+    "bounds": {
+      "minX": -2500,
+      "maxX": 2500,
+      "minY": -4000,
+      "maxY": 10000,
+      "minHeight": -500,
+      "maxHeight": 3000,
+      "minFloorLayer": 0,
+      "maxFloorLayer": 0
+    },
+    "completionObjectiveId": "objective.system_demo.terminal",
+    "player": {
+      "id": "player.system_demo.start",
+      "regionId": "region.system_demo.arena",
+      "assetId": "asset.system_demo.player",
+      "initialSafePointId": "safe_point.system_demo.initial",
+      "pose": {
+        "x": 0,
+        "y": -3250,
+        "height": 0,
+        "floorLayer": 0
+      },
+      "facingMillidegrees": 0
+    },
+    "regions": [
+      {
+        "id": "region.system_demo.arena",
+        "bounds": {
+          "minX": -2500,
+          "maxX": 2500,
+          "minY": -4000,
+          "maxY": 10000,
+          "minHeight": -500,
+          "maxHeight": 3000,
+          "minFloorLayer": 0,
+          "maxFloorLayer": 0
+        }
+      }
+    ],
+    "assets": [
+      {
+        "id": "asset.system_demo.enemy.elite",
+        "kind": "actor"
+      },
+      {
+        "id": "asset.system_demo.enemy.flanker",
+        "kind": "actor"
+      },
+      {
+        "id": "asset.system_demo.enemy.pressure",
+        "kind": "actor"
+      },
+      {
+        "id": "asset.system_demo.interaction.console",
+        "kind": "interaction"
+      },
+      {
+        "id": "asset.system_demo.mechanism.gate",
+        "kind": "mechanism"
+      },
+      {
+        "id": "asset.system_demo.obstacle.tension_gate",
+        "kind": "obstacle"
+      },
+      {
+        "id": "asset.system_demo.player",
+        "kind": "player"
+      },
+      {
+        "id": "asset.system_demo.safe_point.lamp_shelter",
+        "kind": "safe_point"
+      },
+      {
+        "id": "asset.system_demo.skill.eavesguard.hit",
+        "kind": "effect"
+      },
+      {
+        "id": "asset.system_demo.skill.eavesguard.telegraph",
+        "kind": "effect"
+      },
+      {
+        "id": "asset.system_demo.skill.flower_turn.hit",
+        "kind": "effect"
+      },
+      {
+        "id": "asset.system_demo.skill.flower_turn.telegraph",
+        "kind": "effect"
+      }
+    ],
+    "actors": [
+      {
+        "id": "actor.system_demo.entry.slot_a",
+        "regionId": "region.system_demo.arena",
+        "assetId": "asset.system_demo.enemy.pressure",
+        "pose": {
+          "x": -1000,
+          "y": 3000,
+          "height": 0,
+          "floorLayer": 0
+        },
+        "facingMillidegrees": 180000
+      },
+      {
+        "id": "actor.system_demo.entry.slot_b",
+        "regionId": "region.system_demo.arena",
+        "assetId": "asset.system_demo.enemy.flanker",
+        "pose": {
+          "x": 1000,
+          "y": 3500,
+          "height": 0,
+          "floorLayer": 0
+        },
+        "facingMillidegrees": 180000
+      },
+      {
+        "id": "actor.system_demo.followup.slot_a",
+        "regionId": "region.system_demo.arena",
+        "assetId": "asset.system_demo.enemy.pressure",
+        "pose": {
+          "x": -1000,
+          "y": 7000,
+          "height": 0,
+          "floorLayer": 0
+        },
+        "facingMillidegrees": 180000
+      },
+      {
+        "id": "actor.system_demo.followup.slot_b",
+        "regionId": "region.system_demo.arena",
+        "assetId": "asset.system_demo.enemy.elite",
+        "pose": {
+          "x": 1000,
+          "y": 7500,
+          "height": 0,
+          "floorLayer": 0
+        },
+        "facingMillidegrees": 180000
+      }
+    ],
+    "groundBlockers": [
+      {
+        "id": "blocker.system_demo.gate",
+        "regionId": "region.system_demo.arena",
+        "assetId": "asset.system_demo.obstacle.tension_gate",
+        "minX": -2500,
+        "maxX": 2500,
+        "minY": 500,
+        "maxY": 1000,
+        "minHeight": 0,
+        "maxHeight": 2500,
+        "floorLayer": 0
+      }
+    ],
+    "safePoints": [
+      {
+        "id": "safe_point.system_demo.initial",
+        "regionId": "region.system_demo.arena",
+        "assetId": "asset.system_demo.safe_point.lamp_shelter",
+        "pose": {
+          "x": -1250,
+          "y": -3000,
+          "height": 0,
+          "floorLayer": 0
+        },
+        "facingMillidegrees": 0
+      }
+    ],
+    "interactions": [
+      {
+        "id": "interaction.system_demo.console",
+        "regionId": "region.system_demo.arena",
+        "assetId": "asset.system_demo.interaction.console",
+        "pose": {
+          "x": -1500,
+          "y": -500,
+          "height": 900,
+          "floorLayer": 0
+        },
+        "facingMillidegrees": 90000
+      }
+    ],
+    "mechanisms": [
+      {
+        "id": "mechanism.system_demo.gate",
+        "regionId": "region.system_demo.arena",
+        "assetId": "asset.system_demo.mechanism.gate",
+        "pose": {
+          "x": 1500,
+          "y": -500,
+          "height": 0,
+          "floorLayer": 0
+        },
+        "facingMillidegrees": 270000
+      }
+    ],
+    "waves": [
+      {
+        "id": "wave.system_demo.entry",
+        "regionId": "region.system_demo.arena",
+        "predecessorWaveId": "",
+        "trigger": {
+          "kind": "objective_completed",
+          "targetId": "objective.system_demo.open_gate"
+        }
+      },
+      {
+        "id": "wave.system_demo.followup",
+        "regionId": "region.system_demo.arena",
+        "predecessorWaveId": "wave.system_demo.entry",
+        "trigger": {
+          "kind": "wave_completed",
+          "targetId": "wave.system_demo.entry"
+        }
+      }
+    ],
+    "waveSpawns": [
+      {
+        "waveId": "wave.system_demo.entry",
+        "actorId": "actor.system_demo.entry.slot_a",
+        "delayTicks": 0,
+        "spawnOrder": 0
+      },
+      {
+        "waveId": "wave.system_demo.entry",
+        "actorId": "actor.system_demo.entry.slot_b",
+        "delayTicks": 0,
+        "spawnOrder": 1
+      },
+      {
+        "waveId": "wave.system_demo.followup",
+        "actorId": "actor.system_demo.followup.slot_a",
+        "delayTicks": 0,
+        "spawnOrder": 0
+      },
+      {
+        "waveId": "wave.system_demo.followup",
+        "actorId": "actor.system_demo.followup.slot_b",
+        "delayTicks": 0,
+        "spawnOrder": 1
+      }
+    ],
+    "objectives": [
+      {
+        "id": "objective.system_demo.open_gate",
+        "regionId": "region.system_demo.arena",
+        "predecessorObjectiveId": "",
+        "completion": {
+          "kind": "mechanism_activated",
+          "targetId": "mechanism.system_demo.gate"
+        }
+      },
+      {
+        "id": "objective.system_demo.terminal",
+        "regionId": "region.system_demo.arena",
+        "predecessorObjectiveId": "objective.system_demo.open_gate",
+        "completion": {
+          "kind": "wave_completed",
+          "targetId": "wave.system_demo.followup"
+        }
+      }
+    ],
+    "interactionBindings": [
+      {
+        "interactionId": "interaction.system_demo.console",
+        "operation": "operate",
+        "rangeMm": 1200,
+        "targetMechanismId": "mechanism.system_demo.gate"
+      }
+    ],
+    "mechanismBindings": [
+      {
+        "mechanismId": "mechanism.system_demo.gate",
+        "activation": "one_shot_activate",
+        "targetGroundBlockerId": "blocker.system_demo.gate"
+      }
+    ]
+  },
+  "editor": {
+    "version": 1,
+    "items": [
+      {
+        "id": "player.system_demo.start",
+        "label": "Player Start",
+        "ordinal": 0,
+        "canvasX": 80,
+        "canvasY": 40
+      },
+      {
+        "id": "safe_point.system_demo.initial",
+        "label": "Initial Safe Point",
+        "ordinal": 1,
+        "canvasX": 80,
+        "canvasY": 160
+      },
+      {
+        "id": "interaction.system_demo.console",
+        "label": "Gate Console",
+        "ordinal": 2,
+        "canvasX": 240,
+        "canvasY": 40
+      },
+      {
+        "id": "mechanism.system_demo.gate",
+        "label": "Gate Mechanism",
+        "ordinal": 3,
+        "canvasX": 400,
+        "canvasY": 40
+      },
+      {
+        "id": "blocker.system_demo.gate",
+        "label": "Tension Gate Blocker",
+        "ordinal": 4,
+        "canvasX": 560,
+        "canvasY": 40
+      },
+      {
+        "id": "actor.system_demo.entry.slot_a",
+        "label": "Entry Slot A",
+        "ordinal": 5,
+        "canvasX": 720,
+        "canvasY": 0
+      },
+      {
+        "id": "actor.system_demo.entry.slot_b",
+        "label": "Entry Slot B",
+        "ordinal": 6,
+        "canvasX": 720,
+        "canvasY": 80
+      },
+      {
+        "id": "wave.system_demo.entry",
+        "label": "Entry Wave",
+        "ordinal": 7,
+        "canvasX": 880,
+        "canvasY": 40
+      },
+      {
+        "id": "actor.system_demo.followup.slot_a",
+        "label": "Follow-up Slot A",
+        "ordinal": 8,
+        "canvasX": 1040,
+        "canvasY": 0
+      },
+      {
+        "id": "actor.system_demo.followup.slot_b",
+        "label": "Follow-up Slot B",
+        "ordinal": 9,
+        "canvasX": 1040,
+        "canvasY": 80
+      },
+      {
+        "id": "wave.system_demo.followup",
+        "label": "Follow-up Wave",
+        "ordinal": 10,
+        "canvasX": 1200,
+        "canvasY": 40
+      },
+      {
+        "id": "objective.system_demo.open_gate",
+        "label": "Open Gate Objective",
+        "ordinal": 11,
+        "canvasX": 720,
+        "canvasY": 200
+      },
+      {
+        "id": "objective.system_demo.terminal",
+        "label": "Terminal Objective",
+        "ordinal": 12,
+        "canvasX": 1360,
+        "canvasY": 200
+      }
+    ]
+  }
+}

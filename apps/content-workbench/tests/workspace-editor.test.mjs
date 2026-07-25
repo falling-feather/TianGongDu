@@ -18,7 +18,7 @@ import { createLocalWorkspace } from "../src/local-workspace.mjs";
 import { createWorkbenchController } from "../src/workbench-controller.mjs";
 
 const fixtureUrl = new URL(
-  "./fixtures/system-demo-authoring.v1.valid.json",
+  "../../../content/design/system-demo.sandbox.json",
   import.meta.url
 );
 
@@ -116,12 +116,12 @@ test("six explicit object kinds edit, preserve hidden sections, and round-trip",
   const controller = await openedController(root);
   const initial = structuredClone(controller.editorState.document);
   const edits = [
-    ["player", "player.start", "pose", "x", 101],
-    ["actors", "actor.demo", "pose", "x", 2201],
-    ["groundBlockers", "blocker.gate", null, "minX", 999],
-    ["safePoints", "safe.start", "pose", "x", -999],
-    ["interactions", "interaction.console", "binding", "rangeMm", 1300],
-    ["mechanisms", "mechanism.gate", "pose", "x", 1301]
+    ["player", "player.system_demo.start", "pose", "x", 101],
+    ["actors", "actor.system_demo.entry.slot_a", "pose", "x", 2201],
+    ["groundBlockers", "blocker.system_demo.gate", null, "minX", -2499],
+    ["safePoints", "safe_point.system_demo.initial", "pose", "x", -999],
+    ["interactions", "interaction.system_demo.console", "binding", "rangeMm", 1300],
+    ["mechanisms", "mechanism.system_demo.gate", "pose", "x", 1301]
   ];
 
   for (const [kind, id, nested, field, value] of edits) {
@@ -184,7 +184,7 @@ test("invalid values and stale revisions preserve document and last-valid", asyn
   const values = editableValues(
     controller.editorState.document,
     "safePoints",
-    "safe.start"
+    "safe_point.system_demo.initial"
   );
   values.pose.x = "not-an-integer";
 
@@ -192,7 +192,7 @@ test("invalid values and stale revisions preserve document and last-valid", asyn
     () =>
       controller.updateObject({
         kind: "safePoints",
-        id: "safe.start",
+        id: "safe_point.system_demo.initial",
         values,
         expectedRevision: 0
       }),
@@ -204,11 +204,11 @@ test("invalid values and stale revisions preserve document and last-valid", asyn
     () =>
       controller.updateObject({
         kind: "actors",
-        id: "actor.demo",
+        id: "actor.system_demo.entry.slot_a",
         values: editableValues(
           controller.editorState.document,
           "actors",
-          "actor.demo"
+          "actor.system_demo.entry.slot_a"
         ),
         expectedRevision: 9
       }),
@@ -288,12 +288,12 @@ test("stale CAS and external changes never overwrite the disk", async (t) => {
   const values = editableValues(
     controller.editorState.document,
     "actors",
-    "actor.demo"
+    "actor.system_demo.entry.slot_a"
   );
   values.pose.x += 1;
   controller.updateObject({
     kind: "actors",
-    id: "actor.demo",
+    id: "actor.system_demo.entry.slot_a",
     values,
     expectedRevision: 0
   });
@@ -308,17 +308,20 @@ test("stale CAS and external changes never overwrite the disk", async (t) => {
   const secondValues = editableValues(
     second.editorState.document,
     "actors",
-    "actor.demo"
+    "actor.system_demo.entry.slot_a"
   );
   secondValues.pose.y += 1;
   second.updateObject({
     kind: "actors",
-    id: "actor.demo",
+    id: "actor.system_demo.entry.slot_a",
     values: secondValues,
     expectedRevision: 0
   });
   const external = await readFile(path.join(root, "demo.json"), "utf8");
-  const changedExternal = external.replace("完成演示", "外部修改");
+  const changedExternal = external.replace(
+    "Terminal Objective",
+    "Externally Modified Terminal"
+  );
   await writeFile(path.join(root, "demo.json"), changedExternal, "utf8");
   await assert.rejects(
     second.save({ expectedRevision: 1, expectedCas: second.view().cas }),
@@ -345,12 +348,12 @@ test("write, sync, and replace faults clean temp files and retain dirty state", 
     const values = editableValues(
       controller.editorState.document,
       "player",
-      "player.start"
+      "player.system_demo.start"
     );
     values.pose.x += 10;
     controller.updateObject({
       kind: "player",
-      id: "player.start",
+      id: "player.system_demo.start",
       values,
       expectedRevision: 0
     });
@@ -391,12 +394,12 @@ test("an edit during save leaves the newer revision dirty", async (t) => {
   const first = editableValues(
     controller.editorState.document,
     "player",
-    "player.start"
+    "player.system_demo.start"
   );
   first.pose.x = 111;
   controller.updateObject({
     kind: "player",
-    id: "player.start",
+    id: "player.system_demo.start",
     values: first,
     expectedRevision: 0
   });
@@ -410,12 +413,12 @@ test("an edit during save leaves the newer revision dirty", async (t) => {
   const second = editableValues(
     controller.editorState.document,
     "player",
-    "player.start"
+    "player.system_demo.start"
   );
   second.pose.x = 222;
   controller.updateObject({
     kind: "player",
-    id: "player.start",
+    id: "player.system_demo.start",
     values: second,
     expectedRevision: 1
   });
@@ -473,12 +476,12 @@ test("open during save isolates the new document epoch and CAS", async (t) => {
   const values = editableValues(
     controller.editorState.document,
     "player",
-    "player.start"
+    "player.system_demo.start"
   );
   values.pose.x = 311;
   controller.updateObject({
     kind: "player",
-    id: "player.start",
+    id: "player.system_demo.start",
     values,
     expectedRevision: 0
   });
@@ -508,12 +511,12 @@ test("open during save isolates the new document epoch and CAS", async (t) => {
   const next = editableValues(
     controller.editorState.document,
     "player",
-    "player.start"
+    "player.system_demo.start"
   );
   next.pose.x = 322;
   controller.updateObject({
     kind: "player",
-    id: "player.start",
+    id: "player.system_demo.start",
     values: next,
     expectedRevision: 0
   });
@@ -556,12 +559,12 @@ test("reload during save waits for the current file CAS and remains saveable", a
   const first = editableValues(
     controller.editorState.document,
     "player",
-    "player.start"
+    "player.system_demo.start"
   );
   first.pose.x = 411;
   controller.updateObject({
     kind: "player",
-    id: "player.start",
+    id: "player.system_demo.start",
     values: first,
     expectedRevision: 0
   });
@@ -585,12 +588,12 @@ test("reload during save waits for the current file CAS and remains saveable", a
   const second = editableValues(
     controller.editorState.document,
     "player",
-    "player.start"
+    "player.system_demo.start"
   );
   second.pose.x = 422;
   controller.updateObject({
     kind: "player",
-    id: "player.start",
+    id: "player.system_demo.start",
     values: second,
     expectedRevision: 0
   });
@@ -638,12 +641,12 @@ test("slash aliases wait for the pending save and keep its CAS saveable", async 
   const first = editableValues(
     controller.editorState.document,
     "player",
-    "player.start"
+    "player.system_demo.start"
   );
   first.pose.x = 511;
   controller.updateObject({
     kind: "player",
-    id: "player.start",
+    id: "player.system_demo.start",
     values: first,
     expectedRevision: 0
   });
@@ -679,12 +682,12 @@ test("slash aliases wait for the pending save and keep its CAS saveable", async 
   const second = editableValues(
     controller.editorState.document,
     "player",
-    "player.start"
+    "player.system_demo.start"
   );
   second.pose.x = 522;
   controller.updateObject({
     kind: "player",
-    id: "player.start",
+    id: "player.system_demo.start",
     values: second,
     expectedRevision: 0
   });
@@ -731,12 +734,12 @@ test("a failed save releases the document-switch barrier", async (t) => {
   const first = editableValues(
     controller.editorState.document,
     "player",
-    "player.start"
+    "player.system_demo.start"
   );
   first.pose.x = 611;
   controller.updateObject({
     kind: "player",
-    id: "player.start",
+    id: "player.system_demo.start",
     values: first,
     expectedRevision: 0
   });
@@ -776,12 +779,12 @@ test("a failed save releases the document-switch barrier", async (t) => {
   const second = editableValues(
     controller.editorState.document,
     "player",
-    "player.start"
+    "player.system_demo.start"
   );
   second.pose.x = 622;
   controller.updateObject({
     kind: "player",
-    id: "player.start",
+    id: "player.system_demo.start",
     values: second,
     expectedRevision: 0
   });

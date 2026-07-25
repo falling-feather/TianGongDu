@@ -9,7 +9,7 @@ import {
 } from "../src/editor-state.mjs";
 
 const fixtureText = await readFile(
-  new URL("./fixtures/system-demo-authoring.v1.valid.json", import.meta.url),
+  new URL("../../../content/design/system-demo.sandbox.json", import.meta.url),
   "utf8"
 );
 
@@ -52,25 +52,29 @@ test("state owns and freezes normalized source data", () => {
 
 test("real changes increment revision and mark_saved accepts only current revision", () => {
   let state = createSandboxEditorState(fixture());
-  const changedFacing = actor(state, "actor.demo").facingMillidegrees + 1000;
+  const changedFacing =
+    actor(state, "actor.system_demo.entry.slot_a").facingMillidegrees + 1000;
 
   state = reduceSandboxEditorState(state, {
     type: "entity.update",
     expectedRevision: 0,
     collection: "actors",
-    key: "actor.demo",
+    key: "actor.system_demo.entry.slot_a",
     patch: { facingMillidegrees: changedFacing }
   });
   assert.equal(state.revision, 1);
   assert.equal(state.savedRevision, 0);
   assert.equal(state.dirty, true);
-  assert.equal(actor(state, "actor.demo").facingMillidegrees, changedFacing);
+  assert.equal(
+    actor(state, "actor.system_demo.entry.slot_a").facingMillidegrees,
+    changedFacing
+  );
 
   state = reduceSandboxEditorState(state, {
     type: "entity.update",
     expectedRevision: 1,
     collection: "actors",
-    key: "actor.demo",
+    key: "actor.system_demo.entry.slot_a",
     patch: { facingMillidegrees: changedFacing }
   });
   assert.equal(state.revision, 1);
@@ -97,8 +101,8 @@ test("add and delete own input while unknown ids fail closed", () => {
   let state = createSandboxEditorState(fixture());
   const added = {
     id: "safe.extra",
-    regionId: "region.demo",
-    assetId: "asset.safe",
+    regionId: "region.system_demo.arena",
+    assetId: "asset.system_demo.safe_point.lamp_shelter",
     pose: { x: -2000, y: 0, height: 0, floorLayer: 0 },
     facingMillidegrees: 0
   };
@@ -196,7 +200,7 @@ test("invalid mutations and stale revisions preserve document/revision/lastValid
     type: "entity.update",
     expectedRevision: 0,
     collection: "interactionBindings",
-    key: "interaction.console",
+    key: "interaction.system_demo.console",
     patch: { rangeMm: 499 }
   });
   assert.equal(invalid.lastError.code, "invalid_document");
@@ -208,7 +212,7 @@ test("invalid mutations and stale revisions preserve document/revision/lastValid
     type: "entity.delete",
     expectedRevision: 4,
     collection: "actors",
-    key: "actor.demo"
+    key: "actor.system_demo.entry.slot_a"
   });
   assert.equal(stale.lastError.code, "stale_revision");
   assert.strictEqual(stale.document, state.document);
@@ -239,7 +243,7 @@ test("nested symbol and non-enumerable unknown fields survive cloning and fail c
       type: "entity.update",
       expectedRevision: 0,
       collection: "safePoints",
-      key: "safe.start",
+      key: "safe_point.system_demo.initial",
       patch: { pose }
     });
 
@@ -276,7 +280,7 @@ test("top-level patch descriptors survive merging and fail closed", () => {
       type: "entity.update",
       expectedRevision: 0,
       collection: "safePoints",
-      key: "safe.start",
+      key: "safe_point.system_demo.initial",
       patch
     });
 

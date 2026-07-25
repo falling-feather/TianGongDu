@@ -1209,6 +1209,8 @@ test(
     let conflictRequestExpected = false;
     let staleCheckResponseExpected = false;
     let contentCheckHttpRequests = 0;
+    let packageExportHttpRequests = 0;
+    let packageDownloads = 0;
     page.on("console", (message) => {
       if (message.type() === "error") {
         if (
@@ -1234,6 +1236,12 @@ test(
       if (request.url().endsWith("/api/content-check")) {
         contentCheckHttpRequests += 1;
       }
+      if (request.url().endsWith("/api/package-export")) {
+        packageExportHttpRequests += 1;
+      }
+    });
+    page.on("download", () => {
+      packageDownloads += 1;
     });
     page.on("response", (response) => {
       if (response.status() >= 400) {
@@ -1261,7 +1269,9 @@ test(
       () => document.querySelector("#opened-path")?.textContent === "demo.json"
     );
     const checkButton = page.locator("#content-check-button");
+    const exportButton = page.locator("#package-export-button");
     assert.equal(await checkButton.isDisabled(), false);
+    assert.equal(await exportButton.getAttribute("aria-disabled"), "true");
     assert.equal(
       await page.locator("#content-check-summary").textContent(),
       "尚未执行共享内容检查。"
@@ -1295,6 +1305,12 @@ test(
       /^共享内容检查发现 \d+ 个问题。$/
     );
     assert.equal(running.controller.validatedPackageEvidence(), null);
+    await page.evaluate(() =>
+      document.querySelector("#package-export-button").click()
+    );
+    await page.waitForTimeout(25);
+    assert.equal(packageExportHttpRequests, 0);
+    assert.equal(packageDownloads, 0);
     await noPackageActorRegion.fill(noPackageActorOriginal);
     await page.locator("#apply-button").click();
     await waitForRevision(page, 2);
@@ -1323,6 +1339,7 @@ test(
     await bufferedX.fill(preExistingBufferValue);
     assert.equal(await checkButton.getAttribute("disabled"), null);
     assert.equal(await checkButton.getAttribute("aria-disabled"), "true");
+    assert.equal(await exportButton.getAttribute("aria-disabled"), "true");
     assert.equal(
       await page.locator("#content-check-summary").textContent(),
       "当前草稿的共享内容检查结果已过期；尚无已准备包。"
@@ -1339,7 +1356,10 @@ test(
     await page.waitForTimeout(50);
     assert.equal(contentCheckHttpRequests, baselineContentCheckRequests);
     assert.equal(compilerService.requests, baselineServiceRequests);
+    assert.equal(packageExportHttpRequests, 0);
+    assert.equal(packageDownloads, 0);
     assert.equal(await focusLabel(page), "content-check-button");
+    assert.equal(await exportButton.getAttribute("aria-disabled"), "true");
     await bufferedX.focus();
     await bufferedX.press("Escape");
     assert.equal(await bufferedX.inputValue(), initialX);
@@ -1442,6 +1462,10 @@ test(
     );
     assert.equal(compilerService.requests, baselineServiceRequests + 2);
     assert.equal(await focusLabel(page), "content-check-button");
+    assert.equal(await exportButton.getAttribute("aria-disabled"), "false");
+    const exportsBeforeValidationGuard = packageExportHttpRequests;
+    assert.equal(exportsBeforeValidationGuard, 0);
+    assert.equal(packageDownloads, 0);
     assert.equal(
       await page.evaluate(() =>
         window.__tgdDiagnosticAnnouncements.filter((value) => value.trim())
@@ -1735,6 +1759,12 @@ test(
     );
     assert.equal(await focusLabel(page), "apply-button");
     assert.equal(await page.locator("#diagnostic-count-live").textContent(), "");
+    assert.equal(await exportButton.getAttribute("aria-disabled"), "true");
+    await page.evaluate(() =>
+      document.querySelector("#package-export-button").click()
+    );
+    assert.equal(packageExportHttpRequests, exportsBeforeValidationGuard);
+    assert.equal(packageDownloads, 0);
 
     await selectObject(page, "player");
     await page.locator('input[name="x"]').fill("909");
@@ -1753,6 +1783,12 @@ test(
     );
     assert.equal(await focusLabel(page), "content-check-button");
     assert.equal(await page.locator("#diagnostic-count-live").textContent(), "");
+    assert.equal(await exportButton.getAttribute("aria-disabled"), "true");
+    await page.evaluate(() =>
+      document.querySelector("#package-export-button").click()
+    );
+    assert.equal(packageExportHttpRequests, exportsBeforeValidationGuard);
+    assert.equal(packageDownloads, 0);
     assert.deepEqual(
       running.controller.validatedPackageEvidence(),
       evidenceBeforeBridgeFailure
@@ -1837,6 +1873,12 @@ test(
     assert.equal(await checkButton.getAttribute("disabled"), null);
     assert.equal(await checkButton.getAttribute("aria-disabled"), "true");
     assert.equal(await page.locator("#diagnostic-count-live").textContent(), "");
+    assert.equal(await exportButton.getAttribute("aria-disabled"), "true");
+    await page.evaluate(() =>
+      document.querySelector("#package-export-button").click()
+    );
+    assert.equal(packageExportHttpRequests, exportsBeforeValidationGuard);
+    assert.equal(packageDownloads, 0);
     const requestsBeforeConflictGuard = contentCheckHttpRequests;
     const serviceRequestsBeforeConflictGuard = compilerService.requests;
     await checkButton.focus();
@@ -1881,6 +1923,134 @@ test(
       serviceBeforeConflictRecovery + 1
     );
 
+    const exportRequestsBeforeAuthorActions = packageExportHttpRequests;
+    async function expectAuthorActionExportGuard({
+      endpoint,
+      trigger,
+      focusId
+    }) {
+      let releaseRequest;
+      let requestSeen;
+      const release = new Promise((resolve) => {
+        releaseRequest = resolve;
+      });
+      const seen = new Promise((resolve) => {
+        requestSeen = resolve;
+      });
+      const handler = async (route) => {
+        requestSeen();
+        await release;
+        await route.continue();
+      };
+      const packageBefore = running.controller.validatedPackageEvidence();
+      const documentBefore = running.controller.editorState.document;
+      const lastValidBefore =
+        running.controller.editorState.lastValidDocument;
+      await page.route("**" + endpoint, handler);
+      await trigger();
+      await seen;
+      assert.equal(await exportButton.getAttribute("aria-disabled"), "true");
+      assert.equal(await focusLabel(page), focusId);
+      await page.evaluate(() =>
+        document.querySelector("#package-export-button").click()
+      );
+      await page.waitForTimeout(25);
+      assert.equal(
+        packageExportHttpRequests,
+        exportRequestsBeforeAuthorActions
+      );
+      assert.equal(packageDownloads, 0);
+      assert.equal(await focusLabel(page), focusId);
+      assert.deepEqual(
+        running.controller.validatedPackageEvidence(),
+        packageBefore
+      );
+      assert.strictEqual(
+        running.controller.editorState.document,
+        documentBefore
+      );
+      assert.strictEqual(
+        running.controller.editorState.lastValidDocument,
+        lastValidBefore
+      );
+      const response = page.waitForResponse((candidate) =>
+        candidate.url().endsWith(endpoint)
+      );
+      releaseRequest();
+      await response;
+      await page.unroute("**" + endpoint, handler);
+    }
+
+    const authorActionX = page.locator('input[name="x"]');
+    const authorActionValue =
+      (await authorActionX.inputValue()) === "611" ? "612" : "611";
+    await authorActionX.fill(authorActionValue);
+    await expectAuthorActionExportGuard({
+      endpoint: "/api/update",
+      trigger: () => page.locator("#apply-button").click(),
+      focusId: "apply-button"
+    });
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#apply-button")?.getAttribute("aria-busy") ===
+        "false"
+    );
+    await checkButton.click();
+    await page.waitForFunction(
+      () =>
+        document
+          .querySelector("#package-export-button")
+          ?.getAttribute("aria-disabled") === "false"
+    );
+
+    await expectAuthorActionExportGuard({
+      endpoint: "/api/save",
+      trigger: () => page.locator("#save-button").click(),
+      focusId: "save-button"
+    });
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#save-button")?.getAttribute("aria-busy") ===
+        "false"
+    );
+    await checkButton.click();
+    await page.waitForFunction(
+      () =>
+        document
+          .querySelector("#package-export-button")
+          ?.getAttribute("aria-disabled") === "false"
+    );
+
+    await expectAuthorActionExportGuard({
+      endpoint: "/api/reload",
+      trigger: () => page.locator("#reload-button").click(),
+      focusId: "reload-button"
+    });
+    await page.waitForFunction(
+      () => document.activeElement?.id === "object-tree"
+    );
+    await checkButton.click();
+    await page.waitForFunction(
+      () =>
+        document
+          .querySelector("#package-export-button")
+          ?.getAttribute("aria-disabled") === "false"
+    );
+
+    await page.locator("#path-input").fill("other.json");
+    await expectAuthorActionExportGuard({
+      endpoint: "/api/open",
+      trigger: () => page.locator("#open-button").click(),
+      focusId: "open-button"
+    });
+    await page.waitForFunction(
+      () => document.activeElement?.id === "object-tree"
+    );
+    assert.equal(
+      packageExportHttpRequests,
+      exportRequestsBeforeAuthorActions
+    );
+
     const bodyText = await page.locator("body").innerText();
     assert.equal(
       /\bgeneration\b|\bchecksum\b|\bCAS\b|Stable key|documentLease|expectedDocumentLease|lastError|JSONPath|\$\.|exception|stack/i.test(
@@ -1899,7 +2069,7 @@ test(
       .allTextContents();
     assert.equal(
       forbiddenControls.some((label) =>
-        /^(export|preview|run|导出|试玩|运行)$/i.test(label.trim())
+        /^(launch|preview|run|启动|试玩|运行)$/i.test(label.trim())
       ),
       false
     );
@@ -1916,9 +2086,15 @@ test(
         compilerService.requests
     );
     t.diagnostic(
-      "diagnostics focus: guarded=content-check-button, buffered=y, stale-result=y, explicit-ready=content-check-button, locator=regionId, stale-apply=apply-button, conflict=content-check-button, resolved=object-tree"
+      "diagnostics focus: guarded=content-check-button, buffered=y, stale-result=y, explicit-ready=content-check-button, locator=regionId, stale-apply=apply-button, conflict=content-check-button, author-actions=apply/save/reload/open, resolved=object-tree"
     );
     t.diagnostic("diagnostics screenshot sha256: " + screenshotHash);
+    t.diagnostic(
+      "package-export guards: http=" +
+        packageExportHttpRequests +
+        ", downloads=" +
+        packageDownloads
+    );
     t.diagnostic("diagnostics console errors: " + consoleErrors.length);
     t.diagnostic(
       "diagnostics expected conflict console: " +
@@ -1981,6 +2157,8 @@ test(
     const requestErrors = [];
     const unexpectedHttp = [];
     let checkRequests = 0;
+    let packageExportRequests = 0;
+    let packageDownloads = 0;
     page.on("console", (message) => {
       if (message.type() === "error") consoleErrors.push(message.text());
     });
@@ -1990,6 +2168,12 @@ test(
     );
     page.on("request", (request) => {
       if (request.url().endsWith("/api/content-check")) checkRequests += 1;
+      if (request.url().endsWith("/api/package-export")) {
+        packageExportRequests += 1;
+      }
+    });
+    page.on("download", () => {
+      packageDownloads += 1;
     });
     page.on("response", (response) => {
       if (response.status() >= 400) {
@@ -2015,6 +2199,39 @@ test(
     assert.equal(evidence.generation, 1);
     assert.equal(checkRequests, 1);
     assert.equal(await focusLabel(page), "content-check-button");
+    const exportButton = page.locator("#package-export-button");
+    assert.equal(await exportButton.getAttribute("aria-disabled"), "false");
+    const downloadPromise = page.waitForEvent("download");
+    await exportButton.dblclick();
+    const download = await downloadPromise;
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#package-export-button")?.getAttribute(
+          "aria-busy"
+        ) === "false"
+    );
+    assert.equal(packageExportRequests, 1);
+    assert.equal(packageDownloads, 1);
+    assert.equal(download.suggestedFilename(), "demo.tgdsbx");
+    const downloadedPath = await download.path();
+    assert.equal(typeof downloadedPath, "string");
+    const downloadedBytes = await readFile(downloadedPath);
+    assert.equal(downloadedBytes.byteLength, 2712);
+    assert.equal(downloadedBytes.byteLength, evidence.packageBytes);
+    assert.equal(
+      "sha256:" +
+        createHash("sha256").update(downloadedBytes).digest("hex"),
+      evidence.packageSha256
+    );
+    assert.equal(
+      evidence.packageSha256,
+      "sha256:89a7c36ff185867fabb0aab79cb68f4f428a4a62179dadfb8d229eedee8d7ff6"
+    );
+    assert.equal(await focusLabel(page), "package-export-button");
+    assert.equal(
+      await page.locator("#status-live").textContent(),
+      "demo.tgdsbx 已交给浏览器下载；尚未启动 Preview 或试玩。"
+    );
     assert.equal(
       /generation|checksum|packageBytes|\bCAS\b|Stable key/i.test(
         await page.locator("body").innerText()
@@ -2048,6 +2265,75 @@ test(
     const screenshotHash = createHash("sha256")
       .update(await page.screenshot())
       .digest("hex");
+    await cdp.send("Emulation.setPageScaleFactor", { pageScaleFactor: 1 });
+    await page.setViewportSize({ width: 1280, height: 900 });
+
+    let releaseLateExport;
+    let lateExportRequestSeen;
+    const lateExportRelease = new Promise((resolve) => {
+      releaseLateExport = resolve;
+    });
+    const lateExportSeen = new Promise((resolve) => {
+      lateExportRequestSeen = resolve;
+    });
+    const holdLateExportResponse = async (route) => {
+      const response = await route.fetch();
+      lateExportRequestSeen();
+      await lateExportRelease;
+      await route.fulfill({ response });
+    };
+    await page.route("**/api/package-export", holdLateExportResponse);
+    await exportButton.click();
+    await lateExportSeen;
+    await page.keyboard.press("Enter");
+    const bufferedX = page.locator('input[name="x"]');
+    const bufferedValue = (await bufferedX.inputValue()) === "77" ? "78" : "77";
+    await bufferedX.fill(bufferedValue);
+    await page.locator('input[name="y"]').focus();
+    assert.equal(await exportButton.getAttribute("aria-disabled"), "true");
+    releaseLateExport();
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#package-export-button")?.getAttribute(
+          "aria-busy"
+        ) === "false"
+    );
+    await page.unroute("**/api/package-export", holdLateExportResponse);
+    await page.waitForTimeout(50);
+    assert.equal(packageExportRequests, 2);
+    assert.equal(packageDownloads, 1);
+    assert.equal(await bufferedX.inputValue(), bufferedValue);
+    assert.equal(await focusLabel(page), "y");
+    assert.equal(
+      await page.locator("#content-check-summary").textContent(),
+      "当前草稿的共享内容检查结果已过期；上一份已准备包保持不变。"
+    );
+    await bufferedX.focus();
+    await bufferedX.press("Escape");
+    await page.locator("#content-check-button").click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#content-check-summary")?.textContent ===
+        "包已准备；尚未导出，也未启动 Preview 或试玩。"
+    );
+    const recoveredDownloadPromise = page.waitForEvent("download");
+    await exportButton.click();
+    const recoveredDownload = await recoveredDownloadPromise;
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#package-export-button")?.getAttribute(
+          "aria-busy"
+        ) === "false"
+    );
+    const recoveredDownloadPath = await recoveredDownload.path();
+    assert.equal(typeof recoveredDownloadPath, "string");
+    assert.deepEqual(
+      await readFile(recoveredDownloadPath),
+      downloadedBytes
+    );
+    assert.equal(packageExportRequests, 3);
+    assert.equal(packageDownloads, 2);
+    assert.equal(await focusLabel(page), "package-export-button");
 
     const sourceBytes = await readFile(fixtureUrl);
     const artifactRoot = path.join(
@@ -2064,6 +2350,14 @@ test(
     );
     const digest = (bytes) =>
       createHash("sha256").update(bytes).digest("hex");
+    assert.equal(
+      digest(sourceBytes),
+      "67a1be5216edc7cebfbe7a2433a8daa5425fb6ded15ee632b741302b0b57221d"
+    );
+    assert.equal(
+      digest(downloadedBytes),
+      "89a7c36ff185867fabb0aab79cb68f4f428a4a62179dadfb8d229eedee8d7ff6"
+    );
     t.diagnostic("real module browser: Edge " + browser.version());
     t.diagnostic("source sha256: " + digest(sourceBytes));
     t.diagnostic("generated module sha256: " + digest(moduleBytes));
@@ -2081,6 +2375,16 @@ test(
         evidence.packageBytes
     );
     t.diagnostic("real module screenshot sha256: " + screenshotHash);
+    t.diagnostic(
+      "real module export: requests=" +
+        packageExportRequests +
+        ", downloads=" +
+        packageDownloads +
+        ", filename=" +
+        download.suggestedFilename() +
+        ", sha256=" +
+        createHash("sha256").update(downloadedBytes).digest("hex")
+    );
     t.diagnostic("real module console/page/request/http: 0/0/0/0");
     assert.deepEqual(consoleErrors, []);
     assert.deepEqual(pageErrors, []);

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import {
   copyFile,
   mkdir,
@@ -13,7 +14,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { serializeSandboxAuthoringDocument } from "../src/authoring-document.mjs";
+import {
+  projectSandboxRuntimeDocument,
+  serializeSandboxAuthoringDocument
+} from "../src/authoring-document.mjs";
 import { createLocalWorkspace } from "../src/local-workspace.mjs";
 import { createWorkbenchController } from "../src/workbench-controller.mjs";
 import { startWorkbenchServer } from "../src/workbench-server.mjs";
@@ -972,9 +976,50 @@ test("shared diagnostics preserve author and package last-valid layers", async (
   assert.equal(publishedEvidence.packageBytes, 4);
   assert.match(publishedEvidence.projectionSha256, /^sha256:[0-9a-f]{64}$/);
   assert.match(publishedEvidence.packageSha256, /^sha256:[0-9a-f]{64}$/);
+  const currentRuntimeProjection = projectSandboxRuntimeDocument(
+    controller.editorState.lastValidDocument
+  );
+  assert.equal(
+    publishedEvidence.projectionSha256,
+    "sha256:" +
+      createHash("sha256")
+        .update(Buffer.from(JSON.stringify(currentRuntimeProjection), "utf8"))
+        .digest("hex")
+  );
   assert.equal(Object.hasOwn(service.calls[0].runtime, "editor"), false);
   assert.equal(service.calls[0].runtime.packageId, "system-demo.package");
   assert.deepEqual(service.calls[0].expectedIdentity, providerIdentity(0));
+  assert.equal(typeof ready.contentCheck.preparedPackageLease, "string");
+  const exportRequest = {
+    expectedRevision: 0,
+    expectedDocumentLease: controller.view().documentLease,
+    expectedPreparedPackageLease: ready.contentCheck.preparedPackageLease
+  };
+  const stateBeforeExport = stateSnapshot(controller);
+  const exported = controller.exportPackage(exportRequest);
+  assert.equal(exported.filename, "demo.tgdsbx");
+  assert.equal(exported.byteLength, 4);
+  assert.deepEqual(exported.bytes, Uint8Array.of(84, 71, 68, 1));
+  assert.equal(exported.packageSha256, publishedEvidence.packageSha256);
+  assert.deepEqual(stateSnapshot(controller), stateBeforeExport);
+  assert.deepEqual(controller.validatedPackageEvidence(), publishedEvidence);
+  assert.equal(service.calls.length, 1);
+  exported.bytes[0] = 0;
+  assert.deepEqual(
+    controller.exportPackage(exportRequest).bytes,
+    Uint8Array.of(84, 71, 68, 1)
+  );
+  const { createSandboxPackageExport } = await import(
+    "../src/sandbox-package-export.mjs"
+  );
+  assert.equal(
+    createSandboxPackageExport({
+      relativePath: "unsafe name.json",
+      packageBytes: Uint8Array.of(84, 71, 68, 1),
+      packageSha256: publishedEvidence.packageSha256
+    }).filename,
+    "sandbox-package.tgdsbx"
+  );
 
   const values = editableValues(
     controller.editorState.document,
@@ -989,6 +1034,16 @@ test("shared diagnostics preserve author and package last-valid layers", async (
     expectedRevision: 0
   });
   assert.equal(controller.view().contentCheck.status, "stale");
+  assert.throws(
+    () =>
+      controller.exportPackage({
+        expectedRevision: 1,
+        expectedDocumentLease: controller.view().documentLease,
+        expectedPreparedPackageLease:
+          ready.contentCheck.preparedPackageLease
+      }),
+    (error) => error.code === "package_not_ready"
+  );
   const invalidAuthorDocument = controller.editorState.document;
   const invalidAuthorLastValid = controller.editorState.lastValidDocument;
 
@@ -1011,6 +1066,16 @@ test("shared diagnostics preserve author and package last-valid layers", async (
   assert.strictEqual(
     controller.editorState.lastValidDocument,
     invalidAuthorLastValid
+  );
+  assert.throws(
+    () =>
+      controller.exportPackage({
+        expectedRevision: 1,
+        expectedDocumentLease: controller.view().documentLease,
+        expectedPreparedPackageLease:
+          ready.contentCheck.preparedPackageLease
+      }),
+    (error) => error.code === "package_not_ready"
   );
 
   const ordered = controller.checkContent(contentCheckRequest(controller, 1));
@@ -1035,6 +1100,16 @@ test("shared diagnostics preserve author and package last-valid layers", async (
   assert.strictEqual(
     controller.editorState.lastValidDocument,
     invalidAuthorLastValid
+  );
+  assert.throws(
+    () =>
+      controller.exportPackage({
+        expectedRevision: 1,
+        expectedDocumentLease: controller.view().documentLease,
+        expectedPreparedPackageLease:
+          ready.contentCheck.preparedPackageLease
+      }),
+    (error) => error.code === "package_not_ready"
   );
 
   const stale = controller.checkContent(contentCheckRequest(controller, 1));
@@ -1308,6 +1383,58 @@ test("server keeps CAS and package identity outside the browser DTO", async (t) 
   assert.equal(Object.hasOwn(checked, "cas"), false);
   assert.equal(/generation|checksum|packageBytes|subjectKey|relatedKey/.test(browserBytes), false);
   assert.equal(checked.contentCheck.status, "ready");
+  assert.equal(typeof checked.contentCheck.preparedPackageLease, "string");
+  const packageEvidence = running.controller.validatedPackageEvidence();
+  const beforeExport = stateSnapshot(running.controller);
+  const callsBeforeExport = service.calls.length;
+  const missingPackageLease = await request("/api/package-export", {
+    expectedRevision: 0,
+    expectedDocumentLease: checked.documentLease
+  });
+  assert.equal(missingPackageLease.status, 400);
+  assert.equal(missingPackageLease.headers.get("content-disposition"), null);
+  assert.match(
+    missingPackageLease.headers.get("content-type"),
+    /^application\/json/
+  );
+  const leakedIdentity = await request("/api/package-export", {
+    expectedRevision: 0,
+    expectedDocumentLease: checked.documentLease,
+    expectedPreparedPackageLease:
+      checked.contentCheck.preparedPackageLease,
+    generation: 1
+  });
+  assert.equal(leakedIdentity.status, 400);
+  assert.equal(leakedIdentity.headers.get("content-disposition"), null);
+  assert.match(
+    leakedIdentity.headers.get("content-type"),
+    /^application\/json/
+  );
+  const exportedResponse = await request("/api/package-export", {
+    expectedRevision: 0,
+    expectedDocumentLease: checked.documentLease,
+    expectedPreparedPackageLease:
+      checked.contentCheck.preparedPackageLease
+  });
+  assert.equal(exportedResponse.status, 200);
+  assert.equal(
+    exportedResponse.headers.get("content-disposition"),
+    'attachment; filename="demo.tgdsbx"'
+  );
+  assert.equal(exportedResponse.headers.get("content-length"), "4");
+  const exportedBytes = new Uint8Array(await exportedResponse.arrayBuffer());
+  assert.deepEqual(exportedBytes, Uint8Array.of(84, 71, 68, 1));
+  const { createHash } = await import("node:crypto");
+  assert.equal(
+    "sha256:" + createHash("sha256").update(exportedBytes).digest("hex"),
+    packageEvidence.packageSha256
+  );
+  assert.equal(service.calls.length, callsBeforeExport);
+  assert.deepEqual(stateSnapshot(running.controller), beforeExport);
+  assert.deepEqual(
+    running.controller.validatedPackageEvidence(),
+    packageEvidence
+  );
 
   const rejectedSave = await request("/api/save", {
     expectedRevision: 0,
@@ -1316,5 +1443,23 @@ test("server keeps CAS and package identity outside the browser DTO", async (t) 
   assert.equal(rejectedSave.status, 400);
   const saved = await request("/api/save", { expectedRevision: 0 });
   assert.equal(saved.status, 200);
-  assert.equal(Object.hasOwn((await saved.json()).state, "cas"), false);
+  const savedState = (await saved.json()).state;
+  assert.equal(Object.hasOwn(savedState, "cas"), false);
+  assert.equal(savedState.contentCheck.preparedPackageLease, null);
+  const staleExport = await request("/api/package-export", {
+    expectedRevision: 0,
+    expectedDocumentLease: checked.documentLease,
+    expectedPreparedPackageLease:
+      checked.contentCheck.preparedPackageLease
+  });
+  assert.equal(staleExport.status, 409);
+  assert.equal(staleExport.headers.get("content-disposition"), null);
+  assert.match(staleExport.headers.get("content-type"), /^application\/json/);
+  const staleExportBytes = JSON.stringify(await staleExport.json());
+  assert.equal(
+    /generation|checksum|packageBytes|Stable key|JSONPath|stack|exception/i.test(
+      staleExportBytes
+    ),
+    false
+  );
 });

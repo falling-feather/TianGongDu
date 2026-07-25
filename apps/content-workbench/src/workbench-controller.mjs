@@ -18,6 +18,8 @@ const OBJECT_KINDS = new Set([
 ]);
 const EMPTY_DIAGNOSTICS = Object.freeze([]);
 
+import { createSandboxPackageExport } from "./sandbox-package-export.mjs";
+
 export class WorkbenchControllerError extends Error {
   constructor(code, message, status = 400) {
     super(message);
@@ -64,14 +66,18 @@ function createDocumentLease() {
   return randomBytes(24).toString("base64url");
 }
 
-function expectDocumentLease(value) {
+function expectOpaqueLease(value, label) {
   if (
     typeof value !== "string" ||
     !/^[A-Za-z0-9_-]{32}$/.test(value)
   ) {
-    fail("invalid_request", "expectedDocumentLease is invalid");
+    fail("invalid_request", label + " is invalid");
   }
   return value;
+}
+
+function expectDocumentLease(value) {
+  return expectOpaqueLease(value, "expectedDocumentLease");
 }
 
 function expectBoolean(value, label) {
@@ -238,11 +244,17 @@ function convertExternalError(error, fallbackCode) {
   );
 }
 
-function contentCheckState(status, hasPreparedPackage, diagnostics = EMPTY_DIAGNOSTICS) {
+function contentCheckState(
+  status,
+  hasPreparedPackage,
+  diagnostics = EMPTY_DIAGNOSTICS,
+  preparedPackageLease = null
+) {
   return Object.freeze({
     status,
     hasPreparedPackage,
-    diagnostics: Object.freeze([...diagnostics])
+    diagnostics: Object.freeze([...diagnostics]),
+    preparedPackageLease
   });
 }
 
@@ -286,6 +298,15 @@ function ownProviderIdentity(value) {
 
 function sha256(value) {
   return "sha256:" + createHash("sha256").update(value).digest("hex");
+}
+
+function sandboxRuntimeProjection(document) {
+  const runtime = projectSandboxRuntimeDocument(document);
+  const bytes = Buffer.from(JSON.stringify(runtime), "utf8");
+  return {
+    runtime,
+    projectionSha256: sha256(bytes)
+  };
 }
 
 export function createWorkbenchController({ workspace, compilerService = null }) {
@@ -598,9 +619,8 @@ export function createWorkbenchController({ workspace, compilerService = null })
       editorState?.lastValidDocument === checkingDocument;
 
     try {
-      const runtime = projectSandboxRuntimeDocument(checkingDocument);
-      const projectionBytes = Buffer.from(JSON.stringify(runtime), "utf8");
-      const projectionSha256 = sha256(projectionBytes);
+      const { runtime, projectionSha256 } =
+        sandboxRuntimeProjection(checkingDocument);
       const expectedIdentity = ownProviderIdentity(service.identity());
       contentCheck = contentCheckState(
         "publishing",
@@ -626,15 +646,22 @@ export function createWorkbenchController({ workspace, compilerService = null })
         }
         const identity = ownProviderIdentity(result.identity);
         const packageBytes = new Uint8Array(result.packageBytes);
+        const preparedPackageLease = createDocumentLease();
         validatedOwningPackage = {
           documentEpoch,
           revision,
           projectionSha256,
           identity,
           packageBytes,
-          packageSha256: sha256(packageBytes)
+          packageSha256: sha256(packageBytes),
+          preparedPackageLease
         };
-        contentCheck = contentCheckState("ready", true, diagnostics);
+        contentCheck = contentCheckState(
+          "ready",
+          true,
+          diagnostics,
+          preparedPackageLease
+        );
         return view();
       }
       if (result.outcome === 2) {
@@ -680,6 +707,82 @@ export function createWorkbenchController({ workspace, compilerService = null })
     }
   }
 
+  function exportPackage(request) {
+    expectExactObject(
+      request,
+      [
+        "expectedRevision",
+        "expectedDocumentLease",
+        "expectedPreparedPackageLease"
+      ],
+      "package export request"
+    );
+    requireOpen();
+    const revision = expectRevision(request.expectedRevision);
+    const expectedDocumentLease = expectDocumentLease(
+      request.expectedDocumentLease
+    );
+    const expectedPreparedPackageLease = expectOpaqueLease(
+      request.expectedPreparedPackageLease,
+      "expectedPreparedPackageLease"
+    );
+    if (
+      expectedDocumentLease !== documentLease ||
+      revision !== editorState.revision
+    ) {
+      fail("stale_revision", "package export document no longer matches", 409);
+    }
+    if (conflict) {
+      fail("external_change", "document conflict must be resolved", 409);
+    }
+    if (
+      contentCheck.status !== "ready" ||
+      validatedOwningPackage === null ||
+      contentCheck.preparedPackageLease === null
+    ) {
+      fail(
+        "package_not_ready",
+        "current document has no fresh prepared package",
+        409
+      );
+    }
+    if (
+      expectedPreparedPackageLease !== contentCheck.preparedPackageLease ||
+      expectedPreparedPackageLease !==
+        validatedOwningPackage.preparedPackageLease ||
+      validatedOwningPackage.documentEpoch !== documentEpoch ||
+      validatedOwningPackage.revision !== revision
+    ) {
+      fail("stale_revision", "prepared package lease no longer matches", 409);
+    }
+    let currentProjectionSha256;
+    try {
+      currentProjectionSha256 = sandboxRuntimeProjection(
+        editorState.lastValidDocument
+      ).projectionSha256;
+    } catch {
+      fail(
+        "package_not_ready",
+        "current document projection is unavailable",
+        409
+      );
+    }
+    if (
+      currentProjectionSha256 !== validatedOwningPackage.projectionSha256
+    ) {
+      fail(
+        "stale_revision",
+        "prepared package projection no longer matches",
+        409
+      );
+    }
+    return createSandboxPackageExport({
+      relativePath,
+      packageBytes: validatedOwningPackage.packageBytes,
+      packageSha256: validatedOwningPackage.packageSha256
+    });
+  }
+
   function validatedPackageEvidence() {
     if (!validatedOwningPackage) {
       return null;
@@ -702,6 +805,7 @@ export function createWorkbenchController({ workspace, compilerService = null })
     updateObject,
     save,
     checkContent,
+    exportPackage,
     validatedPackageEvidence,
     get editorState() {
       return editorState;

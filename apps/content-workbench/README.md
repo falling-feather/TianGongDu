@@ -9,8 +9,8 @@
 - JavaScript author shape 只是非权威结构门。页面中的“结构草稿”不表示通过 DEV validator、可导出或可玩。
 - DEV 提供唯一 compiler/provider bridge。controller 只提交自身 `lastValidDocument` 的 runtime projection；JavaScript 不复制 Stable ID、引用、图、binding、容量或 Gameplay validator。
 - `lastValidDocument`、server-private `validatedOwningPackage` 与未来 `runningPreviewSession` 是三层独立真相。只有 provider 返回 published 完整结果才替换已准备包；任何 validation、stale、transport、decode 或 provider 失败都保留上一份包与作者草稿。
-- 浏览器只接收有界表现诊断，不接收 provider generation/checksum、canonical package bytes、Stable key、CAS、模块路径或异常堆栈。诊断定位只是 section/record/Stable ID/field 到现有六类表单的表现映射。
-- 当前仍没有 Export、GAME Session、Windows/Web Preview、F1/Profile/奖励或任意命令执行。页面中的“包已准备；尚未导出，也未启动 Preview 或试玩。”只说明本地 provider 已接受一个完整候选。
+- 浏览器 JSON 状态只接收有界表现诊断与 opaque lease，不接收 provider generation/checksum、canonical package bytes、Stable key、CAS、模块路径或异常堆栈。只有用户显式导出时，独立二进制响应才逐字节交付当前 fresh、server-private 的 canonical package。诊断定位只是 section/record/Stable ID/field 到现有六类表单的表现映射。
+- 当前 Export 只把既有 canonical `.tgdsbx` 交给浏览器下载，不重编译、不重编码、不写 workspace，也不表示操作系统已经持久保存。仍没有 GAME Session、Windows/Web Preview、F1/Profile/奖励或任意命令执行。页面中的“包已准备；尚未导出，也未启动 Preview 或试玩。”只说明本地 provider 已接受一个完整候选。
 - 页面永久使用“字段格式可保存；尚未进行内容与玩法校验。”，不会向用户暴露 CAS、hash、JSONPath 或技术异常。
 - 六类对象共用一个键盘 Tab-stop tree；对象字段缓冲按对象保留，Escape 撤销当前字段，存在任意未应用缓冲时 Save 禁用。
 - 外部修改不会抢焦；处理对话框由用户主动打开，首焦为“继续编辑”，取消或 Escape 返回触发控件。
@@ -36,7 +36,7 @@ dist/web/tgd-sandbox-package-service-abi.wasm
 
 加载器拒绝绝对路径、URL、`.`、`..`、空段、符号链接 artifact、仓库外 realpath、未知 module factory、ABI 不匹配、初始化失败和同一 artifact 的重复加载。它不接受浏览器或 authoring JSON 提供 module path，不使用 `eval`，也不执行外部命令。每个成功加载的 service 只复用 `sandbox-package-service-client.mjs`，输出 owning JavaScript result/diagnostics 值；classification、fixture、label 和 editor namespace 不参与 compiler 语义。
 
-`npm start` 只有收到 server-side `--sandbox-service-build` 时才尝试加载固定产物。模块由服务器持有到关闭，浏览器不能提供或替换路径。共享检查是 single-flight；Apply、Save、Open、Reload 或更新检查会使旧 HTTP 响应过期，过期响应不替换当前文档、诊断、焦点或已准备包。真实 generated-WASM 门可用仓库相对 CMake binary directory 指定：
+`npm start` 只有收到 server-side `--sandbox-service-build` 时才尝试加载固定产物。模块由服务器持有到关闭，浏览器不能提供或替换路径。共享检查与 Export 分别 single-flight 且互斥；Apply、Save、Open、Reload 或更新检查会使旧 HTTP 响应过期，过期响应不替换当前文档、诊断、焦点、已准备包或创建下载。真实 generated-WASM 门可用仓库相对 CMake binary directory 指定：
 
 ```powershell
 $env:TGD_SANDBOX_SERVICE_BUILD_DIRECTORY = "build\web-service"
@@ -44,7 +44,13 @@ $env:TGD_SANDBOX_SERVICE_WASM_MODULE = (Resolve-Path "build\web-service\dist\web
 npm --prefix apps/content-workbench test
 ```
 
-`TGD_SANDBOX_SERVICE_WASM_MODULE` 仅供既有 DEV generated-module probe 使用；生产 loader 本身不读取该环境变量或任意 module 文件路径。`TGD_SANDBOX_SERVICE_BUILD_DIRECTORY` 仅供自动化测试把同一仓库相对 binary directory 传给 loader/browser gate。检查成功仍不是 Export 或 Preview 证据。
+`TGD_SANDBOX_SERVICE_WASM_MODULE` 仅供既有 DEV generated-module probe 使用；生产 loader 本身不读取该环境变量或任意 module 文件路径。`TGD_SANDBOX_SERVICE_BUILD_DIRECTORY` 仅供自动化测试把同一仓库相对 binary directory 传给 loader/browser gate。检查成功仍不是下载或 Preview 证据。
+
+## Canonical package Export
+
+`POST /api/package-export` 只接受当前 document lease、revision 与 fresh prepared-package lease。controller 从 server-private `validatedOwningPackage.packageBytes` 复制一个导出快照并复核既有 package SHA-256；它不读取 DOM、不提交 authoring JSON、不调用 compiler/provider，也不创建第二套 package writer 或 validator。响应只包含完整二进制、长度和安全 `Content-Disposition` 文件名；provider generation/checksum、package SHA、CAS 与内部路径不进入 HTTP 或 DOM。
+
+文件名仅从当前 workspace 相对 JSON 的 ASCII-safe basename 派生；非法、空、设备名或过长 basename 固定回落为 `sandbox-package.tgdsbx`。文件名不参与 package identity。存在未应用字段、冲突、非 `ready` 状态或任一检查/导出在途时，导出按钮失败关闭；旧 validation/bridge/stale 状态即使保留上一份包也不能下载。浏览器只在完整响应仍属于同一 UI epoch 时创建下载，成功文案“已交给浏览器下载；尚未启动 Preview 或试玩”不宣称磁盘保存成功。
 
 ## 保存协议
 
@@ -77,7 +83,6 @@ git diff --check
 
 ## Remaining Open
 
-- DEV/TOOLS：为 `.tgdsbx` Export 建立独立的 canonical package artifact 下载协议；不得重新编译 authoring 或绕过 provider publication identity。
 - GAME-003：在已完成的 package document→standalone Session adapter 之上，建立 package/provider/Session/Collision/Assets 的整体候选与回滚。
 - PLATFORM：Windows/Web Preview、整包运输与显式 reload。
-- TOOLS：2D 画布、对象增删、waves/objectives 编辑、Export 和 Preview 请求。
+- TOOLS：2D 画布、对象增删、waves/objectives 编辑和 Preview 请求；Launch/Reload 必须等待 PLATFORM Host 与资产 resolver。

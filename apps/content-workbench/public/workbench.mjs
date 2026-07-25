@@ -21,7 +21,9 @@ const USER_MESSAGES = Object.freeze({
   save_failed: "保存未完成，当前草稿仍处于未保存状态。",
   no_document: "请先打开一个作者文档。",
   compiler_unavailable: "共享内容检查当前不可用。",
-  check_in_flight: "共享内容检查正在进行，请等待本次检查完成。"
+  check_in_flight: "共享内容检查正在进行，请等待本次检查完成。",
+  package_not_ready: "当前草稿没有可导出的已准备包，请重新执行共享内容检查。",
+  export_failed: "未能准备下载；作者草稿和已准备包保持不变。"
 });
 
 const elements = {
@@ -47,6 +49,7 @@ const elements = {
   fieldGrid: document.querySelector("#field-grid"),
   applyButton: document.querySelector("#apply-button"),
   contentCheckButton: document.querySelector("#content-check-button"),
+  packageExportButton: document.querySelector("#package-export-button"),
   contentCheckSummary: document.querySelector("#content-check-summary"),
   diagnosticList: document.querySelector("#diagnostic-list"),
   diagnosticCountLive: document.querySelector("#diagnostic-count-live"),
@@ -92,7 +95,8 @@ let state = {
   contentCheck: {
     status: "unavailable",
     hasPreparedPackage: false,
-    diagnostics: []
+    diagnostics: [],
+    preparedPackageLease: null
   }
 };
 let selectedGroup = "player";
@@ -101,10 +105,14 @@ let treeActiveKey = "group:player";
 let conflictTrigger = null;
 let applyInFlight = false;
 let saveInFlight = false;
+let openInFlight = false;
+let reloadInFlight = false;
 let documentEpoch = 0;
 let contentActionEpoch = 0;
 let contentCheckInFlight = false;
 let contentCheckRequestSequence = 0;
+let packageExportInFlight = false;
+let packageExportRequestSequence = 0;
 let activeFields = [];
 const expandedGroups = new Set(GROUPS.map((group) => group.key));
 const fieldBuffers = new Map();
@@ -156,6 +164,45 @@ async function api(path, options = {}) {
   return payload.state;
 }
 
+async function packageExportApi(body) {
+  const response = await fetch("/api/package-export", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    const error = new Error(userMessage(payload.error?.code));
+    error.code = payload.error?.code ?? "export_failed";
+    error.state = payload.state;
+    throw error;
+  }
+  const disposition = response.headers.get("content-disposition") ?? "";
+  const filename = /^attachment; filename="([A-Za-z0-9][A-Za-z0-9._-]{0,79}\.tgdsbx)"$/.exec(
+    disposition
+  )?.[1];
+  const blob = await response.blob();
+  if (!filename || blob.size === 0) {
+    const error = new Error(userMessage("export_failed"));
+    error.code = "export_failed";
+    throw error;
+  }
+  return { filename, blob };
+}
+
+function triggerPackageDownload({ filename, blob }) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.hidden = true;
+  anchor.tabIndex = -1;
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
 function groupByKey(key) {
   return GROUPS.find((group) => group.key === key);
 }
@@ -184,6 +231,10 @@ function objectBufferKey(group = selectedGroup, id = selectedId) {
 
 function hasFieldBuffers() {
   return [...fieldBuffers.values()].some((buffer) => buffer.size > 0);
+}
+
+function authorActionInFlight() {
+  return applyInFlight || saveInFlight || openInFlight || reloadInFlight;
 }
 
 function updateSaveAvailability() {
@@ -275,7 +326,11 @@ function renderContentCheck() {
   }
   const nativeDisabled = !state.opened || check.status === "unavailable";
   const interactionBlocked =
-    hasFieldBuffers() || state.conflict || contentCheckInFlight;
+    hasFieldBuffers() ||
+    state.conflict ||
+    contentCheckInFlight ||
+    authorActionInFlight() ||
+    packageExportInFlight;
   elements.contentCheckButton.disabled = nativeDisabled;
   elements.contentCheckButton.setAttribute(
     "aria-disabled",
@@ -284,6 +339,24 @@ function renderContentCheck() {
   elements.contentCheckButton.setAttribute(
     "aria-busy",
     String(contentCheckInFlight)
+  );
+  const exportNativeDisabled = !state.opened;
+  const exportBlocked =
+    check.status !== "ready" ||
+    typeof check.preparedPackageLease !== "string" ||
+    hasFieldBuffers() ||
+    state.conflict ||
+    contentCheckInFlight ||
+    authorActionInFlight() ||
+    packageExportInFlight;
+  elements.packageExportButton.disabled = exportNativeDisabled;
+  elements.packageExportButton.setAttribute(
+    "aria-disabled",
+    String(exportNativeDisabled || exportBlocked)
+  );
+  elements.packageExportButton.setAttribute(
+    "aria-busy",
+    String(packageExportInFlight)
   );
   elements.diagnosticList.replaceChildren();
   for (const diagnostic of check.diagnostics) {
@@ -838,6 +911,9 @@ function needsDiscardConfirmation() {
 }
 
 async function openDocument() {
+  if (openInFlight || reloadInFlight) {
+    return;
+  }
   clearFeedback();
   const hadLocalChanges = needsDiscardConfirmation();
   const confirmDiscard = hadLocalChanges
@@ -849,6 +925,8 @@ async function openDocument() {
     setStatus("已取消打开，内存草稿和表单输入保持不变。");
     return;
   }
+  openInFlight = true;
+  renderContentCheck();
   beginContentAction();
   try {
     state = await api("/api/open", {
@@ -873,10 +951,16 @@ async function openDocument() {
     }
     render();
     presentError(error);
+  } finally {
+    openInFlight = false;
+    renderContentCheck();
   }
 }
 
 async function reloadDocument(confirmFromConflict = false) {
+  if (reloadInFlight || openInFlight) {
+    return false;
+  }
   clearFeedback();
   const hadLocalChanges = needsDiscardConfirmation();
   const confirmDiscard = confirmFromConflict
@@ -890,6 +974,8 @@ async function reloadDocument(confirmFromConflict = false) {
     setStatus("已取消重新加载，内存草稿和表单输入保持不变。");
     return false;
   }
+  reloadInFlight = true;
+  renderContentCheck();
   beginContentAction();
   try {
     state = await api("/api/reload", {
@@ -913,6 +999,9 @@ async function reloadDocument(confirmFromConflict = false) {
     render();
     presentError(error);
     return false;
+  } finally {
+    reloadInFlight = false;
+    renderContentCheck();
   }
 }
 
@@ -968,6 +1057,7 @@ async function saveDocument() {
   beginContentAction();
   saveInFlight = true;
   updateSaveAvailability();
+  renderContentCheck();
   elements.saveButton.focus();
   try {
     const savedState = await api("/api/save", {
@@ -1013,6 +1103,7 @@ async function saveDocument() {
   } finally {
     saveInFlight = false;
     updateSaveAvailability();
+    renderContentCheck();
   }
 }
 
@@ -1022,7 +1113,9 @@ async function checkContent() {
     state.contentCheck.status === "unavailable" ||
     hasFieldBuffers() ||
     state.conflict ||
-    contentCheckInFlight
+    contentCheckInFlight ||
+    authorActionInFlight() ||
+    packageExportInFlight
   ) {
     return;
   }
@@ -1099,6 +1192,72 @@ async function checkContent() {
       contentCheckInFlight = false;
       renderContentCheck();
     }
+  }
+}
+
+async function exportPackage() {
+  if (
+    !state.opened ||
+    state.contentCheck.status !== "ready" ||
+    typeof state.contentCheck.preparedPackageLease !== "string" ||
+    hasFieldBuffers() ||
+    state.conflict ||
+    contentCheckInFlight ||
+    authorActionInFlight() ||
+    packageExportInFlight
+  ) {
+    return;
+  }
+  const requestSequence = ++packageExportRequestSequence;
+  const exportingDocumentEpoch = documentEpoch;
+  const exportingActionEpoch = contentActionEpoch;
+  const exportingRevision = state.revision;
+  const exportingDocumentLease = state.documentLease;
+  const exportingPackageLease = state.contentCheck.preparedPackageLease;
+  packageExportInFlight = true;
+  renderContentCheck();
+  clearFeedback();
+  const isFresh = () =>
+    requestSequence === packageExportRequestSequence &&
+    documentEpoch === exportingDocumentEpoch &&
+    contentActionEpoch === exportingActionEpoch &&
+    state.documentLease === exportingDocumentLease &&
+    state.revision === exportingRevision &&
+    state.contentCheck.status === "ready" &&
+    state.contentCheck.preparedPackageLease === exportingPackageLease &&
+    !hasFieldBuffers() &&
+    !state.conflict;
+  try {
+    const artifact = await packageExportApi({
+      expectedRevision: exportingRevision,
+      expectedDocumentLease: exportingDocumentLease,
+      expectedPreparedPackageLease: exportingPackageLease
+    });
+    if (!isFresh()) {
+      return;
+    }
+    triggerPackageDownload(artifact);
+    setStatus(
+      artifact.filename +
+        " 已交给浏览器下载；尚未启动 Preview 或试玩。"
+    );
+  } catch (error) {
+    if (!isFresh()) {
+      return;
+    }
+    const focusedControl = captureFocusedControl();
+    if (error.state) {
+      state = error.state;
+      render();
+      restoreFocusedControl(focusedControl);
+    }
+    if (!error.code) {
+      error.code = "export_failed";
+    }
+    presentError(error);
+  } finally {
+    packageExportInFlight = false;
+    renderContentCheck();
   }
 }
 
@@ -1182,6 +1341,10 @@ elements.contentCheckButton.addEventListener("click", () => {
   void checkContent();
 });
 
+elements.packageExportButton.addEventListener("click", () => {
+  void exportPackage();
+});
+
 elements.inspectorForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (applyInFlight) {
@@ -1189,6 +1352,7 @@ elements.inspectorForm.addEventListener("submit", async (event) => {
   }
   applyInFlight = true;
   updateApplyAvailability();
+  renderContentCheck();
   elements.applyButton.focus();
   clearFeedback();
   const submittedGroup = selectedGroup;
@@ -1222,6 +1386,7 @@ elements.inspectorForm.addEventListener("submit", async (event) => {
   } finally {
     applyInFlight = false;
     updateApplyAvailability();
+    renderContentCheck();
     if (!preserveInvalidFieldFocus) {
       elements.applyButton.focus();
     }

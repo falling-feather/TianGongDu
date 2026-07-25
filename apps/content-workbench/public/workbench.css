@@ -150,6 +150,14 @@ h3 {
   padding-bottom: 0.7rem;
 }
 
+.content-check-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
 .content-check-summary {
   margin: 0.8rem 0 0;
   color: var(--teal-dark);
@@ -690,6 +698,12 @@ fieldset {
   }
 
   .content-check-header .button {
+    width: 100%;
+  }
+
+  .content-check-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
     width: 100%;
   }
 }

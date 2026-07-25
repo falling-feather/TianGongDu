@@ -274,6 +274,31 @@ export async function startWorkbenchServer({
           writeJson(response, 200, { state: browserState(controller) });
           return;
         }
+        if (
+          url.pathname === "/api/package-export" &&
+          request.method === "POST"
+        ) {
+          const body = expectBrowserRequest(
+            await readJson(request),
+            [
+              "expectedRevision",
+              "expectedDocumentLease",
+              "expectedPreparedPackageLease"
+            ]
+          );
+          const artifact = controller.exportPackage(body);
+          writeBytes(
+            response,
+            200,
+            artifact.bytes,
+            "application/octet-stream",
+            {
+              "Content-Disposition":
+                'attachment; filename="' + artifact.filename + '"'
+            }
+          );
+          return;
+        }
         writeJson(response, 404, { error: { code: "not_found" } });
       } catch (error) {
         const failure = apiError(error, controller);

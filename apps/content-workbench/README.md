@@ -41,7 +41,7 @@ $env:TGD_SANDBOX_SERVICE_WASM_MODULE = (Resolve-Path "build\web-service\dist\web
 npm --prefix apps/content-workbench test
 ```
 
-`TGD_SANDBOX_SERVICE_WASM_MODULE` 仅供既有 DEV generated-module probe 使用；生产 loader 本身不读取该环境变量或任意 module 文件路径。
+`TGD_SANDBOX_SERVICE_WASM_MODULE` 仅供既有 DEV generated-module probe 使用；生产 loader 本身不读取该环境变量或任意 module 文件路径。产品根 `2db0adf` 已用同一全新 Emscripten 3.1.73 产物完成 client 12/12 与 loader 6/6 的真实模块执行门；这仍不是页面或 Preview 证据。
 
 ## 保存协议
 
@@ -74,8 +74,8 @@ git diff --check
 
 ## Remaining Open
 
-- TOOLS-002：把当前 loader 接入 controller/server，并把 DEV raw diagnostics 映射到“共享内容检查”页面。
-- DEV-002.4：提供当前 published candidate 的 canonical package bytes/readback。在该合同集成前，Export 明确 blocked；TOOLS 不得重编或旁路 provider 导出。
-- GAME-003：package document 到 Sandbox Session adapter。
+- TOOLS-002：把当前 loader 接入 controller/server，并把 DEV raw diagnostics 映射到“共享内容检查”页面；随后才可独立实现 `.tgdsbx` Export。
+- CONTENT-002：用唯一 `content/design/system-demo.sandbox.json` 替换当前 shape fixture，并让所有消费者读取同一作者源。
+- GAME-003：在已完成的 package document→standalone Session adapter 之上，建立 package/provider/Session/Collision/Assets 的整体候选与回滚。
 - PLATFORM：Windows/Web Preview、整包运输与显式 reload。
 - TOOLS：2D 画布、对象增删、waves/objectives 编辑、Export 和 Preview 请求。

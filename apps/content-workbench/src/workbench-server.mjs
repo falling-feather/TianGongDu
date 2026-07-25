@@ -91,8 +91,13 @@ function hasSessionCookie(request, sessionToken) {
 }
 
 function browserState(controller) {
-  const { cas: privateCas, ...state } = controller.view();
+  const {
+    cas: privateCas,
+    lastError: privateLastError,
+    ...state
+  } = controller.view();
   void privateCas;
+  void privateLastError;
   return state;
 }
 

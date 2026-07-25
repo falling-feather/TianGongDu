@@ -1278,6 +1278,45 @@ test(
       });
     });
 
+    await selectObject(page, "actors");
+    const noPackageActorRegion = page.locator('input[name="regionId"]');
+    const noPackageActorOriginal = await noPackageActorRegion.inputValue();
+    await noPackageActorRegion.fill("region.missing");
+    await page.locator("#apply-button").click();
+    await waitForRevision(page, 1);
+    await checkButton.click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#content-check-summary")?.textContent ===
+        "共享内容检查未通过；尚无已准备包。"
+    );
+    assert.match(
+      await page.locator("#diagnostic-count-live").textContent(),
+      /^共享内容检查发现 \d+ 个问题。$/
+    );
+    assert.equal(running.controller.validatedPackageEvidence(), null);
+    await noPackageActorRegion.fill(noPackageActorOriginal);
+    await page.locator("#apply-button").click();
+    await waitForRevision(page, 2);
+    assert.equal(
+      await page.locator("#content-check-summary").textContent(),
+      "当前草稿的共享内容检查结果已过期；尚无已准备包。"
+    );
+    assert.equal(await page.locator("#diagnostic-count-live").textContent(), "");
+    await page.locator("#save-button").click();
+    await page.waitForFunction(
+      () => document.querySelector("#dirty-value")?.textContent === "否"
+    );
+    await page.locator("#reload-button").click();
+    await waitForRevision(page, 0);
+    assert.equal(await page.locator("#diagnostic-count-live").textContent(), "");
+    await selectObject(page, "player");
+    await page.evaluate(() => {
+      window.__tgdDiagnosticAnnouncements = [];
+    });
+    const baselineContentCheckRequests = contentCheckHttpRequests;
+    const baselineServiceRequests = compilerService.requests;
+
     const bufferedX = page.locator('input[name="x"]');
     const initialX = await bufferedX.inputValue();
     const preExistingBufferValue = initialX === "40" ? "42" : "40";
@@ -1286,8 +1325,9 @@ test(
     assert.equal(await checkButton.getAttribute("aria-disabled"), "true");
     assert.equal(
       await page.locator("#content-check-summary").textContent(),
-      "本次共享内容检查结果已过期，请重新检查当前草稿。"
+      "当前草稿的共享内容检查结果已过期；尚无已准备包。"
     );
+    assert.equal(await page.locator("#diagnostic-count-live").textContent(), "");
     await checkButton.focus();
     const bufferedGuardBox = await checkButton.boundingBox();
     assert.ok(bufferedGuardBox);
@@ -1297,8 +1337,8 @@ test(
     );
     await page.keyboard.press("Enter");
     await page.waitForTimeout(50);
-    assert.equal(contentCheckHttpRequests, 0);
-    assert.equal(compilerService.requests, 0);
+    assert.equal(contentCheckHttpRequests, baselineContentCheckRequests);
+    assert.equal(compilerService.requests, baselineServiceRequests);
     assert.equal(await focusLabel(page), "content-check-button");
     await bufferedX.focus();
     await bufferedX.press("Escape");
@@ -1306,8 +1346,9 @@ test(
     assert.equal(await checkButton.getAttribute("aria-disabled"), "false");
     assert.equal(
       await page.locator("#content-check-summary").textContent(),
-      "本次共享内容检查结果已过期，请重新检查当前草稿。"
+      "当前草稿的共享内容检查结果已过期；尚无已准备包。"
     );
+    assert.equal(await page.locator("#diagnostic-count-live").textContent(), "");
 
     let releaseReady;
     let readyRequestSeen;
@@ -1347,8 +1388,9 @@ test(
     assert.equal(await checkButton.getAttribute("aria-disabled"), "true");
     assert.equal(
       await page.locator("#content-check-summary").textContent(),
-      "本次共享内容检查结果已过期，请重新检查当前草稿。"
+      "当前草稿的共享内容检查结果已过期；尚无已准备包。"
     );
+    assert.equal(await page.locator("#diagnostic-count-live").textContent(), "");
     releaseReady();
     await duplicateCheck;
     await page.waitForFunction(
@@ -1359,16 +1401,20 @@ test(
     );
     await page.unroute("**/api/content-check", holdReadyResponse);
     assert.equal(checkRequests, 1);
-    assert.equal(compilerService.requests, 1);
-    assert.equal(contentCheckHttpRequests, 1);
+    assert.equal(compilerService.requests, baselineServiceRequests + 1);
+    assert.equal(
+      contentCheckHttpRequests,
+      baselineContentCheckRequests + 1
+    );
     assert.equal(await checkButton.getAttribute("aria-busy"), "false");
     assert.equal(await bufferedX.inputValue(), inFlightBufferValue);
     assert.equal(await focusLabel(page), "y");
     assert.equal(await page.locator("#revision-value").textContent(), "0");
     assert.equal(
       await page.locator("#content-check-summary").textContent(),
-      "本次共享内容检查结果已过期，请重新检查当前草稿。"
+      "当前草稿的共享内容检查结果已过期；尚无已准备包。"
     );
+    assert.equal(await page.locator("#diagnostic-count-live").textContent(), "");
     assert.equal(
       await page.evaluate(() =>
         window.__tgdDiagnosticAnnouncements.filter((value) => value.trim())
@@ -1381,16 +1427,20 @@ test(
     assert.equal(await checkButton.getAttribute("aria-disabled"), "false");
     assert.equal(
       await page.locator("#content-check-summary").textContent(),
-      "本次共享内容检查结果已过期，请重新检查当前草稿。"
+      "当前草稿的共享内容检查结果已过期；尚无已准备包。"
     );
+    assert.equal(await page.locator("#diagnostic-count-live").textContent(), "");
     await checkButton.click();
     await page.waitForFunction(
       () =>
         document.querySelector("#content-check-summary")?.textContent ===
         "包已准备；尚未导出，也未启动 Preview 或试玩。"
     );
-    assert.equal(contentCheckHttpRequests, 2);
-    assert.equal(compilerService.requests, 2);
+    assert.equal(
+      contentCheckHttpRequests,
+      baselineContentCheckRequests + 2
+    );
+    assert.equal(compilerService.requests, baselineServiceRequests + 2);
     assert.equal(await focusLabel(page), "content-check-button");
     assert.equal(
       await page.evaluate(() =>
@@ -1470,6 +1520,7 @@ test(
     );
     assert.equal(await reloadBufferedX.inputValue(), reloadBufferValue);
     assert.equal(await focusLabel(page), "y");
+    assert.equal(await page.locator("#diagnostic-count-live").textContent(), "");
     assert.equal(
       await page.evaluate(
         () =>
@@ -1549,6 +1600,7 @@ test(
       openedLastValid
     );
     assert.equal(await focusLabel(page), "object-tree");
+    assert.equal(await page.locator("#diagnostic-count-live").textContent(), "");
     await checkButton.click();
     await page.waitForFunction(
       () =>
@@ -1679,9 +1731,10 @@ test(
     assert.equal(staleRequests, 1);
     assert.equal(
       await page.locator("#content-check-summary").textContent(),
-      "本次共享内容检查结果已过期，请重新检查当前草稿。"
+      "当前草稿的共享内容检查结果已过期；上一份已准备包保持不变。"
     );
     assert.equal(await focusLabel(page), "apply-button");
+    assert.equal(await page.locator("#diagnostic-count-live").textContent(), "");
 
     await selectObject(page, "player");
     await page.locator('input[name="x"]').fill("909");
@@ -1699,6 +1752,7 @@ test(
         "共享内容检查未完成；作者草稿和已准备包状态未改变。"
     );
     assert.equal(await focusLabel(page), "content-check-button");
+    assert.equal(await page.locator("#diagnostic-count-live").textContent(), "");
     assert.deepEqual(
       running.controller.validatedPackageEvidence(),
       evidenceBeforeBridgeFailure
@@ -1782,6 +1836,7 @@ test(
     );
     assert.equal(await checkButton.getAttribute("disabled"), null);
     assert.equal(await checkButton.getAttribute("aria-disabled"), "true");
+    assert.equal(await page.locator("#diagnostic-count-live").textContent(), "");
     const requestsBeforeConflictGuard = contentCheckHttpRequests;
     const serviceRequestsBeforeConflictGuard = compilerService.requests;
     await checkButton.focus();
@@ -1828,7 +1883,7 @@ test(
 
     const bodyText = await page.locator("body").innerText();
     assert.equal(
-      /\bgeneration\b|\bchecksum\b|\bCAS\b|Stable key|documentLease|expectedDocumentLease|exception|stack/i.test(
+      /\bgeneration\b|\bchecksum\b|\bCAS\b|Stable key|documentLease|expectedDocumentLease|lastError|JSONPath|\$\.|exception|stack/i.test(
         bodyText
       ),
       false

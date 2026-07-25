@@ -1240,7 +1240,46 @@ test("server keeps CAS and package identity outside the browser DTO", async (t) 
   assert.equal(openedResponse.status, 200);
   const opened = (await openedResponse.json()).state;
   assert.equal(Object.hasOwn(opened, "cas"), false);
+  assert.equal(Object.hasOwn(opened, "lastError"), false);
   assert.equal(typeof opened.documentLease, "string");
+
+  const beforeInvalidUpdate = stateSnapshot(running.controller);
+  const invalidValues = editableValues(
+    running.controller.editorState.document,
+    "player",
+    "player.system_demo.start"
+  );
+  invalidValues.pose.x = 1.5;
+  const invalidUpdateResponse = await request("/api/update", {
+    kind: "player",
+    id: "player.system_demo.start",
+    values: invalidValues,
+    expectedRevision: 0
+  });
+  assert.equal(invalidUpdateResponse.status, 422);
+  const invalidUpdatePayload = await invalidUpdateResponse.json();
+  const internalMessage = running.controller.editorState.lastError?.message;
+  assert.equal(typeof internalMessage, "string");
+  assert.equal(
+    Object.hasOwn(invalidUpdatePayload.state, "lastError"),
+    false
+  );
+  assert.deepEqual(
+    Reflect.ownKeys(invalidUpdatePayload.error).sort(),
+    ["code", "message"]
+  );
+  assert.equal(typeof invalidUpdatePayload.error.code, "string");
+  assert.equal(
+    invalidUpdatePayload.error.message,
+    "Workbench request was not completed"
+  );
+  const invalidSerialized = JSON.stringify(invalidUpdatePayload);
+  assert.equal(
+    /lastError|JSONPath|\$\.|exception|stack/i.test(invalidSerialized),
+    false
+  );
+  assert.equal(invalidSerialized.includes(internalMessage), false);
+  assert.deepEqual(stateSnapshot(running.controller), beforeInvalidUpdate);
 
   const missingLeaseResponse = await request("/api/content-check", {
     expectedRevision: 0

@@ -216,11 +216,13 @@ function contentCheckSummary(check) {
     case "ready":
       return "包已准备；尚未导出，也未启动 Preview 或试玩。";
     case "stale":
-      return "本次共享内容检查结果已过期，请重新检查当前草稿。";
+      return check.hasPreparedPackage
+        ? "当前草稿的共享内容检查结果已过期；上一份已准备包保持不变。"
+        : "当前草稿的共享内容检查结果已过期；尚无已准备包。";
     case "validation_failed":
       return check.hasPreparedPackage
         ? "共享内容检查未通过；上一份已准备包保持不变。"
-        : "共享内容检查未通过；没有新的已准备包。";
+        : "共享内容检查未通过；尚无已准备包。";
     case "bridge_failed":
       return "共享内容检查未完成；作者草稿和已准备包状态未改变。";
     default:
@@ -268,6 +270,9 @@ function locateDiagnostic(locator) {
 function renderContentCheck() {
   const check = state.contentCheck;
   elements.contentCheckSummary.textContent = contentCheckSummary(check);
+  if (check.status !== "ready" && check.status !== "validation_failed") {
+    elements.diagnosticCountLive.textContent = "";
+  }
   const nativeDisabled = !state.opened || check.status === "unavailable";
   const interactionBlocked =
     hasFieldBuffers() || state.conflict || contentCheckInFlight;
@@ -315,6 +320,7 @@ function announceDiagnosticCount() {
 
 function beginContentAction() {
   contentActionEpoch += 1;
+  elements.diagnosticCountLive.textContent = "";
 }
 
 function markContentCheckStaleForFieldBuffer() {

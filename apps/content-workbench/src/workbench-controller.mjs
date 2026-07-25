@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 
 import { projectSandboxRuntimeDocument } from "./authoring-document.mjs";
 import {
@@ -56,6 +56,20 @@ function expectExactObject(value, keys, label) {
 function expectRevision(value) {
   if (!Number.isSafeInteger(value) || value < 0) {
     fail("invalid_request", "expectedRevision must be a non-negative integer");
+  }
+  return value;
+}
+
+function createDocumentLease() {
+  return randomBytes(24).toString("base64url");
+}
+
+function expectDocumentLease(value) {
+  if (
+    typeof value !== "string" ||
+    !/^[A-Za-z0-9_-]{32}$/.test(value)
+  ) {
+    fail("invalid_request", "expectedDocumentLease is invalid");
   }
   return value;
 }
@@ -288,6 +302,7 @@ export function createWorkbenchController({ workspace, compilerService = null })
   let editorState = null;
   let relativePath = null;
   let cas = null;
+  let documentLease = createDocumentLease();
   let conflict = false;
   let documentEpoch = 0;
   let pendingSave = null;
@@ -305,6 +320,7 @@ export function createWorkbenchController({ workspace, compilerService = null })
       opened: editorState !== null,
       relativePath,
       cas,
+      documentLease,
       conflict,
       document: editorState?.document ?? null,
       revision: editorState?.revision ?? null,
@@ -317,6 +333,10 @@ export function createWorkbenchController({ workspace, compilerService = null })
 
   function hasPreparedPackage() {
     return validatedOwningPackage !== null;
+  }
+
+  function rotateDocumentLease() {
+    documentLease = createDocumentLease();
   }
 
   function markContentCheckStale() {
@@ -373,6 +393,7 @@ export function createWorkbenchController({ workspace, compilerService = null })
     );
     requireDiscardConfirmation(request.confirmDiscard);
     activitySequence += 1;
+    rotateDocumentLease();
     await waitForPendingSave();
 
     let loaded;
@@ -398,6 +419,7 @@ export function createWorkbenchController({ workspace, compilerService = null })
     requireOpen();
     requireDiscardConfirmation(request.confirmDiscard);
     activitySequence += 1;
+    rotateDocumentLease();
     await waitForPendingSave();
 
     let loaded;
@@ -451,6 +473,7 @@ export function createWorkbenchController({ workspace, compilerService = null })
       fail(nextState.lastError.code, nextState.lastError.message, 422);
     }
     activitySequence += 1;
+    rotateDocumentLease();
     markContentCheckStale();
     return view();
   }
@@ -471,10 +494,14 @@ export function createWorkbenchController({ workspace, compilerService = null })
     }
     if (conflict || request.expectedCas !== cas) {
       conflict = true;
+      activitySequence += 1;
+      rotateDocumentLease();
+      markContentCheckStale();
       fail("external_change", "document CAS no longer matches", 409);
     }
 
     activitySequence += 1;
+    rotateDocumentLease();
     markContentCheckStale();
     const savingEpoch = documentEpoch;
     const savingPath = relativePath;
@@ -529,13 +556,20 @@ export function createWorkbenchController({ workspace, compilerService = null })
   function checkContent(request) {
     expectExactObject(
       request,
-      ["expectedRevision"],
+      ["expectedRevision", "expectedDocumentLease"],
       "content check request"
     );
     requireOpen();
     const revision = expectRevision(request.expectedRevision);
+    const expectedLease = expectDocumentLease(request.expectedDocumentLease);
+    if (expectedLease !== documentLease) {
+      fail("stale_revision", "document lease no longer matches", 409);
+    }
     if (revision !== editorState.revision) {
       fail("stale_revision", "expected revision does not match", 409);
+    }
+    if (conflict) {
+      fail("external_change", "document conflict must be resolved", 409);
     }
     if (!service) {
       fail("compiler_unavailable", "Sandbox compiler service is unavailable", 503);

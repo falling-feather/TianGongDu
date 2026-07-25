@@ -82,6 +82,7 @@ const GROUPS = [
 let state = {
   opened: false,
   relativePath: null,
+  documentLease: null,
   conflict: false,
   document: null,
   revision: null,
@@ -1023,6 +1024,7 @@ async function checkContent() {
   const checkingDocumentEpoch = documentEpoch;
   const checkingActionEpoch = contentActionEpoch;
   const checkingRevision = state.revision;
+  const checkingDocumentLease = state.documentLease;
   contentCheckInFlight = true;
   state = {
     ...state,
@@ -1036,13 +1038,18 @@ async function checkContent() {
     const checkedState = await api("/api/content-check", {
       method: "POST",
       deferErrorState: true,
-      body: { expectedRevision: checkingRevision }
+      body: {
+        expectedRevision: checkingRevision,
+        expectedDocumentLease: checkingDocumentLease
+      }
     });
     if (
       requestSequence !== contentCheckRequestSequence ||
       documentEpoch !== checkingDocumentEpoch ||
       contentActionEpoch !== checkingActionEpoch ||
+      state.documentLease !== checkingDocumentLease ||
       state.revision !== checkingRevision ||
+      checkedState.documentLease !== checkingDocumentLease ||
       checkedState.revision !== checkingRevision
     ) {
       return;
@@ -1062,6 +1069,7 @@ async function checkContent() {
       requestSequence !== contentCheckRequestSequence ||
       documentEpoch !== checkingDocumentEpoch ||
       contentActionEpoch !== checkingActionEpoch ||
+      state.documentLease !== checkingDocumentLease ||
       state.revision !== checkingRevision
     ) {
       return;

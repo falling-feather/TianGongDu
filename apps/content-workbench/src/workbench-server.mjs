@@ -263,7 +263,7 @@ export async function startWorkbenchServer({
         ) {
           const body = expectBrowserRequest(
             await readJson(request),
-            ["expectedRevision"]
+            ["expectedRevision", "expectedDocumentLease"]
           );
           controller.checkContent(body);
           writeJson(response, 200, { state: browserState(controller) });

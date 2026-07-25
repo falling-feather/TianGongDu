@@ -1182,6 +1182,7 @@ test(
   async (t) => {
     const root = await mkdtemp(path.join(tmpdir(), "tgd-browser-diagnostics-"));
     await copyFile(fixtureUrl, path.join(root, "demo.json"));
+    await copyFile(fixtureUrl, path.join(root, "other.json"));
     const compilerService = createBrowserCompilerService();
     const running = await startWorkbenchServer({
       workspaceRoot: root,
@@ -1203,11 +1204,19 @@ test(
     const unexpectedHttp = [];
     const expectedConflictHttp = [];
     const expectedConflictConsole = [];
+    const expectedStaleCheckHttp = [];
+    const expectedStaleCheckConsole = [];
     let conflictRequestExpected = false;
+    let staleCheckResponseExpected = false;
     let contentCheckHttpRequests = 0;
     page.on("console", (message) => {
       if (message.type() === "error") {
         if (
+          staleCheckResponseExpected &&
+          message.text().includes("409 (Conflict)")
+        ) {
+          expectedStaleCheckConsole.push(message.text());
+        } else if (
           conflictRequestExpected &&
           message.text().includes("409 (Conflict)")
         ) {
@@ -1234,6 +1243,11 @@ test(
           response.url().endsWith("/api/save")
         ) {
           expectedConflictHttp.push(entry);
+        } else if (
+          response.status() === 409 &&
+          response.url().endsWith("/api/content-check")
+        ) {
+          expectedStaleCheckHttp.push(entry);
         } else {
           unexpectedHttp.push(entry);
         }
@@ -1385,6 +1399,172 @@ test(
       1
     );
 
+    let releaseReloadLease;
+    let reloadLeaseRequestSeen;
+    let reloadLeaseRequests = 0;
+    const reloadLeaseRelease = new Promise((resolve) => {
+      releaseReloadLease = resolve;
+    });
+    const reloadLeaseSeen = new Promise((resolve) => {
+      reloadLeaseRequestSeen = resolve;
+    });
+    const holdReloadLeaseBeforeServer = async (route) => {
+      reloadLeaseRequests += 1;
+      assert.equal(
+        typeof route.request().postDataJSON().expectedDocumentLease,
+        "string"
+      );
+      reloadLeaseRequestSeen();
+      await reloadLeaseRelease;
+      await route.continue();
+    };
+    await page.route(
+      "**/api/content-check",
+      holdReloadLeaseBeforeServer
+    );
+    const serviceBeforeReloadLease = compilerService.requests;
+    const packageBeforeReloadLease =
+      running.controller.validatedPackageEvidence();
+    await checkButton.click();
+    await reloadLeaseSeen;
+    await page.locator("#reload-button").click();
+    await page.waitForFunction(
+      () => document.querySelector("#status-live")?.textContent.includes("重新加载")
+    );
+    const reloadedDocument = running.controller.editorState.document;
+    const reloadedLastValid =
+      running.controller.editorState.lastValidDocument;
+    const reloadBufferedX = page.locator('input[name="x"]');
+    const reloadAuthorX = await reloadBufferedX.inputValue();
+    const reloadBufferValue = reloadAuthorX === "501" ? "502" : "501";
+    await reloadBufferedX.fill(reloadBufferValue);
+    await page.locator('input[name="y"]').focus();
+    const announcementsBeforeReloadRelease = await page.evaluate(
+      () =>
+        window.__tgdDiagnosticAnnouncements.filter((value) => value.trim())
+          .length
+    );
+    staleCheckResponseExpected = true;
+    releaseReloadLease();
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#content-check-button")?.getAttribute(
+          "aria-busy"
+        ) === "false"
+    );
+    staleCheckResponseExpected = false;
+    await page.unroute(
+      "**/api/content-check",
+      holdReloadLeaseBeforeServer
+    );
+    assert.equal(reloadLeaseRequests, 1);
+    assert.equal(compilerService.requests, serviceBeforeReloadLease);
+    assert.deepEqual(
+      running.controller.validatedPackageEvidence(),
+      packageBeforeReloadLease
+    );
+    assert.strictEqual(running.controller.editorState.document, reloadedDocument);
+    assert.strictEqual(
+      running.controller.editorState.lastValidDocument,
+      reloadedLastValid
+    );
+    assert.equal(await reloadBufferedX.inputValue(), reloadBufferValue);
+    assert.equal(await focusLabel(page), "y");
+    assert.equal(
+      await page.evaluate(
+        () =>
+          window.__tgdDiagnosticAnnouncements.filter((value) => value.trim())
+            .length
+      ),
+      announcementsBeforeReloadRelease
+    );
+    await reloadBufferedX.focus();
+    await reloadBufferedX.press("Escape");
+    assert.equal(await reloadBufferedX.inputValue(), reloadAuthorX);
+    assert.equal(await checkButton.getAttribute("aria-disabled"), "false");
+    await checkButton.click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#content-check-summary")?.textContent ===
+        "包已准备；尚未导出，也未启动 Preview 或试玩。"
+    );
+    assert.equal(compilerService.requests, serviceBeforeReloadLease + 1);
+    assert.equal(
+      await page.evaluate(
+        () =>
+          window.__tgdDiagnosticAnnouncements.filter((value) => value.trim())
+            .length
+      ),
+      2
+    );
+
+    let releaseOpenLease;
+    let openLeaseRequestSeen;
+    let openLeaseRequests = 0;
+    const openLeaseRelease = new Promise((resolve) => {
+      releaseOpenLease = resolve;
+    });
+    const openLeaseSeen = new Promise((resolve) => {
+      openLeaseRequestSeen = resolve;
+    });
+    const holdOpenLeaseBeforeServer = async (route) => {
+      openLeaseRequests += 1;
+      openLeaseRequestSeen();
+      await openLeaseRelease;
+      await route.continue();
+    };
+    await page.route("**/api/content-check", holdOpenLeaseBeforeServer);
+    const serviceBeforeOpenLease = compilerService.requests;
+    const packageBeforeOpenLease =
+      running.controller.validatedPackageEvidence();
+    await checkButton.click();
+    await openLeaseSeen;
+    await page.locator("#path-input").fill("other.json");
+    await page.locator("#path-input").press("Enter");
+    await page.waitForFunction(
+      () => document.querySelector("#opened-path")?.textContent === "other.json"
+    );
+    const openedDocument = running.controller.editorState.document;
+    const openedLastValid = running.controller.editorState.lastValidDocument;
+    assert.equal(await focusLabel(page), "object-tree");
+    staleCheckResponseExpected = true;
+    releaseOpenLease();
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#content-check-button")?.getAttribute(
+          "aria-busy"
+        ) === "false"
+    );
+    staleCheckResponseExpected = false;
+    await page.unroute("**/api/content-check", holdOpenLeaseBeforeServer);
+    assert.equal(openLeaseRequests, 1);
+    assert.equal(compilerService.requests, serviceBeforeOpenLease);
+    assert.deepEqual(
+      running.controller.validatedPackageEvidence(),
+      packageBeforeOpenLease
+    );
+    assert.strictEqual(running.controller.editorState.document, openedDocument);
+    assert.strictEqual(
+      running.controller.editorState.lastValidDocument,
+      openedLastValid
+    );
+    assert.equal(await focusLabel(page), "object-tree");
+    await checkButton.click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#content-check-summary")?.textContent ===
+        "包已准备；尚未导出，也未启动 Preview 或试玩。"
+    );
+    assert.equal(compilerService.requests, serviceBeforeOpenLease + 1);
+    assert.equal(
+      await page.evaluate(
+        () =>
+          window.__tgdDiagnosticAnnouncements.filter((value) => value.trim())
+            .length
+      ),
+      3
+    );
+
     await selectObject(page, "actors");
     const actorRegion = page.locator('input[name="regionId"]');
     const originalActorRegion = await actorRegion.inputValue();
@@ -1416,7 +1596,7 @@ test(
       await page.evaluate(() =>
         window.__tgdDiagnosticAnnouncements.filter((value) => value.trim())
       ).then((values) => values.length),
-      2
+      4
     );
     await page.locator(".diagnostic-locator").click();
     assert.match(
@@ -1532,12 +1712,40 @@ test(
       lastValidBeforeBridgeFailure
     );
 
+    let releaseConflictLease;
+    let conflictLeaseRequestSeen;
+    let conflictLeaseRequests = 0;
+    const conflictLeaseRelease = new Promise((resolve) => {
+      releaseConflictLease = resolve;
+    });
+    const conflictLeaseSeen = new Promise((resolve) => {
+      conflictLeaseRequestSeen = resolve;
+    });
+    const holdConflictLeaseBeforeServer = async (route) => {
+      conflictLeaseRequests += 1;
+      conflictLeaseRequestSeen();
+      await conflictLeaseRelease;
+      await route.continue();
+    };
+    await page.route(
+      "**/api/content-check",
+      holdConflictLeaseBeforeServer
+    );
+    const serviceBeforeConflictLease = compilerService.requests;
+    const packageBeforeConflictLease =
+      running.controller.validatedPackageEvidence();
+    const documentBeforeConflictLease =
+      running.controller.editorState.document;
+    const lastValidBeforeConflictLease =
+      running.controller.editorState.lastValidDocument;
+    await checkButton.click();
+    await conflictLeaseSeen;
     const external = JSON.parse(
-      await readFile(path.join(root, "demo.json"), "utf8")
+      await readFile(path.join(root, "other.json"), "utf8")
     );
     external.editor.items[0].label = "诊断冲突外部修改";
     await writeFile(
-      path.join(root, "demo.json"),
+      path.join(root, "other.json"),
       JSON.stringify(external, null, 2) + "\n",
       "utf8"
     );
@@ -1546,7 +1754,32 @@ test(
     await page.waitForFunction(
       () => document.querySelector("#conflict-banner")?.hidden === false
     );
+    releaseConflictLease();
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#content-check-button")?.getAttribute(
+          "aria-busy"
+        ) === "false"
+    );
     conflictRequestExpected = false;
+    await page.unroute(
+      "**/api/content-check",
+      holdConflictLeaseBeforeServer
+    );
+    assert.equal(conflictLeaseRequests, 1);
+    assert.equal(compilerService.requests, serviceBeforeConflictLease);
+    assert.deepEqual(
+      running.controller.validatedPackageEvidence(),
+      packageBeforeConflictLease
+    );
+    assert.strictEqual(
+      running.controller.editorState.document,
+      documentBeforeConflictLease
+    );
+    assert.strictEqual(
+      running.controller.editorState.lastValidDocument,
+      lastValidBeforeConflictLease
+    );
     assert.equal(await checkButton.getAttribute("disabled"), null);
     assert.equal(await checkButton.getAttribute("aria-disabled"), "true");
     const requestsBeforeConflictGuard = contentCheckHttpRequests;
@@ -1581,11 +1814,28 @@ test(
     await page.waitForFunction(
       () => document.activeElement?.id === "object-tree"
     );
+    const serviceBeforeConflictRecovery = compilerService.requests;
+    await checkButton.click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#content-check-summary")?.textContent ===
+        "包已准备；尚未导出，也未启动 Preview 或试玩。"
+    );
+    assert.equal(
+      compilerService.requests,
+      serviceBeforeConflictRecovery + 1
+    );
 
     const bodyText = await page.locator("body").innerText();
     assert.equal(
-      /\bgeneration\b|\bchecksum\b|\bCAS\b|Stable key|exception|stack/i.test(
+      /\bgeneration\b|\bchecksum\b|\bCAS\b|Stable key|documentLease|expectedDocumentLease|exception|stack/i.test(
         bodyText
+      ),
+      false
+    );
+    assert.equal(
+      (await page.content()).includes(
+        running.controller.view().documentLease
       ),
       false
     );
@@ -1619,17 +1869,27 @@ test(
       "diagnostics expected conflict console: " +
         expectedConflictConsole.length
     );
+    t.diagnostic(
+      "diagnostics expected stale-check console: " +
+        expectedStaleCheckConsole.length
+    );
     t.diagnostic("diagnostics page errors: " + pageErrors.length);
     t.diagnostic("diagnostics request errors: " + requestErrors.length);
     t.diagnostic(
       "diagnostics expected conflict HTTP: " + expectedConflictHttp.length
     );
+    t.diagnostic(
+      "diagnostics expected stale-check HTTP: " +
+        expectedStaleCheckHttp.length
+    );
     t.diagnostic("diagnostics unexpected HTTP: " + unexpectedHttp.length);
     assert.deepEqual(consoleErrors, []);
-    assert.equal(expectedConflictConsole.length, 1);
+    assert.equal(expectedConflictConsole.length, 2);
+    assert.equal(expectedStaleCheckConsole.length, 2);
     assert.deepEqual(pageErrors, []);
     assert.deepEqual(requestErrors, []);
     assert.equal(expectedConflictHttp.length, 1);
+    assert.equal(expectedStaleCheckHttp.length, 3);
     assert.deepEqual(unexpectedHttp, []);
   }
 );

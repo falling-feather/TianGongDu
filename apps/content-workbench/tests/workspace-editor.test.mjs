@@ -207,6 +207,16 @@ function stateSnapshot(controller) {
   };
 }
 
+function contentCheckRequest(
+  controller,
+  expectedRevision = controller.editorState.revision
+) {
+  return {
+    expectedRevision,
+    expectedDocumentLease: controller.view().documentLease
+  };
+}
+
 test("six explicit object kinds edit, preserve hidden sections, and round-trip", async (t) => {
   const root = await temporaryWorkspace(t);
   const controller = await openedController(root);
@@ -947,7 +957,7 @@ test("shared diagnostics preserve author and package last-valid layers", async (
 
   const originalDocument = controller.editorState.document;
   const originalLastValid = controller.editorState.lastValidDocument;
-  const ready = controller.checkContent({ expectedRevision: 0 });
+  const ready = controller.checkContent(contentCheckRequest(controller, 0));
   assert.equal(ready.contentCheck.status, "ready");
   assert.equal(ready.contentCheck.hasPreparedPackage, true);
   assert.deepEqual(ready.contentCheck.diagnostics, []);
@@ -982,7 +992,7 @@ test("shared diagnostics preserve author and package last-valid layers", async (
   const invalidAuthorDocument = controller.editorState.document;
   const invalidAuthorLastValid = controller.editorState.lastValidDocument;
 
-  const rejected = controller.checkContent({ expectedRevision: 1 });
+  const rejected = controller.checkContent(contentCheckRequest(controller, 1));
   assert.equal(rejected.contentCheck.status, "validation_failed");
   assert.equal(rejected.contentCheck.hasPreparedPackage, true);
   assert.deepEqual(rejected.contentCheck.diagnostics, [
@@ -1003,7 +1013,7 @@ test("shared diagnostics preserve author and package last-valid layers", async (
     invalidAuthorLastValid
   );
 
-  const ordered = controller.checkContent({ expectedRevision: 1 });
+  const ordered = controller.checkContent(contentCheckRequest(controller, 1));
   assert.equal(ordered.contentCheck.status, "validation_failed");
   assert.equal(ordered.contentCheck.diagnostics.length, 2);
   assert.equal(ordered.contentCheck.diagnostics[0].message, "依赖关系中存在循环。");
@@ -1015,7 +1025,9 @@ test("shared diagnostics preserve author and package last-valid layers", async (
   });
   const orderedDiagnostics = ordered.contentCheck.diagnostics;
 
-  const bridgeFailure = controller.checkContent({ expectedRevision: 1 });
+  const bridgeFailure = controller.checkContent(
+    contentCheckRequest(controller, 1)
+  );
   assert.equal(bridgeFailure.contentCheck.status, "bridge_failed");
   assert.deepEqual(bridgeFailure.contentCheck.diagnostics, orderedDiagnostics);
   assert.deepEqual(controller.validatedPackageEvidence(), publishedEvidence);
@@ -1025,7 +1037,7 @@ test("shared diagnostics preserve author and package last-valid layers", async (
     invalidAuthorLastValid
   );
 
-  const stale = controller.checkContent({ expectedRevision: 1 });
+  const stale = controller.checkContent(contentCheckRequest(controller, 1));
   assert.equal(stale.contentCheck.status, "stale");
   assert.deepEqual(stale.contentCheck.diagnostics, orderedDiagnostics);
   assert.deepEqual(controller.validatedPackageEvidence(), publishedEvidence);
@@ -1035,6 +1047,117 @@ test("shared diagnostics preserve author and package last-valid layers", async (
   }
 });
 
+test("document leases reject stale and conflicted checks before compilation", async (t) => {
+  const root = await temporaryWorkspace(t);
+  await copyFile(fixtureUrl, path.join(root, "other.json"));
+  const service = createCompilerService([
+    compilerResult({ outcome: 1, generation: 1 }),
+    compilerResult({ outcome: 1, generation: 2 })
+  ]);
+  const controller = await openedController(root, { compilerService: service });
+
+  const firstReady = controller.checkContent(contentCheckRequest(controller, 0));
+  assert.equal(firstReady.contentCheck.status, "ready");
+  assert.equal(service.calls.length, 1);
+  const publishedEvidence = controller.validatedPackageEvidence();
+
+  const reloadLease = controller.view().documentLease;
+  await controller.reload({ confirmDiscard: false });
+  assert.equal(controller.editorState.revision, 0);
+  assert.notEqual(controller.view().documentLease, reloadLease);
+  const reloadedDocument = controller.editorState.document;
+  const reloadedLastValid = controller.editorState.lastValidDocument;
+  assert.throws(
+    () =>
+      controller.checkContent({
+        expectedRevision: 0,
+        expectedDocumentLease: reloadLease
+      }),
+    (error) => error.code === "stale_revision"
+  );
+  assert.equal(service.calls.length, 1);
+  assert.deepEqual(controller.validatedPackageEvidence(), publishedEvidence);
+  assert.strictEqual(controller.editorState.document, reloadedDocument);
+  assert.strictEqual(controller.editorState.lastValidDocument, reloadedLastValid);
+
+  const openLease = controller.view().documentLease;
+  await controller.open({
+    relativePath: "other.json",
+    confirmDiscard: false
+  });
+  assert.equal(controller.editorState.revision, 0);
+  assert.notEqual(controller.view().documentLease, openLease);
+  const openedDocument = controller.editorState.document;
+  const openedLastValid = controller.editorState.lastValidDocument;
+  assert.throws(
+    () =>
+      controller.checkContent({
+        expectedRevision: 0,
+        expectedDocumentLease: openLease
+      }),
+    (error) => error.code === "stale_revision"
+  );
+  assert.throws(
+    () => controller.checkContent({ expectedRevision: 0 }),
+    (error) => error.code === "invalid_request"
+  );
+  assert.throws(
+    () =>
+      controller.checkContent({
+        expectedRevision: 0,
+        expectedDocumentLease: 7
+      }),
+    (error) => error.code === "invalid_request"
+  );
+  assert.equal(service.calls.length, 1);
+  assert.deepEqual(controller.validatedPackageEvidence(), publishedEvidence);
+  assert.strictEqual(controller.editorState.document, openedDocument);
+  assert.strictEqual(controller.editorState.lastValidDocument, openedLastValid);
+  assert.equal(
+    Object.hasOwn(controller.view(), "runningPreviewSession"),
+    false
+  );
+
+  const external = JSON.parse(
+    await readFile(path.join(root, "other.json"), "utf8")
+  );
+  external.editor.items[0].label = "external document lease conflict";
+  await writeFile(
+    path.join(root, "other.json"),
+    JSON.stringify(external, null, 2) + "\n",
+    "utf8"
+  );
+  const leaseBeforeConflict = controller.view().documentLease;
+  await assert.rejects(
+    controller.save({
+      expectedRevision: 0,
+      expectedCas: controller.view().cas
+    }),
+    (error) => error.code === "external_change"
+  );
+  assert.equal(controller.view().conflict, true);
+  assert.notEqual(controller.view().documentLease, leaseBeforeConflict);
+  const conflictedDocument = controller.editorState.document;
+  const conflictedLastValid = controller.editorState.lastValidDocument;
+  assert.throws(
+    () => controller.checkContent(contentCheckRequest(controller, 0)),
+    (error) => error.code === "external_change"
+  );
+  assert.equal(service.calls.length, 1);
+  assert.deepEqual(controller.validatedPackageEvidence(), publishedEvidence);
+  assert.strictEqual(controller.editorState.document, conflictedDocument);
+  assert.strictEqual(
+    controller.editorState.lastValidDocument,
+    conflictedLastValid
+  );
+
+  await controller.reload({ confirmDiscard: true });
+  const recovered = controller.checkContent(contentCheckRequest(controller, 0));
+  assert.equal(recovered.contentCheck.status, "ready");
+  assert.equal(service.calls.length, 2);
+  assert.equal(controller.validatedPackageEvidence().generation, 2);
+});
+
 test("content check fails closed for partial output and duplicate submission", async (t) => {
   const root = await temporaryWorkspace(t);
   let controller;
@@ -1042,7 +1165,7 @@ test("content check fails closed for partial output and duplicate submission", a
   const service = createCompilerService([
     () => {
       try {
-        controller.checkContent({ expectedRevision: 0 });
+        controller.checkContent(contentCheckRequest(controller, 0));
       } catch (error) {
         reentrantFailure = error;
       }
@@ -1067,18 +1190,20 @@ test("content check fails closed for partial output and duplicate submission", a
     })
   ]);
   controller = await openedController(root, { compilerService: service });
-  controller.checkContent({ expectedRevision: 0 });
+  controller.checkContent(contentCheckRequest(controller, 0));
   assert.equal(reentrantFailure?.code, "check_in_flight");
   assert.equal(service.calls.length, 1);
   const evidence = controller.validatedPackageEvidence();
 
-  const missingArtifact = controller.checkContent({ expectedRevision: 0 });
+  const missingArtifact = controller.checkContent(
+    contentCheckRequest(controller, 0)
+  );
   assert.equal(missingArtifact.contentCheck.status, "bridge_failed");
   assert.deepEqual(controller.validatedPackageEvidence(), evidence);
 
-  const overPresentationCapacity = controller.checkContent({
-    expectedRevision: 0
-  });
+  const overPresentationCapacity = controller.checkContent(
+    contentCheckRequest(controller, 0)
+  );
   assert.equal(overPresentationCapacity.contentCheck.status, "bridge_failed");
   assert.deepEqual(controller.validatedPackageEvidence(), evidence);
   assert.equal(service.calls.length, 3);
@@ -1115,9 +1240,28 @@ test("server keeps CAS and package identity outside the browser DTO", async (t) 
   assert.equal(openedResponse.status, 200);
   const opened = (await openedResponse.json()).state;
   assert.equal(Object.hasOwn(opened, "cas"), false);
+  assert.equal(typeof opened.documentLease, "string");
+
+  const missingLeaseResponse = await request("/api/content-check", {
+    expectedRevision: 0
+  });
+  assert.equal(missingLeaseResponse.status, 400);
+  const invalidLeaseResponse = await request("/api/content-check", {
+    expectedRevision: 0,
+    expectedDocumentLease: 7
+  });
+  assert.equal(invalidLeaseResponse.status, 400);
+  const extraLeaseResponse = await request("/api/content-check", {
+    expectedRevision: 0,
+    expectedDocumentLease: opened.documentLease,
+    unexpected: true
+  });
+  assert.equal(extraLeaseResponse.status, 400);
+  assert.equal(service.calls.length, 0);
 
   const checkedResponse = await request("/api/content-check", {
-    expectedRevision: 0
+    expectedRevision: 0,
+    expectedDocumentLease: opened.documentLease
   });
   assert.equal(checkedResponse.status, 200);
   const checked = (await checkedResponse.json()).state;

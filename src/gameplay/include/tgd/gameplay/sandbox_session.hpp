@@ -7,6 +7,10 @@
 #include <cstdint>
 #include <limits>
 
+namespace tgd::integration {
+class SandboxRuntimeCoordinator;
+}
+
 namespace tgd::gameplay {
 
 struct SandboxPlayerRuntimeBinding final {
@@ -80,6 +84,15 @@ struct SandboxSessionRetryCommand final {
         const SandboxSessionRetryCommand&,
         const SandboxSessionRetryCommand&
     ) noexcept = default;
+};
+
+enum class SandboxPlayerPoseUpdateDisposition : std::uint8_t {
+    updated = 1,
+    unchanged = 2,
+    floor_mismatch = 3,
+    height_mismatch = 4,
+    invalid_state = 5,
+    invalid = 255,
 };
 
 enum class SandboxSessionRetryDisposition : std::uint8_t {
@@ -166,6 +179,12 @@ class SandboxSession final {
     ) const noexcept;
 
   private:
+    friend class integration::SandboxRuntimeCoordinator;
+
+    [[nodiscard]] SandboxPlayerPoseUpdateDisposition update_player_pose(
+        const contracts::GroundPoseMm& pose
+    ) noexcept;
+
     static constexpr std::uint16_t invalid_index =
         std::numeric_limits<std::uint16_t>::max();
 

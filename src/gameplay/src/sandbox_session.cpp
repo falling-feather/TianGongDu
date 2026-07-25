@@ -355,6 +355,32 @@ SandboxOperateDispatch SandboxSession::submit_operate(
     return dispatch;
 }
 
+SandboxPlayerPoseUpdateDisposition SandboxSession::update_player_pose(
+    const contracts::GroundPoseMm& pose
+) noexcept {
+    if (!valid_owned_state()) {
+        return SandboxPlayerPoseUpdateDisposition::invalid_state;
+    }
+    if (pose.floor_layer != snapshot_.player_pose.floor_layer) {
+        return SandboxPlayerPoseUpdateDisposition::floor_mismatch;
+    }
+    if (pose.height != snapshot_.player_pose.height) {
+        return SandboxPlayerPoseUpdateDisposition::height_mismatch;
+    }
+    if (pose == snapshot_.player_pose) {
+        return SandboxPlayerPoseUpdateDisposition::unchanged;
+    }
+
+    auto candidate = *this;
+    candidate.snapshot_.player_pose = pose;
+    candidate.update_checksum();
+    if (!candidate.valid_owned_state()) {
+        return SandboxPlayerPoseUpdateDisposition::invalid_state;
+    }
+    *this = candidate;
+    return SandboxPlayerPoseUpdateDisposition::updated;
+}
+
 SandboxSessionRetryDisposition SandboxSession::retry(
     const SandboxSessionRetryCommand& command
 ) noexcept {

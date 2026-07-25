@@ -20,6 +20,17 @@ class SandboxPackageDocument;
 
 namespace tgd::integration {
 
+struct SandboxThinRuntimePlayerConfig final {
+    std::int32_t max_move_delta_mm{};
+    std::int32_t collision_radius_mm{};
+    std::int32_t collision_height_mm{};
+
+    [[nodiscard]] friend constexpr bool operator==(
+        const SandboxThinRuntimePlayerConfig&,
+        const SandboxThinRuntimePlayerConfig&
+    ) noexcept = default;
+};
+
 struct SandboxPublishedPackageArtifact final {
     content::SandboxPackagePublicationIdentity identity{};
     std::vector<std::uint8_t> canonical_bytes{};
@@ -39,6 +50,7 @@ enum class SandboxRuntimePublishDisposition : std::uint8_t {
     collision_prepare_failed = 11,
     asset_set_prepare_failed = 12,
     allocation_failed = 13,
+    invalid_player_runtime_config = 14,
     invalid = 255,
 };
 
@@ -67,6 +79,7 @@ struct SandboxStaticCollisionRecord final {
     contracts::StableContentKey blocker_key{};
     contracts::StableContentKey region_key{};
     contracts::CollisionShapeId shape_id{};
+    bool enabled{true};
     std::int32_t min_x{};
     std::int32_t max_x{};
     std::int32_t min_y{};
@@ -91,6 +104,10 @@ struct SandboxRuntimeSnapshot final {
     std::uint16_t collision_region_count{};
     std::uint16_t collision_record_count{};
     std::uint16_t asset_count{};
+    SandboxThinRuntimePlayerConfig player_config{};
+    contracts::TickIndex authoritative_tick{};
+    contracts::CommandSequence movement_sequence{};
+    std::uint64_t checksum{};
 
     [[nodiscard]] friend constexpr bool operator==(
         const SandboxRuntimeSnapshot&,
@@ -120,6 +137,66 @@ sandbox_next_runtime_generation(std::uint32_t current) noexcept {
     return {true, current + 1U};
 }
 
+enum class SandboxRuntimeCommandDisposition : std::uint8_t {
+    applied = 1,
+    repeated = 2,
+    stale_generation = 3,
+    stale_sequence = 4,
+    out_of_order_sequence = 5,
+    invalid_tick = 6,
+    invalid_actor = 7,
+    floor_mismatch = 8,
+    invalid_delta = 9,
+    collision_blocked = 10,
+    session_rejected = 11,
+    generation_exhausted = 12,
+    invalid_state = 13,
+    allocation_failed = 14,
+    invalid = 255,
+};
+
+struct SandboxRuntimeMoveCommand final {
+    std::uint32_t runtime_generation{};
+    contracts::CommandSequence sequence{};
+    contracts::TickIndex tick{};
+    contracts::StableActorKey actor{};
+    std::int16_t floor_layer{};
+    std::int32_t delta_x_mm{};
+    std::int32_t delta_y_mm{};
+};
+
+struct SandboxRuntimeOperateCommand final {
+    std::uint32_t runtime_generation{};
+    contracts::CommandSequence sequence{};
+    contracts::StableActorKey actor{};
+    contracts::StableContentKey interaction{};
+};
+
+struct SandboxRuntimeRetryCommand final {
+    std::uint32_t runtime_generation{};
+    contracts::CommandSequence sequence{};
+};
+
+struct SandboxRuntimeMoveResult final {
+    SandboxRuntimeCommandDisposition disposition{SandboxRuntimeCommandDisposition::invalid};
+    runtime::GroundMoveResolution resolution{};
+    SandboxRuntimeSnapshot snapshot{};
+};
+
+struct SandboxRuntimeOperateResult final {
+    SandboxRuntimeCommandDisposition disposition{SandboxRuntimeCommandDisposition::invalid};
+    gameplay::SandboxOperateDispatch dispatch{};
+    SandboxRuntimeSnapshot snapshot{};
+};
+
+struct SandboxRuntimeRetryResult final {
+    SandboxRuntimeCommandDisposition disposition{SandboxRuntimeCommandDisposition::invalid};
+    gameplay::SandboxSessionRetryDisposition session_disposition{
+        gameplay::SandboxSessionRetryDisposition::invalid
+    };
+    SandboxRuntimeSnapshot snapshot{};
+};
+
 class SandboxRuntimeCoordinator final {
   public:
     SandboxRuntimeCoordinator() noexcept;
@@ -132,7 +209,17 @@ class SandboxRuntimeCoordinator final {
 
     [[nodiscard]] SandboxRuntimePublishResult publish(
         SandboxPublishedPackageArtifact artifact,
-        const gameplay::SandboxPlayerRuntimeBinding& player_binding
+        const gameplay::SandboxPlayerRuntimeBinding& player_binding,
+        const SandboxThinRuntimePlayerConfig& player_config
+    ) noexcept;
+    [[nodiscard]] SandboxRuntimeMoveResult advance_player(
+        const SandboxRuntimeMoveCommand& command
+    ) noexcept;
+    [[nodiscard]] SandboxRuntimeOperateResult submit_operate(
+        const SandboxRuntimeOperateCommand& command
+    ) noexcept;
+    [[nodiscard]] SandboxRuntimeRetryResult retry_standalone(
+        const SandboxRuntimeRetryCommand& command
     ) noexcept;
 
     [[nodiscard]] SandboxRuntimeSnapshot snapshot() const noexcept;

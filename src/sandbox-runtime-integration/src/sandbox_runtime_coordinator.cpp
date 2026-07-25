@@ -40,6 +40,81 @@ struct CollisionCandidate final {
     );
 }
 
+[[nodiscard]] bool pose_fits_bounds(
+    const contracts::GroundPoseMm& pose,
+    const contracts::SandboxBoundsMm& bounds,
+    const SandboxThinRuntimePlayerConfig& config
+) noexcept {
+    const auto min_x =
+        static_cast<std::int64_t>(pose.x) - config.collision_radius_mm;
+    const auto max_x =
+        static_cast<std::int64_t>(pose.x) + config.collision_radius_mm;
+    const auto min_y =
+        static_cast<std::int64_t>(pose.y) - config.collision_radius_mm;
+    const auto max_y =
+        static_cast<std::int64_t>(pose.y) + config.collision_radius_mm;
+    const auto max_height =
+        static_cast<std::int64_t>(pose.height) + config.collision_height_mm;
+    return min_x >= bounds.min_x
+        && max_x <= bounds.max_x
+        && min_y >= bounds.min_y
+        && max_y <= bounds.max_y
+        && pose.height >= bounds.min_height
+        && max_height <= bounds.max_height
+        && pose.floor_layer >= bounds.min_floor_layer
+        && pose.floor_layer <= bounds.max_floor_layer;
+}
+
+[[nodiscard]] bool valid_player_config(
+    const contracts::SandboxDefinition& definition,
+    const SandboxThinRuntimePlayerConfig& config
+) noexcept {
+    if (config.max_move_delta_mm <= 0
+        || config.collision_radius_mm <= 0
+        || config.collision_height_mm <= 0
+        || definition.player.region_id.key == 0
+        || definition.player.initial_safe_point_id.key == 0) {
+        return false;
+    }
+    const auto region = std::find_if(
+        definition.regions.begin(),
+        definition.regions.end(),
+        [&](const contracts::SandboxRegionDefinition& candidate) noexcept {
+            return candidate.id.key == definition.player.region_id.key;
+        }
+    );
+    const auto safe_point = std::find_if(
+        definition.safe_points.begin(),
+        definition.safe_points.end(),
+        [&](const contracts::SandboxSafePointDefinition& candidate) noexcept {
+            return candidate.id.key == definition.player.initial_safe_point_id.key;
+        }
+    );
+    if (region == definition.regions.end()
+        || safe_point == definition.safe_points.end()
+        || safe_point->region_id.key != region->id.key) {
+        return false;
+    }
+
+    const auto width = static_cast<std::int64_t>(region->bounds.max_x)
+        - region->bounds.min_x;
+    const auto depth = static_cast<std::int64_t>(region->bounds.max_y)
+        - region->bounds.min_y;
+    const auto height = static_cast<std::int64_t>(region->bounds.max_height)
+        - region->bounds.min_height;
+    const auto diameter =
+        static_cast<std::int64_t>(config.collision_radius_mm) * 2;
+    return width > 0
+        && depth > 0
+        && height > 0
+        && diameter <= width
+        && diameter <= depth
+        && config.collision_height_mm <= height
+        && config.max_move_delta_mm <= std::max(width, depth)
+        && pose_fits_bounds(definition.player.pose, region->bounds, config)
+        && pose_fits_bounds(safe_point->pose, region->bounds, config);
+}
+
 [[nodiscard]] bool valid_asset_kind(contracts::SandboxAssetKind kind) noexcept {
     using Kind = contracts::SandboxAssetKind;
     switch (kind) {
@@ -110,7 +185,21 @@ struct CollisionCandidate final {
         if (region.id.key == 0) {
             return Error::invalid_blocker;
         }
-        candidate.regions[candidate.region_count++].region_key = region.id.key;
+        auto& destination = candidate.regions[candidate.region_count++];
+        destination.region_key = region.id.key;
+        const auto bounds_error = destination.world.configure_bounds({
+            region.bounds.min_x,
+            region.bounds.max_x,
+            region.bounds.min_y,
+            region.bounds.max_y,
+            region.bounds.min_height,
+            region.bounds.max_height,
+            region.bounds.min_floor_layer,
+            region.bounds.max_floor_layer,
+        });
+        if (bounds_error != Error::none) {
+            return bounds_error;
+        }
     }
     std::sort(
         candidate.regions.begin(),
@@ -134,6 +223,7 @@ struct CollisionCandidate final {
         record.min_height = blocker.min_height;
         record.max_height = blocker.max_height;
         record.floor_layer = blocker.floor_layer;
+        record.enabled = true;
     }
     std::sort(
         candidate.records.begin(),
@@ -173,6 +263,7 @@ struct CollisionCandidate final {
                 record.min_height,
                 record.max_height,
                 record.floor_layer,
+                record.enabled,
             };
         }
         const auto error = candidate.regions[region_index].world.configure(
@@ -202,23 +293,249 @@ struct CollisionCandidate final {
 
 }  // namespace
 
-struct SandboxRuntimeCoordinator::LiveAggregate final {
-    content::SandboxPackagePublicationIdentity package_identity{};
-    std::uint32_t runtime_generation{};
-    std::vector<std::uint8_t> canonical_bytes{};
-    std::unique_ptr<content::SandboxPackageDocument> document{};
+struct RuntimeLiveState final {
     gameplay::SandboxSession session{};
     CollisionCandidate collision{};
-    AssetSetCandidate assets{};
     SandboxRuntimeSnapshot snapshot{};
 };
+
+struct SandboxRuntimeCoordinator::LiveAggregate final {
+    content::SandboxPackagePublicationIdentity package_identity{};
+    std::vector<std::uint8_t> canonical_bytes{};
+    std::unique_ptr<content::SandboxPackageDocument> document{};
+    AssetSetCandidate assets{};
+    std::unique_ptr<RuntimeLiveState> state{};
+};
+
+namespace {
+
+constexpr std::uint64_t fnv_offset_basis = 14695981039346656037ULL;
+constexpr std::uint64_t fnv_prime = 1099511628211ULL;
+
+void hash_u64(
+    std::uint64_t& hash,
+    std::uint64_t value,
+    const std::size_t byte_count
+) noexcept {
+    for (std::size_t index = 0; index < byte_count; ++index) {
+        hash ^= value & 0xffU;
+        hash *= fnv_prime;
+        value >>= 8U;
+    }
+}
+
+void hash_digest(
+    std::uint64_t& hash,
+    const contracts::Sha256Digest& digest
+) noexcept {
+    for (const auto byte : digest) {
+        hash_u64(hash, byte, sizeof(byte));
+    }
+}
+
+[[nodiscard]] RegionCollisionCandidate* find_region(
+    CollisionCandidate& collision,
+    const contracts::StableContentKey region_key
+) noexcept {
+    const auto end = collision.regions.begin()
+        + static_cast<std::ptrdiff_t>(collision.region_count);
+    const auto found = std::find_if(
+        collision.regions.begin(),
+        end,
+        [&](const RegionCollisionCandidate& region) noexcept {
+            return region.region_key == region_key;
+        }
+    );
+    return found == end ? nullptr : &*found;
+}
+
+[[nodiscard]] const RegionCollisionCandidate* find_region(
+    const CollisionCandidate& collision,
+    const contracts::StableContentKey region_key
+) noexcept {
+    const auto end = collision.regions.begin()
+        + static_cast<std::ptrdiff_t>(collision.region_count);
+    const auto found = std::find_if(
+        collision.regions.begin(),
+        end,
+        [&](const RegionCollisionCandidate& region) noexcept {
+            return region.region_key == region_key;
+        }
+    );
+    return found == end ? nullptr : &*found;
+}
+
+[[nodiscard]] bool project_blocker_state(RuntimeLiveState& state) noexcept {
+    using BlockerState = contracts::SandboxGroundBlockerState;
+    for (std::size_t index = 0; index < state.collision.record_count; ++index) {
+        auto& record = state.collision.records[index];
+        const auto source = state.session.ground_blocker_state(record.blocker_key);
+        bool enabled{};
+        if (source == BlockerState::enabled_solid) {
+            enabled = true;
+        } else if (source == BlockerState::disabled_non_solid) {
+            enabled = false;
+        } else {
+            return false;
+        }
+
+        auto* region = find_region(state.collision, record.region_key);
+        if (region == nullptr
+            || !region->world.set_blocker_enabled(record.shape_id, enabled)) {
+            return false;
+        }
+        record.enabled = enabled;
+    }
+    return true;
+}
+
+[[nodiscard]] std::uint64_t compute_runtime_checksum(
+    const RuntimeLiveState& state
+) noexcept {
+    std::uint64_t hash = fnv_offset_basis;
+    const auto& snapshot = state.snapshot;
+    hash_u64(hash, snapshot.initialized ? 1U : 0U, 1U);
+    hash_u64(hash, snapshot.runtime_generation, sizeof(snapshot.runtime_generation));
+    hash_u64(hash, snapshot.package_generation, sizeof(snapshot.package_generation));
+    hash_digest(hash, snapshot.package_checksum);
+    hash_u64(
+        hash,
+        snapshot.canonical_byte_count,
+        sizeof(snapshot.canonical_byte_count)
+    );
+    hash_u64(hash, snapshot.session.checksum, sizeof(snapshot.session.checksum));
+    hash_u64(
+        hash,
+        snapshot.collision_region_count,
+        sizeof(snapshot.collision_region_count)
+    );
+    hash_u64(
+        hash,
+        snapshot.collision_record_count,
+        sizeof(snapshot.collision_record_count)
+    );
+    for (std::size_t index = 0; index < state.collision.record_count; ++index) {
+        const auto& record = state.collision.records[index];
+        hash_u64(hash, record.blocker_key, sizeof(record.blocker_key));
+        hash_u64(hash, record.region_key, sizeof(record.region_key));
+        hash_u64(hash, record.shape_id, sizeof(record.shape_id));
+        hash_u64(hash, record.enabled ? 1U : 0U, 1U);
+    }
+    hash_u64(hash, snapshot.asset_count, sizeof(snapshot.asset_count));
+    hash_u64(
+        hash,
+        static_cast<std::uint32_t>(snapshot.player_config.max_move_delta_mm),
+        sizeof(snapshot.player_config.max_move_delta_mm)
+    );
+    hash_u64(
+        hash,
+        static_cast<std::uint32_t>(snapshot.player_config.collision_radius_mm),
+        sizeof(snapshot.player_config.collision_radius_mm)
+    );
+    hash_u64(
+        hash,
+        static_cast<std::uint32_t>(snapshot.player_config.collision_height_mm),
+        sizeof(snapshot.player_config.collision_height_mm)
+    );
+    hash_u64(
+        hash,
+        snapshot.authoritative_tick,
+        sizeof(snapshot.authoritative_tick)
+    );
+    hash_u64(
+        hash,
+        snapshot.movement_sequence,
+        sizeof(snapshot.movement_sequence)
+    );
+    return hash;
+}
+
+void refresh_runtime_snapshot(
+    RuntimeLiveState& state,
+    const content::SandboxPackagePublicationIdentity& identity,
+    const std::size_t canonical_byte_count,
+    const std::size_t asset_count
+) noexcept {
+    state.snapshot.initialized = true;
+    state.snapshot.package_generation = identity.generation();
+    state.snapshot.package_checksum = identity.checksum();
+    state.snapshot.canonical_byte_count =
+        static_cast<std::uint32_t>(canonical_byte_count);
+    state.snapshot.session = state.session.snapshot();
+    state.snapshot.collision_region_count =
+        static_cast<std::uint16_t>(state.collision.region_count);
+    state.snapshot.collision_record_count =
+        static_cast<std::uint16_t>(state.collision.record_count);
+    state.snapshot.asset_count = static_cast<std::uint16_t>(asset_count);
+    state.snapshot.checksum = 0;
+    state.snapshot.checksum = compute_runtime_checksum(state);
+}
+
+[[nodiscard]] bool valid_runtime_state(
+    const RuntimeLiveState& state,
+    const content::SandboxPackagePublicationIdentity& identity,
+    const std::size_t canonical_byte_count,
+    const std::size_t asset_count
+) noexcept {
+    if (!state.snapshot.initialized
+        || state.snapshot.runtime_generation == 0
+        || state.snapshot.package_generation != identity.generation()
+        || state.snapshot.package_checksum != identity.checksum()
+        || state.snapshot.canonical_byte_count != canonical_byte_count
+        || state.snapshot.session != state.session.snapshot()
+        || state.snapshot.collision_region_count != state.collision.region_count
+        || state.snapshot.collision_record_count != state.collision.record_count
+        || state.snapshot.asset_count != asset_count
+        || state.snapshot.player_config.max_move_delta_mm <= 0
+        || state.snapshot.player_config.collision_radius_mm <= 0
+        || state.snapshot.player_config.collision_height_mm <= 0
+        || state.snapshot.checksum != compute_runtime_checksum(state)) {
+        return false;
+    }
+
+    using BlockerState = contracts::SandboxGroundBlockerState;
+    for (std::size_t index = 0; index < state.collision.record_count; ++index) {
+        const auto& record = state.collision.records[index];
+        const auto source = state.session.ground_blocker_state(record.blocker_key);
+        const auto expected = source == BlockerState::enabled_solid;
+        if ((source != BlockerState::enabled_solid
+             && source != BlockerState::disabled_non_solid)
+            || record.enabled != expected) {
+            return false;
+        }
+        const auto* region = find_region(state.collision, record.region_key);
+        if (region == nullptr
+            || region->world.blocker_enabled(record.shape_id)
+                != std::optional<bool>{expected}) {
+            return false;
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] SandboxRuntimeCommandDisposition validate_sequence(
+    const contracts::CommandSequence requested,
+    const contracts::CommandSequence committed
+) noexcept {
+    if (requested <= committed) {
+        return SandboxRuntimeCommandDisposition::stale_sequence;
+    }
+    if (committed == std::numeric_limits<contracts::CommandSequence>::max()
+        || requested != committed + 1U) {
+        return SandboxRuntimeCommandDisposition::out_of_order_sequence;
+    }
+    return SandboxRuntimeCommandDisposition::applied;
+}
+
+}  // namespace
 
 SandboxRuntimeCoordinator::SandboxRuntimeCoordinator() noexcept = default;
 SandboxRuntimeCoordinator::~SandboxRuntimeCoordinator() = default;
 
 SandboxRuntimePublishResult SandboxRuntimeCoordinator::publish(
     SandboxPublishedPackageArtifact artifact,
-    const gameplay::SandboxPlayerRuntimeBinding& player_binding
+    const gameplay::SandboxPlayerRuntimeBinding& player_binding,
+    const SandboxThinRuntimePlayerConfig& player_config
 ) noexcept {
     static_assert(noexcept(live_.swap(live_)));
     static_assert(std::is_nothrow_destructible_v<LiveAggregate>);
@@ -254,14 +571,22 @@ SandboxRuntimePublishResult SandboxRuntimeCoordinator::publish(
     if (decoded.document->fingerprint() != artifact.identity.checksum()) {
         return result_for(SandboxRuntimePublishDisposition::fingerprint_mismatch);
     }
+    if (!valid_player_config(decoded.document->definition(), player_config)) {
+        return result_for(
+            SandboxRuntimePublishDisposition::invalid_player_runtime_config
+        );
+    }
 
     if (live_ != nullptr &&
         artifact.identity.checksum() == live_->package_identity.checksum()) {
+        if (player_config != live_->state->snapshot.player_config) {
+            return result_for(SandboxRuntimePublishDisposition::identity_conflict);
+        }
         return result_for(SandboxRuntimePublishDisposition::unchanged);
     }
 
     const auto next_generation = sandbox_next_runtime_generation(
-        live_ == nullptr ? 0U : live_->runtime_generation
+        live_ == nullptr ? 0U : live_->state->snapshot.runtime_generation
     );
     if (!next_generation.valid) {
         return result_for(SandboxRuntimePublishDisposition::generation_exhausted);
@@ -276,12 +601,14 @@ SandboxRuntimePublishResult SandboxRuntimeCoordinator::publish(
     try {
         auto candidate = std::make_unique<LiveAggregate>();
         candidate->package_identity = artifact.identity;
-        candidate->runtime_generation = next_generation.generation;
         candidate->canonical_bytes = std::move(artifact.canonical_bytes);
         candidate->document = std::move(decoded.document);
+        candidate->state = std::make_unique<RuntimeLiveState>();
+        candidate->state->snapshot.runtime_generation = next_generation.generation;
+        candidate->state->snapshot.player_config = player_config;
 
         const auto session_result = initialize_sandbox_session_from_blueprint(
-            candidate->session,
+            candidate->state->session,
             *blueprint,
             player_binding
         );
@@ -291,7 +618,7 @@ SandboxRuntimePublishResult SandboxRuntimeCoordinator::publish(
 
         const auto collision_error = prepare_collision(
             candidate->document->definition(),
-            candidate->collision
+            candidate->state->collision
         );
         if (collision_error != runtime::CollisionWorldError::none) {
             auto result = result_for(
@@ -313,23 +640,25 @@ SandboxRuntimePublishResult SandboxRuntimeCoordinator::publish(
             return result;
         }
 
-        candidate->snapshot.initialized = true;
-        candidate->snapshot.runtime_generation = candidate->runtime_generation;
-        candidate->snapshot.package_generation =
-            candidate->package_identity.generation();
-        candidate->snapshot.package_checksum =
-            candidate->package_identity.checksum();
-        candidate->snapshot.canonical_byte_count =
-            static_cast<std::uint32_t>(candidate->canonical_bytes.size());
-        candidate->snapshot.session = candidate->session.snapshot();
-        candidate->snapshot.collision_region_count =
-            static_cast<std::uint16_t>(candidate->collision.region_count);
-        candidate->snapshot.collision_record_count =
-            static_cast<std::uint16_t>(candidate->collision.record_count);
-        candidate->snapshot.asset_count =
-            static_cast<std::uint16_t>(candidate->assets.count);
+        if (!project_blocker_state(*candidate->state)) {
+            return result_for(SandboxRuntimePublishDisposition::collision_prepare_failed);
+        }
+        refresh_runtime_snapshot(
+            *candidate->state,
+            candidate->package_identity,
+            candidate->canonical_bytes.size(),
+            candidate->assets.count
+        );
+        if (!valid_runtime_state(
+                *candidate->state,
+                candidate->package_identity,
+                candidate->canonical_bytes.size(),
+                candidate->assets.count
+            )) {
+            return result_for(SandboxRuntimePublishDisposition::collision_prepare_failed);
+        }
 
-        const auto published_snapshot = candidate->snapshot;
+        const auto published_snapshot = candidate->state->snapshot;
         live_.swap(candidate);
 
         SandboxRuntimePublishResult result{};
@@ -341,8 +670,290 @@ SandboxRuntimePublishResult SandboxRuntimeCoordinator::publish(
     }
 }
 
+SandboxRuntimeMoveResult SandboxRuntimeCoordinator::advance_player(
+    const SandboxRuntimeMoveCommand& command
+) noexcept {
+    static_assert(noexcept(live_->state.swap(live_->state)));
+    static_assert(std::is_nothrow_move_assignable_v<gameplay::SandboxSession>);
+
+    const auto result_for = [&](
+        const SandboxRuntimeCommandDisposition disposition,
+        const runtime::GroundMoveResolution resolution =
+            runtime::GroundMoveResolution{}
+    ) noexcept {
+        return SandboxRuntimeMoveResult{disposition, resolution, snapshot()};
+    };
+    if (live_ == nullptr || live_->state == nullptr || live_->document == nullptr) {
+        return result_for(SandboxRuntimeCommandDisposition::invalid_state);
+    }
+    auto& current = *live_->state;
+    if (!valid_runtime_state(
+            current,
+            live_->package_identity,
+            live_->canonical_bytes.size(),
+            live_->assets.count
+        )) {
+        return result_for(SandboxRuntimeCommandDisposition::invalid_state);
+    }
+    if (command.runtime_generation != current.snapshot.runtime_generation) {
+        return result_for(SandboxRuntimeCommandDisposition::stale_generation);
+    }
+    const auto sequence = validate_sequence(
+        command.sequence,
+        current.snapshot.movement_sequence
+    );
+    if (sequence != SandboxRuntimeCommandDisposition::applied) {
+        return result_for(sequence);
+    }
+    if (current.snapshot.authoritative_tick
+            == std::numeric_limits<contracts::TickIndex>::max()
+        || command.tick != current.snapshot.authoritative_tick + 1U) {
+        return result_for(SandboxRuntimeCommandDisposition::invalid_tick);
+    }
+    if (command.actor == 0 || command.actor != current.snapshot.session.player_actor) {
+        return result_for(SandboxRuntimeCommandDisposition::invalid_actor);
+    }
+    if (command.floor_layer != current.snapshot.session.player_pose.floor_layer) {
+        return result_for(SandboxRuntimeCommandDisposition::floor_mismatch);
+    }
+    const auto& player_config = current.snapshot.player_config;
+    if (command.delta_x_mm < -player_config.max_move_delta_mm
+        || command.delta_x_mm > player_config.max_move_delta_mm
+        || command.delta_y_mm < -player_config.max_move_delta_mm
+        || command.delta_y_mm > player_config.max_move_delta_mm) {
+        return result_for(SandboxRuntimeCommandDisposition::invalid_delta);
+    }
+    const auto delta_square =
+        static_cast<std::int64_t>(command.delta_x_mm) * command.delta_x_mm
+        + static_cast<std::int64_t>(command.delta_y_mm) * command.delta_y_mm;
+    const auto max_delta_square =
+        static_cast<std::int64_t>(player_config.max_move_delta_mm)
+        * player_config.max_move_delta_mm;
+    if (delta_square == 0 || delta_square > max_delta_square) {
+        return result_for(SandboxRuntimeCommandDisposition::invalid_delta);
+    }
+
+    const auto player_region =
+        live_->document->definition().player.region_id.key;
+    const auto* region = find_region(current.collision, player_region);
+    if (region == nullptr) {
+        return result_for(SandboxRuntimeCommandDisposition::invalid_state);
+    }
+    const auto resolution = region->world.resolve_ground_move(
+        current.snapshot.session.player_pose,
+        command.delta_x_mm,
+        command.delta_y_mm,
+        player_config.collision_radius_mm,
+        player_config.collision_height_mm
+    );
+    if (resolution.blocked_x || resolution.blocked_y) {
+        return result_for(
+            SandboxRuntimeCommandDisposition::collision_blocked,
+            resolution
+        );
+    }
+
+    try {
+        auto candidate = std::make_unique<RuntimeLiveState>(current);
+        const auto pose_result = candidate->session.update_player_pose(resolution.pose);
+        if (pose_result != gameplay::SandboxPlayerPoseUpdateDisposition::updated) {
+            return result_for(SandboxRuntimeCommandDisposition::invalid_state);
+        }
+        candidate->snapshot.authoritative_tick = command.tick;
+        candidate->snapshot.movement_sequence = command.sequence;
+        refresh_runtime_snapshot(
+            *candidate,
+            live_->package_identity,
+            live_->canonical_bytes.size(),
+            live_->assets.count
+        );
+        if (!valid_runtime_state(
+                *candidate,
+                live_->package_identity,
+                live_->canonical_bytes.size(),
+                live_->assets.count
+            )) {
+            return result_for(SandboxRuntimeCommandDisposition::invalid_state);
+        }
+        const auto published = candidate->snapshot;
+        live_->state.swap(candidate);
+        return {SandboxRuntimeCommandDisposition::applied, resolution, published};
+    } catch (const std::bad_alloc&) {
+        return result_for(SandboxRuntimeCommandDisposition::allocation_failed);
+    }
+}
+
+SandboxRuntimeOperateResult SandboxRuntimeCoordinator::submit_operate(
+    const SandboxRuntimeOperateCommand& command
+) noexcept {
+    const auto result_for = [&](
+        const SandboxRuntimeCommandDisposition disposition,
+        const gameplay::SandboxOperateDispatch dispatch =
+            gameplay::SandboxOperateDispatch{}
+    ) noexcept {
+        return SandboxRuntimeOperateResult{disposition, dispatch, snapshot()};
+    };
+    if (live_ == nullptr || live_->state == nullptr) {
+        return result_for(SandboxRuntimeCommandDisposition::invalid_state);
+    }
+    auto& current = *live_->state;
+    if (!valid_runtime_state(
+            current,
+            live_->package_identity,
+            live_->canonical_bytes.size(),
+            live_->assets.count
+        )) {
+        return result_for(SandboxRuntimeCommandDisposition::invalid_state);
+    }
+    if (command.runtime_generation != current.snapshot.runtime_generation) {
+        return result_for(SandboxRuntimeCommandDisposition::stale_generation);
+    }
+    const auto sequence = validate_sequence(
+        command.sequence,
+        current.snapshot.session.last_command_sequence
+    );
+    if (sequence != SandboxRuntimeCommandDisposition::applied) {
+        return result_for(sequence);
+    }
+    if (command.actor == 0 || command.actor != current.snapshot.session.player_actor) {
+        return result_for(SandboxRuntimeCommandDisposition::invalid_actor);
+    }
+
+    try {
+        auto candidate = std::make_unique<RuntimeLiveState>(current);
+        const auto dispatch = candidate->session.submit_operate({
+            candidate->session.snapshot().generation,
+            candidate->snapshot.authoritative_tick,
+            command.actor,
+            command.sequence,
+            command.interaction,
+        });
+        using OperateDisposition = contracts::SandboxOperateDisposition;
+        if (dispatch.result.disposition == OperateDisposition::repeated_chain) {
+            return result_for(SandboxRuntimeCommandDisposition::repeated, dispatch);
+        }
+        if (dispatch.result.disposition != OperateDisposition::completed_chain) {
+            return result_for(
+                SandboxRuntimeCommandDisposition::session_rejected,
+                dispatch
+            );
+        }
+        if (!project_blocker_state(*candidate)) {
+            return result_for(SandboxRuntimeCommandDisposition::invalid_state);
+        }
+        refresh_runtime_snapshot(
+            *candidate,
+            live_->package_identity,
+            live_->canonical_bytes.size(),
+            live_->assets.count
+        );
+        if (!valid_runtime_state(
+                *candidate,
+                live_->package_identity,
+                live_->canonical_bytes.size(),
+                live_->assets.count
+            )) {
+            return result_for(SandboxRuntimeCommandDisposition::invalid_state);
+        }
+        const auto published = candidate->snapshot;
+        live_->state.swap(candidate);
+        return {SandboxRuntimeCommandDisposition::applied, dispatch, published};
+    } catch (const std::bad_alloc&) {
+        return result_for(SandboxRuntimeCommandDisposition::allocation_failed);
+    }
+}
+
+SandboxRuntimeRetryResult SandboxRuntimeCoordinator::retry_standalone(
+    const SandboxRuntimeRetryCommand& command
+) noexcept {
+    const auto result_for = [&](
+        const SandboxRuntimeCommandDisposition disposition,
+        const gameplay::SandboxSessionRetryDisposition session_disposition =
+            gameplay::SandboxSessionRetryDisposition::invalid
+    ) noexcept {
+        return SandboxRuntimeRetryResult{
+            disposition,
+            session_disposition,
+            snapshot(),
+        };
+    };
+    if (live_ == nullptr || live_->state == nullptr) {
+        return result_for(SandboxRuntimeCommandDisposition::invalid_state);
+    }
+    auto& current = *live_->state;
+    if (!valid_runtime_state(
+            current,
+            live_->package_identity,
+            live_->canonical_bytes.size(),
+            live_->assets.count
+        )) {
+        return result_for(SandboxRuntimeCommandDisposition::invalid_state);
+    }
+    if (command.runtime_generation != current.snapshot.runtime_generation) {
+        return result_for(SandboxRuntimeCommandDisposition::stale_generation);
+    }
+    const auto sequence = validate_sequence(
+        command.sequence,
+        current.snapshot.session.last_command_sequence
+    );
+    if (sequence != SandboxRuntimeCommandDisposition::applied) {
+        return result_for(sequence);
+    }
+    const auto next_generation = sandbox_next_runtime_generation(
+        current.snapshot.runtime_generation
+    );
+    if (!next_generation.valid) {
+        return result_for(SandboxRuntimeCommandDisposition::generation_exhausted);
+    }
+
+    try {
+        auto candidate = std::make_unique<RuntimeLiveState>(current);
+        const auto session_disposition = candidate->session.retry({
+            candidate->session.snapshot().generation,
+            command.sequence,
+        });
+        if (session_disposition
+            != gameplay::SandboxSessionRetryDisposition::restored) {
+            const auto disposition = session_disposition
+                    == gameplay::SandboxSessionRetryDisposition::generation_exhausted
+                ? SandboxRuntimeCommandDisposition::generation_exhausted
+                : SandboxRuntimeCommandDisposition::invalid_state;
+            return result_for(disposition, session_disposition);
+        }
+        if (!project_blocker_state(*candidate)) {
+            return result_for(SandboxRuntimeCommandDisposition::invalid_state);
+        }
+        candidate->snapshot.runtime_generation = next_generation.generation;
+        candidate->snapshot.authoritative_tick = 0;
+        candidate->snapshot.movement_sequence = 0;
+        refresh_runtime_snapshot(
+            *candidate,
+            live_->package_identity,
+            live_->canonical_bytes.size(),
+            live_->assets.count
+        );
+        if (!valid_runtime_state(
+                *candidate,
+                live_->package_identity,
+                live_->canonical_bytes.size(),
+                live_->assets.count
+            )) {
+            return result_for(SandboxRuntimeCommandDisposition::invalid_state);
+        }
+        const auto published = candidate->snapshot;
+        live_->state.swap(candidate);
+        return {
+            SandboxRuntimeCommandDisposition::applied,
+            session_disposition,
+            published,
+        };
+    } catch (const std::bad_alloc&) {
+        return result_for(SandboxRuntimeCommandDisposition::allocation_failed);
+    }
+}
+
 SandboxRuntimeSnapshot SandboxRuntimeCoordinator::snapshot() const noexcept {
-    return live_ == nullptr ? SandboxRuntimeSnapshot{} : live_->snapshot;
+    return live_ == nullptr ? SandboxRuntimeSnapshot{} : live_->state->snapshot;
 }
 
 const content::SandboxPackageDocument* SandboxRuntimeCoordinator::document() const noexcept {
@@ -350,7 +961,7 @@ const content::SandboxPackageDocument* SandboxRuntimeCoordinator::document() con
 }
 
 const gameplay::SandboxSession* SandboxRuntimeCoordinator::session() const noexcept {
-    return live_ == nullptr ? nullptr : &live_->session;
+    return live_ == nullptr ? nullptr : &live_->state->session;
 }
 
 const runtime::StaticCollisionWorld* SandboxRuntimeCoordinator::collision_world(
@@ -359,7 +970,7 @@ const runtime::StaticCollisionWorld* SandboxRuntimeCoordinator::collision_world(
     if (live_ == nullptr || region_key == 0) {
         return nullptr;
     }
-    const auto& collision = live_->collision;
+    const auto& collision = live_->state->collision;
     const auto found = std::find_if(
         collision.regions.begin(),
         collision.regions.begin() +
@@ -377,10 +988,10 @@ const runtime::StaticCollisionWorld* SandboxRuntimeCoordinator::collision_world(
 std::optional<SandboxStaticCollisionRecord> SandboxRuntimeCoordinator::collision_at(
     std::size_t index
 ) const noexcept {
-    if (live_ == nullptr || index >= live_->collision.record_count) {
+    if (live_ == nullptr || index >= live_->state->collision.record_count) {
         return std::nullopt;
     }
-    return live_->collision.records[index];
+    return live_->state->collision.records[index];
 }
 
 std::optional<SandboxOwnedStableAsset> SandboxRuntimeCoordinator::asset_at(

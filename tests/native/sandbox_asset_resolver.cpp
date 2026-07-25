@@ -770,12 +770,17 @@ void check_runtime_composition(const char *package_path) {
          "asset prepare changed live state before GAME publish");
 
   integration::SandboxRuntimeCoordinator coordinator;
+  const integration::SandboxThinRuntimePlayerConfig player_config{
+      500,
+      100,
+      1'800,
+  };
   const gameplay::SandboxPlayerRuntimeBinding invalid_player{
       content_id(player_id),
       0,
   };
   const auto game_failed =
-      coordinator.publish({package_identity, bytes}, invalid_player);
+      coordinator.publish({package_identity, bytes}, invalid_player, player_config);
   expect(
       game_failed.disposition == integration::SandboxRuntimePublishDisposition::
                                      session_prepare_failed &&
@@ -790,7 +795,7 @@ void check_runtime_composition(const char *package_path) {
       player_actor,
   };
   const auto game_published =
-      coordinator.publish({package_identity, bytes}, player);
+      coordinator.publish({package_identity, bytes}, player, player_config);
   expect(game_published.disposition ==
                  integration::SandboxRuntimePublishDisposition::published &&
              resolver.live_set() == nullptr,

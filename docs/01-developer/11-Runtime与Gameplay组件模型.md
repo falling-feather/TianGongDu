@@ -443,3 +443,13 @@ package generation/checksum、Host runtime generation 与 standalone Session gen
 ## GAME-003 Web consumer stack budget（Bootstrap）
 
 当前 Emscripten 实际探针为既有 fixed-capacity standalone adapter 构造预留 128 KiB 固定栈：SandboxSessionBlueprint 为 40096 bytes，builder callee 局部对象与 caller BuildResult 的同时存活峰值已客观超过默认 64 KiB。Host coordinator 已移除 `take_blueprint()` 形成的第二份 40096-byte blueprint，直接借用同一 BuildResult 内的只读 blueprint 完成私有 Session prepare；128 KiB 仅覆盖剩余 accepted adapter 构造峰值，不代表正式 Preview host 的最终 Web 栈预算。正式 Preview consumer、player movement、Objective/Wave/Encounter/Combat 聚合与完整恢复仍为 Open。
+
+## 38. Sandbox Thin Runtime Bootstrap
+
+`SandboxSession::snapshot().player_pose` 是当前玩家位置的唯一 Gameplay 真相；Coordinator 不缓存第二份 pose，只拥有 active aggregate、runtime generation、authoritative tick 与 movement command sequence。player max move delta、collision radius 与 collision height 由 GAME bootstrap 显式注入通用 `SandboxThinRuntimePlayerConfig`，随 live candidate 自有保存并进入 snapshot/checksum；它们不从资产名、Stable ID、JSON 或 Presentation 推断，零、负数、无法容纳于 authored player/safe-point region 的极值在 publish 前失败关闭。相对移动先经过当前 region 的 `StaticCollisionWorld`，同时应用 authored region bounds、该 player config footprint 与 swept blocker 检查；只有碰撞接受后，Session pose candidate 才能发布。Platform/Host 的正式 movement intent 接线仍为 Open。
+
+dynamic blocker 不保存 `gateOpen`。Coordinator 逐项以 exact ground-blocker Stable key 查询 Session `ground_blocker_state`，把 `enabled_solid` / `disabled_nonblocking` 投影到对应 collision shape。`operate` 只读取 Session authoritative pose；首次完成沿用既有 `interaction_completed → mechanism_activated` 事件顺序并同步关闭 blocker solid。测试 proof point 仍只属于测试推导，不进入 production 状态或分支。repeat 与所有拒绝不推进 tick、sequence、event 或 checksum。
+
+movement、operate 与 standalone retry 都先构造完整私有 mutable candidate，校验 Session/collision exact-key 投影和逐字段 checksum 后，以 no-fail `unique_ptr` swap 发布。任一失败保留旧 live aggregate 地址、identity、snapshot 与 checksum。standalone retry 只重建本地 Session 三组件、authored safe-point pose 与 dynamic collision，并开启新的 runtime/session generation；它不代表 Objective/Wave/Encounter/Combat 或死亡恢复聚合事务。
+
+当前状态是 **Thin Runtime Bootstrap Implemented / Not Preview-ready**。正式 Host/Platform/renderer 接线、玩家输入采样、dynamic collision renderer/resolver 消费、Actor duty/AI/profile/loadout/skill、Objective/Wave/Encounter/Combat 与聚合 retry 均为 Open。

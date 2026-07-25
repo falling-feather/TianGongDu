@@ -205,6 +205,35 @@ else()
   )
 endif()
 
+add_executable(
+  tgd_native_sandbox_asset_resolver
+  sandbox_asset_resolver.cpp
+)
+target_compile_features(
+  tgd_native_sandbox_asset_resolver
+  PRIVATE cxx_std_20
+)
+tgd_enable_strict_warnings(tgd_native_sandbox_asset_resolver)
+target_link_libraries(
+  tgd_native_sandbox_asset_resolver
+  PRIVATE
+    tgd_presentation_axmol
+    tgd_sandbox_runtime_integration
+)
+if(TGD_SYSTEM_DEMO_CANONICAL_PACKAGE)
+  add_test(
+    NAME tgd.native.sandbox-asset-resolver
+    COMMAND
+      tgd_native_sandbox_asset_resolver
+      "${TGD_SYSTEM_DEMO_CANONICAL_PACKAGE}"
+  )
+else()
+  add_test(
+    NAME tgd.native.sandbox-asset-resolver
+    COMMAND tgd_native_sandbox_asset_resolver
+  )
+endif()
+
 add_executable(tgd_native_profile_progress profile_progress.cpp)
 target_compile_features(tgd_native_profile_progress PRIVATE cxx_std_20)
 tgd_enable_strict_warnings(tgd_native_profile_progress)

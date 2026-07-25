@@ -272,3 +272,59 @@ set_target_properties(
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/dist/web"
     SUFFIX ".cjs"
 )
+
+# Execute the exact Native resolver/last-valid probe against the same
+# build-generated, path-free registry. This is product resolver evidence, not a
+# Preview Host, renderer, or browser-visible asset integration claim.
+add_executable(
+  tgd_web_sandbox_asset_resolver
+  ../native/sandbox_asset_resolver.cpp
+)
+add_dependencies(
+  tgd_web_sandbox_asset_resolver
+  tgd_prepare_system_demo_package
+)
+set_property(
+  TARGET tgd_web_sandbox_asset_resolver
+  APPEND
+  PROPERTY LINK_DEPENDS "${TGD_SYSTEM_DEMO_CANONICAL_PACKAGE}"
+)
+target_compile_features(
+  tgd_web_sandbox_asset_resolver
+  PRIVATE cxx_std_20
+)
+target_compile_options(
+  tgd_web_sandbox_asset_resolver
+  PRIVATE -fexceptions
+)
+tgd_enable_strict_warnings(tgd_web_sandbox_asset_resolver)
+target_compile_definitions(
+  tgd_web_sandbox_asset_resolver
+  PRIVATE
+    TGD_SYSTEM_DEMO_CANONICAL_PACKAGE_PATH="/system-demo.tgdsbx"
+)
+target_link_libraries(
+  tgd_web_sandbox_asset_resolver
+  PRIVATE
+    tgd_presentation_axmol
+    tgd_sandbox_runtime_integration
+)
+target_link_options(
+  tgd_web_sandbox_asset_resolver
+  PRIVATE
+    "-sDISABLE_EXCEPTION_CATCHING=0"
+    "-sENVIRONMENT=node"
+    "-sEXIT_RUNTIME=1"
+    "-sFORCE_FILESYSTEM=1"
+    # The combined resolver + runtime-coordinator composition probe exceeded
+    # the coordinator-only 128 KiB stack by 4,176 bytes under assertions.
+    "-sSTACK_SIZE=147456"
+    "SHELL:--embed-file dist/web/system-demo.tgdsbx@/system-demo.tgdsbx"
+)
+set_target_properties(
+  tgd_web_sandbox_asset_resolver
+  PROPERTIES
+    OUTPUT_NAME "tgd-sandbox-asset-resolver-probe"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/dist/web"
+    SUFFIX ".cjs"
+)

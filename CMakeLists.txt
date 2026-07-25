@@ -122,10 +122,52 @@ target_link_libraries(tgd_gameplay PUBLIC tgd_runtime tgd_contracts)
 tgd_register_layer(tgd_gameplay ALLOW tgd_runtime tgd_contracts)
 
 tgd_add_static_layer(tgd_presentation_axmol)
+find_program(TGD_SYSTEM_SANDBOX_NODE_EXECUTABLE NAMES node REQUIRED)
+set(
+  TGD_SYSTEM_SANDBOX_GENERATED_REGISTRY
+  "${CMAKE_CURRENT_BINARY_DIR}/generated/src/sandbox_asset_registry.generated.cpp"
+)
+file(
+  GLOB_RECURSE
+  TGD_SYSTEM_SANDBOX_ART_INPUTS
+  CONFIGURE_DEPENDS
+  "${CMAKE_CURRENT_SOURCE_DIR}/assets_src/system-sandbox-blockouts/assets/*"
+  "${CMAKE_CURRENT_SOURCE_DIR}/assets_src/system-sandbox-blockouts/fallbacks/*"
+  "${CMAKE_CURRENT_SOURCE_DIR}/assets_src/system-sandbox-blockouts/runtime/*"
+  "${CMAKE_CURRENT_SOURCE_DIR}/assets_src/system-sandbox-blockouts/tools/*"
+)
+add_custom_command(
+  OUTPUT "${TGD_SYSTEM_SANDBOX_GENERATED_REGISTRY}"
+  COMMAND
+    "${TGD_SYSTEM_SANDBOX_NODE_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets_src/system-sandbox-blockouts/tools/generate-system-sandbox-runtime-assets.mjs"
+    --verify-determinism
+  COMMAND
+    "${TGD_SYSTEM_SANDBOX_NODE_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate-system-sandbox-runtime-bundle.mjs"
+    --output
+    "${TGD_SYSTEM_SANDBOX_GENERATED_REGISTRY}"
+  DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate-system-sandbox-runtime-bundle.mjs"
+    ${TGD_SYSTEM_SANDBOX_ART_INPUTS}
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+  COMMENT "Validating ART-003 and generating the path-free Sandbox asset registry"
+  VERBATIM
+)
 target_sources(
   tgd_presentation_axmol
-  PRIVATE src/presentation-axmol/src/presentation_lifecycle.cpp
+  PRIVATE
+    src/presentation-axmol/src/presentation_lifecycle.cpp
+    src/presentation-axmol/src/sandbox_asset_resolver.cpp
+    "${TGD_SYSTEM_SANDBOX_GENERATED_REGISTRY}"
 )
+if(EMSCRIPTEN)
+  set_property(
+    SOURCE src/presentation-axmol/src/sandbox_asset_resolver.cpp
+    APPEND
+    PROPERTY COMPILE_OPTIONS -fexceptions
+  )
+endif()
 target_include_directories(
   tgd_presentation_axmol
   PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/presentation-axmol/include>"

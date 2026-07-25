@@ -10,7 +10,7 @@
 - DEV 提供唯一 compiler/provider bridge。controller 只提交自身 `lastValidDocument` 的 runtime projection；JavaScript 不复制 Stable ID、引用、图、binding、容量或 Gameplay validator。
 - `lastValidDocument`、server-private `validatedOwningPackage` 与未来 `runningPreviewSession` 是三层独立真相。只有 provider 返回 published 完整结果才替换已准备包；任何 validation、stale、transport、decode 或 provider 失败都保留上一份包与作者草稿。
 - 浏览器 JSON 状态只接收有界表现诊断与 opaque lease，不接收 provider generation/checksum、canonical package bytes、Stable key、CAS、模块路径或异常堆栈。只有用户显式导出时，独立二进制响应才逐字节交付当前 fresh、server-private 的 canonical package。诊断定位只是 section/record/Stable ID/field 到现有六类表单的表现映射。
-- 当前 Export 只把既有 canonical `.tgdsbx` 交给浏览器下载，不重编译、不重编码、不写 workspace，也不表示操作系统已经持久保存。仍没有 GAME Session、Windows/Web Preview、F1/Profile/奖励或任意命令执行。页面中的“包已准备；尚未导出，也未启动 Preview 或试玩。”只说明本地 provider 已接受一个完整候选。
+- 当前 Export 只把既有 canonical `.tgdsbx` 交给浏览器下载，不重编译、不重编码、不写 workspace，也不表示操作系统已经持久保存。仍没有 GAME Session、Windows/Web Preview、F1/Profile/奖励或任意命令执行。页面中的“包已准备；可导出下载，但尚未启动 Preview 或试玩。”只说明本地 provider 已接受一个完整候选。
 - 页面永久使用“字段格式可保存；尚未进行内容与玩法校验。”，不会向用户暴露 CAS、hash、JSONPath 或技术异常。
 - 六类对象共用一个键盘 Tab-stop tree；对象字段缓冲按对象保留，Escape 撤销当前字段，存在任意未应用缓冲时 Save 禁用。
 - 外部修改不会抢焦；处理对话框由用户主动打开，首焦为“继续编辑”，取消或 Escape 返回触发控件。
@@ -23,7 +23,7 @@
 npm --prefix apps/content-workbench start -- --workspace "D:\path\to\sandbox-workspace" --sandbox-service-build "build\web-service"
 ```
 
-`--sandbox-service-build` 是仓库内 CMake binary directory 的相对路径。省略或加载失败时编辑器仍可打开和保存作者草稿，但“共享内容检查”显示 unavailable。服务器会打印一次本地 URL；它只公开三项静态资源和有限的 open/reload/update/save/content-check/state API，不启动浏览器，也不执行外部命令。
+`--sandbox-service-build` 是仓库内 CMake binary directory 的相对路径。省略或加载失败时编辑器仍可打开和保存作者草稿，但“共享内容检查”显示 unavailable。服务器会打印一次本地 URL；它只公开三项静态资源和有限的 open/reload/update/save/content-check/package-export/state API，不启动浏览器，也不执行外部命令。
 
 ## Sandbox 编译模块加载器
 
@@ -50,7 +50,7 @@ npm --prefix apps/content-workbench test
 
 `POST /api/package-export` 只接受当前 document lease、revision 与 fresh prepared-package lease。controller 从 server-private `validatedOwningPackage.packageBytes` 复制一个导出快照并复核既有 package SHA-256；它不读取 DOM、不提交 authoring JSON、不调用 compiler/provider，也不创建第二套 package writer 或 validator。响应只包含完整二进制、长度和安全 `Content-Disposition` 文件名；provider generation/checksum、package SHA、CAS 与内部路径不进入 HTTP 或 DOM。
 
-文件名仅从当前 workspace 相对 JSON 的 ASCII-safe basename 派生；非法、空、设备名或过长 basename 固定回落为 `sandbox-package.tgdsbx`。文件名不参与 package identity。存在未应用字段、冲突、非 `ready` 状态或任一检查/导出在途时，导出按钮失败关闭；旧 validation/bridge/stale 状态即使保留上一份包也不能下载。浏览器只在完整响应仍属于同一 UI epoch 时创建下载，成功文案“已交给浏览器下载；尚未启动 Preview 或试玩”不宣称磁盘保存成功。
+文件名仅从当前 workspace 相对 JSON 的 ASCII-safe basename 派生；非法、空、Windows 设备名（含保留名前缀后接点号）或过长 basename 固定回落为 `sandbox-package.tgdsbx`。文件名不参与 package identity。存在未应用字段、冲突、非 `ready` 状态或任一检查/导出在途时，导出按钮失败关闭；旧 validation/bridge/stale 状态即使保留上一份包也不能下载。浏览器只在完整响应仍属于同一 UI epoch 时创建下载，成功文案“已交给浏览器下载；尚未启动 Preview 或试玩”不宣称磁盘保存成功。
 
 ## 保存协议
 

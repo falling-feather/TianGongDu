@@ -1454,7 +1454,7 @@ test(
     await page.waitForFunction(
       () =>
         document.querySelector("#content-check-summary")?.textContent ===
-        "包已准备；尚未导出，也未启动 Preview 或试玩。"
+        "包已准备；可导出下载，但尚未启动 Preview 或试玩。"
     );
     assert.equal(
       contentCheckHttpRequests,
@@ -1561,7 +1561,7 @@ test(
     await page.waitForFunction(
       () =>
         document.querySelector("#content-check-summary")?.textContent ===
-        "包已准备；尚未导出，也未启动 Preview 或试玩。"
+        "包已准备；可导出下载，但尚未启动 Preview 或试玩。"
     );
     assert.equal(compilerService.requests, serviceBeforeReloadLease + 1);
     assert.equal(
@@ -1629,7 +1629,7 @@ test(
     await page.waitForFunction(
       () =>
         document.querySelector("#content-check-summary")?.textContent ===
-        "包已准备；尚未导出，也未启动 Preview 或试玩。"
+        "包已准备；可导出下载，但尚未启动 Preview 或试玩。"
     );
     assert.equal(compilerService.requests, serviceBeforeOpenLease + 1);
     assert.equal(
@@ -1916,7 +1916,7 @@ test(
     await page.waitForFunction(
       () =>
         document.querySelector("#content-check-summary")?.textContent ===
-        "包已准备；尚未导出，也未启动 Preview 或试玩。"
+        "包已准备；可导出下载，但尚未启动 Preview 或试玩。"
     );
     assert.equal(
       compilerService.requests,
@@ -2182,6 +2182,25 @@ test(
     });
 
     await page.goto(running.url, { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => {
+      const target = document.querySelector("#status-live");
+      window.__tgdExportAnnouncements = [];
+      window.__tgdExportAnnouncementObserver = new MutationObserver(() => {
+        const value = target.textContent.trim();
+        if (
+          value.endsWith(
+            "已交给浏览器下载；尚未启动 Preview 或试玩。"
+          )
+        ) {
+          window.__tgdExportAnnouncements.push(value);
+        }
+      });
+      window.__tgdExportAnnouncementObserver.observe(target, {
+        childList: true,
+        characterData: true,
+        subtree: true
+      });
+    });
     await page.locator("#path-input").fill("demo.json");
     await page.locator("#path-input").press("Enter");
     await page.waitForFunction(
@@ -2191,7 +2210,7 @@ test(
     await page.waitForFunction(
       () =>
         document.querySelector("#content-check-summary")?.textContent ===
-        "包已准备；尚未导出，也未启动 Preview 或试玩。"
+        "包已准备；可导出下载，但尚未启动 Preview 或试玩。"
     );
     const evidence = running.controller.validatedPackageEvidence();
     assert.ok(evidence);
@@ -2231,6 +2250,10 @@ test(
     assert.equal(
       await page.locator("#status-live").textContent(),
       "demo.tgdsbx 已交给浏览器下载；尚未启动 Preview 或试玩。"
+    );
+    assert.deepEqual(
+      await page.evaluate(() => window.__tgdExportAnnouncements),
+      ["demo.tgdsbx 已交给浏览器下载；尚未启动 Preview 或试玩。"]
     );
     assert.equal(
       /generation|checksum|packageBytes|\bCAS\b|Stable key/i.test(
@@ -2302,6 +2325,10 @@ test(
     await page.waitForTimeout(50);
     assert.equal(packageExportRequests, 2);
     assert.equal(packageDownloads, 1);
+    assert.equal(
+      await page.evaluate(() => window.__tgdExportAnnouncements.length),
+      1
+    );
     assert.equal(await bufferedX.inputValue(), bufferedValue);
     assert.equal(await focusLabel(page), "y");
     assert.equal(
@@ -2314,7 +2341,7 @@ test(
     await page.waitForFunction(
       () =>
         document.querySelector("#content-check-summary")?.textContent ===
-        "包已准备；尚未导出，也未启动 Preview 或试玩。"
+        "包已准备；可导出下载，但尚未启动 Preview 或试玩。"
     );
     const recoveredDownloadPromise = page.waitForEvent("download");
     await exportButton.click();
@@ -2334,6 +2361,18 @@ test(
     assert.equal(packageExportRequests, 3);
     assert.equal(packageDownloads, 2);
     assert.equal(await focusLabel(page), "package-export-button");
+    assert.deepEqual(
+      await page.evaluate(() => window.__tgdExportAnnouncements),
+      [
+        "demo.tgdsbx 已交给浏览器下载；尚未启动 Preview 或试玩。",
+        "demo.tgdsbx 已交给浏览器下载；尚未启动 Preview 或试玩。"
+      ]
+    );
+    await page.evaluate(() => {
+      window.__tgdExportAnnouncementObserver.disconnect();
+      delete window.__tgdExportAnnouncementObserver;
+      delete window.__tgdExportAnnouncements;
+    });
 
     const sourceBytes = await readFile(fixtureUrl);
     const artifactRoot = path.join(

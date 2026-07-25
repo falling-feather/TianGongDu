@@ -265,7 +265,7 @@ function contentCheckSummary(check) {
     case "publishing":
       return "内容检查已完成，正在准备包。";
     case "ready":
-      return "包已准备；尚未导出，也未启动 Preview 或试玩。";
+      return "包已准备；可导出下载，但尚未启动 Preview 或试玩。";
     case "stale":
       return check.hasPreparedPackage
         ? "当前草稿的共享内容检查结果已过期；上一份已准备包保持不变。"

@@ -1020,6 +1020,24 @@ test("shared diagnostics preserve author and package last-valid layers", async (
     }).filename,
     "sandbox-package.tgdsbx"
   );
+  for (const relativePath of ["CON.foo.json", "LPT1.backup.json"]) {
+    assert.equal(
+      createSandboxPackageExport({
+        relativePath,
+        packageBytes: Uint8Array.of(84, 71, 68, 1),
+        packageSha256: publishedEvidence.packageSha256
+      }).filename,
+      "sandbox-package.tgdsbx"
+    );
+  }
+  assert.equal(
+    createSandboxPackageExport({
+      relativePath: "release.v1.json",
+      packageBytes: Uint8Array.of(84, 71, 68, 1),
+      packageSha256: publishedEvidence.packageSha256
+    }).filename,
+    "release.v1.tgdsbx"
+  );
 
   const values = editableValues(
     controller.editorState.document,

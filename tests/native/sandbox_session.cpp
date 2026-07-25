@@ -35,6 +35,12 @@ constexpr GroundPoseMm retry_pose{1'000, 1'000, 250, 1};
 constexpr std::uint32_t spawn_facing = 12'000;
 constexpr std::uint32_t retry_facing = 87'000;
 
+template <typename T>
+concept HasAbsolutePoseMember = requires(T value) {
+    value.pose;
+};
+
+static_assert(!HasAbsolutePoseMember<SandboxPlayerRelativeMoveIntent>);
 static_assert(sandbox_next_generation(1) == SandboxGenerationAdvance{true, 2});
 static_assert(!sandbox_next_generation(0).valid);
 static_assert(
@@ -527,6 +533,148 @@ void test_rejection_priority_and_range() {
     }
 }
 
+void test_relative_movement_owns_pose_and_collision() {
+    Fixture fixture;
+    SandboxSession session;
+    expect(
+        session.initialize(fixture.core(), fixture.binding(), fixture.player_binding()).error ==
+            SandboxSessionBuildError::none,
+        "relative movement fixture builds"
+    );
+
+    tgd::runtime::StaticCollisionWorld collision_world;
+    tgd::runtime::GroundMovementBounds bounds{};
+    bounds.min_x = -1'000;
+    bounds.max_x = 1'000;
+    bounds.min_y = -1'000;
+    bounds.max_y = 1'000;
+    bounds.min_height = 0;
+    bounds.max_height = 3'000;
+    bounds.min_floor_layer = 1;
+    bounds.max_floor_layer = 1;
+    expect(
+        collision_world.configure_bounds(bounds) ==
+            tgd::runtime::CollisionWorldError::none,
+        "relative movement bounds configure"
+    );
+    const std::array blockers{
+        tgd::runtime::GroundBlocker{
+            1,
+            150,
+            250,
+            -100,
+            100,
+            0,
+            2'000,
+            1,
+        },
+    };
+    expect(
+        collision_world.configure(blockers) ==
+            tgd::runtime::CollisionWorldError::none,
+        "relative movement blocker configures"
+    );
+
+    const SandboxPlayerMovementConfig config{500, 100, 1'800};
+    const auto moved = session.move_player_relative(
+        {player_actor, spawn_pose.floor_layer, -100, 0},
+        config,
+        collision_world
+    );
+    expect(
+        moved.disposition == SandboxPlayerRelativeMoveDisposition::moved &&
+            session.snapshot().player_pose == GroundPoseMm{-100, 0, 100, 1},
+        "Session derives and commits a relative move from its owned pose"
+    );
+
+    const auto expect_rejected = [&](
+        const SandboxPlayerRelativeMoveIntent& intent,
+        const SandboxPlayerMovementConfig& attempted_config,
+        SandboxPlayerRelativeMoveDisposition disposition,
+        std::string_view message
+    ) {
+        const auto before = session.snapshot();
+        const auto result =
+            session.move_player_relative(intent, attempted_config, collision_world);
+        expect(result.disposition == disposition, message);
+        expect_unchanged(before, session, message);
+    };
+
+    expect_rejected(
+        {0, spawn_pose.floor_layer, -1, 0},
+        config,
+        SandboxPlayerRelativeMoveDisposition::invalid_actor,
+        "zero actor relative move fails closed"
+    );
+    expect_rejected(
+        {other_actor, spawn_pose.floor_layer, -1, 0},
+        config,
+        SandboxPlayerRelativeMoveDisposition::invalid_actor,
+        "wrong actor relative move fails closed"
+    );
+    expect_rejected(
+        {player_actor, 2, -1, 0},
+        config,
+        SandboxPlayerRelativeMoveDisposition::floor_mismatch,
+        "wrong floor relative move fails closed"
+    );
+    expect_rejected(
+        {player_actor, spawn_pose.floor_layer, 0, 0},
+        config,
+        SandboxPlayerRelativeMoveDisposition::invalid_delta,
+        "zero relative move fails closed"
+    );
+    expect_rejected(
+        {
+            player_actor,
+            spawn_pose.floor_layer,
+            std::numeric_limits<std::int32_t>::min(),
+            0,
+        },
+        config,
+        SandboxPlayerRelativeMoveDisposition::invalid_delta,
+        "INT32_MIN relative move fails before arithmetic"
+    );
+    expect_rejected(
+        {
+            player_actor,
+            spawn_pose.floor_layer,
+            std::numeric_limits<std::int32_t>::max(),
+            0,
+        },
+        config,
+        SandboxPlayerRelativeMoveDisposition::invalid_delta,
+        "INT32_MAX relative move fails before arithmetic"
+    );
+    expect_rejected(
+        {player_actor, spawn_pose.floor_layer, -1, 0},
+        {0, 100, 1'800},
+        SandboxPlayerRelativeMoveDisposition::invalid_config,
+        "invalid movement config fails closed in Gameplay"
+    );
+    expect_rejected(
+        {player_actor, spawn_pose.floor_layer, 300, 0},
+        config,
+        SandboxPlayerRelativeMoveDisposition::collision_blocked,
+        "closed blocker rejects relative movement"
+    );
+
+    expect(
+        session.move_player_relative(
+            {player_actor, spawn_pose.floor_layer, -500, 0},
+            config,
+            collision_world
+        ).disposition == SandboxPlayerRelativeMoveDisposition::moved,
+        "relative movement reaches the authored bounds approach"
+    );
+    expect_rejected(
+        {player_actor, spawn_pose.floor_layer, -500, 0},
+        config,
+        SandboxPlayerRelativeMoveDisposition::collision_blocked,
+        "region bounds reject an out-of-bounds relative move"
+    );
+}
+
 void test_retry_generation_and_determinism() {
     Fixture fixture;
     SandboxSession first;
@@ -631,6 +779,7 @@ int main() {
     test_player_binding_and_safe_point_failures();
     test_first_operate_repeat_replay_and_isolation();
     test_rejection_priority_and_range();
+    test_relative_movement_owns_pose_and_collision();
     test_retry_generation_and_determinism();
 
     if (failures != 0) {

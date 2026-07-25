@@ -365,6 +365,52 @@ void run_probe(const char* canonical_path, const char* changed_path) {
         first_live,
         "runtime config conflict changed the live aggregate"
     );
+    const auto expect_same_checksum_binding_failure = [&](
+        const tgd::gameplay::SandboxPlayerRuntimeBinding& attempted_binding,
+        const SandboxRuntimePublishDisposition expected,
+        std::string_view message
+    ) {
+        auto republish = canonical;
+        republish.identity = tgd::content::SandboxPackagePublicationIdentity{
+            2,
+            canonical.identity.checksum(),
+        };
+        const auto before = capture(coordinator);
+        const auto result = coordinator.publish(
+            std::move(republish),
+            attempted_binding,
+            player_config
+        );
+        expect(result.disposition == expected, message);
+        expect_preserved(coordinator, before, message);
+    };
+    expect_same_checksum_binding_failure(
+        {},
+        SandboxRuntimePublishDisposition::session_prepare_failed,
+        "missing same-checksum player binding changed the live aggregate"
+    );
+    auto malformed_player_id = player_binding.player_content_id;
+    ++malformed_player_id.key;
+    expect_same_checksum_binding_failure(
+        {malformed_player_id, player_actor},
+        SandboxRuntimePublishDisposition::session_prepare_failed,
+        "malformed same-checksum player id changed the live aggregate"
+    );
+    expect_same_checksum_binding_failure(
+        {content_id("sandbox.player.not-published"), player_actor},
+        SandboxRuntimePublishDisposition::session_prepare_failed,
+        "wrong same-checksum player id changed the live aggregate"
+    );
+    expect_same_checksum_binding_failure(
+        {player_binding.player_content_id, 0},
+        SandboxRuntimePublishDisposition::session_prepare_failed,
+        "zero same-checksum player actor changed the live aggregate"
+    );
+    expect_same_checksum_binding_failure(
+        {player_binding.player_content_id, player_actor + 1U},
+        SandboxRuntimePublishDisposition::identity_conflict,
+        "wrong nonzero same-checksum actor changed the live aggregate"
+    );
 
     const auto before_prepare_failure = capture(coordinator);
     const auto bad_player = coordinator.publish(

@@ -43,6 +43,31 @@ void hash_pose(std::uint64_t& hash, contracts::GroundPoseMm pose) noexcept {
     return id.key != 0 && !id.name.empty() && contracts::stable_content_key(id.name) == id.key;
 }
 
+[[nodiscard]] bool pose_fits_bounds(
+    const contracts::GroundPoseMm& pose,
+    const contracts::SandboxBoundsMm& bounds,
+    const SandboxPlayerMovementConfig& config
+) noexcept {
+    const auto min_x =
+        static_cast<std::int64_t>(pose.x) - config.collision_radius_mm;
+    const auto max_x =
+        static_cast<std::int64_t>(pose.x) + config.collision_radius_mm;
+    const auto min_y =
+        static_cast<std::int64_t>(pose.y) - config.collision_radius_mm;
+    const auto max_y =
+        static_cast<std::int64_t>(pose.y) + config.collision_radius_mm;
+    const auto max_height =
+        static_cast<std::int64_t>(pose.height) + config.collision_height_mm;
+    return min_x >= bounds.min_x
+        && max_x <= bounds.max_x
+        && min_y >= bounds.min_y
+        && max_y <= bounds.max_y
+        && pose.height >= bounds.min_height
+        && max_height <= bounds.max_height
+        && pose.floor_layer >= bounds.min_floor_layer
+        && pose.floor_layer <= bounds.max_floor_layer;
+}
+
 [[nodiscard]] SandboxOperateDispatch operate_disposition(
     contracts::SandboxOperateDisposition disposition
 ) noexcept {
@@ -52,6 +77,85 @@ void hash_pose(std::uint64_t& hash, contracts::GroundPoseMm pose) noexcept {
 }
 
 }  // namespace
+
+SandboxSessionBuildError validate_sandbox_player_runtime_binding(
+    const contracts::SandboxPlayerDefinition& player,
+    const SandboxPlayerRuntimeBinding& binding
+) noexcept {
+    if (!valid_content_id(player.id)) {
+        return SandboxSessionBuildError::invalid_player_definition;
+    }
+    if (binding.player_content_id.key == 0 &&
+        binding.player_content_id.name.empty()) {
+        return SandboxSessionBuildError::missing_player_runtime_binding;
+    }
+    if (!valid_content_id(binding.player_content_id)) {
+        return SandboxSessionBuildError::invalid_player_runtime_id;
+    }
+    if (binding.player_content_id != player.id) {
+        return SandboxSessionBuildError::player_runtime_id_mismatch;
+    }
+    if (binding.actor_key == 0) {
+        return SandboxSessionBuildError::invalid_player_actor;
+    }
+    return SandboxSessionBuildError::none;
+}
+
+bool validate_sandbox_player_movement_config(
+    const SandboxPlayerMovementConfig& config
+) noexcept {
+    return config.max_move_delta_mm > 0
+        && config.collision_radius_mm > 0
+        && config.collision_height_mm > 0;
+}
+
+bool validate_sandbox_player_movement_config(
+    const contracts::SandboxDefinition& definition,
+    const SandboxPlayerMovementConfig& config
+) noexcept {
+    if (!validate_sandbox_player_movement_config(config)
+        || definition.player.region_id.key == 0
+        || definition.player.initial_safe_point_id.key == 0) {
+        return false;
+    }
+    const auto region = std::find_if(
+        definition.regions.begin(),
+        definition.regions.end(),
+        [&](const contracts::SandboxRegionDefinition& candidate) noexcept {
+            return candidate.id.key == definition.player.region_id.key;
+        }
+    );
+    const auto safe_point = std::find_if(
+        definition.safe_points.begin(),
+        definition.safe_points.end(),
+        [&](const contracts::SandboxSafePointDefinition& candidate) noexcept {
+            return candidate.id.key == definition.player.initial_safe_point_id.key;
+        }
+    );
+    if (region == definition.regions.end()
+        || safe_point == definition.safe_points.end()
+        || safe_point->region_id.key != region->id.key) {
+        return false;
+    }
+
+    const auto width = static_cast<std::int64_t>(region->bounds.max_x)
+        - region->bounds.min_x;
+    const auto depth = static_cast<std::int64_t>(region->bounds.max_y)
+        - region->bounds.min_y;
+    const auto height = static_cast<std::int64_t>(region->bounds.max_height)
+        - region->bounds.min_height;
+    const auto diameter =
+        static_cast<std::int64_t>(config.collision_radius_mm) * 2;
+    return width > 0
+        && depth > 0
+        && height > 0
+        && diameter <= width
+        && diameter <= depth
+        && config.collision_height_mm <= height
+        && config.max_move_delta_mm <= std::max(width, depth)
+        && pose_fits_bounds(definition.player.pose, region->bounds, config)
+        && pose_fits_bounds(safe_point->pose, region->bounds, config);
+}
 
 SandboxSessionBuildResult SandboxSession::initialize(
     const contracts::SandboxDefinition& validated_core,
@@ -73,18 +177,10 @@ SandboxSessionBuildResult SandboxSession::initialize(
         !valid_content_id(validated_core.player.initial_safe_point_id)) {
         return {BuildError::invalid_player_definition, {}};
     }
-    if (player_binding.player_content_id.key == 0 &&
-        player_binding.player_content_id.name.empty()) {
-        return {BuildError::missing_player_runtime_binding, {}};
-    }
-    if (!valid_content_id(player_binding.player_content_id)) {
-        return {BuildError::invalid_player_runtime_id, {}};
-    }
-    if (player_binding.player_content_id != validated_core.player.id) {
-        return {BuildError::player_runtime_id_mismatch, {}};
-    }
-    if (player_binding.actor_key == 0) {
-        return {BuildError::invalid_player_actor, {}};
+    const auto player_binding_error =
+        validate_sandbox_player_runtime_binding(validated_core.player, player_binding);
+    if (player_binding_error != BuildError::none) {
+        return {player_binding_error, {}};
     }
 
     const contracts::SandboxSafePointDefinition* retry_safe_point = nullptr;
@@ -355,30 +451,87 @@ SandboxOperateDispatch SandboxSession::submit_operate(
     return dispatch;
 }
 
-SandboxPlayerPoseUpdateDisposition SandboxSession::update_player_pose(
-    const contracts::GroundPoseMm& pose
+SandboxPlayerRelativeMoveResult SandboxSession::move_player_relative(
+    const SandboxPlayerRelativeMoveIntent& intent,
+    const SandboxPlayerMovementConfig& config,
+    const runtime::StaticCollisionWorld& collision_world
 ) noexcept {
+    SandboxPlayerRelativeMoveResult result{};
+    result.resolution.pose = snapshot_.player_pose;
     if (!valid_owned_state()) {
-        return SandboxPlayerPoseUpdateDisposition::invalid_state;
+        result.disposition = SandboxPlayerRelativeMoveDisposition::invalid_state;
+        return result;
     }
-    if (pose.floor_layer != snapshot_.player_pose.floor_layer) {
-        return SandboxPlayerPoseUpdateDisposition::floor_mismatch;
+    if (intent.actor == 0 || intent.actor != snapshot_.player_actor) {
+        result.disposition = SandboxPlayerRelativeMoveDisposition::invalid_actor;
+        return result;
     }
-    if (pose.height != snapshot_.player_pose.height) {
-        return SandboxPlayerPoseUpdateDisposition::height_mismatch;
+    if (intent.floor_layer != snapshot_.player_pose.floor_layer) {
+        result.disposition = SandboxPlayerRelativeMoveDisposition::floor_mismatch;
+        return result;
     }
-    if (pose == snapshot_.player_pose) {
-        return SandboxPlayerPoseUpdateDisposition::unchanged;
+    if (!validate_sandbox_player_movement_config(config)) {
+        result.disposition = SandboxPlayerRelativeMoveDisposition::invalid_config;
+        return result;
+    }
+    if (intent.delta_x_mm < -config.max_move_delta_mm
+        || intent.delta_x_mm > config.max_move_delta_mm
+        || intent.delta_y_mm < -config.max_move_delta_mm
+        || intent.delta_y_mm > config.max_move_delta_mm) {
+        result.disposition = SandboxPlayerRelativeMoveDisposition::invalid_delta;
+        return result;
+    }
+    const auto delta_square =
+        static_cast<std::int64_t>(intent.delta_x_mm) * intent.delta_x_mm
+        + static_cast<std::int64_t>(intent.delta_y_mm) * intent.delta_y_mm;
+    const auto max_delta_square =
+        static_cast<std::int64_t>(config.max_move_delta_mm)
+        * config.max_move_delta_mm;
+    if (delta_square == 0 || delta_square > max_delta_square) {
+        result.disposition = SandboxPlayerRelativeMoveDisposition::invalid_delta;
+        return result;
+    }
+    const auto target_x =
+        static_cast<std::int64_t>(snapshot_.player_pose.x) + intent.delta_x_mm;
+    const auto target_y =
+        static_cast<std::int64_t>(snapshot_.player_pose.y) + intent.delta_y_mm;
+    if (target_x < std::numeric_limits<std::int32_t>::min()
+        || target_x > std::numeric_limits<std::int32_t>::max()
+        || target_y < std::numeric_limits<std::int32_t>::min()
+        || target_y > std::numeric_limits<std::int32_t>::max()) {
+        result.disposition = SandboxPlayerRelativeMoveDisposition::invalid_delta;
+        return result;
+    }
+
+    result.resolution = collision_world.resolve_ground_move(
+        snapshot_.player_pose,
+        intent.delta_x_mm,
+        intent.delta_y_mm,
+        config.collision_radius_mm,
+        config.collision_height_mm
+    );
+    if (result.resolution.blocked_x || result.resolution.blocked_y) {
+        result.disposition = SandboxPlayerRelativeMoveDisposition::collision_blocked;
+        return result;
+    }
+    if (result.resolution.pose.x != target_x
+        || result.resolution.pose.y != target_y
+        || result.resolution.pose.height != snapshot_.player_pose.height
+        || result.resolution.pose.floor_layer != snapshot_.player_pose.floor_layer) {
+        result.disposition = SandboxPlayerRelativeMoveDisposition::invalid_state;
+        return result;
     }
 
     auto candidate = *this;
-    candidate.snapshot_.player_pose = pose;
+    candidate.snapshot_.player_pose = result.resolution.pose;
     candidate.update_checksum();
     if (!candidate.valid_owned_state()) {
-        return SandboxPlayerPoseUpdateDisposition::invalid_state;
+        result.disposition = SandboxPlayerRelativeMoveDisposition::invalid_state;
+        return result;
     }
     *this = candidate;
-    return SandboxPlayerPoseUpdateDisposition::updated;
+    result.disposition = SandboxPlayerRelativeMoveDisposition::moved;
+    return result;
 }
 
 SandboxSessionRetryDisposition SandboxSession::retry(

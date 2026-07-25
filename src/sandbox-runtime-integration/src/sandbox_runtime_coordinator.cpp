@@ -40,81 +40,6 @@ struct CollisionCandidate final {
     );
 }
 
-[[nodiscard]] bool pose_fits_bounds(
-    const contracts::GroundPoseMm& pose,
-    const contracts::SandboxBoundsMm& bounds,
-    const SandboxThinRuntimePlayerConfig& config
-) noexcept {
-    const auto min_x =
-        static_cast<std::int64_t>(pose.x) - config.collision_radius_mm;
-    const auto max_x =
-        static_cast<std::int64_t>(pose.x) + config.collision_radius_mm;
-    const auto min_y =
-        static_cast<std::int64_t>(pose.y) - config.collision_radius_mm;
-    const auto max_y =
-        static_cast<std::int64_t>(pose.y) + config.collision_radius_mm;
-    const auto max_height =
-        static_cast<std::int64_t>(pose.height) + config.collision_height_mm;
-    return min_x >= bounds.min_x
-        && max_x <= bounds.max_x
-        && min_y >= bounds.min_y
-        && max_y <= bounds.max_y
-        && pose.height >= bounds.min_height
-        && max_height <= bounds.max_height
-        && pose.floor_layer >= bounds.min_floor_layer
-        && pose.floor_layer <= bounds.max_floor_layer;
-}
-
-[[nodiscard]] bool valid_player_config(
-    const contracts::SandboxDefinition& definition,
-    const SandboxThinRuntimePlayerConfig& config
-) noexcept {
-    if (config.max_move_delta_mm <= 0
-        || config.collision_radius_mm <= 0
-        || config.collision_height_mm <= 0
-        || definition.player.region_id.key == 0
-        || definition.player.initial_safe_point_id.key == 0) {
-        return false;
-    }
-    const auto region = std::find_if(
-        definition.regions.begin(),
-        definition.regions.end(),
-        [&](const contracts::SandboxRegionDefinition& candidate) noexcept {
-            return candidate.id.key == definition.player.region_id.key;
-        }
-    );
-    const auto safe_point = std::find_if(
-        definition.safe_points.begin(),
-        definition.safe_points.end(),
-        [&](const contracts::SandboxSafePointDefinition& candidate) noexcept {
-            return candidate.id.key == definition.player.initial_safe_point_id.key;
-        }
-    );
-    if (region == definition.regions.end()
-        || safe_point == definition.safe_points.end()
-        || safe_point->region_id.key != region->id.key) {
-        return false;
-    }
-
-    const auto width = static_cast<std::int64_t>(region->bounds.max_x)
-        - region->bounds.min_x;
-    const auto depth = static_cast<std::int64_t>(region->bounds.max_y)
-        - region->bounds.min_y;
-    const auto height = static_cast<std::int64_t>(region->bounds.max_height)
-        - region->bounds.min_height;
-    const auto diameter =
-        static_cast<std::int64_t>(config.collision_radius_mm) * 2;
-    return width > 0
-        && depth > 0
-        && height > 0
-        && diameter <= width
-        && diameter <= depth
-        && config.collision_height_mm <= height
-        && config.max_move_delta_mm <= std::max(width, depth)
-        && pose_fits_bounds(definition.player.pose, region->bounds, config)
-        && pose_fits_bounds(safe_point->pose, region->bounds, config);
-}
-
 [[nodiscard]] bool valid_asset_kind(contracts::SandboxAssetKind kind) noexcept {
     using Kind = contracts::SandboxAssetKind;
     switch (kind) {
@@ -486,9 +411,9 @@ void refresh_runtime_snapshot(
         || state.snapshot.collision_region_count != state.collision.region_count
         || state.snapshot.collision_record_count != state.collision.record_count
         || state.snapshot.asset_count != asset_count
-        || state.snapshot.player_config.max_move_delta_mm <= 0
-        || state.snapshot.player_config.collision_radius_mm <= 0
-        || state.snapshot.player_config.collision_height_mm <= 0
+        || !gameplay::validate_sandbox_player_movement_config(
+            state.snapshot.player_config
+        )
         || state.snapshot.checksum != compute_runtime_checksum(state)) {
         return false;
     }
@@ -571,7 +496,18 @@ SandboxRuntimePublishResult SandboxRuntimeCoordinator::publish(
     if (decoded.document->fingerprint() != artifact.identity.checksum()) {
         return result_for(SandboxRuntimePublishDisposition::fingerprint_mismatch);
     }
-    if (!valid_player_config(decoded.document->definition(), player_config)) {
+    const auto player_binding_error =
+        gameplay::validate_sandbox_player_runtime_binding(
+            decoded.document->definition().player,
+            player_binding
+        );
+    if (player_binding_error != gameplay::SandboxSessionBuildError::none) {
+        return result_for(SandboxRuntimePublishDisposition::session_prepare_failed);
+    }
+    if (!gameplay::validate_sandbox_player_movement_config(
+            decoded.document->definition(),
+            player_config
+        )) {
         return result_for(
             SandboxRuntimePublishDisposition::invalid_player_runtime_config
         );
@@ -579,7 +515,8 @@ SandboxRuntimePublishResult SandboxRuntimeCoordinator::publish(
 
     if (live_ != nullptr &&
         artifact.identity.checksum() == live_->package_identity.checksum()) {
-        if (player_config != live_->state->snapshot.player_config) {
+        if (player_binding.actor_key != live_->state->snapshot.session.player_actor
+            || player_config != live_->state->snapshot.player_config) {
             return result_for(SandboxRuntimePublishDisposition::identity_conflict);
         }
         return result_for(SandboxRuntimePublishDisposition::unchanged);
@@ -710,54 +647,54 @@ SandboxRuntimeMoveResult SandboxRuntimeCoordinator::advance_player(
         || command.tick != current.snapshot.authoritative_tick + 1U) {
         return result_for(SandboxRuntimeCommandDisposition::invalid_tick);
     }
-    if (command.actor == 0 || command.actor != current.snapshot.session.player_actor) {
-        return result_for(SandboxRuntimeCommandDisposition::invalid_actor);
-    }
-    if (command.floor_layer != current.snapshot.session.player_pose.floor_layer) {
-        return result_for(SandboxRuntimeCommandDisposition::floor_mismatch);
-    }
-    const auto& player_config = current.snapshot.player_config;
-    if (command.delta_x_mm < -player_config.max_move_delta_mm
-        || command.delta_x_mm > player_config.max_move_delta_mm
-        || command.delta_y_mm < -player_config.max_move_delta_mm
-        || command.delta_y_mm > player_config.max_move_delta_mm) {
-        return result_for(SandboxRuntimeCommandDisposition::invalid_delta);
-    }
-    const auto delta_square =
-        static_cast<std::int64_t>(command.delta_x_mm) * command.delta_x_mm
-        + static_cast<std::int64_t>(command.delta_y_mm) * command.delta_y_mm;
-    const auto max_delta_square =
-        static_cast<std::int64_t>(player_config.max_move_delta_mm)
-        * player_config.max_move_delta_mm;
-    if (delta_square == 0 || delta_square > max_delta_square) {
-        return result_for(SandboxRuntimeCommandDisposition::invalid_delta);
-    }
-
     const auto player_region =
         live_->document->definition().player.region_id.key;
     const auto* region = find_region(current.collision, player_region);
     if (region == nullptr) {
         return result_for(SandboxRuntimeCommandDisposition::invalid_state);
     }
-    const auto resolution = region->world.resolve_ground_move(
-        current.snapshot.session.player_pose,
-        command.delta_x_mm,
-        command.delta_y_mm,
-        player_config.collision_radius_mm,
-        player_config.collision_height_mm
-    );
-    if (resolution.blocked_x || resolution.blocked_y) {
-        return result_for(
-            SandboxRuntimeCommandDisposition::collision_blocked,
-            resolution
-        );
-    }
-
     try {
         auto candidate = std::make_unique<RuntimeLiveState>(current);
-        const auto pose_result = candidate->session.update_player_pose(resolution.pose);
-        if (pose_result != gameplay::SandboxPlayerPoseUpdateDisposition::updated) {
-            return result_for(SandboxRuntimeCommandDisposition::invalid_state);
+        const auto move_result = candidate->session.move_player_relative(
+            {
+                command.actor,
+                command.floor_layer,
+                command.delta_x_mm,
+                command.delta_y_mm,
+            },
+            candidate->snapshot.player_config,
+            region->world
+        );
+        switch (move_result.disposition) {
+            case gameplay::SandboxPlayerRelativeMoveDisposition::moved:
+                break;
+            case gameplay::SandboxPlayerRelativeMoveDisposition::invalid_actor:
+                return result_for(
+                    SandboxRuntimeCommandDisposition::invalid_actor,
+                    move_result.resolution
+                );
+            case gameplay::SandboxPlayerRelativeMoveDisposition::floor_mismatch:
+                return result_for(
+                    SandboxRuntimeCommandDisposition::floor_mismatch,
+                    move_result.resolution
+                );
+            case gameplay::SandboxPlayerRelativeMoveDisposition::invalid_delta:
+                return result_for(
+                    SandboxRuntimeCommandDisposition::invalid_delta,
+                    move_result.resolution
+                );
+            case gameplay::SandboxPlayerRelativeMoveDisposition::collision_blocked:
+                return result_for(
+                    SandboxRuntimeCommandDisposition::collision_blocked,
+                    move_result.resolution
+                );
+            case gameplay::SandboxPlayerRelativeMoveDisposition::invalid_config:
+            case gameplay::SandboxPlayerRelativeMoveDisposition::invalid_state:
+            case gameplay::SandboxPlayerRelativeMoveDisposition::invalid:
+                return result_for(
+                    SandboxRuntimeCommandDisposition::invalid_state,
+                    move_result.resolution
+                );
         }
         candidate->snapshot.authoritative_tick = command.tick;
         candidate->snapshot.movement_sequence = command.sequence;
@@ -777,7 +714,11 @@ SandboxRuntimeMoveResult SandboxRuntimeCoordinator::advance_player(
         }
         const auto published = candidate->snapshot;
         live_->state.swap(candidate);
-        return {SandboxRuntimeCommandDisposition::applied, resolution, published};
+        return {
+            SandboxRuntimeCommandDisposition::applied,
+            move_result.resolution,
+            published,
+        };
     } catch (const std::bad_alloc&) {
         return result_for(SandboxRuntimeCommandDisposition::allocation_failed);
     }

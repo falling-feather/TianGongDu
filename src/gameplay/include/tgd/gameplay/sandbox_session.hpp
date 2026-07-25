@@ -1,15 +1,12 @@
 #pragma once
 
 #include <tgd/contracts/sandbox_gameplay_binding.hpp>
+#include <tgd/runtime/collision_world.hpp>
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
-
-namespace tgd::integration {
-class SandboxRuntimeCoordinator;
-}
 
 namespace tgd::gameplay {
 
@@ -21,6 +18,47 @@ struct SandboxPlayerRuntimeBinding final {
         const SandboxPlayerRuntimeBinding&,
         const SandboxPlayerRuntimeBinding&
     ) noexcept = default;
+};
+
+struct SandboxPlayerMovementConfig final {
+    std::int32_t max_move_delta_mm{};
+    std::int32_t collision_radius_mm{};
+    std::int32_t collision_height_mm{};
+
+    [[nodiscard]] friend constexpr bool operator==(
+        const SandboxPlayerMovementConfig&,
+        const SandboxPlayerMovementConfig&
+    ) noexcept = default;
+};
+
+struct SandboxPlayerRelativeMoveIntent final {
+    contracts::StableActorKey actor{};
+    std::int16_t floor_layer{};
+    std::int32_t delta_x_mm{};
+    std::int32_t delta_y_mm{};
+
+    [[nodiscard]] friend constexpr bool operator==(
+        const SandboxPlayerRelativeMoveIntent&,
+        const SandboxPlayerRelativeMoveIntent&
+    ) noexcept = default;
+};
+
+enum class SandboxPlayerRelativeMoveDisposition : std::uint8_t {
+    moved = 1,
+    invalid_actor = 2,
+    floor_mismatch = 3,
+    invalid_config = 4,
+    invalid_delta = 5,
+    collision_blocked = 6,
+    invalid_state = 7,
+    invalid = 255,
+};
+
+struct SandboxPlayerRelativeMoveResult final {
+    SandboxPlayerRelativeMoveDisposition disposition{
+        SandboxPlayerRelativeMoveDisposition::invalid
+    };
+    runtime::GroundMoveResolution resolution{};
 };
 
 enum class SandboxSessionBuildError : std::uint8_t {
@@ -37,6 +75,20 @@ enum class SandboxSessionBuildError : std::uint8_t {
     invalid_owned_state = 10,
     invalid = 255,
 };
+
+[[nodiscard]] SandboxSessionBuildError validate_sandbox_player_runtime_binding(
+    const contracts::SandboxPlayerDefinition& player,
+    const SandboxPlayerRuntimeBinding& binding
+) noexcept;
+
+[[nodiscard]] bool validate_sandbox_player_movement_config(
+    const SandboxPlayerMovementConfig& config
+) noexcept;
+
+[[nodiscard]] bool validate_sandbox_player_movement_config(
+    const contracts::SandboxDefinition& definition,
+    const SandboxPlayerMovementConfig& config
+) noexcept;
 
 struct SandboxSessionBuildResult final {
     SandboxSessionBuildError error{SandboxSessionBuildError::invalid};
@@ -84,15 +136,6 @@ struct SandboxSessionRetryCommand final {
         const SandboxSessionRetryCommand&,
         const SandboxSessionRetryCommand&
     ) noexcept = default;
-};
-
-enum class SandboxPlayerPoseUpdateDisposition : std::uint8_t {
-    updated = 1,
-    unchanged = 2,
-    floor_mismatch = 3,
-    height_mismatch = 4,
-    invalid_state = 5,
-    invalid = 255,
 };
 
 enum class SandboxSessionRetryDisposition : std::uint8_t {
@@ -163,6 +206,12 @@ class SandboxSession final {
         const contracts::SandboxOperateCommand& command
     ) noexcept;
 
+    [[nodiscard]] SandboxPlayerRelativeMoveResult move_player_relative(
+        const SandboxPlayerRelativeMoveIntent& intent,
+        const SandboxPlayerMovementConfig& config,
+        const runtime::StaticCollisionWorld& collision_world
+    ) noexcept;
+
     [[nodiscard]] SandboxSessionRetryDisposition retry(
         const SandboxSessionRetryCommand& command
     ) noexcept;
@@ -179,12 +228,6 @@ class SandboxSession final {
     ) const noexcept;
 
   private:
-    friend class integration::SandboxRuntimeCoordinator;
-
-    [[nodiscard]] SandboxPlayerPoseUpdateDisposition update_player_pose(
-        const contracts::GroundPoseMm& pose
-    ) noexcept;
-
     static constexpr std::uint16_t invalid_index =
         std::numeric_limits<std::uint16_t>::max();
 

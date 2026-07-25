@@ -20,16 +20,7 @@ class SandboxPackageDocument;
 
 namespace tgd::integration {
 
-struct SandboxThinRuntimePlayerConfig final {
-    std::int32_t max_move_delta_mm{};
-    std::int32_t collision_radius_mm{};
-    std::int32_t collision_height_mm{};
-
-    [[nodiscard]] friend constexpr bool operator==(
-        const SandboxThinRuntimePlayerConfig&,
-        const SandboxThinRuntimePlayerConfig&
-    ) noexcept = default;
-};
+using SandboxThinRuntimePlayerConfig = gameplay::SandboxPlayerMovementConfig;
 
 struct SandboxPublishedPackageArtifact final {
     content::SandboxPackagePublicationIdentity identity{};

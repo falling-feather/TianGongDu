@@ -1201,18 +1201,42 @@ test(
     const pageErrors = [];
     const requestErrors = [];
     const unexpectedHttp = [];
+    const expectedConflictHttp = [];
+    const expectedConflictConsole = [];
+    let conflictRequestExpected = false;
+    let contentCheckHttpRequests = 0;
     page.on("console", (message) => {
       if (message.type() === "error") {
-        consoleErrors.push(message.text());
+        if (
+          conflictRequestExpected &&
+          message.text().includes("409 (Conflict)")
+        ) {
+          expectedConflictConsole.push(message.text());
+        } else {
+          consoleErrors.push(message.text());
+        }
       }
     });
     page.on("pageerror", (error) => pageErrors.push(error.message));
     page.on("requestfailed", (request) =>
       requestErrors.push(request.url() + ": " + request.failure()?.errorText)
     );
+    page.on("request", (request) => {
+      if (request.url().endsWith("/api/content-check")) {
+        contentCheckHttpRequests += 1;
+      }
+    });
     page.on("response", (response) => {
       if (response.status() >= 400) {
-        unexpectedHttp.push(response.status() + " " + response.url());
+        const entry = response.status() + " " + response.url();
+        if (
+          response.status() === 409 &&
+          response.url().endsWith("/api/save")
+        ) {
+          expectedConflictHttp.push(entry);
+        } else {
+          unexpectedHttp.push(entry);
+        }
       }
     });
 
@@ -1239,6 +1263,37 @@ test(
         subtree: true
       });
     });
+
+    const bufferedX = page.locator('input[name="x"]');
+    const initialX = await bufferedX.inputValue();
+    const preExistingBufferValue = initialX === "40" ? "42" : "40";
+    await bufferedX.fill(preExistingBufferValue);
+    assert.equal(await checkButton.getAttribute("disabled"), null);
+    assert.equal(await checkButton.getAttribute("aria-disabled"), "true");
+    assert.equal(
+      await page.locator("#content-check-summary").textContent(),
+      "本次共享内容检查结果已过期，请重新检查当前草稿。"
+    );
+    await checkButton.focus();
+    const bufferedGuardBox = await checkButton.boundingBox();
+    assert.ok(bufferedGuardBox);
+    await page.mouse.click(
+      bufferedGuardBox.x + bufferedGuardBox.width / 2,
+      bufferedGuardBox.y + bufferedGuardBox.height / 2
+    );
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(50);
+    assert.equal(contentCheckHttpRequests, 0);
+    assert.equal(compilerService.requests, 0);
+    assert.equal(await focusLabel(page), "content-check-button");
+    await bufferedX.focus();
+    await bufferedX.press("Escape");
+    assert.equal(await bufferedX.inputValue(), initialX);
+    assert.equal(await checkButton.getAttribute("aria-disabled"), "false");
+    assert.equal(
+      await page.locator("#content-check-summary").textContent(),
+      "本次共享内容检查结果已过期，请重新检查当前草稿。"
+    );
 
     let releaseReady;
     let readyRequestSeen;
@@ -1271,32 +1326,64 @@ test(
       await page.locator("#content-check-summary").textContent(),
       "正在执行共享内容检查。"
     );
-    const bufferedX = page.locator('input[name="x"]');
-    await bufferedX.fill("41");
+    const inFlightBufferValue = initialX === "41" ? "43" : "41";
+    await bufferedX.fill(inFlightBufferValue);
     await page.locator('input[name="y"]').focus();
     assert.equal(await focusLabel(page), "y");
+    assert.equal(await checkButton.getAttribute("aria-disabled"), "true");
+    assert.equal(
+      await page.locator("#content-check-summary").textContent(),
+      "本次共享内容检查结果已过期，请重新检查当前草稿。"
+    );
     releaseReady();
     await duplicateCheck;
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#content-check-button")?.getAttribute(
+          "aria-busy"
+        ) === "false"
+    );
+    await page.unroute("**/api/content-check", holdReadyResponse);
+    assert.equal(checkRequests, 1);
+    assert.equal(compilerService.requests, 1);
+    assert.equal(contentCheckHttpRequests, 1);
+    assert.equal(await checkButton.getAttribute("aria-busy"), "false");
+    assert.equal(await bufferedX.inputValue(), inFlightBufferValue);
+    assert.equal(await focusLabel(page), "y");
+    assert.equal(await page.locator("#revision-value").textContent(), "0");
+    assert.equal(
+      await page.locator("#content-check-summary").textContent(),
+      "本次共享内容检查结果已过期，请重新检查当前草稿。"
+    );
+    assert.equal(
+      await page.evaluate(() =>
+        window.__tgdDiagnosticAnnouncements.filter((value) => value.trim())
+      ).then((values) => values.length),
+      0
+    );
+    await bufferedX.focus();
+    await bufferedX.press("Escape");
+    assert.equal(await bufferedX.inputValue(), initialX);
+    assert.equal(await checkButton.getAttribute("aria-disabled"), "false");
+    assert.equal(
+      await page.locator("#content-check-summary").textContent(),
+      "本次共享内容检查结果已过期，请重新检查当前草稿。"
+    );
+    await checkButton.click();
     await page.waitForFunction(
       () =>
         document.querySelector("#content-check-summary")?.textContent ===
         "包已准备；尚未导出，也未启动 Preview 或试玩。"
     );
-    await page.unroute("**/api/content-check", holdReadyResponse);
-    assert.equal(checkRequests, 1);
-    assert.equal(compilerService.requests, 1);
-    assert.equal(await checkButton.getAttribute("aria-busy"), "false");
-    assert.equal(await bufferedX.inputValue(), "41");
-    assert.equal(await focusLabel(page), "y");
-    assert.equal(await page.locator("#revision-value").textContent(), "0");
+    assert.equal(contentCheckHttpRequests, 2);
+    assert.equal(compilerService.requests, 2);
+    assert.equal(await focusLabel(page), "content-check-button");
     assert.equal(
       await page.evaluate(() =>
         window.__tgdDiagnosticAnnouncements.filter((value) => value.trim())
       ).then((values) => values.length),
       1
     );
-    await bufferedX.focus();
-    await bufferedX.press("Escape");
 
     await selectObject(page, "actors");
     const actorRegion = page.locator('input[name="regionId"]');
@@ -1445,6 +1532,56 @@ test(
       lastValidBeforeBridgeFailure
     );
 
+    const external = JSON.parse(
+      await readFile(path.join(root, "demo.json"), "utf8")
+    );
+    external.editor.items[0].label = "诊断冲突外部修改";
+    await writeFile(
+      path.join(root, "demo.json"),
+      JSON.stringify(external, null, 2) + "\n",
+      "utf8"
+    );
+    conflictRequestExpected = true;
+    await page.locator("#save-button").click();
+    await page.waitForFunction(
+      () => document.querySelector("#conflict-banner")?.hidden === false
+    );
+    conflictRequestExpected = false;
+    assert.equal(await checkButton.getAttribute("disabled"), null);
+    assert.equal(await checkButton.getAttribute("aria-disabled"), "true");
+    const requestsBeforeConflictGuard = contentCheckHttpRequests;
+    const serviceRequestsBeforeConflictGuard = compilerService.requests;
+    await checkButton.focus();
+    const conflictGuardBox = await checkButton.boundingBox();
+    assert.ok(conflictGuardBox);
+    await page.mouse.click(
+      conflictGuardBox.x + conflictGuardBox.width / 2,
+      conflictGuardBox.y + conflictGuardBox.height / 2
+    );
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(50);
+    assert.equal(contentCheckHttpRequests, requestsBeforeConflictGuard);
+    assert.equal(
+      compilerService.requests,
+      serviceRequestsBeforeConflictGuard
+    );
+    assert.equal(await focusLabel(page), "content-check-button");
+    await page.locator("#resolve-conflict-button").click();
+    await page.waitForFunction(
+      () => document.querySelector("#conflict-dialog")?.open === true
+    );
+    await page.locator("#load-disk-button").click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#conflict-banner")?.hidden === true &&
+        document.querySelector("#content-check-button")?.getAttribute(
+          "aria-disabled"
+        ) === "false"
+    );
+    await page.waitForFunction(
+      () => document.activeElement?.id === "object-tree"
+    );
+
     const bodyText = await page.locator("body").innerText();
     assert.equal(
       /\bgeneration\b|\bchecksum\b|\bCAS\b|Stable key|exception|stack/i.test(
@@ -1468,20 +1605,31 @@ test(
         checkRequests +
         ", stale=" +
         staleRequests +
+        ", total-http=" +
+        contentCheckHttpRequests +
         ", total-service=" +
         compilerService.requests
     );
     t.diagnostic(
-      "diagnostics focus: buffered=y, result=y, locator=regionId, stale=apply-button"
+      "diagnostics focus: guarded=content-check-button, buffered=y, stale-result=y, explicit-ready=content-check-button, locator=regionId, stale-apply=apply-button, conflict=content-check-button, resolved=object-tree"
     );
     t.diagnostic("diagnostics screenshot sha256: " + screenshotHash);
     t.diagnostic("diagnostics console errors: " + consoleErrors.length);
+    t.diagnostic(
+      "diagnostics expected conflict console: " +
+        expectedConflictConsole.length
+    );
     t.diagnostic("diagnostics page errors: " + pageErrors.length);
     t.diagnostic("diagnostics request errors: " + requestErrors.length);
+    t.diagnostic(
+      "diagnostics expected conflict HTTP: " + expectedConflictHttp.length
+    );
     t.diagnostic("diagnostics unexpected HTTP: " + unexpectedHttp.length);
     assert.deepEqual(consoleErrors, []);
+    assert.equal(expectedConflictConsole.length, 1);
     assert.deepEqual(pageErrors, []);
     assert.deepEqual(requestErrors, []);
+    assert.equal(expectedConflictHttp.length, 1);
     assert.deepEqual(unexpectedHttp, []);
   }
 );

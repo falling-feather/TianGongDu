@@ -268,10 +268,12 @@ function renderContentCheck() {
   const check = state.contentCheck;
   elements.contentCheckSummary.textContent = contentCheckSummary(check);
   const nativeDisabled = !state.opened || check.status === "unavailable";
+  const interactionBlocked =
+    hasFieldBuffers() || state.conflict || contentCheckInFlight;
   elements.contentCheckButton.disabled = nativeDisabled;
   elements.contentCheckButton.setAttribute(
     "aria-disabled",
-    String(nativeDisabled || contentCheckInFlight)
+    String(nativeDisabled || interactionBlocked)
   );
   elements.contentCheckButton.setAttribute(
     "aria-busy",
@@ -314,6 +316,20 @@ function beginContentAction() {
   contentActionEpoch += 1;
 }
 
+function markContentCheckStaleForFieldBuffer() {
+  beginContentAction();
+  if (state.opened && state.contentCheck.status !== "unavailable") {
+    state = {
+      ...state,
+      contentCheck: {
+        ...state.contentCheck,
+        status: "stale"
+      }
+    };
+    elements.diagnosticCountLive.textContent = "";
+  }
+}
+
 function bufferedEntry(field) {
   return fieldBuffers.get(objectBufferKey())?.get(field.name) ?? null;
 }
@@ -322,7 +338,16 @@ function recordFieldBuffer(field, input, invalid = false) {
   const key = objectBufferKey();
   let buffer = fieldBuffers.get(key);
   const original = String(field.value);
-  if (input.value === original) {
+  const previous = buffer?.get(field.name) ?? null;
+  const next =
+    input.value === original ? null : { value: input.value, invalid };
+  const changed =
+    previous?.value !== next?.value || previous?.invalid !== next?.invalid;
+  if (!changed) {
+    updateSaveAvailability();
+    return;
+  }
+  if (next === null) {
     buffer?.delete(field.name);
     if (buffer?.size === 0) {
       fieldBuffers.delete(key);
@@ -332,8 +357,10 @@ function recordFieldBuffer(field, input, invalid = false) {
       buffer = new Map();
       fieldBuffers.set(key, buffer);
     }
-    buffer.set(field.name, { value: input.value, invalid });
+    buffer.set(field.name, next);
   }
+  markContentCheckStaleForFieldBuffer();
+  renderContentCheck();
   updateSaveAvailability();
 }
 
@@ -986,6 +1013,8 @@ async function checkContent() {
   if (
     !state.opened ||
     state.contentCheck.status === "unavailable" ||
+    hasFieldBuffers() ||
+    state.conflict ||
     contentCheckInFlight
   ) {
     return;

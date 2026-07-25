@@ -19,7 +19,9 @@ const USER_MESSAGES = Object.freeze({
   invalid_request: "当前操作包含无法接受的字段值。",
   io_error: "文件操作未完成，原文件与当前草稿均保持不变。",
   save_failed: "保存未完成，当前草稿仍处于未保存状态。",
-  no_document: "请先打开一个作者文档。"
+  no_document: "请先打开一个作者文档。",
+  compiler_unavailable: "共享内容检查当前不可用。",
+  check_in_flight: "共享内容检查正在进行，请等待本次检查完成。"
 });
 
 const elements = {
@@ -44,6 +46,10 @@ const elements = {
   inspectorFieldset: document.querySelector("#inspector-fieldset"),
   fieldGrid: document.querySelector("#field-grid"),
   applyButton: document.querySelector("#apply-button"),
+  contentCheckButton: document.querySelector("#content-check-button"),
+  contentCheckSummary: document.querySelector("#content-check-summary"),
+  diagnosticList: document.querySelector("#diagnostic-list"),
+  diagnosticCountLive: document.querySelector("#diagnostic-count-live"),
   status: document.querySelector("#status-live"),
   error: document.querySelector("#error-live")
 };
@@ -76,13 +82,17 @@ const GROUPS = [
 let state = {
   opened: false,
   relativePath: null,
-  cas: null,
   conflict: false,
   document: null,
   revision: null,
   savedRevision: null,
   dirty: false,
-  lastError: null
+  lastError: null,
+  contentCheck: {
+    status: "unavailable",
+    hasPreparedPackage: false,
+    diagnostics: []
+  }
 };
 let selectedGroup = "player";
 let selectedId = null;
@@ -91,6 +101,9 @@ let conflictTrigger = null;
 let applyInFlight = false;
 let saveInFlight = false;
 let documentEpoch = 0;
+let contentActionEpoch = 0;
+let contentCheckInFlight = false;
+let contentCheckRequestSequence = 0;
 let activeFields = [];
 const expandedGroups = new Set(GROUPS.map((group) => group.key));
 const fieldBuffers = new Map();
@@ -185,6 +198,120 @@ function updateSaveAvailability() {
 function updateApplyAvailability() {
   elements.applyButton.setAttribute("aria-disabled", String(applyInFlight));
   elements.applyButton.setAttribute("aria-busy", String(applyInFlight));
+}
+
+function contentCheckSummary(check) {
+  switch (check.status) {
+    case "unavailable":
+      return "共享内容检查当前不可用。作者草稿保持不变。";
+    case "idle":
+      return state.opened
+        ? "尚未执行共享内容检查。"
+        : "打开作者文档后可执行共享内容检查。";
+    case "compiling":
+      return "正在执行共享内容检查。";
+    case "publishing":
+      return "内容检查已完成，正在准备包。";
+    case "ready":
+      return "包已准备；尚未导出，也未启动 Preview 或试玩。";
+    case "stale":
+      return "本次共享内容检查结果已过期，请重新检查当前草稿。";
+    case "validation_failed":
+      return check.hasPreparedPackage
+        ? "共享内容检查未通过；上一份已准备包保持不变。"
+        : "共享内容检查未通过；没有新的已准备包。";
+    case "bridge_failed":
+      return "共享内容检查未完成；作者草稿和已准备包状态未改变。";
+    default:
+      return "共享内容检查当前不可用。作者草稿保持不变。";
+  }
+}
+
+function resolveDiagnosticLocator(locator) {
+  if (
+    locator === null ||
+    typeof locator !== "object" ||
+    (state.contentCheck.status !== "ready" &&
+      state.contentCheck.status !== "validation_failed")
+  ) {
+    return null;
+  }
+  const group = groupByKey(locator.group);
+  if (!group) {
+    return null;
+  }
+  const record = recordsFor(group).find(({ id }) => id === locator.stableId);
+  if (!record) {
+    return null;
+  }
+  const field = fieldsFor(group, record).find(
+    (candidate) => !candidate.section && candidate.name === locator.field
+  );
+  return field ? { group, record, field } : null;
+}
+
+function locateDiagnostic(locator) {
+  const resolved = resolveDiagnosticLocator(locator);
+  if (!resolved) {
+    return;
+  }
+  selectedGroup = resolved.group.key;
+  selectedId = resolved.record.id;
+  expandedGroups.add(selectedGroup);
+  treeActiveKey = "object:" + selectedGroup + ":" + selectedId;
+  render();
+  const target = elements.inspectorForm.elements.namedItem(resolved.field.name);
+  target?.focus();
+}
+
+function renderContentCheck() {
+  const check = state.contentCheck;
+  elements.contentCheckSummary.textContent = contentCheckSummary(check);
+  const nativeDisabled = !state.opened || check.status === "unavailable";
+  elements.contentCheckButton.disabled = nativeDisabled;
+  elements.contentCheckButton.setAttribute(
+    "aria-disabled",
+    String(nativeDisabled || contentCheckInFlight)
+  );
+  elements.contentCheckButton.setAttribute(
+    "aria-busy",
+    String(contentCheckInFlight)
+  );
+  elements.diagnosticList.replaceChildren();
+  for (const diagnostic of check.diagnostics) {
+    const item = document.createElement("li");
+    item.className = "diagnostic-item";
+    const severity = document.createElement("span");
+    severity.className = "diagnostic-severity";
+    severity.textContent = diagnostic.severity === "warning" ? "提醒" : "错误";
+    const message = document.createElement("p");
+    message.className = "diagnostic-message";
+    message.textContent = diagnostic.message;
+    item.append(severity, message);
+    if (resolveDiagnosticLocator(diagnostic.locator)) {
+      const locate = document.createElement("button");
+      locate.className = "button diagnostic-locator";
+      locate.type = "button";
+      locate.textContent = "定位到字段";
+      locate.addEventListener("click", () =>
+        locateDiagnostic(diagnostic.locator)
+      );
+      item.append(locate);
+    }
+    elements.diagnosticList.append(item);
+  }
+}
+
+function announceDiagnosticCount() {
+  const count = state.contentCheck.diagnostics.length;
+  elements.diagnosticCountLive.textContent =
+    count === 0
+      ? "共享内容检查完成，没有发现问题。"
+      : "共享内容检查发现 " + count + " 个问题。";
+}
+
+function beginContentAction() {
+  contentActionEpoch += 1;
 }
 
 function bufferedEntry(field) {
@@ -591,6 +718,7 @@ function render() {
   }
   renderTree();
   renderInspector();
+  renderContentCheck();
   updateSaveAvailability();
   updateApplyAvailability();
 }
@@ -687,6 +815,7 @@ async function openDocument() {
     setStatus("已取消打开，内存草稿和表单输入保持不变。");
     return;
   }
+  beginContentAction();
   try {
     state = await api("/api/open", {
       method: "POST",
@@ -727,6 +856,7 @@ async function reloadDocument(confirmFromConflict = false) {
     setStatus("已取消重新加载，内存草稿和表单输入保持不变。");
     return false;
   }
+  beginContentAction();
   try {
     state = await api("/api/reload", {
       method: "POST",
@@ -801,6 +931,7 @@ async function saveDocument() {
   const savingState = state;
   const savingRevision = savingState.revision;
   const savingEpoch = documentEpoch;
+  beginContentAction();
   saveInFlight = true;
   updateSaveAvailability();
   elements.saveButton.focus();
@@ -809,8 +940,7 @@ async function saveDocument() {
       method: "POST",
       deferErrorState: true,
       body: {
-        expectedRevision: savingState.revision,
-        expectedCas: savingState.cas
+        expectedRevision: savingState.revision
       }
     });
     if (
@@ -849,6 +979,83 @@ async function saveDocument() {
   } finally {
     saveInFlight = false;
     updateSaveAvailability();
+  }
+}
+
+async function checkContent() {
+  if (
+    !state.opened ||
+    state.contentCheck.status === "unavailable" ||
+    contentCheckInFlight
+  ) {
+    return;
+  }
+  const requestSequence = ++contentCheckRequestSequence;
+  const checkingDocumentEpoch = documentEpoch;
+  const checkingActionEpoch = contentActionEpoch;
+  const checkingRevision = state.revision;
+  contentCheckInFlight = true;
+  state = {
+    ...state,
+    contentCheck: {
+      ...state.contentCheck,
+      status: "compiling"
+    }
+  };
+  renderContentCheck();
+  try {
+    const checkedState = await api("/api/content-check", {
+      method: "POST",
+      deferErrorState: true,
+      body: { expectedRevision: checkingRevision }
+    });
+    if (
+      requestSequence !== contentCheckRequestSequence ||
+      documentEpoch !== checkingDocumentEpoch ||
+      contentActionEpoch !== checkingActionEpoch ||
+      state.revision !== checkingRevision ||
+      checkedState.revision !== checkingRevision
+    ) {
+      return;
+    }
+    const focusedControl = captureFocusedControl();
+    state = checkedState;
+    render();
+    restoreFocusedControl(focusedControl);
+    if (
+      state.contentCheck.status === "ready" ||
+      state.contentCheck.status === "validation_failed"
+    ) {
+      announceDiagnosticCount();
+    }
+  } catch (error) {
+    if (
+      requestSequence !== contentCheckRequestSequence ||
+      documentEpoch !== checkingDocumentEpoch ||
+      contentActionEpoch !== checkingActionEpoch ||
+      state.revision !== checkingRevision
+    ) {
+      return;
+    }
+    const focusedControl = captureFocusedControl();
+    if (error.state) {
+      state = error.state;
+    } else {
+      state = {
+        ...state,
+        contentCheck: {
+          ...state.contentCheck,
+          status: "bridge_failed"
+        }
+      };
+    }
+    render();
+    restoreFocusedControl(focusedControl);
+  } finally {
+    if (requestSequence === contentCheckRequestSequence) {
+      contentCheckInFlight = false;
+      renderContentCheck();
+    }
   }
 }
 
@@ -928,6 +1135,10 @@ elements.saveButton.addEventListener("click", () => {
   void saveDocument();
 });
 
+elements.contentCheckButton.addEventListener("click", () => {
+  void checkContent();
+});
+
 elements.inspectorForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (applyInFlight) {
@@ -943,6 +1154,7 @@ elements.inspectorForm.addEventListener("submit", async (event) => {
   let preserveInvalidFieldFocus = false;
   try {
     const raw = parseFormValues();
+    beginContentAction();
     state = await api("/api/update", {
       method: "POST",
       body: {

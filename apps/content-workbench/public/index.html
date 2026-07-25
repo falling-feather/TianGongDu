@@ -56,6 +56,38 @@
         </div>
       </section>
 
+      <section class="content-check" aria-labelledby="content-check-heading">
+        <div class="content-check-header">
+          <div>
+            <p class="panel-index">SHARED CONTENT</p>
+            <h2 id="content-check-heading">共享内容检查</h2>
+          </div>
+          <button
+            id="content-check-button"
+            class="button primary"
+            type="button"
+            disabled
+          >
+            检查当前草稿
+          </button>
+        </div>
+        <p id="content-check-summary" class="content-check-summary">
+          共享内容检查当前不可用。作者草稿保持不变。
+        </p>
+        <ol
+          id="diagnostic-list"
+          class="diagnostic-list"
+          aria-label="共享内容检查问题"
+        ></ol>
+        <p
+          id="diagnostic-count-live"
+          class="visually-hidden"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        ></p>
+      </section>
+
       <main class="workbench-grid">
         <nav class="object-browser" aria-labelledby="objects-heading">
           <div class="panel-heading">

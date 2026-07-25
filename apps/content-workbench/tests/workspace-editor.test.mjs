@@ -16,6 +16,7 @@ import test from "node:test";
 import { serializeSandboxAuthoringDocument } from "../src/authoring-document.mjs";
 import { createLocalWorkspace } from "../src/local-workspace.mjs";
 import { createWorkbenchController } from "../src/workbench-controller.mjs";
+import { startWorkbenchServer } from "../src/workbench-server.mjs";
 
 const fixtureUrl = new URL(
   "../../../content/design/system-demo.sandbox.json",
@@ -79,7 +80,11 @@ function editableValues(document, kind, id) {
 }
 
 async function openedController(root, options = {}) {
-  const { observeRead, ...workspaceOptions } = options;
+  const {
+    observeRead,
+    compilerService = null,
+    ...workspaceOptions
+  } = options;
   const localWorkspace = await createLocalWorkspace({
     rootPath: root,
     ...workspaceOptions
@@ -95,9 +100,100 @@ async function openedController(root, options = {}) {
         }
       }
     : localWorkspace;
-  const controller = createWorkbenchController({ workspace });
+  const controller = createWorkbenchController({ workspace, compilerService });
   await controller.open({ relativePath: "demo.json", confirmDiscard: false });
   return controller;
+}
+
+function providerIdentity(generation) {
+  return Object.freeze({
+    generation,
+    checksum: Object.freeze(Array(32).fill(generation))
+  });
+}
+
+function validBindingResult() {
+  return Object.freeze({
+    code: 1,
+    domain: 255,
+    field: 65535,
+    recordIndex: 0,
+    subjectId: null,
+    relatedId: null
+  });
+}
+
+function compilerResult({
+  outcome,
+  generation,
+  diagnostics = [],
+  bindingValidation = validBindingResult(),
+  packageBytes = outcome === 1 ? new Uint8Array([84, 71, 68, generation]) : null
+}) {
+  return Object.freeze({
+    complete: true,
+    outcome,
+    compileStatus: outcome === 1 ? 1 : 2,
+    packageError: outcome === 1 ? 0 : 17,
+    identity: providerIdentity(generation),
+    diagnostics: Object.freeze(diagnostics),
+    bindingValidation,
+    packageBytes
+  });
+}
+
+function packageDiagnostic({
+  code,
+  severity = 1,
+  section,
+  field,
+  recordIndex,
+  subjectId,
+  relatedId = null
+}) {
+  return Object.freeze({
+    code,
+    severity,
+    section,
+    field,
+    recordIndex,
+    subjectId,
+    relatedId
+  });
+}
+
+function createCompilerService(responses) {
+  const queue = [...responses];
+  let identity = providerIdentity(0);
+  let closed = 0;
+  const calls = [];
+  return {
+    calls,
+    get closed() {
+      return closed;
+    },
+    identity() {
+      return providerIdentity(identity.generation);
+    },
+    compileAndPublish(runtime, expectedIdentity) {
+      calls.push({ runtime, expectedIdentity });
+      const response = queue.shift();
+      if (response instanceof Error) {
+        throw response;
+      }
+      const result =
+        typeof response === "function"
+          ? response(runtime, expectedIdentity)
+          : response;
+      if (result.outcome === 1) {
+        identity = result.identity;
+      }
+      return result;
+    },
+    close() {
+      closed += 1;
+    }
+  };
 }
 
 function stateSnapshot(controller) {
@@ -798,4 +894,244 @@ test("a failed save releases the document-switch barrier", async (t) => {
     JSON.parse(await readFile(path.join(root, "other.json"), "utf8")).runtime.player.pose.x,
     622
   );
+});
+
+test("shared diagnostics preserve author and package last-valid layers", async (t) => {
+  const root = await temporaryWorkspace(t);
+  const actorId = "actor.system_demo.entry.slot_a";
+  const interactionId = "interaction.system_demo.console";
+  const published = compilerResult({ outcome: 1, generation: 1 });
+  const missingReference = compilerResult({
+    outcome: 2,
+    generation: 1,
+    diagnostics: [
+      packageDiagnostic({
+        code: 21,
+        section: 6,
+        field: 10,
+        recordIndex: 0,
+        subjectId: actorId
+      })
+    ]
+  });
+  const graphAndBinding = compilerResult({
+    outcome: 2,
+    generation: 1,
+    diagnostics: [
+      packageDiagnostic({
+        code: 23,
+        section: 13,
+        field: 26,
+        recordIndex: 0,
+        subjectId: "objective.system_demo.entry"
+      })
+    ],
+    bindingValidation: Object.freeze({
+      code: 8,
+      domain: 1,
+      field: 3,
+      recordIndex: 0,
+      subjectId: interactionId,
+      relatedId: null
+    })
+  });
+  const service = createCompilerService([
+    published,
+    missingReference,
+    graphAndBinding,
+    new Error("injected transport detail"),
+    compilerResult({ outcome: 3, generation: 1 })
+  ]);
+  const controller = await openedController(root, { compilerService: service });
+  assert.equal(controller.view().contentCheck.status, "idle");
+
+  const originalDocument = controller.editorState.document;
+  const originalLastValid = controller.editorState.lastValidDocument;
+  const ready = controller.checkContent({ expectedRevision: 0 });
+  assert.equal(ready.contentCheck.status, "ready");
+  assert.equal(ready.contentCheck.hasPreparedPackage, true);
+  assert.deepEqual(ready.contentCheck.diagnostics, []);
+  assert.strictEqual(controller.editorState.document, originalDocument);
+  assert.strictEqual(controller.editorState.lastValidDocument, originalLastValid);
+  assert.equal(Object.hasOwn(ready.contentCheck, "generation"), false);
+  assert.equal(Object.hasOwn(ready.contentCheck, "checksum"), false);
+  assert.equal(Object.hasOwn(ready.contentCheck, "packageBytes"), false);
+  const publishedEvidence = controller.validatedPackageEvidence();
+  assert.equal(publishedEvidence.revision, 0);
+  assert.equal(publishedEvidence.generation, 1);
+  assert.equal(publishedEvidence.packageBytes, 4);
+  assert.match(publishedEvidence.projectionSha256, /^sha256:[0-9a-f]{64}$/);
+  assert.match(publishedEvidence.packageSha256, /^sha256:[0-9a-f]{64}$/);
+  assert.equal(Object.hasOwn(service.calls[0].runtime, "editor"), false);
+  assert.equal(service.calls[0].runtime.packageId, "system-demo.package");
+  assert.deepEqual(service.calls[0].expectedIdentity, providerIdentity(0));
+
+  const values = editableValues(
+    controller.editorState.document,
+    "actors",
+    actorId
+  );
+  values.regionId = "region.missing";
+  controller.updateObject({
+    kind: "actors",
+    id: actorId,
+    values,
+    expectedRevision: 0
+  });
+  assert.equal(controller.view().contentCheck.status, "stale");
+  const invalidAuthorDocument = controller.editorState.document;
+  const invalidAuthorLastValid = controller.editorState.lastValidDocument;
+
+  const rejected = controller.checkContent({ expectedRevision: 1 });
+  assert.equal(rejected.contentCheck.status, "validation_failed");
+  assert.equal(rejected.contentCheck.hasPreparedPackage, true);
+  assert.deepEqual(rejected.contentCheck.diagnostics, [
+    {
+      severity: "error",
+      message: "存在指向缺失对象的引用。",
+      locator: {
+        group: "actors",
+        stableId: actorId,
+        field: "regionId"
+      }
+    }
+  ]);
+  assert.deepEqual(controller.validatedPackageEvidence(), publishedEvidence);
+  assert.strictEqual(controller.editorState.document, invalidAuthorDocument);
+  assert.strictEqual(
+    controller.editorState.lastValidDocument,
+    invalidAuthorLastValid
+  );
+
+  const ordered = controller.checkContent({ expectedRevision: 1 });
+  assert.equal(ordered.contentCheck.status, "validation_failed");
+  assert.equal(ordered.contentCheck.diagnostics.length, 2);
+  assert.equal(ordered.contentCheck.diagnostics[0].message, "依赖关系中存在循环。");
+  assert.equal(ordered.contentCheck.diagnostics[0].locator, null);
+  assert.deepEqual(ordered.contentCheck.diagnostics[1].locator, {
+    group: "interactions",
+    stableId: interactionId,
+    field: "rangeMm"
+  });
+  const orderedDiagnostics = ordered.contentCheck.diagnostics;
+
+  const bridgeFailure = controller.checkContent({ expectedRevision: 1 });
+  assert.equal(bridgeFailure.contentCheck.status, "bridge_failed");
+  assert.deepEqual(bridgeFailure.contentCheck.diagnostics, orderedDiagnostics);
+  assert.deepEqual(controller.validatedPackageEvidence(), publishedEvidence);
+  assert.strictEqual(controller.editorState.document, invalidAuthorDocument);
+  assert.strictEqual(
+    controller.editorState.lastValidDocument,
+    invalidAuthorLastValid
+  );
+
+  const stale = controller.checkContent({ expectedRevision: 1 });
+  assert.equal(stale.contentCheck.status, "stale");
+  assert.deepEqual(stale.contentCheck.diagnostics, orderedDiagnostics);
+  assert.deepEqual(controller.validatedPackageEvidence(), publishedEvidence);
+  assert.equal(service.calls.length, 5);
+  for (const call of service.calls.slice(1)) {
+    assert.deepEqual(call.expectedIdentity, providerIdentity(1));
+  }
+});
+
+test("content check fails closed for partial output and duplicate submission", async (t) => {
+  const root = await temporaryWorkspace(t);
+  let controller;
+  let reentrantFailure = null;
+  const service = createCompilerService([
+    () => {
+      try {
+        controller.checkContent({ expectedRevision: 0 });
+      } catch (error) {
+        reentrantFailure = error;
+      }
+      return compilerResult({ outcome: 1, generation: 1 });
+    },
+    Object.freeze({
+      ...compilerResult({ outcome: 1, generation: 2 }),
+      packageBytes: null
+    }),
+    compilerResult({
+      outcome: 2,
+      generation: 1,
+      diagnostics: Array.from({ length: 513 }, () =>
+        packageDiagnostic({
+          code: 21,
+          section: 6,
+          field: 10,
+          recordIndex: 0,
+          subjectId: "actor.system_demo.entry.slot_a"
+        })
+      )
+    })
+  ]);
+  controller = await openedController(root, { compilerService: service });
+  controller.checkContent({ expectedRevision: 0 });
+  assert.equal(reentrantFailure?.code, "check_in_flight");
+  assert.equal(service.calls.length, 1);
+  const evidence = controller.validatedPackageEvidence();
+
+  const missingArtifact = controller.checkContent({ expectedRevision: 0 });
+  assert.equal(missingArtifact.contentCheck.status, "bridge_failed");
+  assert.deepEqual(controller.validatedPackageEvidence(), evidence);
+
+  const overPresentationCapacity = controller.checkContent({
+    expectedRevision: 0
+  });
+  assert.equal(overPresentationCapacity.contentCheck.status, "bridge_failed");
+  assert.deepEqual(controller.validatedPackageEvidence(), evidence);
+  assert.equal(service.calls.length, 3);
+});
+
+test("server keeps CAS and package identity outside the browser DTO", async (t) => {
+  const root = await temporaryWorkspace(t);
+  const service = createCompilerService([
+    compilerResult({ outcome: 1, generation: 1 })
+  ]);
+  const running = await startWorkbenchServer({
+    workspaceRoot: root,
+    sandboxService: service
+  });
+  t.after(() => running.close());
+  const shell = await fetch(running.url);
+  const cookie = shell.headers.get("set-cookie").split(";")[0];
+  const origin = new URL(running.url).origin;
+  const request = async (pathname, body) =>
+    fetch(new URL(pathname, running.url), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: cookie,
+        Origin: origin
+      },
+      body: JSON.stringify(body)
+    });
+
+  const openedResponse = await request("/api/open", {
+    relativePath: "demo.json",
+    confirmDiscard: false
+  });
+  assert.equal(openedResponse.status, 200);
+  const opened = (await openedResponse.json()).state;
+  assert.equal(Object.hasOwn(opened, "cas"), false);
+
+  const checkedResponse = await request("/api/content-check", {
+    expectedRevision: 0
+  });
+  assert.equal(checkedResponse.status, 200);
+  const checked = (await checkedResponse.json()).state;
+  const browserBytes = JSON.stringify(checked);
+  assert.equal(Object.hasOwn(checked, "cas"), false);
+  assert.equal(/generation|checksum|packageBytes|subjectKey|relatedKey/.test(browserBytes), false);
+  assert.equal(checked.contentCheck.status, "ready");
+
+  const rejectedSave = await request("/api/save", {
+    expectedRevision: 0,
+    expectedCas: "browser-must-not-own-this"
+  });
+  assert.equal(rejectedSave.status, 400);
+  const saved = await request("/api/save", { expectedRevision: 0 });
+  assert.equal(saved.status, 200);
+  assert.equal(Object.hasOwn((await saved.json()).state, "cas"), false);
 });

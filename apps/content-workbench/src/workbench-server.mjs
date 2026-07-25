@@ -5,6 +5,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { createLocalWorkspace } from "./local-workspace.mjs";
+import { createSandboxPackageServiceLoader } from "./sandbox-package-service-loader.mjs";
 import { createWorkbenchController } from "./workbench-controller.mjs";
 
 const MAX_REQUEST_BYTES = 2 * 1024 * 1024;
@@ -89,6 +90,12 @@ function hasSessionCookie(request, sessionToken) {
   return cookies.includes("tgd_workbench_session=" + sessionToken);
 }
 
+function browserState(controller) {
+  const { cas: privateCas, ...state } = controller.view();
+  void privateCas;
+  return state;
+}
+
 function apiError(error, controller) {
   return {
     status: Number.isInteger(error?.status) ? error.status : 500,
@@ -96,21 +103,76 @@ function apiError(error, controller) {
       error: {
         code: typeof error?.code === "string" ? error.code : "internal_error",
         message:
-          typeof error?.message === "string"
-            ? error.message
+          typeof error?.code === "string"
+            ? "Workbench request was not completed"
             : "Workbench request failed"
       },
-      state: controller.view()
+      state: browserState(controller)
     }
   };
 }
 
-export async function startWorkbenchServer({ workspaceRoot, faultInjector }) {
+function expectBrowserRequest(value, keys) {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    Object.getPrototypeOf(value) !== Object.prototype ||
+    Reflect.ownKeys(value).length !== keys.length ||
+    Reflect.ownKeys(value).some(
+      (key) => typeof key !== "string" || !keys.includes(key)
+    )
+  ) {
+    const error = new Error("invalid browser request");
+    error.code = "invalid_request";
+    error.status = 400;
+    throw error;
+  }
+  return value;
+}
+
+async function loadCompilerService({
+  sandboxService,
+  sandboxBuildDirectory
+}) {
+  if (sandboxService !== null && sandboxBuildDirectory !== null) {
+    throw new Error(
+      "sandboxService and sandboxBuildDirectory are mutually exclusive"
+    );
+  }
+  if (sandboxService !== null) {
+    return sandboxService;
+  }
+  if (sandboxBuildDirectory === null) {
+    return null;
+  }
+  try {
+    return await createSandboxPackageServiceLoader({
+      buildDirectory: sandboxBuildDirectory
+    }).load();
+  } catch {
+    return null;
+  }
+}
+
+export async function startWorkbenchServer({
+  workspaceRoot,
+  faultInjector,
+  sandboxService = null,
+  sandboxBuildDirectory = null
+}) {
   const workspace = await createLocalWorkspace({
     rootPath: workspaceRoot,
     faultInjector
   });
-  const controller = createWorkbenchController({ workspace });
+  const compilerService = await loadCompilerService({
+    sandboxService,
+    sandboxBuildDirectory
+  });
+  const controller = createWorkbenchController({
+    workspace,
+    compilerService
+  });
   const sessionToken = randomBytes(24).toString("base64url");
   let origin = null;
 
@@ -165,23 +227,46 @@ export async function startWorkbenchServer({ workspaceRoot, faultInjector }) {
 
       try {
         if (url.pathname === "/api/state" && request.method === "GET") {
-          writeJson(response, 200, { state: controller.view() });
+          writeJson(response, 200, { state: browserState(controller) });
           return;
         }
         if (url.pathname === "/api/open" && request.method === "POST") {
-          writeJson(response, 200, { state: await controller.open(await readJson(request)) });
+          await controller.open(await readJson(request));
+          writeJson(response, 200, { state: browserState(controller) });
           return;
         }
         if (url.pathname === "/api/reload" && request.method === "POST") {
-          writeJson(response, 200, { state: await controller.reload(await readJson(request)) });
+          await controller.reload(await readJson(request));
+          writeJson(response, 200, { state: browserState(controller) });
           return;
         }
         if (url.pathname === "/api/update" && request.method === "POST") {
-          writeJson(response, 200, { state: controller.updateObject(await readJson(request)) });
+          controller.updateObject(await readJson(request));
+          writeJson(response, 200, { state: browserState(controller) });
           return;
         }
         if (url.pathname === "/api/save" && request.method === "POST") {
-          writeJson(response, 200, { state: await controller.save(await readJson(request)) });
+          const body = expectBrowserRequest(
+            await readJson(request),
+            ["expectedRevision"]
+          );
+          await controller.save({
+            expectedRevision: body.expectedRevision,
+            expectedCas: controller.view().cas
+          });
+          writeJson(response, 200, { state: browserState(controller) });
+          return;
+        }
+        if (
+          url.pathname === "/api/content-check" &&
+          request.method === "POST"
+        ) {
+          const body = expectBrowserRequest(
+            await readJson(request),
+            ["expectedRevision"]
+          );
+          controller.checkContent(body);
+          writeJson(response, 200, { state: browserState(controller) });
           return;
         }
         writeJson(response, 404, { error: { code: "not_found" } });
@@ -209,6 +294,7 @@ export async function startWorkbenchServer({ workspaceRoot, faultInjector }) {
   const address = server.address();
   if (address === null || typeof address === "string") {
     await new Promise((resolve) => server.close(resolve));
+    compilerService?.close?.();
     throw new Error("Workbench server did not receive a TCP address");
   }
   origin = "http://" + LOOPBACK_HOST + ":" + address.port;
@@ -218,18 +304,50 @@ export async function startWorkbenchServer({ workspaceRoot, faultInjector }) {
     workspaceRoot: workspace.rootPath,
     controller,
     async close() {
-      await new Promise((resolve, reject) => {
-        server.close((error) => (error ? reject(error) : resolve()));
-      });
+      try {
+        await new Promise((resolve, reject) => {
+          server.close((error) => (error ? reject(error) : resolve()));
+        });
+      } finally {
+        compilerService?.close?.();
+      }
     }
   });
 }
 
-function commandLineWorkspace(args) {
-  if (args.length !== 2 || args[0] !== "--workspace") {
-    throw new Error("usage: npm start -- --workspace <existing-directory>");
+function commandLineOptions(args) {
+  let workspaceRoot = null;
+  let sandboxBuildDirectory = null;
+  for (let index = 0; index < args.length; index += 2) {
+    const name = args[index];
+    const value = args[index + 1];
+    if (
+      typeof value !== "string" ||
+      (name !== "--workspace" && name !== "--sandbox-service-build")
+    ) {
+      throw new Error(
+        "usage: npm start -- --workspace <existing-directory> " +
+          "[--sandbox-service-build <repository-relative-build-directory>]"
+      );
+    }
+    if (name === "--workspace" && workspaceRoot === null) {
+      workspaceRoot = value;
+    } else if (
+      name === "--sandbox-service-build" &&
+      sandboxBuildDirectory === null
+    ) {
+      sandboxBuildDirectory = value;
+    } else {
+      throw new Error("Workbench command-line option was repeated");
+    }
   }
-  return args[1];
+  if (workspaceRoot === null) {
+    throw new Error(
+      "usage: npm start -- --workspace <existing-directory> " +
+        "[--sandbox-service-build <repository-relative-build-directory>]"
+    );
+  }
+  return { workspaceRoot, sandboxBuildDirectory };
 }
 
 const invokedAsScript =
@@ -238,9 +356,9 @@ const invokedAsScript =
 
 if (invokedAsScript) {
   try {
-    const running = await startWorkbenchServer({
-      workspaceRoot: commandLineWorkspace(process.argv.slice(2))
-    });
+    const running = await startWorkbenchServer(
+      commandLineOptions(process.argv.slice(2))
+    );
     console.log("Sandbox Content Workbench: " + running.url);
     console.log("Workspace root: " + running.workspaceRoot);
     process.once("SIGINT", async () => {

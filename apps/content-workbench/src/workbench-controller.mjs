@@ -1,8 +1,12 @@
+import { createHash } from "node:crypto";
+
+import { projectSandboxRuntimeDocument } from "./authoring-document.mjs";
 import {
   createSandboxEditorState,
   reduceSandboxEditorState,
   serializeSandboxEditorState
 } from "./editor-state.mjs";
+import { presentSandboxDiagnostics } from "./sandbox-diagnostics-presentation.mjs";
 
 const OBJECT_KINDS = new Set([
   "player",
@@ -12,6 +16,7 @@ const OBJECT_KINDS = new Set([
   "interactions",
   "mechanisms"
 ]);
+const EMPTY_DIAGNOSTICS = Object.freeze([]);
 
 export class WorkbenchControllerError extends Error {
   constructor(code, message, status = 400) {
@@ -219,7 +224,57 @@ function convertExternalError(error, fallbackCode) {
   );
 }
 
-export function createWorkbenchController({ workspace }) {
+function contentCheckState(status, hasPreparedPackage, diagnostics = EMPTY_DIAGNOSTICS) {
+  return Object.freeze({
+    status,
+    hasPreparedPackage,
+    diagnostics: Object.freeze([...diagnostics])
+  });
+}
+
+function requireCompilerService(value) {
+  if (value === null) {
+    return null;
+  }
+  if (
+    typeof value !== "object" ||
+    typeof value.identity !== "function" ||
+    typeof value.compileAndPublish !== "function"
+  ) {
+    fail(
+      "invalid_compiler_service",
+      "compilerService must provide identity and compileAndPublish functions"
+    );
+  }
+  return value;
+}
+
+function ownProviderIdentity(value) {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    !Number.isSafeInteger(value.generation) ||
+    value.generation < 0 ||
+    value.generation > 0xffffffff ||
+    !Array.isArray(value.checksum) ||
+    value.checksum.length !== 32 ||
+    value.checksum.some(
+      (byte) => !Number.isSafeInteger(byte) || byte < 0 || byte > 255
+    )
+  ) {
+    throw new Error("Sandbox package service returned an invalid identity");
+  }
+  return Object.freeze({
+    generation: value.generation,
+    checksum: Object.freeze([...value.checksum])
+  });
+}
+
+function sha256(value) {
+  return "sha256:" + createHash("sha256").update(value).digest("hex");
+}
+
+export function createWorkbenchController({ workspace, compilerService = null }) {
   if (
     workspace === null ||
     typeof workspace !== "object" ||
@@ -228,6 +283,7 @@ export function createWorkbenchController({ workspace }) {
   ) {
     fail("invalid_workspace", "workspace must provide read and save functions");
   }
+  const service = requireCompilerService(compilerService);
 
   let editorState = null;
   let relativePath = null;
@@ -235,6 +291,14 @@ export function createWorkbenchController({ workspace }) {
   let conflict = false;
   let documentEpoch = 0;
   let pendingSave = null;
+  let activitySequence = 0;
+  let checkSequence = 0;
+  let checkInFlight = false;
+  let validatedOwningPackage = null;
+  let contentCheck = contentCheckState(
+    service ? "idle" : "unavailable",
+    false
+  );
 
   function view() {
     return {
@@ -246,8 +310,34 @@ export function createWorkbenchController({ workspace }) {
       revision: editorState?.revision ?? null,
       savedRevision: editorState?.savedRevision ?? null,
       dirty: editorState?.dirty ?? false,
-      lastError: editorState?.lastError ?? null
+      lastError: editorState?.lastError ?? null,
+      contentCheck
     };
+  }
+
+  function hasPreparedPackage() {
+    return validatedOwningPackage !== null;
+  }
+
+  function markContentCheckStale() {
+    if (!service) {
+      return;
+    }
+    contentCheck = contentCheckState(
+      contentCheck.status === "idle" && !hasPreparedPackage() ? "idle" : "stale",
+      hasPreparedPackage()
+    );
+  }
+
+  function adoptOpenedDocumentCheckState() {
+    if (!service) {
+      contentCheck = contentCheckState("unavailable", hasPreparedPackage());
+      return;
+    }
+    contentCheck = contentCheckState(
+      hasPreparedPackage() || contentCheck.status !== "idle" ? "stale" : "idle",
+      hasPreparedPackage()
+    );
   }
 
   function requireOpen() {
@@ -282,6 +372,7 @@ export function createWorkbenchController({ workspace }) {
       "open request"
     );
     requireDiscardConfirmation(request.confirmDiscard);
+    activitySequence += 1;
     await waitForPendingSave();
 
     let loaded;
@@ -298,6 +389,7 @@ export function createWorkbenchController({ workspace }) {
     cas = loaded.cas;
     conflict = false;
     documentEpoch += 1;
+    adoptOpenedDocumentCheckState();
     return view();
   }
 
@@ -305,6 +397,7 @@ export function createWorkbenchController({ workspace }) {
     expectExactObject(request, ["confirmDiscard"], "reload request");
     requireOpen();
     requireDiscardConfirmation(request.confirmDiscard);
+    activitySequence += 1;
     await waitForPendingSave();
 
     let loaded;
@@ -320,6 +413,7 @@ export function createWorkbenchController({ workspace }) {
     cas = loaded.cas;
     conflict = false;
     documentEpoch += 1;
+    adoptOpenedDocumentCheckState();
     return view();
   }
 
@@ -356,6 +450,8 @@ export function createWorkbenchController({ workspace }) {
     if (nextState.lastError) {
       fail(nextState.lastError.code, nextState.lastError.message, 422);
     }
+    activitySequence += 1;
+    markContentCheckStale();
     return view();
   }
 
@@ -378,6 +474,8 @@ export function createWorkbenchController({ workspace }) {
       fail("external_change", "document CAS no longer matches", 409);
     }
 
+    activitySequence += 1;
+    markContentCheckStale();
     const savingEpoch = documentEpoch;
     const savingPath = relativePath;
     const savingCas = cas;
@@ -428,12 +526,149 @@ export function createWorkbenchController({ workspace }) {
     }
   }
 
+  function checkContent(request) {
+    expectExactObject(
+      request,
+      ["expectedRevision"],
+      "content check request"
+    );
+    requireOpen();
+    const revision = expectRevision(request.expectedRevision);
+    if (revision !== editorState.revision) {
+      fail("stale_revision", "expected revision does not match", 409);
+    }
+    if (!service) {
+      fail("compiler_unavailable", "Sandbox compiler service is unavailable", 503);
+    }
+    if (checkInFlight) {
+      fail("check_in_flight", "a content check is already running", 409);
+    }
+
+    const previousCheck = contentCheck;
+    const checkingDocumentEpoch = documentEpoch;
+    const checkingActivitySequence = activitySequence;
+    const checkingSequence = ++checkSequence;
+    const checkingDocument = editorState.lastValidDocument;
+    checkInFlight = true;
+    contentCheck = contentCheckState(
+      "compiling",
+      hasPreparedPackage(),
+      previousCheck.diagnostics
+    );
+
+    const isFresh = () =>
+      checkingSequence === checkSequence &&
+      checkingDocumentEpoch === documentEpoch &&
+      checkingActivitySequence === activitySequence &&
+      editorState?.revision === revision &&
+      editorState?.lastValidDocument === checkingDocument;
+
+    try {
+      const runtime = projectSandboxRuntimeDocument(checkingDocument);
+      const projectionBytes = Buffer.from(JSON.stringify(runtime), "utf8");
+      const projectionSha256 = sha256(projectionBytes);
+      const expectedIdentity = ownProviderIdentity(service.identity());
+      contentCheck = contentCheckState(
+        "publishing",
+        hasPreparedPackage(),
+        previousCheck.diagnostics
+      );
+      const result = service.compileAndPublish(runtime, expectedIdentity);
+      if (result && typeof result.then === "function") {
+        throw new Error("Sandbox compiler service must submit synchronously");
+      }
+      if (!isFresh()) {
+        contentCheck = contentCheckState("stale", hasPreparedPackage());
+        return view();
+      }
+
+      const diagnostics = presentSandboxDiagnostics(result, runtime);
+      if (result.outcome === 1) {
+        if (
+          !(result.packageBytes instanceof Uint8Array) ||
+          result.packageBytes.byteLength === 0
+        ) {
+          throw new Error("published result did not include a canonical package");
+        }
+        const identity = ownProviderIdentity(result.identity);
+        const packageBytes = new Uint8Array(result.packageBytes);
+        validatedOwningPackage = {
+          documentEpoch,
+          revision,
+          projectionSha256,
+          identity,
+          packageBytes,
+          packageSha256: sha256(packageBytes)
+        };
+        contentCheck = contentCheckState("ready", true, diagnostics);
+        return view();
+      }
+      if (result.outcome === 2) {
+        contentCheck = contentCheckState(
+          "validation_failed",
+          hasPreparedPackage(),
+          diagnostics
+        );
+        return view();
+      }
+      if (result.outcome === 3 || result.outcome === 4) {
+        contentCheck = contentCheckState(
+          "stale",
+          hasPreparedPackage(),
+          previousCheck.diagnostics
+        );
+        return view();
+      }
+      if (
+        result.outcome === 5 ||
+        result.outcome === 6 ||
+        result.outcome === 7
+      ) {
+        contentCheck = contentCheckState(
+          "bridge_failed",
+          hasPreparedPackage(),
+          previousCheck.diagnostics
+        );
+        return view();
+      }
+      throw new Error("Sandbox package service returned an unknown outcome");
+    } catch {
+      contentCheck = isFresh()
+        ? contentCheckState(
+            "bridge_failed",
+            hasPreparedPackage(),
+            previousCheck.diagnostics
+          )
+        : contentCheckState("stale", hasPreparedPackage());
+      return view();
+    } finally {
+      checkInFlight = false;
+    }
+  }
+
+  function validatedPackageEvidence() {
+    if (!validatedOwningPackage) {
+      return null;
+    }
+    return Object.freeze({
+      documentEpoch: validatedOwningPackage.documentEpoch,
+      revision: validatedOwningPackage.revision,
+      projectionSha256: validatedOwningPackage.projectionSha256,
+      generation: validatedOwningPackage.identity.generation,
+      checksum: Object.freeze([...validatedOwningPackage.identity.checksum]),
+      packageSha256: validatedOwningPackage.packageSha256,
+      packageBytes: validatedOwningPackage.packageBytes.byteLength
+    });
+  }
+
   return Object.freeze({
     view,
     open,
     reload,
     updateObject,
     save,
+    checkContent,
+    validatedPackageEvidence,
     get editorState() {
       return editorState;
     }

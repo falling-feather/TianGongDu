@@ -121,6 +121,7 @@ h3 {
 }
 
 .workspace-bar,
+.content-check,
 .object-browser,
 .inspector {
   border: 1px solid var(--line-strong);
@@ -130,6 +131,67 @@ h3 {
 
 .workspace-bar {
   padding: clamp(0.8rem, 2vw, 1.25rem);
+}
+
+.content-check {
+  min-width: 0;
+  margin-top: 1rem;
+  padding: clamp(0.8rem, 2vw, 1.25rem);
+}
+
+.content-check-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  border-bottom: 2px solid var(--ink);
+  padding-bottom: 0.7rem;
+}
+
+.content-check-summary {
+  margin: 0.8rem 0 0;
+  color: var(--teal-dark);
+  font-weight: 800;
+}
+
+.diagnostic-list {
+  display: grid;
+  gap: 0.55rem;
+  min-width: 0;
+  margin: 0.8rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.diagnostic-item {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
+  gap: 0.55rem 0.75rem;
+  align-items: center;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--warning);
+  background: rgb(255 250 240 / 72%);
+  padding: 0.65rem;
+}
+
+.diagnostic-severity {
+  color: var(--warning);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.diagnostic-message {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.diagnostic-locator {
+  white-space: nowrap;
 }
 
 .workspace-form {
@@ -595,6 +657,16 @@ fieldset {
   .workbench-grid {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  .diagnostic-item {
+    grid-template-columns: max-content minmax(0, 1fr);
+  }
+
+  .diagnostic-locator {
+    grid-column: 1 / -1;
+    width: 100%;
+    white-space: normal;
+  }
 }
 
 @media (max-width: 25rem) {
@@ -611,6 +683,14 @@ fieldset {
   .path-field,
   .path-status {
     grid-column: auto;
+  }
+
+  .content-check-header {
+    align-items: stretch;
+  }
+
+  .content-check-header .button {
+    width: 100%;
   }
 }
 

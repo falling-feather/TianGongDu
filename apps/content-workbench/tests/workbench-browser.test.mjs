@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { copyFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import { chromium } from "playwright";
@@ -12,6 +14,7 @@ const fixtureUrl = new URL(
   "../../../content/design/system-demo.sandbox.json",
   import.meta.url
 );
+const repositoryRoot = fileURLToPath(new URL("../../../", import.meta.url));
 
 async function waitForRevision(page, minimum) {
   await page.waitForFunction(
@@ -49,6 +52,88 @@ async function selectObject(page, kind) {
   ).first();
   await item.click();
   assert.equal(await focusLabel(page), "object-tree");
+}
+
+function browserIdentity(generation) {
+  return Object.freeze({
+    generation,
+    checksum: Object.freeze(Array(32).fill(generation))
+  });
+}
+
+function browserCompilerResult({
+  outcome,
+  generation,
+  diagnostics = [],
+  packageBytes = outcome === 1 ? new Uint8Array([84, 71, 68, generation]) : null
+}) {
+  return Object.freeze({
+    complete: true,
+    outcome,
+    compileStatus: outcome === 1 ? 1 : 2,
+    packageError: outcome === 1 ? 0 : 17,
+    identity: browserIdentity(generation),
+    diagnostics: Object.freeze(diagnostics),
+    bindingValidation: Object.freeze({
+      code: 1,
+      domain: 255,
+      field: 65535,
+      recordIndex: 0,
+      subjectId: null,
+      relatedId: null
+    }),
+    packageBytes
+  });
+}
+
+function createBrowserCompilerService() {
+  let identity = browserIdentity(0);
+  let requests = 0;
+  let closed = 0;
+  return {
+    get requests() {
+      return requests;
+    },
+    get closed() {
+      return closed;
+    },
+    identity() {
+      return browserIdentity(identity.generation);
+    },
+    compileAndPublish(runtime, expectedIdentity) {
+      requests += 1;
+      assert.deepEqual(expectedIdentity, identity);
+      assert.equal(Object.hasOwn(runtime, "editor"), false);
+      if (runtime.player.pose.x === 909) {
+        throw new Error("injected compiler transport detail");
+      }
+      if (runtime.actors[0].regionId === "region.missing") {
+        return browserCompilerResult({
+          outcome: 2,
+          generation: identity.generation,
+          diagnostics: [
+            Object.freeze({
+              code: 21,
+              severity: 1,
+              section: 6,
+              field: 10,
+              recordIndex: 0,
+              subjectId: runtime.actors[0].id,
+              relatedId: null
+            })
+          ]
+        });
+      }
+      identity = browserIdentity(identity.generation + 1);
+      return browserCompilerResult({
+        outcome: 1,
+        generation: identity.generation
+      });
+    },
+    close() {
+      closed += 1;
+    }
+  };
 }
 
 test(
@@ -144,6 +229,11 @@ test(
         .count(),
       1
     );
+    assert.equal(
+      await page.locator("#content-check-summary").textContent(),
+      "共享内容检查当前不可用。作者草稿保持不变。"
+    );
+    assert.equal(await page.locator("#content-check-button").isDisabled(), true);
 
     await page.locator("#path-input").fill("demo.json");
     await page.locator("#path-input").press("Enter");
@@ -690,7 +780,7 @@ test(
     const holdSaveErrorAcrossReload = async (route) => {
       reloadErrorSaveRequests += 1;
       const response = await route.fetch();
-      const savedState = await response.json();
+      const savedState = (await response.json()).state;
       reloadErrorSaveSeen();
       await reloadErrorSaveReleased;
       await route.fulfill({
@@ -766,7 +856,7 @@ test(
     const holdSaveErrorAcrossOpen = async (route) => {
       openErrorSaveRequests += 1;
       const response = await route.fetch();
-      const savedState = await response.json();
+      const savedState = (await response.json()).state;
       openErrorSaveSeen();
       await openErrorSaveReleased;
       await route.fulfill({
@@ -1083,5 +1173,455 @@ test(
     assert.deepEqual(pageErrors, []);
     assert.deepEqual(requestErrors, []);
     assert.deepEqual(unexpectedResponses, []);
+  }
+);
+
+test(
+  "real Edge presents shared diagnostics without disturbing authoring focus",
+  { timeout: 90_000 },
+  async (t) => {
+    const root = await mkdtemp(path.join(tmpdir(), "tgd-browser-diagnostics-"));
+    await copyFile(fixtureUrl, path.join(root, "demo.json"));
+    const compilerService = createBrowserCompilerService();
+    const running = await startWorkbenchServer({
+      workspaceRoot: root,
+      sandboxService: compilerService
+    });
+    let browser = null;
+    t.after(async () => {
+      if (browser) {
+        await browser.close();
+      }
+      await running.close();
+      await rm(root, { recursive: true, force: true });
+    });
+    browser = await chromium.launch({ headless: true, channel: "msedge" });
+    const page = await browser.newPage({ viewport: { width: 1100, height: 820 } });
+    const consoleErrors = [];
+    const pageErrors = [];
+    const requestErrors = [];
+    const unexpectedHttp = [];
+    page.on("console", (message) => {
+      if (message.type() === "error") {
+        consoleErrors.push(message.text());
+      }
+    });
+    page.on("pageerror", (error) => pageErrors.push(error.message));
+    page.on("requestfailed", (request) =>
+      requestErrors.push(request.url() + ": " + request.failure()?.errorText)
+    );
+    page.on("response", (response) => {
+      if (response.status() >= 400) {
+        unexpectedHttp.push(response.status() + " " + response.url());
+      }
+    });
+
+    await page.goto(running.url, { waitUntil: "domcontentloaded" });
+    await page.locator("#path-input").fill("demo.json");
+    await page.locator("#path-input").press("Enter");
+    await page.waitForFunction(
+      () => document.querySelector("#opened-path")?.textContent === "demo.json"
+    );
+    const checkButton = page.locator("#content-check-button");
+    assert.equal(await checkButton.isDisabled(), false);
+    assert.equal(
+      await page.locator("#content-check-summary").textContent(),
+      "尚未执行共享内容检查。"
+    );
+    await page.evaluate(() => {
+      window.__tgdDiagnosticAnnouncements = [];
+      const target = document.querySelector("#diagnostic-count-live");
+      new MutationObserver(() => {
+        window.__tgdDiagnosticAnnouncements.push(target.textContent);
+      }).observe(target, {
+        childList: true,
+        characterData: true,
+        subtree: true
+      });
+    });
+
+    let releaseReady;
+    let readyRequestSeen;
+    let checkRequests = 0;
+    const readyRelease = new Promise((resolve) => {
+      releaseReady = resolve;
+    });
+    const readySeen = new Promise((resolve) => {
+      readyRequestSeen = resolve;
+    });
+    const holdReadyResponse = async (route) => {
+      checkRequests += 1;
+      const response = await route.fetch();
+      readyRequestSeen();
+      await readyRelease;
+      await route.fulfill({ response });
+    };
+    await page.route("**/api/content-check", holdReadyResponse);
+    await checkButton.scrollIntoViewIfNeeded();
+    const checkBox = await checkButton.boundingBox();
+    assert.ok(checkBox);
+    const duplicateCheck = page.mouse.dblclick(
+      checkBox.x + checkBox.width / 2,
+      checkBox.y + checkBox.height / 2
+    );
+    await readySeen;
+    assert.equal(await checkButton.getAttribute("aria-busy"), "true");
+    assert.equal(await checkButton.getAttribute("aria-disabled"), "true");
+    assert.equal(
+      await page.locator("#content-check-summary").textContent(),
+      "正在执行共享内容检查。"
+    );
+    const bufferedX = page.locator('input[name="x"]');
+    await bufferedX.fill("41");
+    await page.locator('input[name="y"]').focus();
+    assert.equal(await focusLabel(page), "y");
+    releaseReady();
+    await duplicateCheck;
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#content-check-summary")?.textContent ===
+        "包已准备；尚未导出，也未启动 Preview 或试玩。"
+    );
+    await page.unroute("**/api/content-check", holdReadyResponse);
+    assert.equal(checkRequests, 1);
+    assert.equal(compilerService.requests, 1);
+    assert.equal(await checkButton.getAttribute("aria-busy"), "false");
+    assert.equal(await bufferedX.inputValue(), "41");
+    assert.equal(await focusLabel(page), "y");
+    assert.equal(await page.locator("#revision-value").textContent(), "0");
+    assert.equal(
+      await page.evaluate(() =>
+        window.__tgdDiagnosticAnnouncements.filter((value) => value.trim())
+      ).then((values) => values.length),
+      1
+    );
+    await bufferedX.focus();
+    await bufferedX.press("Escape");
+
+    await selectObject(page, "actors");
+    const actorRegion = page.locator('input[name="regionId"]');
+    const originalActorRegion = await actorRegion.inputValue();
+    await actorRegion.fill("region.missing");
+    await page.locator("#apply-button").click();
+    await waitForRevision(page, 1);
+    await selectObject(page, "mechanisms");
+    await checkButton.click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#content-check-summary")?.textContent ===
+        "共享内容检查未通过；上一份已准备包保持不变。"
+    );
+    assert.match(
+      await page.locator("#selection-summary").textContent(),
+      /^mechanisms \//
+    );
+    assert.equal(await focusLabel(page), "content-check-button");
+    assert.equal(await page.locator("#diagnostic-list li").count(), 1);
+    assert.equal(
+      await page.locator("#diagnostic-list").getAttribute("aria-live"),
+      null
+    );
+    assert.equal(
+      await page.locator("#diagnostic-count-live").textContent(),
+      "共享内容检查发现 1 个问题。"
+    );
+    assert.equal(
+      await page.evaluate(() =>
+        window.__tgdDiagnosticAnnouncements.filter((value) => value.trim())
+      ).then((values) => values.length),
+      2
+    );
+    await page.locator(".diagnostic-locator").click();
+    assert.match(
+      await page.locator("#selection-summary").textContent(),
+      /^actors \//
+    );
+    assert.equal(await focusLabel(page), "regionId");
+
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send("Emulation.setPageScaleFactor", { pageScaleFactor: 2 });
+    await page.waitForFunction(() => window.visualViewport?.scale >= 1.99);
+    assert.equal(
+      await page.evaluate(
+        () =>
+          document.documentElement.scrollWidth <=
+          document.documentElement.clientWidth + 1
+      ),
+      true
+    );
+    await cdp.send("Emulation.setPageScaleFactor", { pageScaleFactor: 1 });
+    await page.setViewportSize({ width: 520, height: 800 });
+    assert.equal(
+      await page.evaluate(
+        () =>
+          document.documentElement.scrollWidth <=
+          document.documentElement.clientWidth + 1
+      ),
+      true
+    );
+    await cdp.send("Emulation.setPageScaleFactor", { pageScaleFactor: 2 });
+    await page.waitForFunction(() => window.visualViewport?.scale >= 1.99);
+    assert.equal(
+      await page.evaluate(
+        () =>
+          document.documentElement.scrollWidth <=
+          document.documentElement.clientWidth + 1
+      ),
+      true
+    );
+    const screenshotHash = createHash("sha256")
+      .update(await page.screenshot())
+      .digest("hex");
+    await cdp.send("Emulation.setPageScaleFactor", { pageScaleFactor: 1 });
+    await page.setViewportSize({ width: 1100, height: 820 });
+
+    await actorRegion.fill(originalActorRegion);
+    await page.locator("#apply-button").click();
+    await waitForRevision(page, 2);
+    let releaseStale;
+    let staleRequestSeen;
+    let staleRequests = 0;
+    const staleRelease = new Promise((resolve) => {
+      releaseStale = resolve;
+    });
+    const staleSeen = new Promise((resolve) => {
+      staleRequestSeen = resolve;
+    });
+    const holdStaleResponse = async (route) => {
+      staleRequests += 1;
+      const response = await route.fetch();
+      staleRequestSeen();
+      await staleRelease;
+      await route.fulfill({ response });
+    };
+    await page.route("**/api/content-check", holdStaleResponse);
+    await checkButton.click();
+    await staleSeen;
+    await page.locator('input[name="x"]').fill("2301");
+    await page.locator("#apply-button").click();
+    await waitForRevision(page, 3);
+    assert.equal(await focusLabel(page), "apply-button");
+    releaseStale();
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#content-check-button")?.getAttribute(
+          "aria-busy"
+        ) === "false"
+    );
+    await page.unroute("**/api/content-check", holdStaleResponse);
+    assert.equal(staleRequests, 1);
+    assert.equal(
+      await page.locator("#content-check-summary").textContent(),
+      "本次共享内容检查结果已过期，请重新检查当前草稿。"
+    );
+    assert.equal(await focusLabel(page), "apply-button");
+
+    await selectObject(page, "player");
+    await page.locator('input[name="x"]').fill("909");
+    await page.locator("#apply-button").click();
+    await waitForRevision(page, 4);
+    const evidenceBeforeBridgeFailure =
+      running.controller.validatedPackageEvidence();
+    const documentBeforeBridgeFailure = running.controller.editorState.document;
+    const lastValidBeforeBridgeFailure =
+      running.controller.editorState.lastValidDocument;
+    await checkButton.click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#content-check-summary")?.textContent ===
+        "共享内容检查未完成；作者草稿和已准备包状态未改变。"
+    );
+    assert.equal(await focusLabel(page), "content-check-button");
+    assert.deepEqual(
+      running.controller.validatedPackageEvidence(),
+      evidenceBeforeBridgeFailure
+    );
+    assert.strictEqual(
+      running.controller.editorState.document,
+      documentBeforeBridgeFailure
+    );
+    assert.strictEqual(
+      running.controller.editorState.lastValidDocument,
+      lastValidBeforeBridgeFailure
+    );
+
+    const bodyText = await page.locator("body").innerText();
+    assert.equal(
+      /\bgeneration\b|\bchecksum\b|\bCAS\b|Stable key|exception|stack/i.test(
+        bodyText
+      ),
+      false
+    );
+    const forbiddenControls = await page
+      .locator("button, input[type=button], input[type=submit]")
+      .allTextContents();
+    assert.equal(
+      forbiddenControls.some((label) =>
+        /^(export|preview|run|导出|试玩|运行)$/i.test(label.trim())
+      ),
+      false
+    );
+
+    t.diagnostic("diagnostics browser: Edge " + browser.version());
+    t.diagnostic(
+      "content-check requests: ready=" +
+        checkRequests +
+        ", stale=" +
+        staleRequests +
+        ", total-service=" +
+        compilerService.requests
+    );
+    t.diagnostic(
+      "diagnostics focus: buffered=y, result=y, locator=regionId, stale=apply-button"
+    );
+    t.diagnostic("diagnostics screenshot sha256: " + screenshotHash);
+    t.diagnostic("diagnostics console errors: " + consoleErrors.length);
+    t.diagnostic("diagnostics page errors: " + pageErrors.length);
+    t.diagnostic("diagnostics request errors: " + requestErrors.length);
+    t.diagnostic("diagnostics unexpected HTTP: " + unexpectedHttp.length);
+    assert.deepEqual(consoleErrors, []);
+    assert.deepEqual(pageErrors, []);
+    assert.deepEqual(requestErrors, []);
+    assert.deepEqual(unexpectedHttp, []);
+  }
+);
+
+const generatedBuildDirectory =
+  process.env.TGD_SANDBOX_SERVICE_BUILD_DIRECTORY;
+test(
+  "real Edge loads the trusted generated module and prepares the unique source",
+  {
+    timeout: 90_000,
+    skip: generatedBuildDirectory
+      ? false
+      : "set TGD_SANDBOX_SERVICE_BUILD_DIRECTORY for the real module browser gate"
+  },
+  async (t) => {
+    const root = await mkdtemp(path.join(tmpdir(), "tgd-browser-real-module-"));
+    await copyFile(fixtureUrl, path.join(root, "demo.json"));
+    const running = await startWorkbenchServer({
+      workspaceRoot: root,
+      sandboxBuildDirectory: generatedBuildDirectory
+    });
+    let browser = null;
+    t.after(async () => {
+      if (browser) {
+        await browser.close();
+      }
+      await running.close();
+      await rm(root, { recursive: true, force: true });
+    });
+    browser = await chromium.launch({ headless: true, channel: "msedge" });
+    const page = await browser.newPage({ viewport: { width: 1100, height: 820 } });
+    const consoleErrors = [];
+    const pageErrors = [];
+    const requestErrors = [];
+    const unexpectedHttp = [];
+    let checkRequests = 0;
+    page.on("console", (message) => {
+      if (message.type() === "error") consoleErrors.push(message.text());
+    });
+    page.on("pageerror", (error) => pageErrors.push(error.message));
+    page.on("requestfailed", (request) =>
+      requestErrors.push(request.url() + ": " + request.failure()?.errorText)
+    );
+    page.on("request", (request) => {
+      if (request.url().endsWith("/api/content-check")) checkRequests += 1;
+    });
+    page.on("response", (response) => {
+      if (response.status() >= 400) {
+        unexpectedHttp.push(response.status() + " " + response.url());
+      }
+    });
+
+    await page.goto(running.url, { waitUntil: "domcontentloaded" });
+    await page.locator("#path-input").fill("demo.json");
+    await page.locator("#path-input").press("Enter");
+    await page.waitForFunction(
+      () => document.querySelector("#opened-path")?.textContent === "demo.json"
+    );
+    await page.locator("#content-check-button").click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#content-check-summary")?.textContent ===
+        "包已准备；尚未导出，也未启动 Preview 或试玩。"
+    );
+    const evidence = running.controller.validatedPackageEvidence();
+    assert.ok(evidence);
+    assert.equal(evidence.revision, 0);
+    assert.equal(evidence.generation, 1);
+    assert.equal(checkRequests, 1);
+    assert.equal(await focusLabel(page), "content-check-button");
+    assert.equal(
+      /generation|checksum|packageBytes|\bCAS\b|Stable key/i.test(
+        await page.locator("body").innerText()
+      ),
+      false
+    );
+
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send("Emulation.setPageScaleFactor", { pageScaleFactor: 2 });
+    await page.waitForFunction(() => window.visualViewport?.scale >= 1.99);
+    assert.equal(
+      await page.evaluate(
+        () =>
+          document.documentElement.scrollWidth <=
+          document.documentElement.clientWidth + 1
+      ),
+      true
+    );
+    await cdp.send("Emulation.setPageScaleFactor", { pageScaleFactor: 1 });
+    await page.setViewportSize({ width: 520, height: 800 });
+    await cdp.send("Emulation.setPageScaleFactor", { pageScaleFactor: 2 });
+    await page.waitForFunction(() => window.visualViewport?.scale >= 1.99);
+    assert.equal(
+      await page.evaluate(
+        () =>
+          document.documentElement.scrollWidth <=
+          document.documentElement.clientWidth + 1
+      ),
+      true
+    );
+    const screenshotHash = createHash("sha256")
+      .update(await page.screenshot())
+      .digest("hex");
+
+    const sourceBytes = await readFile(fixtureUrl);
+    const artifactRoot = path.join(
+      repositoryRoot,
+      generatedBuildDirectory,
+      "dist",
+      "web"
+    );
+    const moduleBytes = await readFile(
+      path.join(artifactRoot, "tgd-sandbox-package-service-abi.mjs")
+    );
+    const wasmBytes = await readFile(
+      path.join(artifactRoot, "tgd-sandbox-package-service-abi.wasm")
+    );
+    const digest = (bytes) =>
+      createHash("sha256").update(bytes).digest("hex");
+    t.diagnostic("real module browser: Edge " + browser.version());
+    t.diagnostic("source sha256: " + digest(sourceBytes));
+    t.diagnostic("generated module sha256: " + digest(moduleBytes));
+    t.diagnostic("generated wasm sha256: " + digest(wasmBytes));
+    t.diagnostic(
+      "package identity: generation=" +
+        evidence.generation +
+        ", checksum=" +
+        Buffer.from(evidence.checksum).toString("hex") +
+        ", projection=" +
+        evidence.projectionSha256 +
+        ", package=" +
+        evidence.packageSha256 +
+        ", bytes=" +
+        evidence.packageBytes
+    );
+    t.diagnostic("real module screenshot sha256: " + screenshotHash);
+    t.diagnostic("real module console/page/request/http: 0/0/0/0");
+    assert.deepEqual(consoleErrors, []);
+    assert.deepEqual(pageErrors, []);
+    assert.deepEqual(requestErrors, []);
+    assert.deepEqual(unexpectedHttp, []);
   }
 );

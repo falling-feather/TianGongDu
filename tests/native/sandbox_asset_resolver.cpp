@@ -67,6 +67,58 @@ void expect(bool condition, std::string_view message) {
   }
 }
 
+[[nodiscard]] std::uint32_t read_png_u32(std::span<const std::uint8_t> bytes,
+                                         std::size_t offset) {
+  expect(offset <= bytes.size() && bytes.size() - offset >= 4U,
+         "PNG test helper read exceeded input");
+  return static_cast<std::uint32_t>(bytes[offset]) << 24U |
+         static_cast<std::uint32_t>(bytes[offset + 1U]) << 16U |
+         static_cast<std::uint32_t>(bytes[offset + 2U]) << 8U |
+         static_cast<std::uint32_t>(bytes[offset + 3U]);
+}
+
+void write_png_u32(std::span<std::uint8_t> bytes, std::size_t offset,
+                   std::uint32_t value) {
+  expect(offset <= bytes.size() && bytes.size() - offset >= 4U,
+         "PNG test helper write exceeded input");
+  bytes[offset] = static_cast<std::uint8_t>(value >> 24U);
+  bytes[offset + 1U] = static_cast<std::uint8_t>(value >> 16U);
+  bytes[offset + 2U] = static_cast<std::uint8_t>(value >> 8U);
+  bytes[offset + 3U] = static_cast<std::uint8_t>(value);
+}
+
+[[nodiscard]] std::uint32_t
+test_png_crc(std::span<const std::uint8_t> bytes) noexcept {
+  auto crc = 0xffffffffU;
+  for (const auto byte : bytes) {
+    crc ^= byte;
+    for (unsigned bit = 0; bit < 8U; ++bit) {
+      const auto mask = static_cast<std::uint32_t>(0U - (crc & 1U));
+      crc = (crc >> 1U) ^ (0xedb88320U & mask);
+    }
+  }
+  return crc ^ 0xffffffffU;
+}
+
+[[nodiscard]] std::size_t find_png_chunk(std::span<const std::uint8_t> bytes,
+                                         std::array<std::uint8_t, 4> type) {
+  constexpr std::size_t signature_size = 8U;
+  auto offset = signature_size;
+  while (offset < bytes.size()) {
+    expect(bytes.size() - offset >= 12U,
+           "PNG test helper found truncated chunk");
+    const auto data_size = read_png_u32(bytes, offset);
+    expect(data_size <= bytes.size() - offset - 12U,
+           "PNG test helper found oversized chunk");
+    if (std::equal(type.begin(), type.end(),
+                   bytes.begin() + static_cast<std::ptrdiff_t>(offset + 4U))) {
+      return offset;
+    }
+    offset += 12U + data_size;
+  }
+  fail("PNG test helper did not find requested chunk");
+}
+
 [[nodiscard]] SandboxAssetSourceIdentity
 source_identity(std::uint32_t package_generation = 1,
                 std::uint32_t runtime_generation = 1) {
@@ -439,6 +491,69 @@ void check_registry_and_lookup_failures() {
                            SandboxAssetQuality::standard, source_identity(),
                            SandboxAssetResolveError::artifact_import_failed,
                            "synced-hash truncated PNG was accepted");
+  }
+  {
+    MutableRegistry changed{registry};
+    auto &artifact = changed.entries[0].standard;
+    changed.bytes.assign(artifact.canonical_bytes.begin(),
+                         artifact.canonical_bytes.end());
+    const auto idat = find_png_chunk(changed.bytes, {'I', 'D', 'A', 'T'});
+    const auto idat_size = read_png_u32(changed.bytes, idat);
+    const auto crc_offset = idat + 8U + idat_size;
+    changed.bytes[crc_offset] ^= 1U;
+    artifact.canonical_bytes = changed.bytes;
+    artifact.sha256 = sha256(changed.bytes);
+    expect_prepare_failure(resolver, changed.view, requirements,
+                           SandboxAssetQuality::standard, source_identity(),
+                           SandboxAssetResolveError::artifact_import_failed,
+                           "synced-hash IDAT CRC corruption was accepted");
+  }
+  {
+    MutableRegistry changed{registry};
+    auto &artifact = changed.entries[0].standard;
+    changed.bytes.assign(artifact.canonical_bytes.begin(),
+                         artifact.canonical_bytes.end());
+    const auto srgb = find_png_chunk(changed.bytes, {'s', 'R', 'G', 'B'});
+    const auto idat = find_png_chunk(changed.bytes, {'I', 'D', 'A', 'T'});
+    const auto srgb_extent =
+        12U + static_cast<std::size_t>(read_png_u32(changed.bytes, srgb));
+    const auto idat_extent =
+        12U + static_cast<std::size_t>(read_png_u32(changed.bytes, idat));
+    expect(srgb + srgb_extent == idat,
+           "canonical PNG test fixture chunk order drifted");
+    std::rotate(changed.bytes.begin() + static_cast<std::ptrdiff_t>(srgb),
+                changed.bytes.begin() + static_cast<std::ptrdiff_t>(idat),
+                changed.bytes.begin() +
+                    static_cast<std::ptrdiff_t>(idat + idat_extent));
+    artifact.canonical_bytes = changed.bytes;
+    artifact.sha256 = sha256(changed.bytes);
+    expect_prepare_failure(resolver, changed.view, requirements,
+                           SandboxAssetQuality::standard, source_identity(),
+                           SandboxAssetResolveError::artifact_import_failed,
+                           "synced-hash invalid PNG chunk order was accepted");
+  }
+  {
+    MutableRegistry changed{registry};
+    auto &artifact = changed.entries[0].standard;
+    changed.bytes.assign(artifact.canonical_bytes.begin(),
+                         artifact.canonical_bytes.end());
+    const auto ihdr = find_png_chunk(changed.bytes, {'I', 'H', 'D', 'R'});
+    const auto ihdr_size = read_png_u32(changed.bytes, ihdr);
+    expect(ihdr_size == 13U, "canonical PNG IHDR size drifted");
+    const auto type_offset = ihdr + 4U;
+    const auto data_offset = type_offset + 4U;
+    const auto crc_offset = data_offset + ihdr_size;
+    write_png_u32(changed.bytes, data_offset, artifact.width + 1U);
+    write_png_u32(
+        changed.bytes, crc_offset,
+        test_png_crc(std::span<const std::uint8_t>{changed.bytes}.subspan(
+            type_offset, 4U + ihdr_size)));
+    artifact.canonical_bytes = changed.bytes;
+    artifact.sha256 = sha256(changed.bytes);
+    expect_prepare_failure(resolver, changed.view, requirements,
+                           SandboxAssetQuality::standard, source_identity(),
+                           SandboxAssetResolveError::artifact_import_failed,
+                           "synced-hash IHDR dimension mismatch was accepted");
   }
   {
     MutableRegistry changed{registry};

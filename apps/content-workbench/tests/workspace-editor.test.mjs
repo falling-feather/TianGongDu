@@ -1020,7 +1020,13 @@ test("shared diagnostics preserve author and package last-valid layers", async (
     }).filename,
     "sandbox-package.tgdsbx"
   );
-  for (const relativePath of ["CON.foo.json", "LPT1.backup.json"]) {
+  for (const relativePath of [
+    "CON.any.json",
+    "PRN.any.json",
+    "COM1.any.json",
+    "LPT9.any.json",
+    "LPT1.backup.json"
+  ]) {
     assert.equal(
       createSandboxPackageExport({
         relativePath,

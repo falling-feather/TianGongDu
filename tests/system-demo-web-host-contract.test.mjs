@@ -30,8 +30,13 @@ test("Demo 0.8.1 Web Host stays isolated from the historical F1 player path", as
   assert.match(shell, /Internal Blockout/i);
   assert.match(shell, /__tgdSystemDemo/);
   assert.match(shell, /hostRuntimeReady/);
+  assert.match(shell, /workbenchPreview/);
+  assert.match(shell, /\/api\/preview-package/);
+  assert.match(shell, /tgd-system-demo-preview-ready/);
+  assert.match(layer, /workbench-preview\.tgdsbx/);
   assert.doesNotMatch(shell, /\blet runtimeInitialized\b/);
   assert.match(packageJson, /test:system-demo-web/);
+  assert.match(packageJson, /test:system-demo-workbench/);
 
   const forbidden = [
     "F1GrayboxLayer",
@@ -62,5 +67,29 @@ test("Demo 0.8.1 browser route exposes package, blocker, operate, and retry evid
     "requestErrors"
   ]) {
     assert.match(browserRoute, new RegExp(token));
+  }
+});
+
+test("Demo 0.8.2 Workbench route proves CRUD, atomic Preview swap, and last-valid retention", async () => {
+  const [browserRoute, server, controller, workbench] = await Promise.all([
+    read("tests/browser/system-demo-workbench.mjs"),
+    read("apps/content-workbench/src/workbench-server.mjs"),
+    read("apps/content-workbench/src/workbench-controller.mjs"),
+    read("apps/content-workbench/public/workbench.mjs")
+  ]);
+  for (const token of [
+    "/api/object-create",
+    "/api/object-delete",
+    "/api/preview-publish",
+    "/api/preview-package",
+    "preview-candidate",
+    "preview-live",
+    "oldFrameStayedVisibleUntilReady",
+    "keptLiveFrame"
+  ]) {
+    assert.match(
+      `${browserRoute}\n${server}\n${controller}\n${workbench}`,
+      new RegExp(token.replaceAll("/", "\\/"))
+    );
   }
 });

@@ -8,15 +8,29 @@ import {
 } from "./editor-state.mjs";
 import { presentSandboxDiagnostics } from "./sandbox-diagnostics-presentation.mjs";
 
-const OBJECT_KINDS = new Set([
-  "player",
-  "actors",
-  "groundBlockers",
-  "safePoints",
-  "interactions",
-  "mechanisms"
-]);
+const OBJECT_DEFINITIONS = Object.freeze({
+  player: Object.freeze({ collection: null, assetKind: "player" }),
+  actors: Object.freeze({ collection: "actors", assetKind: "actor" }),
+  groundBlockers: Object.freeze({
+    collection: "groundBlockers",
+    assetKind: "obstacle"
+  }),
+  safePoints: Object.freeze({
+    collection: "safePoints",
+    assetKind: "safe_point"
+  }),
+  interactions: Object.freeze({
+    collection: "interactions",
+    assetKind: "interaction"
+  }),
+  mechanisms: Object.freeze({
+    collection: "mechanisms",
+    assetKind: "mechanism"
+  })
+});
+const OBJECT_KINDS = new Set(Object.keys(OBJECT_DEFINITIONS));
 const EMPTY_DIAGNOSTICS = Object.freeze([]);
+const MAX_PREVIEW_PUBLICATIONS = 4;
 
 import { createSandboxPackageExport } from "./sandbox-package-export.mjs";
 
@@ -87,8 +101,53 @@ function expectBoolean(value, label) {
   return value;
 }
 
+function expectString(value, label) {
+  if (typeof value !== "string") {
+    fail("invalid_request", label + " must be a string");
+  }
+  return value;
+}
+
+function expectNullableString(value, label) {
+  if (value !== null && typeof value !== "string") {
+    fail("invalid_request", label + " must be null or a string");
+  }
+  return value;
+}
+
+function expectObjectKind(value) {
+  if (!OBJECT_KINDS.has(value)) {
+    fail("invalid_request", "unsupported object kind");
+  }
+  return value;
+}
+
+function expectAuthorLabel(value) {
+  expectString(value, "label");
+  const trimmed = value.trim();
+  if (trimmed.length === 0 || new TextEncoder().encode(trimmed).byteLength > 160) {
+    fail("invalid_request", "label must contain 1 to 160 UTF-8 bytes");
+  }
+  return trimmed;
+}
+
 function expectPose(value) {
   return expectExactObject(value, ["x", "y", "height", "floorLayer"], "pose");
+}
+
+function editorItemIndex(document, id) {
+  return document.editor.items.findIndex((item) => item.id === id);
+}
+
+function updateEditorLabel(document, id, label) {
+  const index = editorItemIndex(document, id);
+  if (index < 0) {
+    return;
+  }
+  document.editor.items[index] = {
+    ...document.editor.items[index],
+    label: expectAuthorLabel(label)
+  };
 }
 
 function placementFrom(record, values, extra = {}) {
@@ -123,6 +182,9 @@ function findUnique(records, keyName, keyValue, label) {
 
 function updateCandidate(document, kind, id, values) {
   const candidate = structuredClone(document);
+  const hasEditorLabel =
+    isPlainObject(values) &&
+    Object.prototype.hasOwnProperty.call(values, "editorLabel");
 
   if (kind === "player") {
     expectExactObject(
@@ -132,7 +194,8 @@ function updateCandidate(document, kind, id, values) {
         "assetId",
         "initialSafePointId",
         "pose",
-        "facingMillidegrees"
+        "facingMillidegrees",
+        ...(hasEditorLabel ? ["editorLabel"] : [])
       ],
       "player values"
     );
@@ -144,6 +207,9 @@ function updateCandidate(document, kind, id, values) {
       values,
       { initialSafePointId: values.initialSafePointId }
     );
+    if (hasEditorLabel) {
+      updateEditorLabel(candidate, id, values.editorLabel);
+    }
     return candidate;
   }
 
@@ -162,7 +228,8 @@ function updateCandidate(document, kind, id, values) {
         "maxY",
         "minHeight",
         "maxHeight",
-        "floorLayer"
+        "floorLayer",
+        ...(hasEditorLabel ? ["editorLabel"] : [])
       ],
       "ground blocker values"
     );
@@ -178,10 +245,19 @@ function updateCandidate(document, kind, id, values) {
       maxHeight: values.maxHeight,
       floorLayer: values.floorLayer
     };
+    if (hasEditorLabel) {
+      updateEditorLabel(candidate, id, values.editorLabel);
+    }
     return candidate;
   }
 
-  const keys = ["regionId", "assetId", "pose", "facingMillidegrees"];
+  const keys = [
+    "regionId",
+    "assetId",
+    "pose",
+    "facingMillidegrees",
+    ...(hasEditorLabel ? ["editorLabel"] : [])
+  ];
   if (kind === "interactions" || kind === "mechanisms") {
     keys.push("binding");
   }
@@ -227,6 +303,268 @@ function updateCandidate(document, kind, id, values) {
     };
   }
 
+  if (hasEditorLabel) {
+    updateEditorLabel(candidate, id, values.editorLabel);
+  }
+  return candidate;
+}
+
+function allStableIds(document) {
+  const runtime = document.runtime;
+  return new Set([
+    runtime.player.id,
+    ...runtime.regions.map(({ id }) => id),
+    ...runtime.assets.map(({ id }) => id),
+    ...runtime.actors.map(({ id }) => id),
+    ...runtime.groundBlockers.map(({ id }) => id),
+    ...runtime.safePoints.map(({ id }) => id),
+    ...runtime.interactions.map(({ id }) => id),
+    ...runtime.mechanisms.map(({ id }) => id),
+    ...runtime.waves.map(({ id }) => id),
+    ...runtime.objectives.map(({ id }) => id)
+  ]);
+}
+
+function objectRecords(document, kind) {
+  const definition = OBJECT_DEFINITIONS[kind];
+  return definition.collection === null
+    ? [document.runtime.player]
+    : document.runtime[definition.collection];
+}
+
+function findObject(document, kind, id) {
+  return findUnique(objectRecords(document, kind), "id", id, kind + " record")
+    .record;
+}
+
+function firstAssetId(runtime, kind) {
+  const asset = runtime.assets.find((candidate) => candidate.kind === kind);
+  if (!asset) {
+    fail("invalid_document", "no compatible Stable Asset is available", 422);
+  }
+  return asset.id;
+}
+
+function defaultPose(runtime, offset = 0) {
+  return {
+    x: Math.max(runtime.bounds.minX, Math.min(runtime.bounds.maxX, offset)),
+    y: Math.max(runtime.bounds.minY, Math.min(runtime.bounds.maxY, offset)),
+    height: Math.max(runtime.bounds.minHeight, 0),
+    floorLayer: runtime.bounds.minFloorLayer
+  };
+}
+
+function shiftedPose(runtime, pose, offset) {
+  return {
+    ...pose,
+    x: Math.max(runtime.bounds.minX, Math.min(runtime.bounds.maxX, pose.x + offset)),
+    y: Math.max(runtime.bounds.minY, Math.min(runtime.bounds.maxY, pose.y + offset))
+  };
+}
+
+function nextEditorOrdinal(document) {
+  return document.editor.items.reduce(
+    (maximum, item) => Math.max(maximum, item.ordinal + 1),
+    0
+  );
+}
+
+function addEditorItem(document, id, label, sourceId) {
+  const sourceIndex =
+    sourceId === null ? -1 : editorItemIndex(document, sourceId);
+  const source =
+    sourceIndex < 0
+      ? {
+          canvasX: 80 + (nextEditorOrdinal(document) % 8) * 120,
+          canvasY: 40 + Math.floor(nextEditorOrdinal(document) / 8) * 100
+        }
+      : document.editor.items[sourceIndex];
+  document.editor.items.push({
+    id,
+    label: expectAuthorLabel(label),
+    ordinal: nextEditorOrdinal(document),
+    canvasX: source.canvasX + (sourceIndex < 0 ? 0 : 32),
+    canvasY: source.canvasY + (sourceIndex < 0 ? 0 : 32)
+  });
+}
+
+function nextSpawnOrder(runtime, waveId) {
+  return runtime.waveSpawns.reduce(
+    (maximum, spawn) =>
+      spawn.waveId === waveId
+        ? Math.max(maximum, spawn.spawnOrder + 1)
+        : maximum,
+    0
+  );
+}
+
+function addObjectCandidate(document, kind, id, label, sourceId, mode) {
+  const candidate = structuredClone(document);
+  const runtime = candidate.runtime;
+  const definition = OBJECT_DEFINITIONS[kind];
+  if (allStableIds(candidate).has(id)) {
+    fail("duplicate_id", "Stable ID is already in use", 409);
+  }
+  const offset = mode === "duplicate" ? 350 : 700;
+  const source =
+    sourceId === null
+      ? objectRecords(candidate, kind)[0] ?? null
+      : findObject(candidate, kind, sourceId);
+
+  if (kind === "player") {
+    const previousId = runtime.player.id;
+    const base = source ?? runtime.player;
+    runtime.player = {
+      ...base,
+      id,
+      assetId: base.assetId ?? firstAssetId(runtime, definition.assetKind),
+      pose: shiftedPose(runtime, base.pose ?? defaultPose(runtime), offset)
+    };
+    const previousEditorIndex = editorItemIndex(candidate, previousId);
+    const previousEditor =
+      previousEditorIndex < 0 ? null : candidate.editor.items[previousEditorIndex];
+    candidate.editor.items = candidate.editor.items.filter(
+      (item) => item.id !== previousId
+    );
+    candidate.editor.items.push({
+      id,
+      label: expectAuthorLabel(label),
+      ordinal: previousEditor?.ordinal ?? nextEditorOrdinal(candidate),
+      canvasX: (previousEditor?.canvasX ?? 80) + 32,
+      canvasY: (previousEditor?.canvasY ?? 40) + 32
+    });
+    return candidate;
+  }
+
+  let record;
+  if (kind === "groundBlockers") {
+    const base =
+      source ??
+      {
+        regionId: runtime.regions[0]?.id,
+        assetId: firstAssetId(runtime, definition.assetKind),
+        minX: -500,
+        maxX: 500,
+        minY: -250,
+        maxY: 250,
+        minHeight: 0,
+        maxHeight: 1800,
+        floorLayer: runtime.bounds.minFloorLayer
+      };
+    record = {
+      ...base,
+      id,
+      minX: base.minX + offset,
+      maxX: base.maxX + offset,
+      minY: base.minY + offset,
+      maxY: base.maxY + offset
+    };
+  } else {
+    const base =
+      source ??
+      {
+        regionId: runtime.regions[0]?.id,
+        assetId: firstAssetId(runtime, definition.assetKind),
+        pose: defaultPose(runtime),
+        facingMillidegrees: 0
+      };
+    record = {
+      ...base,
+      id,
+      assetId: base.assetId ?? firstAssetId(runtime, definition.assetKind),
+      pose: shiftedPose(runtime, base.pose ?? defaultPose(runtime), offset)
+    };
+  }
+  runtime[definition.collection].push(record);
+  addEditorItem(candidate, id, label, source?.id ?? null);
+
+  if (kind === "actors" && source) {
+    const sourceSpawn = runtime.waveSpawns.find(
+      (spawn) => spawn.actorId === source.id
+    );
+    if (sourceSpawn) {
+      runtime.waveSpawns.push({
+        waveId: sourceSpawn.waveId,
+        actorId: id,
+        delayTicks: sourceSpawn.delayTicks,
+        spawnOrder: nextSpawnOrder(runtime, sourceSpawn.waveId)
+      });
+    }
+  }
+  if (kind === "interactions" && source) {
+    const sourceBinding = runtime.interactionBindings.find(
+      (binding) => binding.interactionId === source.id
+    );
+    if (sourceBinding) {
+      runtime.interactionBindings.push({
+        ...sourceBinding,
+        interactionId: id
+      });
+    }
+  }
+  if (kind === "mechanisms" && source) {
+    const sourceBinding = runtime.mechanismBindings.find(
+      (binding) => binding.mechanismId === source.id
+    );
+    if (sourceBinding) {
+      runtime.mechanismBindings.push({
+        ...sourceBinding,
+        mechanismId: id
+      });
+    }
+  }
+  return candidate;
+}
+
+function deleteObjectCandidate(document, kind, id) {
+  if (kind === "player") {
+    fail(
+      "required_object",
+      "the authoring document must retain exactly one player",
+      409
+    );
+  }
+  const candidate = structuredClone(document);
+  const runtime = candidate.runtime;
+  const collection = runtime[OBJECT_DEFINITIONS[kind].collection];
+  const match = findUnique(collection, "id", id, kind + " record");
+  if (
+    kind === "safePoints" &&
+    runtime.player.initialSafePointId === match.record.id
+  ) {
+    fail(
+      "object_referenced",
+      "the player's initial safe point cannot be deleted",
+      409
+    );
+  }
+  collection.splice(match.index, 1);
+  candidate.editor.items = candidate.editor.items.filter(
+    (item) => item.id !== id
+  );
+  if (kind === "actors") {
+    runtime.waveSpawns = runtime.waveSpawns.filter(
+      (spawn) => spawn.actorId !== id
+    );
+  }
+  if (kind === "interactions") {
+    runtime.interactionBindings = runtime.interactionBindings.filter(
+      (binding) => binding.interactionId !== id
+    );
+  }
+  if (kind === "mechanisms") {
+    runtime.mechanismBindings = runtime.mechanismBindings.filter(
+      (binding) => binding.mechanismId !== id
+    );
+    runtime.interactionBindings = runtime.interactionBindings.filter(
+      (binding) => binding.targetMechanismId !== id
+    );
+  }
+  if (kind === "groundBlockers") {
+    runtime.mechanismBindings = runtime.mechanismBindings.filter(
+      (binding) => binding.targetGroundBlockerId !== id
+    );
+  }
   return candidate;
 }
 
@@ -309,7 +647,11 @@ function sandboxRuntimeProjection(document) {
   };
 }
 
-export function createWorkbenchController({ workspace, compilerService = null }) {
+export function createWorkbenchController({
+  workspace,
+  compilerService = null,
+  previewAvailable = false
+}) {
   if (
     workspace === null ||
     typeof workspace !== "object" ||
@@ -318,6 +660,7 @@ export function createWorkbenchController({ workspace, compilerService = null })
   ) {
     fail("invalid_workspace", "workspace must provide read and save functions");
   }
+  expectBoolean(previewAvailable, "previewAvailable");
   const service = requireCompilerService(compilerService);
 
   let editorState = null;
@@ -331,6 +674,9 @@ export function createWorkbenchController({ workspace, compilerService = null })
   let checkSequence = 0;
   let checkInFlight = false;
   let validatedOwningPackage = null;
+  let previewGeneration = 0;
+  let latestPreviewPublication = null;
+  const previewPublications = new Map();
   let contentCheck = contentCheckState(
     service ? "idle" : "unavailable",
     false
@@ -348,7 +694,14 @@ export function createWorkbenchController({ workspace, compilerService = null })
       savedRevision: editorState?.savedRevision ?? null,
       dirty: editorState?.dirty ?? false,
       lastError: editorState?.lastError ?? null,
-      contentCheck
+      contentCheck,
+      preview: Object.freeze({
+        available: previewAvailable,
+        publication:
+          latestPreviewPublication === null
+            ? null
+            : Object.freeze({ ...latestPreviewPublication })
+      })
     };
   }
 
@@ -385,6 +738,22 @@ export function createWorkbenchController({ workspace, compilerService = null })
     if (editorState === null) {
       fail("no_document", "open an authoring document first", 409);
     }
+  }
+
+  function adoptCandidate(candidate, expectedRevision) {
+    const nextState = reduceSandboxEditorState(editorState, {
+      type: "document.import",
+      expectedRevision,
+      source: candidate
+    });
+    editorState = nextState;
+    if (nextState.lastError) {
+      fail(nextState.lastError.code, nextState.lastError.message, 422);
+    }
+    activitySequence += 1;
+    rotateDocumentLease();
+    markContentCheckStale();
+    return view();
   }
 
   function requireDiscardConfirmation(confirmDiscard) {
@@ -467,9 +836,7 @@ export function createWorkbenchController({ workspace, compilerService = null })
       "update request"
     );
     requireOpen();
-    if (!OBJECT_KINDS.has(request.kind)) {
-      fail("invalid_request", "unsupported object kind");
-    }
+    expectObjectKind(request.kind);
     if (typeof request.id !== "string") {
       fail("invalid_request", "object id must be a string");
     }
@@ -484,19 +851,60 @@ export function createWorkbenchController({ workspace, compilerService = null })
       request.id,
       request.values
     );
-    const nextState = reduceSandboxEditorState(editorState, {
-      type: "document.import",
-      expectedRevision: request.expectedRevision,
-      source: candidate
-    });
-    editorState = nextState;
-    if (nextState.lastError) {
-      fail(nextState.lastError.code, nextState.lastError.message, 422);
+    return adoptCandidate(candidate, request.expectedRevision);
+  }
+
+  function createObject(request) {
+    expectExactObject(
+      request,
+      [
+        "kind",
+        "id",
+        "label",
+        "sourceId",
+        "mode",
+        "expectedRevision"
+      ],
+      "create object request"
+    );
+    requireOpen();
+    const kind = expectObjectKind(request.kind);
+    const id = expectString(request.id, "id");
+    const label = expectAuthorLabel(request.label);
+    const sourceId = expectNullableString(request.sourceId, "sourceId");
+    if (request.mode !== "create" && request.mode !== "duplicate") {
+      fail("invalid_request", "mode must be create or duplicate");
     }
-    activitySequence += 1;
-    rotateDocumentLease();
-    markContentCheckStale();
-    return view();
+    expectRevision(request.expectedRevision);
+    if (request.expectedRevision !== editorState.revision) {
+      fail("stale_revision", "expected revision does not match", 409);
+    }
+    const candidate = addObjectCandidate(
+      editorState.document,
+      kind,
+      id,
+      label,
+      sourceId,
+      request.mode
+    );
+    return adoptCandidate(candidate, request.expectedRevision);
+  }
+
+  function deleteObject(request) {
+    expectExactObject(
+      request,
+      ["kind", "id", "expectedRevision"],
+      "delete object request"
+    );
+    requireOpen();
+    const kind = expectObjectKind(request.kind);
+    const id = expectString(request.id, "id");
+    expectRevision(request.expectedRevision);
+    if (request.expectedRevision !== editorState.revision) {
+      fail("stale_revision", "expected revision does not match", 409);
+    }
+    const candidate = deleteObjectCandidate(editorState.document, kind, id);
+    return adoptCandidate(candidate, request.expectedRevision);
   }
 
   async function save(request) {
@@ -707,16 +1115,7 @@ export function createWorkbenchController({ workspace, compilerService = null })
     }
   }
 
-  function exportPackage(request) {
-    expectExactObject(
-      request,
-      [
-        "expectedRevision",
-        "expectedDocumentLease",
-        "expectedPreparedPackageLease"
-      ],
-      "package export request"
-    );
+  function requirePreparedPackage(request) {
     requireOpen();
     const revision = expectRevision(request.expectedRevision);
     const expectedDocumentLease = expectDocumentLease(
@@ -776,10 +1175,82 @@ export function createWorkbenchController({ workspace, compilerService = null })
         409
       );
     }
+    return validatedOwningPackage;
+  }
+
+  function exportPackage(request) {
+    expectExactObject(
+      request,
+      [
+        "expectedRevision",
+        "expectedDocumentLease",
+        "expectedPreparedPackageLease"
+      ],
+      "package export request"
+    );
+    const prepared = requirePreparedPackage(request);
     return createSandboxPackageExport({
       relativePath,
-      packageBytes: validatedOwningPackage.packageBytes,
-      packageSha256: validatedOwningPackage.packageSha256
+      packageBytes: prepared.packageBytes,
+      packageSha256: prepared.packageSha256
+    });
+  }
+
+  function publishPreview(request) {
+    expectExactObject(
+      request,
+      [
+        "expectedRevision",
+        "expectedDocumentLease",
+        "expectedPreparedPackageLease"
+      ],
+      "preview publish request"
+    );
+    if (!previewAvailable) {
+      fail("preview_unavailable", "system Demo Preview host is unavailable", 503);
+    }
+    const prepared = requirePreparedPackage(request);
+    if (previewGeneration === Number.MAX_SAFE_INTEGER) {
+      fail("preview_failed", "preview generation cannot advance", 409);
+    }
+    const token = createDocumentLease();
+    const generation = previewGeneration + 1;
+    const publication = {
+      token,
+      generation,
+      revision: prepared.revision,
+      packageSha256: prepared.packageSha256,
+      packageBytes: prepared.packageBytes.byteLength,
+      url:
+        "/preview/tiangongdu-system-demo.html?workbenchPreview=" +
+        token +
+        "&generation=" +
+        generation
+    };
+    const owned = {
+      ...publication,
+      bytes: new Uint8Array(prepared.packageBytes)
+    };
+    previewPublications.set(token, owned);
+    while (previewPublications.size > MAX_PREVIEW_PUBLICATIONS) {
+      previewPublications.delete(previewPublications.keys().next().value);
+    }
+    previewGeneration = generation;
+    latestPreviewPublication = Object.freeze(publication);
+    return view();
+  }
+
+  function previewPackage(token) {
+    const owned = previewPublications.get(
+      expectOpaqueLease(token, "preview token")
+    );
+    if (!owned) {
+      fail("preview_not_found", "preview publication was not found", 404);
+    }
+    return Object.freeze({
+      bytes: new Uint8Array(owned.bytes),
+      packageSha256: owned.packageSha256,
+      generation: owned.generation
     });
   }
 
@@ -803,9 +1274,13 @@ export function createWorkbenchController({ workspace, compilerService = null })
     open,
     reload,
     updateObject,
+    createObject,
+    deleteObject,
     save,
     checkContent,
     exportPackage,
+    publishPreview,
+    previewPackage,
     validatedPackageEvidence,
     get editorState() {
       return editorState;

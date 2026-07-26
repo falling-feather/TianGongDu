@@ -84,6 +84,7 @@ button {
   font-size: 0.74rem;
   font-weight: 800;
   letter-spacing: 0.14em;
+  white-space: nowrap;
 }
 
 h1,
@@ -122,7 +123,9 @@ h3 {
 
 .workspace-bar,
 .content-check,
+.preview-panel,
 .object-browser,
+.scene-canvas-panel,
 .inspector {
   border: 1px solid var(--line-strong);
   background: rgb(255 250 240 / 92%);
@@ -137,6 +140,101 @@ h3 {
   min-width: 0;
   margin-top: 1rem;
   padding: clamp(0.8rem, 2vw, 1.25rem);
+}
+
+.preview-panel {
+  min-width: 0;
+  margin-top: 1rem;
+  padding: clamp(0.8rem, 2vw, 1.25rem);
+}
+
+.preview-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 2px solid var(--ink);
+  padding-bottom: 0.7rem;
+}
+
+.preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.preview-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0.75rem 0;
+  color: var(--teal-dark);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.preview-meta p {
+  margin: 0;
+}
+
+#preview-identity {
+  font-family: ui-monospace, "Cascadia Code", monospace;
+  font-size: 0.72rem;
+}
+
+.preview-stage {
+  position: relative;
+  min-height: 18rem;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  background: #071218;
+}
+
+.preview-frame {
+  display: block;
+  width: 100%;
+  min-height: min(48rem, 72vw);
+  border: 0;
+  background: #071218;
+}
+
+.preview-frame[hidden] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  min-height: 0;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.preview-placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 0.45rem;
+  padding: 2rem;
+  color: #d9cfbb;
+  text-align: center;
+}
+
+.preview-placeholder[hidden] {
+  display: none;
+}
+
+.preview-placeholder strong {
+  color: #e9d8aa;
+  font-family: Rockwell, "Microsoft YaHei UI", serif;
+  font-size: 1.2rem;
+}
+
+.preview-placeholder span {
+  color: #91b9b1;
+  font-size: 0.82rem;
 }
 
 .content-check-header {
@@ -271,6 +369,12 @@ select[aria-invalid="true"] {
   color: white;
 }
 
+.button.danger {
+  border-color: var(--warning);
+  background: #f6d8cc;
+  color: #652315;
+}
+
 .button:disabled,
 .button[aria-disabled="true"] {
   cursor: not-allowed;
@@ -335,16 +439,177 @@ select:focus-visible {
 
 .workbench-grid {
   display: grid;
-  grid-template-columns: minmax(15rem, 23rem) minmax(0, 1fr);
+  grid-template-columns:
+    minmax(15rem, 20rem)
+    minmax(26rem, 1fr)
+    minmax(20rem, 28rem);
   gap: 1rem;
   min-width: 0;
   margin-top: 1rem;
 }
 
 .object-browser,
+.scene-canvas-panel,
 .inspector {
   min-width: 0;
   padding: clamp(0.8rem, 2vw, 1.25rem);
+}
+
+.object-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.45rem;
+  margin-top: 0.8rem;
+}
+
+.object-actions .button {
+  min-width: 0;
+  padding-inline: 0.5rem;
+}
+
+.scene-canvas-panel {
+  min-width: 0;
+}
+
+.canvas-heading {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.canvas-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.8rem;
+  align-items: center;
+  justify-content: flex-end;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.canvas-tools label {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.canvas-tools input[type="range"] {
+  width: 5.5rem;
+}
+
+.canvas-tools input[type="checkbox"] {
+  width: auto;
+}
+
+.canvas-help {
+  margin: 0.75rem 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.scene-canvas-frame {
+  position: relative;
+  min-height: 30rem;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  background:
+    linear-gradient(rgb(23 107 104 / 7%) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(23 107 104 / 7%) 1px, transparent 1px),
+    #eef1e7;
+  background-size: 24px 24px;
+}
+
+.scene-canvas {
+  display: block;
+  width: 100%;
+  min-height: 30rem;
+  touch-action: none;
+}
+
+.scene-canvas:focus-visible {
+  outline: 3px solid #f0a53a;
+  outline-offset: -3px;
+}
+
+.scene-canvas-empty {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  margin: 0;
+  color: var(--muted);
+  font-weight: 800;
+  transform: translate(-50%, -50%);
+}
+
+.canvas-region {
+  fill: rgb(255 250 240 / 66%);
+  stroke: var(--teal-dark);
+  stroke-width: 28;
+}
+
+.canvas-grid-line {
+  stroke: rgb(23 107 104 / 18%);
+  stroke-width: 12;
+}
+
+.canvas-range {
+  fill: rgb(181 74 43 / 7%);
+  stroke: rgb(181 74 43 / 58%);
+  stroke-dasharray: 70 48;
+  stroke-width: 18;
+  pointer-events: none;
+}
+
+.canvas-blocker {
+  fill: rgb(141 49 30 / 25%);
+  stroke: var(--warning);
+  stroke-width: 24;
+}
+
+.canvas-object {
+  color: var(--teal-dark);
+  cursor: grab;
+}
+
+.canvas-object[data-kind="actors"] {
+  color: var(--rust-dark);
+}
+
+.canvas-object[data-kind="interactions"],
+.canvas-object[data-kind="mechanisms"] {
+  color: #8a601e;
+}
+
+.canvas-object[aria-selected="true"] {
+  color: #d84f24;
+  filter: drop-shadow(0 0 55px rgb(216 79 36 / 58%));
+}
+
+.canvas-object:active {
+  cursor: grabbing;
+}
+
+.canvas-object-shape {
+  fill: currentcolor;
+  stroke: #fffaf0;
+  stroke-width: 20;
+}
+
+.canvas-facing {
+  stroke: currentcolor;
+  stroke-linecap: round;
+  stroke-width: 30;
+}
+
+.canvas-object-label {
+  fill: var(--ink);
+  font-family: Bahnschrift, "Microsoft YaHei UI", sans-serif;
+  font-size: 180px;
+  font-weight: 800;
+  paint-order: stroke;
+  pointer-events: none;
+  stroke: #fffaf0;
+  stroke-width: 34;
 }
 
 .panel-heading {
@@ -590,7 +855,8 @@ fieldset {
   font-weight: 800;
 }
 
-.conflict-dialog {
+.conflict-dialog,
+.object-dialog {
   width: min(32rem, calc(100% - 2rem));
   max-width: 100%;
   border: 2px solid var(--ink);
@@ -601,20 +867,50 @@ fieldset {
   box-shadow: 0 24px 70px rgb(23 35 41 / 35%);
 }
 
-.conflict-dialog::backdrop {
+.conflict-dialog::backdrop,
+.object-dialog::backdrop {
   background: rgb(23 35 41 / 52%);
   backdrop-filter: blur(2px);
 }
 
-.conflict-dialog form {
+.conflict-dialog form,
+.object-dialog form {
   display: grid;
   gap: 0.8rem;
   min-width: 0;
 }
 
 .conflict-dialog h2,
-.conflict-dialog p {
+.conflict-dialog p,
+.object-dialog h2,
+.object-dialog p {
   margin: 0;
+}
+
+.dialog-field {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.dialog-summary {
+  color: var(--teal-dark);
+}
+
+.dialog-error {
+  min-height: 1.3rem;
+  color: var(--warning);
+  font-weight: 800;
+}
+
+.delete-reference-list {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding-left: 1.25rem;
+  color: var(--muted);
 }
 
 .dialog-actions {
@@ -674,6 +970,16 @@ fieldset {
     grid-column: 1 / -1;
     width: 100%;
     white-space: normal;
+  }
+}
+
+@media (max-width: 78rem) and (min-width: 45.001rem) {
+  .workbench-grid {
+    grid-template-columns: minmax(15rem, 20rem) minmax(0, 1fr);
+  }
+
+  .inspector {
+    grid-column: 1 / -1;
   }
 }
 

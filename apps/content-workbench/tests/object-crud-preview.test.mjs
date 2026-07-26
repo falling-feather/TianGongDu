@@ -1,0 +1,422 @@
+import assert from "node:assert/strict";
+import {
+  copyFile,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import test from "node:test";
+
+import { createWorkbenchController } from "../src/workbench-controller.mjs";
+import { startWorkbenchServer } from "../src/workbench-server.mjs";
+
+const fixtureUrl = new URL(
+  "../../../content/design/system-demo.sandbox.json",
+  import.meta.url
+);
+
+function providerIdentity(generation) {
+  return Object.freeze({
+    generation,
+    checksum: Object.freeze(Array(32).fill(generation))
+  });
+}
+
+function compilerResult(generation) {
+  return Object.freeze({
+    complete: true,
+    outcome: 1,
+    compileStatus: 1,
+    packageError: 0,
+    identity: providerIdentity(generation),
+    diagnostics: Object.freeze([]),
+    bindingValidation: Object.freeze({
+      code: 1,
+      domain: 255,
+      field: 65535,
+      recordIndex: 0,
+      subjectId: null,
+      relatedId: null
+    }),
+    packageBytes: Uint8Array.of(84, 71, 68, generation)
+  });
+}
+
+function compilerService() {
+  let generation = 0;
+  return {
+    identity() {
+      return providerIdentity(generation);
+    },
+    compileAndPublish() {
+      generation += 1;
+      return compilerResult(generation);
+    }
+  };
+}
+
+async function openedController(options = {}) {
+  let text = await readFile(fixtureUrl, "utf8");
+  const workspace = {
+    async read() {
+      return {
+        relativePath: "system-demo.sandbox.json",
+        cas: "cas-1",
+        text
+      };
+    },
+    async save({ text: nextText }) {
+      text = nextText;
+      return { cas: "cas-2" };
+    }
+  };
+  const controller = createWorkbenchController({ workspace, ...options });
+  await controller.open({
+    relativePath: "system-demo.sandbox.json",
+    confirmDiscard: false
+  });
+  return controller;
+}
+
+test("object creation owns IDs, bindings, wave membership, and editor labels", async () => {
+  const controller = await openedController();
+  controller.createObject({
+    kind: "actors",
+    id: "actor.system_demo.entry.slot_c",
+    label: "Entry Slot C",
+    sourceId: "actor.system_demo.entry.slot_a",
+    mode: "duplicate",
+    expectedRevision: 0
+  });
+
+  const actor = controller.view().document.runtime.actors.find(
+    ({ id }) => id === "actor.system_demo.entry.slot_c"
+  );
+  assert.ok(actor);
+  assert.equal(actor.pose.x, -650);
+  assert.deepEqual(
+    controller.view().document.runtime.waveSpawns.find(
+      ({ actorId }) => actorId === actor.id
+    ),
+    {
+      waveId: "wave.system_demo.entry",
+      actorId: actor.id,
+      delayTicks: 0,
+      spawnOrder: 2
+    }
+  );
+  assert.equal(
+    controller.view().document.editor.items.find(({ id }) => id === actor.id)
+      ?.label,
+    "Entry Slot C"
+  );
+
+  controller.createObject({
+    kind: "interactions",
+    id: "interaction.system_demo.console.copy",
+    label: "Gate Console Copy",
+    sourceId: "interaction.system_demo.console",
+    mode: "duplicate",
+    expectedRevision: 1
+  });
+  assert.deepEqual(
+    controller.view().document.runtime.interactionBindings.find(
+      ({ interactionId }) =>
+        interactionId === "interaction.system_demo.console.copy"
+    ),
+    {
+      interactionId: "interaction.system_demo.console.copy",
+      operation: "operate",
+      rangeMm: 1200,
+      targetMechanismId: "mechanism.system_demo.gate"
+    }
+  );
+  assert.equal(controller.view().revision, 2);
+  assert.equal(controller.view().dirty, true);
+});
+
+test("duplicate IDs, required player, and referenced safe point fail closed", async () => {
+  const controller = await openedController();
+  assert.throws(
+    () =>
+      controller.createObject({
+        kind: "actors",
+        id: "actor.system_demo.entry.slot_a",
+        label: "Duplicate",
+        sourceId: "actor.system_demo.entry.slot_a",
+        mode: "duplicate",
+        expectedRevision: 0
+      }),
+    (error) => error.code === "duplicate_id" && error.status === 409
+  );
+  assert.throws(
+    () =>
+      controller.deleteObject({
+        kind: "player",
+        id: "player.system_demo.start",
+        expectedRevision: 0
+      }),
+    (error) => error.code === "required_object" && error.status === 409
+  );
+  assert.throws(
+    () =>
+      controller.deleteObject({
+        kind: "safePoints",
+        id: "safe_point.system_demo.initial",
+        expectedRevision: 0
+      }),
+    (error) => error.code === "object_referenced" && error.status === 409
+  );
+  assert.equal(controller.view().revision, 0);
+  assert.equal(controller.view().dirty, false);
+});
+
+test("player replacement and dependent delete operations stay atomic", async () => {
+  const controller = await openedController();
+  controller.createObject({
+    kind: "player",
+    id: "player.system_demo.rebuilt",
+    label: "Rebuilt Player",
+    sourceId: "player.system_demo.start",
+    mode: "duplicate",
+    expectedRevision: 0
+  });
+  assert.equal(
+    controller.view().document.runtime.player.id,
+    "player.system_demo.rebuilt"
+  );
+  assert.equal(
+    controller.view().document.editor.items.some(
+      ({ id }) => id === "player.system_demo.start"
+    ),
+    false
+  );
+
+  controller.deleteObject({
+    kind: "actors",
+    id: "actor.system_demo.entry.slot_a",
+    expectedRevision: 1
+  });
+  assert.equal(
+    controller.view().document.runtime.waveSpawns.some(
+      ({ actorId }) => actorId === "actor.system_demo.entry.slot_a"
+    ),
+    false
+  );
+
+  controller.deleteObject({
+    kind: "interactions",
+    id: "interaction.system_demo.console",
+    expectedRevision: 2
+  });
+  assert.equal(
+    controller.view().document.runtime.interactionBindings.length,
+    0
+  );
+  assert.equal(controller.view().revision, 3);
+});
+
+test("editor label changes remain editor-only and round-trip through update", async () => {
+  const controller = await openedController();
+  const actor = controller.view().document.runtime.actors[0];
+  controller.updateObject({
+    kind: "actors",
+    id: actor.id,
+    values: {
+      regionId: actor.regionId,
+      assetId: actor.assetId,
+      pose: actor.pose,
+      facingMillidegrees: actor.facingMillidegrees,
+      editorLabel: "入口压迫位"
+    },
+    expectedRevision: 0
+  });
+  assert.equal(
+    controller.view().document.editor.items.find(({ id }) => id === actor.id)
+      ?.label,
+    "入口压迫位"
+  );
+  assert.deepEqual(
+    controller.view().document.runtime.actors.find(({ id }) => id === actor.id),
+    actor
+  );
+});
+
+test("Preview publication owns a fresh package and stale edits preserve the last publication", async () => {
+  const controller = await openedController({
+    compilerService: compilerService(),
+    previewAvailable: true
+  });
+  const initial = controller.view();
+  controller.checkContent({
+    expectedRevision: initial.revision,
+    expectedDocumentLease: initial.documentLease
+  });
+  const ready = controller.view();
+  controller.publishPreview({
+    expectedRevision: ready.revision,
+    expectedDocumentLease: ready.documentLease,
+    expectedPreparedPackageLease:
+      ready.contentCheck.preparedPackageLease
+  });
+  const published = controller.view().preview.publication;
+  assert.equal(published.generation, 1);
+  assert.equal(published.packageBytes, 4);
+  assert.match(
+    published.url,
+    /^\/preview\/tiangongdu-system-demo\.html\?workbenchPreview=/
+  );
+  assert.deepEqual(
+    controller.previewPackage(published.token).bytes,
+    Uint8Array.of(84, 71, 68, 1)
+  );
+
+  const actor = controller.view().document.runtime.actors[0];
+  controller.updateObject({
+    kind: "actors",
+    id: actor.id,
+    values: {
+      regionId: actor.regionId,
+      assetId: actor.assetId,
+      pose: { ...actor.pose, x: actor.pose.x + 100 },
+      facingMillidegrees: actor.facingMillidegrees
+    },
+    expectedRevision: controller.view().revision
+  });
+  assert.equal(controller.view().contentCheck.status, "stale");
+  assert.throws(
+    () =>
+      controller.publishPreview({
+        expectedRevision: controller.view().revision,
+        expectedDocumentLease: controller.view().documentLease,
+        expectedPreparedPackageLease:
+          ready.contentCheck.preparedPackageLease
+      }),
+    (error) =>
+      (error.code === "package_not_ready" || error.code === "stale_revision") &&
+      error.status === 409
+  );
+  assert.deepEqual(controller.view().preview.publication, published);
+  assert.deepEqual(
+    controller.previewPackage(published.token).bytes,
+    Uint8Array.of(84, 71, 68, 1)
+  );
+});
+
+test("Preview HTTP routes stay session-bound and expose only immutable published bytes", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "tgd-preview-server-"));
+  const previewRoot = path.join(root, "host");
+  await mkdir(previewRoot);
+  await copyFile(fixtureUrl, path.join(root, "demo.json"));
+  await Promise.all([
+    writeFile(
+      path.join(previewRoot, "tiangongdu-system-demo.html"),
+      "<!doctype html><title>preview host</title>",
+      "utf8"
+    ),
+    writeFile(
+      path.join(previewRoot, "tiangongdu-system-demo.js"),
+      "globalThis.previewHostLoaded = true;",
+      "utf8"
+    ),
+    writeFile(
+      path.join(previewRoot, "tiangongdu-system-demo.wasm"),
+      Uint8Array.of(0, 97, 115, 109)
+    )
+  ]);
+  const running = await startWorkbenchServer({
+    workspaceRoot: root,
+    sandboxService: compilerService(),
+    systemDemoWebRoot: previewRoot
+  });
+  t.after(async () => {
+    await running.close();
+    await rm(root, { recursive: true, force: true });
+  });
+
+  const landing = await fetch(running.url);
+  assert.equal(landing.status, 200);
+  const cookie = landing.headers.get("set-cookie")?.split(";")[0];
+  assert.match(cookie, /^tgd_workbench_session=/);
+  const origin = new URL(running.url).origin;
+  const request = (url, options = {}) =>
+    fetch(new URL(url, running.url), {
+      ...options,
+      headers: {
+        Cookie: cookie,
+        ...(options.body
+          ? { "Content-Type": "application/json", Origin: origin }
+          : {}),
+        ...options.headers
+      }
+    });
+
+  assert.equal(
+    (await fetch(new URL("/preview/tiangongdu-system-demo.html", running.url)))
+      .status,
+    403
+  );
+  let response = await request("/api/open", {
+    method: "POST",
+    body: JSON.stringify({
+      relativePath: "demo.json",
+      confirmDiscard: false
+    })
+  });
+  let state = (await response.json()).state;
+  assert.equal(state.preview.available, true);
+  response = await request("/api/content-check", {
+    method: "POST",
+    body: JSON.stringify({
+      expectedRevision: state.revision,
+      expectedDocumentLease: state.documentLease
+    })
+  });
+  state = (await response.json()).state;
+  response = await request("/api/preview-publish", {
+    method: "POST",
+    body: JSON.stringify({
+      expectedRevision: state.revision,
+      expectedDocumentLease: state.documentLease,
+      expectedPreparedPackageLease:
+        state.contentCheck.preparedPackageLease
+    })
+  });
+  state = (await response.json()).state;
+  assert.equal(state.preview.publication.packageBytes, 4);
+  assert.equal(JSON.stringify(state).includes('"bytes"'), false);
+
+  const previewPage = await request(state.preview.publication.url);
+  assert.equal(previewPage.status, 200);
+  assert.match(
+    previewPage.headers.get("content-security-policy"),
+    /frame-ancestors 'self'/
+  );
+  assert.equal(previewPage.headers.get("x-frame-options"), "SAMEORIGIN");
+  assert.match(await previewPage.text(), /preview host/);
+
+  const packageResponse = await request(
+    "/api/preview-package?token=" + state.preview.publication.token
+  );
+  assert.equal(packageResponse.status, 200);
+  assert.equal(
+    packageResponse.headers.get("x-tgd-preview-generation"),
+    "1"
+  );
+  assert.deepEqual(
+    new Uint8Array(await packageResponse.arrayBuffer()),
+    Uint8Array.of(84, 71, 68, 1)
+  );
+  assert.equal(
+    (
+      await request(
+        "/api/preview-package?token=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      )
+    ).status,
+    404
+  );
+});

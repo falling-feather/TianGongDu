@@ -21,6 +21,20 @@ const STATIC_FILES = new Map([
     [new URL("../public/workbench.css", import.meta.url), "text/css; charset=utf-8"]
   ]
 ]);
+const PREVIEW_STATIC_FILES = new Map([
+  [
+    "/preview/tiangongdu-system-demo.html",
+    ["tiangongdu-system-demo.html", "text/html; charset=utf-8"]
+  ],
+  [
+    "/preview/tiangongdu-system-demo.js",
+    ["tiangongdu-system-demo.js", "text/javascript; charset=utf-8"]
+  ],
+  [
+    "/preview/tiangongdu-system-demo.wasm",
+    ["tiangongdu-system-demo.wasm", "application/wasm"]
+  ]
+]);
 
 function securityHeaders(contentType) {
   return {
@@ -33,6 +47,20 @@ function securityHeaders(contentType) {
     "Referrer-Policy": "no-referrer",
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY"
+  };
+}
+
+function previewSecurityHeaders(contentType) {
+  return {
+    "Cache-Control": "no-store",
+    "Content-Type": contentType,
+    "Content-Security-Policy":
+      "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; " +
+      "style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; " +
+      "object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'",
+    "Referrer-Policy": "no-referrer",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "SAMEORIGIN"
   };
 }
 
@@ -52,6 +80,14 @@ function writeJson(response, status, value) {
     Buffer.from(JSON.stringify(value), "utf8"),
     "application/json; charset=utf-8"
   );
+}
+
+function writePreviewBytes(response, bytes, contentType) {
+  response.writeHead(200, {
+    ...previewSecurityHeaders(contentType),
+    "Content-Length": bytes.byteLength
+  });
+  response.end(bytes);
 }
 
 async function readJson(request) {
@@ -160,11 +196,42 @@ async function loadCompilerService({
   }
 }
 
+async function resolveSystemDemoWebRoot({
+  systemDemoWebRoot,
+  sandboxBuildDirectory
+}) {
+  const candidate =
+    systemDemoWebRoot ??
+    (sandboxBuildDirectory === null
+      ? null
+      : path.resolve(sandboxBuildDirectory, "dist", "web"));
+  if (candidate === null) {
+    return null;
+  }
+  const resolved = path.resolve(candidate);
+  try {
+    await Promise.all(
+      [...PREVIEW_STATIC_FILES.values()].map(([filename]) =>
+        readFile(path.join(resolved, filename))
+      )
+    );
+    return resolved;
+  } catch {
+    if (systemDemoWebRoot !== null) {
+      throw new Error(
+        "system Demo Web root does not contain the required host artifacts"
+      );
+    }
+    return null;
+  }
+}
+
 export async function startWorkbenchServer({
   workspaceRoot,
   faultInjector,
   sandboxService = null,
-  sandboxBuildDirectory = null
+  sandboxBuildDirectory = null,
+  systemDemoWebRoot = null
 }) {
   const workspace = await createLocalWorkspace({
     rootPath: workspaceRoot,
@@ -174,9 +241,14 @@ export async function startWorkbenchServer({
     sandboxService,
     sandboxBuildDirectory
   });
+  const previewRoot = await resolveSystemDemoWebRoot({
+    systemDemoWebRoot,
+    sandboxBuildDirectory
+  });
   const controller = createWorkbenchController({
     workspace,
-    compilerService
+    compilerService,
+    previewAvailable: previewRoot !== null
   });
   const sessionToken = randomBytes(24).toString("base64url");
   let origin = null;
@@ -214,6 +286,29 @@ export async function startWorkbenchServer({
         return;
       }
 
+      if (PREVIEW_STATIC_FILES.has(url.pathname) && previewRoot !== null) {
+        if (request.method !== "GET" && request.method !== "HEAD") {
+          writeJson(response, 405, { error: { code: "method_not_allowed" } });
+          return;
+        }
+        if (!hasSessionCookie(request, sessionToken)) {
+          writeJson(response, 403, { error: { code: "invalid_session" } });
+          return;
+        }
+        const [filename, contentType] = PREVIEW_STATIC_FILES.get(url.pathname);
+        const bytes = await readFile(path.join(previewRoot, filename));
+        if (request.method === "HEAD") {
+          response.writeHead(200, {
+            ...previewSecurityHeaders(contentType),
+            "Content-Length": bytes.byteLength
+          });
+          response.end();
+          return;
+        }
+        writePreviewBytes(response, bytes, contentType);
+        return;
+      }
+
       if (!url.pathname.startsWith("/api/")) {
         writeJson(response, 404, { error: { code: "not_found" } });
         return;
@@ -247,6 +342,22 @@ export async function startWorkbenchServer({
         }
         if (url.pathname === "/api/update" && request.method === "POST") {
           controller.updateObject(await readJson(request));
+          writeJson(response, 200, { state: browserState(controller) });
+          return;
+        }
+        if (
+          url.pathname === "/api/object-create" &&
+          request.method === "POST"
+        ) {
+          controller.createObject(await readJson(request));
+          writeJson(response, 200, { state: browserState(controller) });
+          return;
+        }
+        if (
+          url.pathname === "/api/object-delete" &&
+          request.method === "POST"
+        ) {
+          controller.deleteObject(await readJson(request));
           writeJson(response, 200, { state: browserState(controller) });
           return;
         }
@@ -295,6 +406,47 @@ export async function startWorkbenchServer({
             {
               "Content-Disposition":
                 'attachment; filename="' + artifact.filename + '"'
+            }
+          );
+          return;
+        }
+        if (
+          url.pathname === "/api/preview-publish" &&
+          request.method === "POST"
+        ) {
+          const body = expectBrowserRequest(
+            await readJson(request),
+            [
+              "expectedRevision",
+              "expectedDocumentLease",
+              "expectedPreparedPackageLease"
+            ]
+          );
+          controller.publishPreview(body);
+          writeJson(response, 200, { state: browserState(controller) });
+          return;
+        }
+        if (
+          url.pathname === "/api/preview-package" &&
+          request.method === "GET"
+        ) {
+          if (previewRoot === null) {
+            const error = new Error("system Demo Preview host is unavailable");
+            error.code = "preview_unavailable";
+            error.status = 503;
+            throw error;
+          }
+          const publication = controller.previewPackage(
+            url.searchParams.get("token")
+          );
+          writeBytes(
+            response,
+            200,
+            publication.bytes,
+            "application/octet-stream",
+            {
+              "X-TGD-Preview-Generation": String(publication.generation),
+              "X-TGD-Package-SHA256": publication.packageSha256
             }
           );
           return;

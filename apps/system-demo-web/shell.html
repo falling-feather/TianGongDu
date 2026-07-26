@@ -232,6 +232,14 @@
       const statusElement = document.getElementById("status");
       const telemetryElement = document.getElementById("telemetry");
       const pageErrors = [];
+      const query = new URLSearchParams(window.location.search);
+      const previewToken = query.get("workbenchPreview");
+      const previewGeneration = Number(query.get("generation"));
+      const validPreviewRequest =
+        previewToken === null ||
+        (/^[A-Za-z0-9_-]{32}$/.test(previewToken) &&
+          Number.isSafeInteger(previewGeneration) &&
+          previewGeneration > 0);
       let hostRuntimeReady = false;
 
       const exported = (name) => {
@@ -286,6 +294,49 @@
         canvasElement.focus({ preventScroll: true });
         updateTelemetry();
         window.setInterval(updateTelemetry, 250);
+        if (previewToken !== null && window.parent !== window) {
+          window.parent.postMessage(
+            {
+              type: "tgd-system-demo-preview-ready",
+              token: previewToken,
+              generation: previewGeneration,
+              state
+            },
+            window.location.origin
+          );
+        }
+      };
+
+      const prepareWorkbenchPreviewPackage = () => {
+        if (previewToken === null) {
+          return;
+        }
+        const dependency = "tgd-workbench-preview-package";
+        addRunDependency(dependency);
+        fetch(`/api/preview-package?token=${encodeURIComponent(previewToken)}`, {
+          credentials: "same-origin",
+          cache: "no-store"
+        })
+          .then((response) => {
+            if (!response.ok) {
+              throw new Error(`preview package request failed: ${response.status}`);
+            }
+            return response.arrayBuffer();
+          })
+          .then((buffer) => {
+            const bytes = new Uint8Array(buffer);
+            if (bytes.byteLength === 0) {
+              throw new Error("preview package was empty");
+            }
+            FS.writeFile("/workbench-preview.tgdsbx", bytes);
+            removeRunDependency(dependency);
+          })
+          .catch((error) => {
+            const message = `Workbench Preview aborted: ${String(error)}`;
+            pageErrors.push(message);
+            statusElement.textContent = message;
+            abort(message);
+          });
       };
 
       document.getElementById("focus-scene").addEventListener("click", () => {
@@ -322,7 +373,15 @@
       });
 
       var Module = {
-        preRun: [],
+        preRun: [
+          () => {
+            if (!validPreviewRequest) {
+              abort("invalid Workbench Preview request");
+              return;
+            }
+            prepareWorkbenchPreviewPackage();
+          }
+        ],
         postRun: [],
         onRuntimeInitialized: () => {
           hostRuntimeReady = true;

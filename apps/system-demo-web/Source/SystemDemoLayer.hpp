@@ -76,6 +76,7 @@ private:
   tgd::contracts::StableContentKey interaction_key_{};
   tgd::contracts::GroundPoseMm interaction_pose_{};
   std::int32_t interaction_range_mm_{};
+  std::size_t gate_blocker_index_{};
 
   ax::Node *world_layer_{};
   ax::Sprite *player_node_{};

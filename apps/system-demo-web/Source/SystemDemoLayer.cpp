@@ -32,6 +32,8 @@ using tgd::contracts::StableContentKey;
 using tgd::integration::SandboxRuntimeCommandDisposition;
 
 constexpr std::string_view package_path = "/system-demo.tgdsbx";
+constexpr std::string_view workbench_preview_package_path =
+    "/workbench-preview.tgdsbx";
 constexpr StableActorKey player_actor = 0x706c617965720001ULL;
 constexpr float design_width = 1280.0F;
 constexpr float design_height = 720.0F;
@@ -215,7 +217,10 @@ std::uint32_t SystemDemoLayer::qaAssetCount() const noexcept {
 }
 
 bool SystemDemoLayer::loadRuntimeAndAssets() noexcept {
-  auto bytes = readBytes(package_path);
+  auto bytes = readBytes(workbench_preview_package_path);
+  if (bytes.empty()) {
+    bytes = readBytes(package_path);
+  }
   if (bytes.empty() ||
       bytes.size() >
           static_cast<std::size_t>(std::numeric_limits<std::uint32_t>::max())) {
@@ -298,18 +303,52 @@ bool SystemDemoLayer::loadRuntimeAndAssets() noexcept {
   if (live_document == nullptr || live_assets == nullptr ||
       live_assets->size() !=
           tgd::presentation::sandbox_runtime_asset_slot_count ||
-      live_document->definition().interactions.size() != 1U ||
-      live_document->definition().ground_blockers.size() != 1U ||
-      live_document->gameplay_binding().interaction_bindings.size() != 1U) {
+      live_document->definition().interactions.empty() ||
+      live_document->definition().ground_blockers.empty() ||
+      live_document->gameplay_binding().interaction_bindings.empty() ||
+      live_document->gameplay_binding().mechanism_bindings.empty()) {
     message_ = "BOOT FAILED / PUBLISHED SYSTEM DEMO SHAPE DRIFTED";
     return false;
   }
 
-  const auto &interaction = live_document->definition().interactions.front();
-  interaction_key_ = interaction.id.key;
-  interaction_pose_ = interaction.pose;
-  interaction_range_mm_ =
-      live_document->gameplay_binding().interaction_bindings.front().range_mm;
+  const auto &live_definition = live_document->definition();
+  const auto &gameplay_binding = live_document->gameplay_binding();
+  const auto &interaction_binding =
+      gameplay_binding.interaction_bindings.front();
+  const auto interaction = std::find_if(
+      live_definition.interactions.begin(), live_definition.interactions.end(),
+      [&interaction_binding](const auto &candidate) {
+        return candidate.id.key == interaction_binding.interaction_id.key;
+      });
+  const auto mechanism_binding =
+      std::find_if(gameplay_binding.mechanism_bindings.begin(),
+                   gameplay_binding.mechanism_bindings.end(),
+                   [&interaction_binding](const auto &candidate) {
+                     return candidate.mechanism_id.key ==
+                            interaction_binding.target_mechanism_id.key;
+                   });
+  if (interaction == live_definition.interactions.end() ||
+      mechanism_binding == gameplay_binding.mechanism_bindings.end()) {
+    message_ = "BOOT FAILED / PRIMARY INTERACTION CHAIN DID NOT RESOLVE";
+    return false;
+  }
+  const auto blocker =
+      std::find_if(live_definition.ground_blockers.begin(),
+                   live_definition.ground_blockers.end(),
+                   [&mechanism_binding](const auto &candidate) {
+                     return candidate.id.key ==
+                            mechanism_binding->target_ground_blocker_id.key;
+                   });
+  if (blocker == live_definition.ground_blockers.end()) {
+    message_ = "BOOT FAILED / PRIMARY GATE BLOCKER DID NOT RESOLVE";
+    return false;
+  }
+
+  gate_blocker_index_ = static_cast<std::size_t>(
+      blocker - live_definition.ground_blockers.begin());
+  interaction_key_ = interaction->id.key;
+  interaction_pose_ = interaction->pose;
+  interaction_range_mm_ = interaction_binding.range_mm;
   asset_count_ = static_cast<std::uint32_t>(live_assets->size());
   gate_open_ = currentGateOpen();
   return true;
@@ -385,65 +424,79 @@ void SystemDemoLayer::createWorldPresentation() {
                        color(22, 73, 80, 185), 1.0F, color(85, 147, 145, 130));
   world_layer_->addChild(water, -900);
 
-  const auto &blocker = definition.ground_blockers.front();
-  const std::array threshold{
-      project({blocker.min_x, blocker.min_y, 0, blocker.floor_layer}),
-      project({blocker.max_x, blocker.min_y, 0, blocker.floor_layer}),
-      project({blocker.max_x, blocker.max_y, 0, blocker.floor_layer}),
-      project({blocker.min_x, blocker.max_y, 0, blocker.floor_layer}),
-  };
-  auto *threshold_draw = ax::DrawNode::create();
-  threshold_draw->drawSolidPoly(
-      threshold.data(), static_cast<unsigned int>(threshold.size()),
-      color(138, 93, 58, 125), 2.0F, color(224, 175, 101, 205));
-  world_layer_->addChild(threshold_draw, -300);
+  for (std::size_t index = 0; index < definition.ground_blockers.size();
+       ++index) {
+    const auto &blocker = definition.ground_blockers[index];
+    const std::array threshold{
+        project({blocker.min_x, blocker.min_y, 0, blocker.floor_layer}),
+        project({blocker.max_x, blocker.min_y, 0, blocker.floor_layer}),
+        project({blocker.max_x, blocker.max_y, 0, blocker.floor_layer}),
+        project({blocker.min_x, blocker.max_y, 0, blocker.floor_layer}),
+    };
+    auto *threshold_draw = ax::DrawNode::create();
+    threshold_draw->drawSolidPoly(
+        threshold.data(), static_cast<unsigned int>(threshold.size()),
+        color(138, 93, 58, 125), 2.0F, color(224, 175, 101, 205));
+    world_layer_->addChild(threshold_draw, -300);
 
-  const auto &safe_point = definition.safe_points.front();
-  auto *safe_node =
-      createAssetSprite(safe_point.asset_id.name, safe_point.asset_id.key,
-                        SandboxAssetKind::safe_point,
-                        sceneAssetExtent(SandboxAssetKind::safe_point));
-  if (safe_node != nullptr) {
-    const auto position = project(safe_point.pose);
-    safe_node->setPosition(position);
-    world_layer_->addChild(safe_node, depthOrder(position.y));
-  }
-
-  const auto &interaction = definition.interactions.front();
-  auto *interaction_node =
-      createAssetSprite(interaction.asset_id.name, interaction.asset_id.key,
-                        SandboxAssetKind::interaction,
-                        sceneAssetExtent(SandboxAssetKind::interaction));
-  if (interaction_node != nullptr) {
-    const auto position = project(interaction.pose);
-    interaction_node->setPosition(position);
-    world_layer_->addChild(interaction_node, depthOrder(position.y) + 2);
-  }
-
-  const auto &mechanism = definition.mechanisms.front();
-  auto *mechanism_node =
-      createAssetSprite(mechanism.asset_id.name, mechanism.asset_id.key,
-                        SandboxAssetKind::mechanism,
-                        sceneAssetExtent(SandboxAssetKind::mechanism));
-  if (mechanism_node != nullptr) {
-    const auto position = project(mechanism.pose);
-    mechanism_node->setPosition(position);
-    world_layer_->addChild(mechanism_node, depthOrder(position.y) + 3);
-  }
-
-  gate_node_ = createAssetSprite(blocker.asset_id.name, blocker.asset_id.key,
-                                 SandboxAssetKind::obstacle,
-                                 sceneAssetExtent(SandboxAssetKind::obstacle));
-  if (gate_node_ != nullptr) {
-    const GroundPoseMm gate_pose{
+    auto *blocker_node = createAssetSprite(
+        blocker.asset_id.name, blocker.asset_id.key, SandboxAssetKind::obstacle,
+        sceneAssetExtent(SandboxAssetKind::obstacle));
+    if (blocker_node == nullptr) {
+      continue;
+    }
+    const GroundPoseMm blocker_pose{
         blocker.min_x + ((blocker.max_x - blocker.min_x) / 2),
         blocker.min_y + ((blocker.max_y - blocker.min_y) / 2),
         blocker.min_height,
         blocker.floor_layer,
     };
-    const auto position = project(gate_pose);
-    gate_node_->setPosition(position);
-    world_layer_->addChild(gate_node_, depthOrder(position.y) + 4);
+    const auto position = project(blocker_pose);
+    blocker_node->setPosition(position);
+    world_layer_->addChild(blocker_node, depthOrder(position.y) + 4);
+    if (index == gate_blocker_index_) {
+      gate_node_ = blocker_node;
+    } else {
+      blocker_node->setOpacity(190);
+    }
+  }
+
+  for (const auto &safe_point : definition.safe_points) {
+    auto *safe_node =
+        createAssetSprite(safe_point.asset_id.name, safe_point.asset_id.key,
+                          SandboxAssetKind::safe_point,
+                          sceneAssetExtent(SandboxAssetKind::safe_point));
+    if (safe_node != nullptr) {
+      const auto position = project(safe_point.pose);
+      safe_node->setPosition(position);
+      world_layer_->addChild(safe_node, depthOrder(position.y));
+    }
+  }
+
+  for (const auto &interaction : definition.interactions) {
+    auto *interaction_node =
+        createAssetSprite(interaction.asset_id.name, interaction.asset_id.key,
+                          SandboxAssetKind::interaction,
+                          sceneAssetExtent(SandboxAssetKind::interaction));
+    if (interaction_node != nullptr) {
+      const auto position = project(interaction.pose);
+      interaction_node->setPosition(position);
+      interaction_node->setOpacity(
+          interaction.id.key == interaction_key_ ? 255 : 170);
+      world_layer_->addChild(interaction_node, depthOrder(position.y) + 2);
+    }
+  }
+
+  for (const auto &mechanism : definition.mechanisms) {
+    auto *mechanism_node =
+        createAssetSprite(mechanism.asset_id.name, mechanism.asset_id.key,
+                          SandboxAssetKind::mechanism,
+                          sceneAssetExtent(SandboxAssetKind::mechanism));
+    if (mechanism_node != nullptr) {
+      const auto position = project(mechanism.pose);
+      mechanism_node->setPosition(position);
+      world_layer_->addChild(mechanism_node, depthOrder(position.y) + 3);
+    }
   }
 
   for (const auto &actor : definition.actors) {
@@ -828,7 +881,7 @@ bool SystemDemoLayer::playerInOperateRange() const noexcept {
 }
 
 bool SystemDemoLayer::currentGateOpen() const noexcept {
-  const auto blocker = coordinator_.collision_at(0);
+  const auto blocker = coordinator_.collision_at(gate_blocker_index_);
   return blocker.has_value() && !blocker->enabled;
 }
 

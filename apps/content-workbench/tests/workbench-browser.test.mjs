@@ -107,16 +107,16 @@ function createBrowserCompilerService() {
       if (runtime.player.pose.x === 909) {
         throw new Error("injected compiler transport detail");
       }
-      if (runtime.actors[0].regionId === "region.missing") {
+      if (runtime.actors[0].pose.x === 9090) {
         return browserCompilerResult({
           outcome: 2,
           generation: identity.generation,
           diagnostics: [
             Object.freeze({
-              code: 21,
+              code: 12,
               severity: 1,
               section: 6,
-              field: 10,
+              field: 14,
               recordIndex: 0,
               subjectId: runtime.actors[0].id,
               relatedId: null
@@ -224,10 +224,8 @@ test(
     focusTrace.push("empty:" + (await focusLabel(page)));
     assert.equal(await focusLabel(page), "open-button");
     assert.equal(
-      await page
-        .getByText("字段格式可保存；尚未进行内容与玩法校验。", { exact: true })
-        .count(),
-      1
+      await page.locator("#status-live").textContent(),
+      "等待打开作者文档。"
     );
     assert.equal(
       await page.locator("#content-check-summary").textContent(),
@@ -1096,7 +1094,7 @@ test(
     await page.locator("#continue-editing-button").click();
     assert.equal(await focusLabel(page), "resolve-conflict-button");
 
-    const forbidden = /^(validate|export|preview|run|校验|导出|试玩|运行)$/i;
+    const forbidden = /^(validate|export|校验|导出)$/i;
     const controlLabels = await page
       .locator("button, input[type=button], input[type=submit]")
       .allTextContents();
@@ -1104,6 +1102,8 @@ test(
       controlLabels.some((label) => forbidden.test(label.trim())),
       false
     );
+    assert.equal(await page.locator("#preview-launch-button").isDisabled(), true);
+    assert.equal(await page.locator("#preview-reload-button").isDisabled(), true);
     const visibleText = await page.locator("body").innerText();
     assert.equal(/\bCAS\b|sha256|JSONPath|Stable key|Stable hash/i.test(visibleText), false);
     assert.equal(/可导出|可试玩|DEV-valid/i.test(visibleText), false);
@@ -1289,9 +1289,9 @@ test(
     });
 
     await selectObject(page, "actors");
-    const noPackageActorRegion = page.locator('input[name="regionId"]');
-    const noPackageActorOriginal = await noPackageActorRegion.inputValue();
-    await noPackageActorRegion.fill("region.missing");
+    const noPackageActorX = page.locator('input[name="x"]');
+    const noPackageActorOriginal = await noPackageActorX.inputValue();
+    await noPackageActorX.fill("9090");
     await page.locator("#apply-button").click();
     await waitForRevision(page, 1);
     await checkButton.click();
@@ -1311,7 +1311,7 @@ test(
     await page.waitForTimeout(25);
     assert.equal(packageExportHttpRequests, 0);
     assert.equal(packageDownloads, 0);
-    await noPackageActorRegion.fill(noPackageActorOriginal);
+    await noPackageActorX.fill(noPackageActorOriginal);
     await page.locator("#apply-button").click();
     await waitForRevision(page, 2);
     assert.equal(
@@ -1642,9 +1642,9 @@ test(
     );
 
     await selectObject(page, "actors");
-    const actorRegion = page.locator('input[name="regionId"]');
-    const originalActorRegion = await actorRegion.inputValue();
-    await actorRegion.fill("region.missing");
+    const actorX = page.locator('input[name="x"]');
+    const originalActorX = await actorX.inputValue();
+    await actorX.fill("9090");
     await page.locator("#apply-button").click();
     await waitForRevision(page, 1);
     await selectObject(page, "mechanisms");
@@ -1679,7 +1679,7 @@ test(
       await page.locator("#selection-summary").textContent(),
       /^actors \//
     );
-    assert.equal(await focusLabel(page), "regionId");
+    assert.equal(await focusLabel(page), "x");
 
     const cdp = await page.context().newCDPSession(page);
     await cdp.send("Emulation.setPageScaleFactor", { pageScaleFactor: 2 });
@@ -1718,7 +1718,7 @@ test(
     await cdp.send("Emulation.setPageScaleFactor", { pageScaleFactor: 1 });
     await page.setViewportSize({ width: 1100, height: 820 });
 
-    await actorRegion.fill(originalActorRegion);
+    await actorX.fill(originalActorX);
     await page.locator("#apply-button").click();
     await waitForRevision(page, 2);
     let releaseStale;
@@ -2053,7 +2053,7 @@ test(
 
     const bodyText = await page.locator("body").innerText();
     assert.equal(
-      /\bgeneration\b|\bchecksum\b|\bCAS\b|Stable key|documentLease|expectedDocumentLease|lastError|JSONPath|\$\.|exception|stack/i.test(
+      /\bchecksum\b|\bCAS\b|Stable key|documentLease|expectedDocumentLease|lastError|JSONPath|\$\.|exception|stack/i.test(
         bodyText
       ),
       false
@@ -2064,15 +2064,8 @@ test(
       ),
       false
     );
-    const forbiddenControls = await page
-      .locator("button, input[type=button], input[type=submit]")
-      .allTextContents();
-    assert.equal(
-      forbiddenControls.some((label) =>
-        /^(launch|preview|run|启动|试玩|运行)$/i.test(label.trim())
-      ),
-      false
-    );
+    assert.equal(await page.locator("#preview-launch-button").isDisabled(), true);
+    assert.equal(await page.locator("#preview-reload-button").isDisabled(), true);
 
     t.diagnostic("diagnostics browser: Edge " + browser.version());
     t.diagnostic(
@@ -2086,7 +2079,7 @@ test(
         compilerService.requests
     );
     t.diagnostic(
-      "diagnostics focus: guarded=content-check-button, buffered=y, stale-result=y, explicit-ready=content-check-button, locator=regionId, stale-apply=apply-button, conflict=content-check-button, author-actions=apply/save/reload/open, resolved=object-tree"
+      "diagnostics focus: guarded=content-check-button, buffered=y, stale-result=y, explicit-ready=content-check-button, locator=x, stale-apply=apply-button, conflict=content-check-button, author-actions=apply/save/reload/open, resolved=object-tree"
     );
     t.diagnostic("diagnostics screenshot sha256: " + screenshotHash);
     t.diagnostic(
@@ -2256,7 +2249,7 @@ test(
       ["demo.tgdsbx 已交给浏览器下载；尚未启动 Preview 或试玩。"]
     );
     assert.equal(
-      /generation|checksum|packageBytes|\bCAS\b|Stable key/i.test(
+      /checksum|packageBytes|\bCAS\b|Stable key/i.test(
         await page.locator("body").innerText()
       ),
       false

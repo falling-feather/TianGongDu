@@ -23,7 +23,12 @@ const USER_MESSAGES = Object.freeze({
   compiler_unavailable: "共享内容检查当前不可用。",
   check_in_flight: "共享内容检查正在进行，请等待本次检查完成。",
   package_not_ready: "当前草稿没有可导出的已准备包，请重新执行共享内容检查。",
-  export_failed: "未能准备下载；作者草稿和已准备包保持不变。"
+  export_failed: "未能准备下载；作者草稿和已准备包保持不变。",
+  duplicate_id: "Stable ID 已被其他对象使用，请换一个 ID。",
+  required_object: "全包必须保留唯一玩家起点；可使用“复制并替换”建立新的玩家记录。",
+  object_referenced: "该对象仍被必需字段引用；请先修改引用对象。",
+  preview_unavailable: "当前构建没有可用的系统 Demo Preview Host。",
+  preview_failed: "Preview 候选未就绪；上一份可见画面保持不变。"
 });
 
 const elements = {
@@ -42,7 +47,14 @@ const elements = {
   conflictDialog: document.querySelector("#conflict-dialog"),
   continueEditingButton: document.querySelector("#continue-editing-button"),
   loadDiskButton: document.querySelector("#load-disk-button"),
+  createObjectButton: document.querySelector("#create-object-button"),
+  duplicateObjectButton: document.querySelector("#duplicate-object-button"),
+  deleteObjectButton: document.querySelector("#delete-object-button"),
   objectTree: document.querySelector("#object-tree"),
+  sceneCanvas: document.querySelector("#scene-canvas"),
+  sceneCanvasEmpty: document.querySelector("#scene-canvas-empty"),
+  canvasZoom: document.querySelector("#canvas-zoom"),
+  canvasSnap: document.querySelector("#canvas-snap"),
   selectionSummary: document.querySelector("#selection-summary"),
   inspectorForm: document.querySelector("#inspector-form"),
   inspectorFieldset: document.querySelector("#inspector-fieldset"),
@@ -53,31 +65,74 @@ const elements = {
   contentCheckSummary: document.querySelector("#content-check-summary"),
   diagnosticList: document.querySelector("#diagnostic-list"),
   diagnosticCountLive: document.querySelector("#diagnostic-count-live"),
+  previewLaunchButton: document.querySelector("#preview-launch-button"),
+  previewReloadButton: document.querySelector("#preview-reload-button"),
+  previewStatus: document.querySelector("#preview-status"),
+  previewIdentity: document.querySelector("#preview-identity"),
+  previewStage: document.querySelector("#preview-stage"),
+  previewPlaceholder: document.querySelector("#preview-placeholder"),
+  objectDialog: document.querySelector("#object-dialog"),
+  objectDialogForm: document.querySelector("#object-dialog-form"),
+  objectDialogTitle: document.querySelector("#object-dialog-title"),
+  objectDialogSummary: document.querySelector("#object-dialog-summary"),
+  objectIdInput: document.querySelector("#object-id-input"),
+  objectLabelInput: document.querySelector("#object-label-input"),
+  objectDialogError: document.querySelector("#object-dialog-error"),
+  confirmObjectButton: document.querySelector("#confirm-object-button"),
+  cancelObjectButton: document.querySelector("#cancel-object-button"),
+  deleteDialog: document.querySelector("#delete-dialog"),
+  deleteDialogForm: document.querySelector("#delete-dialog-form"),
+  deleteDialogSummary: document.querySelector("#delete-dialog-summary"),
+  deleteReferenceList: document.querySelector("#delete-reference-list"),
+  deleteDialogError: document.querySelector("#delete-dialog-error"),
+  confirmDeleteButton: document.querySelector("#confirm-delete-button"),
+  cancelDeleteButton: document.querySelector("#cancel-delete-button"),
   status: document.querySelector("#status-live"),
   error: document.querySelector("#error-live")
 };
 
 const GROUPS = [
-  { key: "player", label: "Player", records: (runtime) => [runtime.player] },
-  { key: "actors", label: "Actors", records: (runtime) => runtime.actors },
+  {
+    key: "player",
+    label: "Player",
+    singular: true,
+    prefix: "player.system_demo",
+    assetKind: "player",
+    records: (runtime) => [runtime.player]
+  },
+  {
+    key: "actors",
+    label: "Actors",
+    prefix: "actor.system_demo",
+    assetKind: "actor",
+    records: (runtime) => runtime.actors
+  },
   {
     key: "groundBlockers",
     label: "Ground Blockers",
+    prefix: "blocker.system_demo",
+    assetKind: "obstacle",
     records: (runtime) => runtime.groundBlockers
   },
   {
     key: "safePoints",
     label: "Safe Points",
+    prefix: "safe_point.system_demo",
+    assetKind: "safe_point",
     records: (runtime) => runtime.safePoints
   },
   {
     key: "interactions",
     label: "Interactions",
+    prefix: "interaction.system_demo",
+    assetKind: "interaction",
     records: (runtime) => runtime.interactions
   },
   {
     key: "mechanisms",
     label: "Mechanisms",
+    prefix: "mechanism.system_demo",
+    assetKind: "mechanism",
     records: (runtime) => runtime.mechanisms
   }
 ];
@@ -97,6 +152,10 @@ let state = {
     hasPreparedPackage: false,
     diagnostics: [],
     preparedPackageLease: null
+  },
+  preview: {
+    available: false,
+    publication: null
   }
 };
 let selectedGroup = "player";
@@ -113,6 +172,15 @@ let contentCheckInFlight = false;
 let contentCheckRequestSequence = 0;
 let packageExportInFlight = false;
 let packageExportRequestSequence = 0;
+let objectMutationInFlight = false;
+let objectDialogMode = "create";
+let canvasMutationInFlight = false;
+let canvasDrag = null;
+let canvasZoomPercent = 100;
+let previewPublishInFlight = false;
+let previewCandidate = null;
+let livePreview = null;
+let previewFeedback = null;
 let activeFields = [];
 const expandedGroups = new Set(GROUPS.map((group) => group.key));
 const fieldBuffers = new Map();
@@ -207,6 +275,55 @@ function groupByKey(key) {
   return GROUPS.find((group) => group.key === key);
 }
 
+function runtimeIds() {
+  if (!state.document) {
+    return new Set();
+  }
+  const runtime = state.document.runtime;
+  return new Set([
+    runtime.player.id,
+    ...runtime.regions.map(({ id }) => id),
+    ...runtime.assets.map(({ id }) => id),
+    ...runtime.actors.map(({ id }) => id),
+    ...runtime.groundBlockers.map(({ id }) => id),
+    ...runtime.safePoints.map(({ id }) => id),
+    ...runtime.interactions.map(({ id }) => id),
+    ...runtime.mechanisms.map(({ id }) => id),
+    ...runtime.waves.map(({ id }) => id),
+    ...runtime.objectives.map(({ id }) => id)
+  ]);
+}
+
+function nextObjectId(group, sourceId = null) {
+  const occupied = runtimeIds();
+  const stem =
+    sourceId === null
+      ? group.prefix + ".new"
+      : sourceId.replace(/(?:\.copy(?:_\d+)?)?$/, "") + ".copy";
+  if (!occupied.has(stem)) {
+    return stem;
+  }
+  for (let index = 2; index < 1000; index += 1) {
+    const candidate = stem + "_" + index;
+    if (!occupied.has(candidate)) {
+      return candidate;
+    }
+  }
+  return group.prefix + ".new_" + Date.now();
+}
+
+function optionsForRegion() {
+  return state.document?.runtime.regions.map(({ id }) => id) ?? [];
+}
+
+function optionsForAsset(group) {
+  return (
+    state.document?.runtime.assets
+      .filter(({ kind }) => kind === group.assetKind)
+      .map(({ id }) => id) ?? []
+  );
+}
+
 function recordsFor(group) {
   return state.document ? group.records(state.document.runtime) : [];
 }
@@ -234,7 +351,15 @@ function hasFieldBuffers() {
 }
 
 function authorActionInFlight() {
-  return applyInFlight || saveInFlight || openInFlight || reloadInFlight;
+  return (
+    applyInFlight ||
+    saveInFlight ||
+    openInFlight ||
+    reloadInFlight ||
+    objectMutationInFlight ||
+    canvasMutationInFlight ||
+    previewPublishInFlight
+  );
 }
 
 function updateSaveAvailability() {
@@ -320,6 +445,7 @@ function locateDiagnostic(locator) {
 
 function renderContentCheck() {
   const check = state.contentCheck;
+  elements.contentCheckSummary.dataset.status = check.status;
   elements.contentCheckSummary.textContent = contentCheckSummary(check);
   if (check.status !== "ready" && check.status !== "validation_failed") {
     elements.diagnosticCountLive.textContent = "";
@@ -381,6 +507,76 @@ function renderContentCheck() {
     }
     elements.diagnosticList.append(item);
   }
+  renderPreviewControls();
+}
+
+function previewInteractionBlocked() {
+  return (
+    !state.opened ||
+    !state.preview.available ||
+    state.contentCheck.status !== "ready" ||
+    typeof state.contentCheck.preparedPackageLease !== "string" ||
+    hasFieldBuffers() ||
+    state.conflict ||
+    contentCheckInFlight ||
+    packageExportInFlight ||
+    authorActionInFlight()
+  );
+}
+
+function renderPreviewControls() {
+  const unavailable = !state.preview.available;
+  const blocked = previewInteractionBlocked();
+  elements.previewLaunchButton.disabled = unavailable || livePreview !== null;
+  elements.previewLaunchButton.setAttribute(
+    "aria-disabled",
+    String(blocked || livePreview !== null)
+  );
+  elements.previewLaunchButton.setAttribute(
+    "aria-busy",
+    String(previewPublishInFlight && livePreview === null)
+  );
+  elements.previewReloadButton.disabled = unavailable || livePreview === null;
+  elements.previewReloadButton.setAttribute(
+    "aria-disabled",
+    String(blocked || livePreview === null)
+  );
+  elements.previewReloadButton.setAttribute(
+    "aria-busy",
+    String(previewPublishInFlight && livePreview !== null)
+  );
+  elements.previewPlaceholder.hidden =
+    livePreview !== null || previewCandidate !== null;
+
+  if (previewFeedback) {
+    elements.previewStatus.textContent = previewFeedback;
+  } else if (unavailable) {
+    elements.previewStatus.textContent =
+      "当前构建尚未连接 Preview Host；作者草稿与 Export 仍可使用。";
+  } else if (previewCandidate) {
+    elements.previewStatus.textContent =
+      "新候选正在隐藏启动；上一份可见画面保持运行。";
+  } else if (livePreview) {
+    elements.previewStatus.textContent =
+      state.contentCheck.status === "ready"
+        ? "Preview 正在运行；当前 fresh package 可安全重载。"
+        : "Preview 正在运行；草稿已变化，上一份画面保持不变。";
+  } else {
+    elements.previewStatus.textContent =
+      state.contentCheck.status === "ready"
+        ? "fresh package 已准备，可 Launch 到真实系统 Demo Host。"
+        : "先完成共享内容检查，再 Launch。";
+  }
+  const identity = livePreview ?? state.preview.publication;
+  elements.previewIdentity.textContent = identity
+    ? "generation " +
+      identity.generation +
+      " / " +
+      identity.packageSha256.replace(/^sha256:/, "").slice(0, 12) +
+      "… / " +
+      identity.packageBytes +
+      " bytes"
+    : "generation - / package -";
 }
 
 function announceDiagnosticCount() {
@@ -469,10 +665,16 @@ function textField(name, label, value, options = {}) {
   };
 }
 
-function placementFields(record) {
+function placementFields(group, record) {
   return [
-    textField("regionId", "Region ID", record.regionId),
-    textField("assetId", "Asset ID", record.assetId),
+    textField("regionId", "Region ID", record.regionId, {
+      kind: "enum",
+      options: optionsForRegion()
+    }),
+    textField("assetId", "Stable Asset ID", record.assetId, {
+      kind: "enum",
+      options: optionsForAsset(group)
+    }),
     textField("x", "Pose X", record.pose.x, {
       kind: "integer",
       min: INT32_MIN,
@@ -507,13 +709,22 @@ function fieldsFor(group, record) {
     textField("id", "Stable ID（只读，可复制）", record.id, {
       readonly: true,
       wide: true
+    }),
+    textField("editorLabel", "作者标签", editorLabel(record.id), {
+      wide: true
     })
   ];
 
   if (group.key === "groundBlockers") {
     fields.push(
-      textField("regionId", "Region ID", record.regionId),
-      textField("assetId", "Asset ID", record.assetId),
+      textField("regionId", "Region ID", record.regionId, {
+        kind: "enum",
+        options: optionsForRegion()
+      }),
+      textField("assetId", "Stable Asset ID", record.assetId, {
+        kind: "enum",
+        options: optionsForAsset(group)
+      }),
       ...[
         ["minX", "Min X", INT32_MIN, INT32_MAX],
         ["maxX", "Max X", INT32_MIN, INT32_MAX],
@@ -529,15 +740,19 @@ function fieldsFor(group, record) {
     return fields;
   }
 
-  fields.push(...placementFields(record));
+  fields.push(...placementFields(group, record));
   if (group.key === "player") {
     fields.splice(
-      3,
+      4,
       0,
       textField(
         "initialSafePointId",
         "Initial Safe Point ID",
-        record.initialSafePointId
+        record.initialSafePointId,
+        {
+          kind: "enum",
+          options: state.document.runtime.safePoints.map(({ id }) => id)
+        }
       )
     );
   }
@@ -809,6 +1024,449 @@ function renderInspector() {
   }
 }
 
+function updateObjectActionAvailability() {
+  const record = currentRecord();
+  const group = groupByKey(selectedGroup);
+  const blocked =
+    !state.opened ||
+    hasFieldBuffers() ||
+    state.conflict ||
+    authorActionInFlight() ||
+    contentCheckInFlight ||
+    packageExportInFlight;
+  elements.createObjectButton.disabled = !state.opened;
+  elements.createObjectButton.setAttribute("aria-disabled", String(blocked));
+  elements.createObjectButton.textContent =
+    group?.singular ? "重建" : "新增";
+  elements.duplicateObjectButton.disabled = !record;
+  elements.duplicateObjectButton.setAttribute(
+    "aria-disabled",
+    String(blocked || !record)
+  );
+  elements.duplicateObjectButton.textContent =
+    group?.singular ? "复制并替换" : "复制";
+  elements.deleteObjectButton.disabled = !record || group?.singular === true;
+  elements.deleteObjectButton.setAttribute(
+    "aria-disabled",
+    String(blocked || !record || group?.singular === true)
+  );
+  elements.deleteObjectButton.title =
+    group?.singular === true ? "全包必须保留唯一玩家起点" : "";
+}
+
+function svgElement(name, attributes = {}) {
+  const element = document.createElementNS("http://www.w3.org/2000/svg", name);
+  for (const [key, value] of Object.entries(attributes)) {
+    element.setAttribute(key, String(value));
+  }
+  return element;
+}
+
+function canvasPoint(x, y) {
+  const bounds = state.document.runtime.bounds;
+  return { x, y: bounds.maxY - y };
+}
+
+function canvasViewBox() {
+  const bounds = state.document.runtime.bounds;
+  const zoom = canvasZoomPercent / 100;
+  const width = (bounds.maxX - bounds.minX) / zoom;
+  const height = (bounds.maxY - bounds.minY) / zoom;
+  const centerX = (bounds.minX + bounds.maxX) / 2;
+  const centerY = (bounds.maxY - bounds.minY) / 2;
+  return [
+    centerX - width / 2,
+    centerY - height / 2,
+    width,
+    height
+  ].join(" ");
+}
+
+function canvasObjectLabel(id) {
+  const label = editorLabel(id);
+  return label.length > 24 ? label.slice(0, 23) + "…" : label;
+}
+
+function appendCanvasPlacement(group, record) {
+  const point = canvasPoint(record.pose.x, record.pose.y);
+  if (group.key === "interactions") {
+    const binding = state.document.runtime.interactionBindings.find(
+      (candidate) => candidate.interactionId === record.id
+    );
+    if (binding) {
+      elements.sceneCanvas.append(
+        svgElement("circle", {
+          class: "canvas-range",
+          cx: point.x,
+          cy: point.y,
+          r: binding.rangeMm
+        })
+      );
+    }
+  }
+  const node = svgElement("g", {
+    class: "canvas-object",
+    "data-kind": group.key,
+    "data-object-id": record.id,
+    "aria-label": group.label + " " + editorLabel(record.id),
+    "aria-selected": selectedGroup === group.key && selectedId === record.id,
+    role: "button",
+    tabindex: "0"
+  });
+  const radius = group.key === "player" ? 230 : 175;
+  node.append(
+    svgElement(group.key === "actors" ? "polygon" : "circle", {
+      class: "canvas-object-shape",
+      ...(group.key === "actors"
+        ? {
+            points:
+              point.x +
+              "," +
+              (point.y - radius) +
+              " " +
+              (point.x + radius) +
+              "," +
+              (point.y + radius) +
+              " " +
+              (point.x - radius) +
+              "," +
+              (point.y + radius)
+          }
+        : { cx: point.x, cy: point.y, r: radius })
+    })
+  );
+  const angle =
+    (Number(record.facingMillidegrees % 360000) / 1000 - 90) *
+    (Math.PI / 180);
+  node.append(
+    svgElement("line", {
+      class: "canvas-facing",
+      x1: point.x,
+      y1: point.y,
+      x2: point.x + Math.cos(angle) * 460,
+      y2: point.y + Math.sin(angle) * 460
+    })
+  );
+  const label = svgElement("text", {
+    class: "canvas-object-label",
+    x: point.x + 260,
+    y: point.y - 250
+  });
+  label.textContent = canvasObjectLabel(record.id);
+  node.append(label);
+  node.addEventListener("pointerdown", beginCanvasDrag);
+  node.addEventListener("click", () => selectObject(group.key, record.id));
+  node.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      selectObject(group.key, record.id);
+    }
+  });
+  elements.sceneCanvas.append(node);
+}
+
+function appendCanvasBlocker(group, record) {
+  const topLeft = canvasPoint(record.minX, record.maxY);
+  const node = svgElement("g", {
+    class: "canvas-object",
+    "data-kind": group.key,
+    "data-object-id": record.id,
+    "aria-label": group.label + " " + editorLabel(record.id),
+    "aria-selected": selectedGroup === group.key && selectedId === record.id,
+    role: "button",
+    tabindex: "0"
+  });
+  node.append(
+    svgElement("rect", {
+      class: "canvas-blocker",
+      x: topLeft.x,
+      y: topLeft.y,
+      width: record.maxX - record.minX,
+      height: record.maxY - record.minY
+    })
+  );
+  const label = svgElement("text", {
+    class: "canvas-object-label",
+    x: topLeft.x + 120,
+    y: topLeft.y - 110
+  });
+  label.textContent = canvasObjectLabel(record.id);
+  node.append(label);
+  node.addEventListener("pointerdown", beginCanvasDrag);
+  node.addEventListener("click", () => selectObject(group.key, record.id));
+  elements.sceneCanvas.append(node);
+}
+
+function renderCanvas() {
+  elements.sceneCanvas.replaceChildren();
+  elements.sceneCanvasEmpty.hidden = state.opened;
+  elements.canvasZoom.disabled = !state.opened;
+  elements.canvasSnap.disabled = !state.opened;
+  if (!state.opened) {
+    elements.sceneCanvas.removeAttribute("viewBox");
+    return;
+  }
+  const runtime = state.document.runtime;
+  const bounds = runtime.bounds;
+  elements.sceneCanvas.setAttribute("viewBox", canvasViewBox());
+  elements.sceneCanvas.setAttribute(
+    "aria-label",
+    "Sandbox 二维场地，当前选择 " + (selectedId ?? "无")
+  );
+  const region = svgElement("rect", {
+    class: "canvas-region",
+    x: bounds.minX,
+    y: 0,
+    width: bounds.maxX - bounds.minX,
+    height: bounds.maxY - bounds.minY
+  });
+  elements.sceneCanvas.append(region);
+  for (
+    let x = Math.ceil(bounds.minX / 1000) * 1000;
+    x <= bounds.maxX;
+    x += 1000
+  ) {
+    elements.sceneCanvas.append(
+      svgElement("line", {
+        class: "canvas-grid-line",
+        x1: x,
+        y1: 0,
+        x2: x,
+        y2: bounds.maxY - bounds.minY
+      })
+    );
+  }
+  for (
+    let y = Math.ceil(bounds.minY / 1000) * 1000;
+    y <= bounds.maxY;
+    y += 1000
+  ) {
+    const canvasY = bounds.maxY - y;
+    elements.sceneCanvas.append(
+      svgElement("line", {
+        class: "canvas-grid-line",
+        x1: bounds.minX,
+        y1: canvasY,
+        x2: bounds.maxX,
+        y2: canvasY
+      })
+    );
+  }
+  for (const group of GROUPS) {
+    for (const record of recordsFor(group)) {
+      if (group.key === "groundBlockers") {
+        appendCanvasBlocker(group, record);
+      } else {
+        appendCanvasPlacement(group, record);
+      }
+    }
+  }
+}
+
+function valuesForCanvasUpdate(group, record, deltaX, deltaY) {
+  const label = editorLabel(record.id);
+  if (group.key === "groundBlockers") {
+    return {
+      regionId: record.regionId,
+      assetId: record.assetId,
+      minX: record.minX + deltaX,
+      maxX: record.maxX + deltaX,
+      minY: record.minY + deltaY,
+      maxY: record.maxY + deltaY,
+      minHeight: record.minHeight,
+      maxHeight: record.maxHeight,
+      floorLayer: record.floorLayer,
+      editorLabel: label
+    };
+  }
+  const values = {
+    regionId: record.regionId,
+    assetId: record.assetId,
+    pose: {
+      ...record.pose,
+      x: record.pose.x + deltaX,
+      y: record.pose.y + deltaY
+    },
+    facingMillidegrees: record.facingMillidegrees,
+    editorLabel: label
+  };
+  if (group.key === "player") {
+    values.initialSafePointId = record.initialSafePointId;
+  }
+  if (group.key === "interactions") {
+    const binding = state.document.runtime.interactionBindings.find(
+      (candidate) => candidate.interactionId === record.id
+    );
+    values.binding = binding
+      ? {
+          operation: binding.operation,
+          rangeMm: binding.rangeMm,
+          targetMechanismId: binding.targetMechanismId
+        }
+      : null;
+  }
+  if (group.key === "mechanisms") {
+    const binding = state.document.runtime.mechanismBindings.find(
+      (candidate) => candidate.mechanismId === record.id
+    );
+    values.binding = binding
+      ? {
+          activation: binding.activation,
+          targetGroundBlockerId: binding.targetGroundBlockerId
+        }
+      : null;
+  }
+  return values;
+}
+
+function pointerInCanvas(event) {
+  const matrix = elements.sceneCanvas.getScreenCTM();
+  if (!matrix) {
+    return null;
+  }
+  return new DOMPoint(event.clientX, event.clientY).matrixTransform(
+    matrix.inverse()
+  );
+}
+
+function beginCanvasDrag(event) {
+  if (
+    event.button !== 0 ||
+    !state.opened ||
+    hasFieldBuffers() ||
+    authorActionInFlight()
+  ) {
+    return;
+  }
+  const group = groupByKey(event.currentTarget.dataset.kind);
+  const id = event.currentTarget.dataset.objectId;
+  const record = recordsFor(group).find((candidate) => candidate.id === id);
+  const start = pointerInCanvas(event);
+  if (!record || !start) {
+    return;
+  }
+  event.preventDefault();
+  selectObject(group.key, id);
+  const node = elements.sceneCanvas.querySelector(
+    '[data-kind="' +
+      CSS.escape(group.key) +
+      '"][data-object-id="' +
+      CSS.escape(id) +
+      '"]'
+  );
+  canvasDrag = {
+    pointerId: event.pointerId,
+    group,
+    id,
+    record: structuredClone(record),
+    start,
+    node,
+    deltaX: 0,
+    deltaY: 0
+  };
+  elements.sceneCanvas.setPointerCapture(event.pointerId);
+}
+
+function snapped(value) {
+  return elements.canvasSnap.checked ? Math.round(value / 100) * 100 : Math.round(value);
+}
+
+async function commitCanvasMove(group, record, deltaX, deltaY) {
+  if (deltaX === 0 && deltaY === 0) {
+    renderCanvas();
+    return;
+  }
+  canvasMutationInFlight = true;
+  beginContentAction();
+  renderContentCheck();
+  updateObjectActionAvailability();
+  clearFeedback();
+  try {
+    state = await api("/api/update", {
+      method: "POST",
+      body: {
+        kind: group.key,
+        id: record.id,
+        values: valuesForCanvasUpdate(group, record, deltaX, deltaY),
+        expectedRevision: state.revision
+      }
+    });
+    render();
+    setStatus(
+      "画布已移动 " +
+        record.id +
+        "：ΔX " +
+        deltaX +
+        " mm / ΔY " +
+        deltaY +
+        " mm，revision " +
+        state.revision +
+        "。"
+    );
+  } catch (error) {
+    render();
+    presentError(error);
+  } finally {
+    canvasMutationInFlight = false;
+    renderContentCheck();
+    updateObjectActionAvailability();
+  }
+}
+
+function referenceDescriptions(groupKey, id) {
+  if (!state.document) {
+    return [];
+  }
+  const runtime = state.document.runtime;
+  const descriptions = [];
+  if (groupKey === "actors") {
+    for (const spawn of runtime.waveSpawns.filter(
+      (candidate) => candidate.actorId === id
+    )) {
+      descriptions.push(
+        "将同步移除波次 " + spawn.waveId + " 的 spawnOrder " + spawn.spawnOrder
+      );
+    }
+  }
+  if (
+    groupKey === "safePoints" &&
+    runtime.player.initialSafePointId === id
+  ) {
+    descriptions.push("玩家 Initial Safe Point 正在引用；删除会被拒绝");
+  }
+  if (groupKey === "interactions") {
+    for (const binding of runtime.interactionBindings.filter(
+      (candidate) => candidate.interactionId === id
+    )) {
+      descriptions.push(
+        "将同步移除指向机关 " + binding.targetMechanismId + " 的 operate binding"
+      );
+    }
+  }
+  if (groupKey === "mechanisms") {
+    for (const binding of runtime.interactionBindings.filter(
+      (candidate) => candidate.targetMechanismId === id
+    )) {
+      descriptions.push("将同步移除互动点 " + binding.interactionId + " 的 binding");
+    }
+    for (const objective of runtime.objectives.filter(
+      (candidate) =>
+        candidate.completion.kind === "mechanism_activated" &&
+        candidate.completion.targetId === id
+    )) {
+      descriptions.push("目标 " + objective.id + " 仍引用该机关，检查将报告诊断");
+    }
+  }
+  if (groupKey === "groundBlockers") {
+    for (const binding of runtime.mechanismBindings.filter(
+      (candidate) => candidate.targetGroundBlockerId === id
+    )) {
+      descriptions.push("将同步移除机关 " + binding.mechanismId + " 的 blocker binding");
+    }
+  }
+  return descriptions;
+}
+
 function render() {
   const documentValue = state.document;
   elements.schema.textContent = documentValue
@@ -825,9 +1483,12 @@ function render() {
   }
   renderTree();
   renderInspector();
+  renderCanvas();
   renderContentCheck();
+  renderPreviewControls();
   updateSaveAvailability();
   updateApplyAvailability();
+  updateObjectActionAvailability();
 }
 
 function parseFormValues() {
@@ -875,6 +1536,7 @@ function requestValues(raw) {
   const values = {
     regionId: raw.regionId,
     assetId: raw.assetId,
+    editorLabel: raw.editorLabel,
     pose: {
       x: raw.x,
       y: raw.y,
@@ -1261,6 +1923,383 @@ async function exportPackage() {
   }
 }
 
+function discardPreviewCandidate(message) {
+  if (!previewCandidate) {
+    return;
+  }
+  clearTimeout(previewCandidate.timeout);
+  previewCandidate.frame.remove();
+  previewCandidate = null;
+  previewFeedback =
+    message ?? "Preview 候选未就绪；上一份可见画面保持不变。";
+  renderPreviewControls();
+}
+
+function stagePreviewCandidate(publication, mode) {
+  discardPreviewCandidate(null);
+  previewFeedback = null;
+  const frame = document.createElement("iframe");
+  frame.className = "preview-frame preview-candidate";
+  frame.title =
+    "TianGongDu system Demo Preview generation " + publication.generation;
+  frame.src = publication.url;
+  frame.hidden = true;
+  frame.setAttribute("allow", "autoplay");
+  elements.previewStage.append(frame);
+  previewCandidate = {
+    publication,
+    mode,
+    frame,
+    timeout: window.setTimeout(
+      () =>
+        discardPreviewCandidate(
+          "Preview 候选在 30 秒内没有报告 ready；上一份画面保持不变。"
+        ),
+      30_000
+    )
+  };
+  renderPreviewControls();
+}
+
+async function publishPreview(mode) {
+  if (previewPublishInFlight || previewInteractionBlocked()) {
+    return;
+  }
+  const revision = state.revision;
+  const documentLease = state.documentLease;
+  const packageLease = state.contentCheck.preparedPackageLease;
+  previewPublishInFlight = true;
+  previewFeedback = null;
+  renderPreviewControls();
+  clearFeedback();
+  try {
+    const publishedState = await api("/api/preview-publish", {
+      method: "POST",
+      deferErrorState: true,
+      body: {
+        expectedRevision: revision,
+        expectedDocumentLease: documentLease,
+        expectedPreparedPackageLease: packageLease
+      }
+    });
+    if (
+      state.revision !== revision ||
+      state.documentLease !== documentLease ||
+      state.contentCheck.preparedPackageLease !== packageLease
+    ) {
+      return;
+    }
+    state = publishedState;
+    stagePreviewCandidate(state.preview.publication, mode);
+    setStatus(
+      (mode === "reload" ? "Safe Reload" : "Launch") +
+        " 已准备 generation " +
+        state.preview.publication.generation +
+        "；等待真实 Host ready。"
+    );
+  } catch (error) {
+    if (error.state) {
+      state = error.state;
+    }
+    previewFeedback = userMessage(error.code ?? "preview_failed");
+    render();
+    presentError(error);
+  } finally {
+    previewPublishInFlight = false;
+    renderPreviewControls();
+  }
+}
+
+window.addEventListener("message", (event) => {
+  const candidate = previewCandidate;
+  if (
+    !candidate ||
+    event.origin !== window.location.origin ||
+    event.source !== candidate.frame.contentWindow ||
+    event.data?.type !== "tgd-system-demo-preview-ready" ||
+    event.data?.token !== candidate.publication.token ||
+    event.data?.generation !== candidate.publication.generation
+  ) {
+    return;
+  }
+  clearTimeout(candidate.timeout);
+  const previous = livePreview;
+  candidate.frame.hidden = false;
+  candidate.frame.className = "preview-frame preview-live";
+  for (const frame of elements.previewStage.querySelectorAll(
+    ".preview-frame.preview-live"
+  )) {
+    if (frame !== candidate.frame) {
+      frame.remove();
+    }
+  }
+  livePreview = {
+    ...candidate.publication,
+    runtimeState: event.data.state
+  };
+  previewCandidate = null;
+  previewFeedback =
+    (candidate.mode === "reload" ? "Safe Reload" : "Launch") +
+    " 已提交 generation " +
+    livePreview.generation +
+    "；新画面已替换上一候选。";
+  void previous;
+  renderPreviewControls();
+  setStatus(previewFeedback);
+});
+
+function openObjectDialog(mode) {
+  if (
+    !state.opened ||
+    hasFieldBuffers() ||
+    state.conflict ||
+    authorActionInFlight()
+  ) {
+    return;
+  }
+  const group = groupByKey(selectedGroup);
+  const source = currentRecord();
+  if (mode === "duplicate" && !source) {
+    return;
+  }
+  objectDialogMode = mode;
+  elements.objectDialogTitle.textContent =
+    mode === "duplicate"
+      ? group.singular
+        ? "复制并替换唯一玩家"
+        : "复制 " + group.label
+      : group.singular
+        ? "重建唯一玩家"
+        : "新增 " + group.label;
+  elements.objectDialogSummary.textContent = group.singular
+    ? "作者格式必须始终保留一个玩家；提交后新记录会原子替换旧玩家。"
+    : mode === "duplicate"
+      ? "复制会生成新 Stable ID、作者标签和偏移位置；关联 binding 使用同一受控结构。"
+      : "从当前分类的受控结构创建记录；Gameplay 含义仍由共享检查决定。";
+  elements.objectIdInput.value = nextObjectId(
+    group,
+    mode === "duplicate" ? source.id : null
+  );
+  elements.objectLabelInput.value =
+    mode === "duplicate"
+      ? editorLabel(source.id) + " 副本"
+      : group.label.replace(/s$/, "") + " New";
+  elements.objectDialogError.textContent = "";
+  elements.confirmObjectButton.textContent =
+    group.singular ? "替换玩家" : mode === "duplicate" ? "创建副本" : "创建对象";
+  elements.objectDialog.showModal();
+  requestAnimationFrame(() => {
+    elements.objectIdInput.focus();
+    elements.objectIdInput.select();
+  });
+}
+
+async function submitObjectDialog() {
+  if (objectMutationInFlight || !state.opened) {
+    return;
+  }
+  const group = groupByKey(selectedGroup);
+  const source = currentRecord();
+  const id = elements.objectIdInput.value.trim();
+  const label = elements.objectLabelInput.value.trim();
+  if (!id || !label) {
+    elements.objectDialogError.textContent = "Stable ID 与作者标签不能为空。";
+    return;
+  }
+  objectMutationInFlight = true;
+  elements.confirmObjectButton.setAttribute("aria-busy", "true");
+  elements.confirmObjectButton.setAttribute("aria-disabled", "true");
+  elements.objectDialogError.textContent = "";
+  clearFeedback();
+  beginContentAction();
+  try {
+    state = await api("/api/object-create", {
+      method: "POST",
+      body: {
+        kind: group.key,
+        id,
+        label,
+        sourceId: objectDialogMode === "duplicate" ? source?.id ?? null : null,
+        mode: objectDialogMode,
+        expectedRevision: state.revision
+      }
+    });
+    fieldBuffers.clear();
+    selectedGroup = group.key;
+    selectedId = id;
+    expandedGroups.add(group.key);
+    treeActiveKey = "object:" + group.key + ":" + id;
+    elements.objectDialog.close("created");
+    render();
+    setStatus(
+      (objectDialogMode === "duplicate" ? "已创建副本 " : "已创建 ") +
+        id +
+        "，revision " +
+        state.revision +
+        "。请执行共享内容检查确认引用与玩法语义。"
+    );
+  } catch (error) {
+    render();
+    elements.objectDialogError.textContent = userMessage(error.code);
+  } finally {
+    objectMutationInFlight = false;
+    elements.confirmObjectButton.setAttribute("aria-busy", "false");
+    elements.confirmObjectButton.setAttribute("aria-disabled", "false");
+    renderContentCheck();
+    updateObjectActionAvailability();
+  }
+}
+
+function openDeleteDialog() {
+  const group = groupByKey(selectedGroup);
+  const record = currentRecord();
+  if (
+    !record ||
+    group.singular ||
+    hasFieldBuffers() ||
+    state.conflict ||
+    authorActionInFlight()
+  ) {
+    return;
+  }
+  elements.deleteDialogSummary.textContent =
+    "将从作者文档删除 " +
+    editorLabel(record.id) +
+    "（" +
+    record.id +
+    "）。删除后仍需重新执行共享内容检查。";
+  elements.deleteReferenceList.replaceChildren();
+  const references = referenceDescriptions(group.key, record.id);
+  for (const description of references.length > 0
+    ? references
+    : ["未发现由当前工具管理的直接反向引用。"]) {
+    const item = document.createElement("li");
+    item.textContent = description;
+    elements.deleteReferenceList.append(item);
+  }
+  elements.deleteDialogError.textContent = "";
+  elements.deleteDialog.showModal();
+  requestAnimationFrame(() => elements.confirmDeleteButton.focus());
+}
+
+async function submitDeleteDialog() {
+  if (objectMutationInFlight) {
+    return;
+  }
+  const group = groupByKey(selectedGroup);
+  const record = currentRecord();
+  if (!record || group.singular) {
+    return;
+  }
+  const deletedId = record.id;
+  objectMutationInFlight = true;
+  elements.confirmDeleteButton.setAttribute("aria-busy", "true");
+  elements.confirmDeleteButton.setAttribute("aria-disabled", "true");
+  elements.deleteDialogError.textContent = "";
+  beginContentAction();
+  try {
+    state = await api("/api/object-delete", {
+      method: "POST",
+      body: {
+        kind: group.key,
+        id: deletedId,
+        expectedRevision: state.revision
+      }
+    });
+    fieldBuffers.delete(objectBufferKey(group.key, deletedId));
+    const remaining = recordsFor(group);
+    selectedId = remaining[0]?.id ?? null;
+    treeActiveKey =
+      selectedId === null
+        ? "group:" + group.key
+        : "object:" + group.key + ":" + selectedId;
+    elements.deleteDialog.close("deleted");
+    render();
+    setStatus(
+      "已删除 " +
+        deletedId +
+        "，revision " +
+        state.revision +
+        "。共享内容检查结果已过期。"
+    );
+  } catch (error) {
+    render();
+    elements.deleteDialogError.textContent = userMessage(error.code);
+  } finally {
+    objectMutationInFlight = false;
+    elements.confirmDeleteButton.setAttribute("aria-busy", "false");
+    elements.confirmDeleteButton.setAttribute("aria-disabled", "false");
+    renderContentCheck();
+    updateObjectActionAvailability();
+  }
+}
+
+elements.sceneCanvas.addEventListener("pointermove", (event) => {
+  if (!canvasDrag || canvasDrag.pointerId !== event.pointerId) {
+    return;
+  }
+  const current = pointerInCanvas(event);
+  if (!current) {
+    return;
+  }
+  canvasDrag.deltaX = snapped(current.x - canvasDrag.start.x);
+  canvasDrag.deltaY = snapped(-(current.y - canvasDrag.start.y));
+  if (canvasDrag.node) {
+    canvasDrag.node.setAttribute(
+      "transform",
+      "translate(" + canvasDrag.deltaX + " " + -canvasDrag.deltaY + ")"
+    );
+  }
+});
+
+elements.sceneCanvas.addEventListener("pointerup", (event) => {
+  if (!canvasDrag || canvasDrag.pointerId !== event.pointerId) {
+    return;
+  }
+  const completed = canvasDrag;
+  canvasDrag = null;
+  if (elements.sceneCanvas.hasPointerCapture(event.pointerId)) {
+    elements.sceneCanvas.releasePointerCapture(event.pointerId);
+  }
+  void commitCanvasMove(
+    completed.group,
+    completed.record,
+    completed.deltaX,
+    completed.deltaY
+  );
+});
+
+elements.sceneCanvas.addEventListener("pointercancel", (event) => {
+  if (!canvasDrag || canvasDrag.pointerId !== event.pointerId) {
+    return;
+  }
+  canvasDrag = null;
+  renderCanvas();
+});
+
+elements.sceneCanvas.addEventListener("keydown", (event) => {
+  if (
+    !["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key) ||
+    !currentRecord() ||
+    hasFieldBuffers() ||
+    authorActionInFlight()
+  ) {
+    return;
+  }
+  event.preventDefault();
+  const step = elements.canvasSnap.checked ? 100 : 1;
+  const deltaX =
+    event.key === "ArrowLeft" ? -step : event.key === "ArrowRight" ? step : 0;
+  const deltaY =
+    event.key === "ArrowDown" ? -step : event.key === "ArrowUp" ? step : 0;
+  void commitCanvasMove(
+    groupByKey(selectedGroup),
+    structuredClone(currentRecord()),
+    deltaX,
+    deltaY
+  );
+});
+
 elements.objectTree.addEventListener("keydown", (event) => {
   const items = visibleTreeItems();
   const active = activeTreeItem() ?? items[0];
@@ -1324,6 +2363,47 @@ elements.objectTree.addEventListener("keydown", (event) => {
   }
 });
 
+elements.createObjectButton.addEventListener("click", () => {
+  if (elements.createObjectButton.getAttribute("aria-disabled") !== "true") {
+    openObjectDialog("create");
+  }
+});
+
+elements.duplicateObjectButton.addEventListener("click", () => {
+  if (elements.duplicateObjectButton.getAttribute("aria-disabled") !== "true") {
+    openObjectDialog("duplicate");
+  }
+});
+
+elements.deleteObjectButton.addEventListener("click", () => {
+  if (elements.deleteObjectButton.getAttribute("aria-disabled") !== "true") {
+    openDeleteDialog();
+  }
+});
+
+elements.objectDialogForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  void submitObjectDialog();
+});
+
+elements.cancelObjectButton.addEventListener("click", () => {
+  elements.objectDialog.close("cancel");
+});
+
+elements.deleteDialogForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  void submitDeleteDialog();
+});
+
+elements.cancelDeleteButton.addEventListener("click", () => {
+  elements.deleteDialog.close("cancel");
+});
+
+elements.canvasZoom.addEventListener("input", () => {
+  canvasZoomPercent = Number(elements.canvasZoom.value);
+  renderCanvas();
+});
+
 elements.workspaceForm.addEventListener("submit", (event) => {
   event.preventDefault();
   void openDocument();
@@ -1343,6 +2423,18 @@ elements.contentCheckButton.addEventListener("click", () => {
 
 elements.packageExportButton.addEventListener("click", () => {
   void exportPackage();
+});
+
+elements.previewLaunchButton.addEventListener("click", () => {
+  if (elements.previewLaunchButton.getAttribute("aria-disabled") !== "true") {
+    void publishPreview("launch");
+  }
+});
+
+elements.previewReloadButton.addEventListener("click", () => {
+  if (elements.previewReloadButton.getAttribute("aria-disabled") !== "true") {
+    void publishPreview("reload");
+  }
 });
 
 elements.inspectorForm.addEventListener("submit", async (event) => {

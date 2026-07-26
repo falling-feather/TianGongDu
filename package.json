@@ -16,7 +16,7 @@
     "generate:f1-slice-contract": "node tools/generate-f1-slice-contract.mjs",
     "check:f1-slice-contract": "node tools/generate-f1-slice-contract.mjs --check",
     "bootstrap:toolchain": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/bootstrap-toolchain.ps1",
-    "test": "node --test tests/design-foundation.test.mjs tests/architecture.test.mjs tests/toolchain.test.mjs tests/action-contract.test.mjs tests/web-abi-contract.test.mjs tests/indexeddb-contract.test.mjs tests/quest-ui-renderer.test.mjs tests/f1-slice-contract.test.mjs tests/f1-ui-content-fixtures.test.mjs tests/f1-asset-requirements.test.mjs tests/f1-playtest-evidence.test.mjs && npm run test:content-workbench && npm run test:system-demo-evidence-contract",
+    "test": "node --test tests/design-foundation.test.mjs tests/architecture.test.mjs tests/toolchain.test.mjs tests/action-contract.test.mjs tests/web-abi-contract.test.mjs tests/indexeddb-contract.test.mjs tests/quest-ui-renderer.test.mjs tests/f1-slice-contract.test.mjs tests/f1-ui-content-fixtures.test.mjs tests/f1-asset-requirements.test.mjs tests/f1-playtest-evidence.test.mjs tests/system-demo-web-host-contract.test.mjs && npm run test:content-workbench && npm run test:system-demo-evidence-contract",
     "test:content-workbench": "npm --prefix apps/content-workbench test",
     "test:system-demo-evidence-contract": "node tests/browser/system-demo-evidence-contract.mjs --self-test",
     "validate:design": "node tools/validate-design.mjs",
@@ -28,6 +28,7 @@
     "test:cpp:clang": "node tools/run-toolchain.mjs --vsdev cmake --workflow --preset windows-clang-debug",
     "test:cpp:clang:release": "node tools/run-toolchain.mjs --vsdev cmake --workflow --preset windows-clang-release",
     "test:browser": "node tests/browser/web-host-lifecycle.mjs",
+    "test:system-demo-web": "node tests/browser/system-demo-web-host.mjs",
     "evidence:g1": "node tools/collect-g1-evidence.mjs",
     "build:web:debug": "node tools/run-toolchain.mjs cmake --workflow --preset web-debug",
     "build:web:release": "node tools/run-toolchain.mjs cmake --workflow --preset web-release-single"

@@ -9,13 +9,13 @@
 | 问题 | 结论 |
 | --- | --- |
 | 现有 F1 灰盒能运行吗 | 能。Web 灰盒已有移动、基础战斗、任务、两路线、四阶段 Boss、双结算、存档与固定回放，继续作为回归基线 |
-| 新的系统型 Demo 能直接给玩家玩吗 | 还不能作为完整 Demo。当前已有真实 Web Internal Blockout，可移动、操作机关、开门和局部重试，也能从 Workbench Launch/Safe Reload；尚无正式 Windows 窗口、两波战斗、工艺经营和 NPC |
-| 编辑器能添加人物和敌人吗 | 公开页面已能新增/复制/受控删除或重建六类场地对象，并提供二维画布；Actor 目前只是 placement，敌人 profile/duty/skill、阵营、职责和战斗行为进入 0.8.3 |
+| 新的系统型 Demo 能直接给玩家玩吗 | 还不能作为完整 Demo。当前真实 Web Internal Blockout 已能移动、操作机关、开门、执行两波/两目标战斗、死亡重试和 terminal，也能从 Workbench Launch/Safe Reload；尚无正式 Windows 窗口、工艺经营、三名 NPC 和完整战斗手感 |
+| 编辑器能添加人物和敌人吗 | 公开页面已能新增/复制/受控删除或重建六类场地对象，并为已有敌人编辑 profile、阵营、职责和生命；现有两波/目标可 update-only 编辑，技能/loadout、人物模板和 Wave/Objective 完整 CRUD 尚未完成 |
 | 工艺经营系统已经实现吗 | 还没有。工艺循环、地区经济和三地差异已有设计规范，但没有通用材料、工序、工位、订单、品质/返工和工坊状态 Runtime，也没有对应编辑面板 |
-| 编辑器能完整制作关卡吗 | 还不能。六类对象、受控资源选择、二维摆放和 Web Launch/Safe Reload 已完成；波次、目标、工艺经营、完整 Undo/Redo 和 Windows Launch 仍未完成 |
+| 编辑器能完整制作关卡吗 | 还不能。六类对象、Actor Gameplay binding、现有两波/目标更新、二维摆放和 Web Launch/Safe Reload 已完成；Wave/Objective 从空创建/删除、工艺经营、完整 Undo/Redo 和 Windows Launch 仍未完成 |
 | Windows 和 Web 是否已证明同一 Demo | 核心与包格式已有共同测试；玩家可见的同包双端 Preview 仍未完成 |
 
-工程底座完成度约为 **52%–57%**；按“设计师能制作、玩家能完成工艺经营与战斗闭环”的系统型 Demo 口径约为 **38%–43%**。这些数字用于排期，不是发布质量分数。
+工程底座完成度约为 **56%–61%**；按“设计师能制作、玩家能完成工艺经营与战斗闭环”的系统型 Demo 口径约为 **43%–48%**。这些数字用于排期，不是发布质量分数。
 
 ## 系统型 Demo 目标
 
@@ -39,10 +39,10 @@
 - F1 Web Shell、IndexedDB/Profile 奖励原子持久化、重复奖励保护和故障回归。
 - 唯一作者源 [`content/design/system-demo.sandbox.json`](content/design/system-demo.sandbox.json)。
 - 有界 `.tgdsbx` 包、唯一 C++ 编译/校验器、last-valid provider、JS/WASM 桥和 canonical Export。
-- Workbench 的文件打开、六类对象 CRUD、二维画布、受控 region/Stable Asset 选择、保存、重载、并发保护、共享诊断、Export 和 Web Launch/Safe Reload。
-- Sandbox 薄运行链：权威玩家位姿、相对移动、typed interaction → mechanism → dynamic blocker，以及局部安全点重试。
+- Workbench 的文件打开、六类对象 CRUD、Actor Gameplay binding、现有 Wave/Objective update-only 面板、二维画布、受控 region/Stable Asset 选择、保存、重载、并发保护、共享诊断、Export 和 Web Launch/Safe Reload。
+- Sandbox 运行链：权威玩家位姿、相对移动、typed interaction → mechanism → dynamic blocker，以及 Actor/Combat/Wave/Objective/terminal 和单 Host 局部重建。
 - 12 个 Stable Asset ID、24 个 Standard/Low 灰盒产物和失败关闭的资源解析候选。
-- 隔离的真实系统 Demo Web Host：加载唯一 canonical 包，显示可辨灰盒对象，并支持移动、关门碰撞、operate 开门和 local retry。
+- 隔离的真实系统 Demo Web Host：加载唯一 canonical 包，显示可辨灰盒对象，并支持移动、关门碰撞、operate 开门、轻/重击、两波目标战斗、死亡与 local retry。
 - 现有 7 Beat、两路线、Boss、双结算、存档与浏览器自动路线作为回归基线。
 
 ## 当前最短开发路径
@@ -52,8 +52,8 @@
 1. `0.8.0`（已完成）：冻结唯一启动目标，审计旧代码、分支和 worktree，只列清单、不盲删。
 2. `0.8.1`（已完成）：交付首个新 Demo Web 画面，可移动、操作机关、开门和重试。
 3. `0.8.2`（已完成）：编辑器能新增/摆放六类对象，并安全启动/重载同一 Web Host。
-4. `0.8.3`（下一任务）：在同一场景运行两波敌人、目标和 terminal。
-5. `0.8.4–0.8.5`：实装一段江南伞作技艺和一个小型工坊经营闭环。
+4. `0.8.3`（已完成技术闭环）：在同一场景运行两波敌人、目标和 terminal；真人 8–12 分钟节奏留到战斗调校与最终候选复验。
+5. `0.8.4–0.8.5`（下一阶段）：实装一段江南伞作技艺和一个小型工坊经营闭环。
 6. `0.8.6–0.8.7`：完善战斗手感，并加入沈砚、骆青禾、阿棠三名代表 NPC。
 7. `0.8.8–0.8.9`：完成状态恢复、Windows/Web 同包、表现优化和真人 Demo 验收。
 

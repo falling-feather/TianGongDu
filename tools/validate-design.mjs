@@ -75,7 +75,7 @@ const architectureSkeleton = [
 const handoffContractMarkers = [
   ["docs/00-项目总纲.md", ["体验指导优先级", "《斗战神》是整体体验的第一指导", "团队交付入口", "第一轮必读顺序", "任务卡必须同时写明", "产品不以战斗作为压倒其他系统的唯一核心", "技艺与经营重心"]],
   ["docs/01-开发者文档.md", ["当前实现事实", "当前未完成模块", "必须遵守的开发准则", "工艺与经营", "工艺不是表现小游戏", "工作项 DoR 与 DoD", "二级开发手册"]],
-  ["docs/02-版本规划与验收.md", ["江南工艺经营与战斗系统沙盒", "Demo 阶段与时间估算", "模块完成度与后续工作", "系统型 Demo 放行条件", "必须保留的回归基线", "PLATFORM-001", "TOOLS-004", "TOOLS-006", "GAME-005", "GAME-007", "CONTENT-003"]],
+  ["docs/02-版本规划与验收.md", ["Demo 0.8.x", "精简后的协作模型", "Demo 阶段与时间估算", "模块完成度与后续工作", "小版本任务卡", "任务资源与模板索引", "系统型 Demo 放行条件", "必须保留的回归基线", "代码、分支与历史简化计划", "DEMO-081", "DEMO-084", "DEMO-087", "DEMO-089"]],
   ["docs/04-游戏设计总纲.md", ["2.5D 斜向全景空间与相机", "玩家本体、推进与装备边界", "F1 战斗手感种子", "命名遭遇等级"]],
   ["docs/05-世界与叙事圣经.md", ["玩家角色正史边界", "技术年代感与幻想边界", "天工院介入程序"]],
   ["docs/06-内容生产规范.md", ["内容 Definition of Ready", "template_elite_encounter", "F1 金标准实例"]],
@@ -182,7 +182,7 @@ async function validateHandoffDocumentation(root, errors) {
   const planning = await readFile(join(root, "docs", "02-版本规划与验收.md"), "utf8");
   pushIf(errors, planning.includes("当前处于 **F0.1"), "F0.1 已完成，02 不得继续把它写成当前阶段。");
   pushIf(errors, !planning.includes("是规划窗口，不是固定交付承诺"), "系统型 Demo 估算必须声明为规划窗口而非固定交付承诺。");
-  pushIf(errors, !planning.includes("当前仍只保留主开发、平台预览和独立 QA 三条活跃线"), "02 必须明确当前只保留三条活跃协作线。");
+  pushIf(errors, !planning.includes("当前不维持“合同组、包体组、平台组、内容组、UI 组、QA 组”长期同时在线"), "02 必须明确精简后的按任务协作模式。");
 
   const developerGuide = await readFile(join(root, "docs", "01-开发者文档.md"), "utf8");
   pushIf(errors, developerGuide.includes("共同 Owner"), "01 不得使用共同 Owner；必须有单一最终 A。");

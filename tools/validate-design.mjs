@@ -40,7 +40,8 @@ const requiredTemplates = [
   "template_quest_chain",
   "template_dialogue",
   "template_weapon_family",
-  "template_subregion"
+  "template_subregion",
+  "template_craft_process"
 ];
 
 const activeArchitectureDecisions = [
@@ -272,6 +273,16 @@ export async function validateProject(projectRoot = defaultRoot) {
     pushIf(errors, !templateIds.includes(templateId), `缺少基础内容模板：${templateId}`);
   }
   for (const template of templateRegistry.templates) {
+    if (template.id === "template_craft_process") {
+      const requiredCraftModules = ["need", "materials", "workstation", "orderedSteps", "trial", "recoverableRework"];
+      const requiredCraftValidators = ["material_choices", "step_reachability", "trial_reachability", "recoverable_failure", "no_free_loop"];
+      for (const moduleId of requiredCraftModules) {
+        pushIf(errors, !template.requiredModules.includes(moduleId), `template_craft_process 缺少必需模块：${moduleId}`);
+      }
+      for (const validatorId of requiredCraftValidators) {
+        pushIf(errors, !template.validators.includes(validatorId), `template_craft_process 缺少机器校验：${validatorId}`);
+      }
+    }
     pushIf(errors, template.requiredModules.length < 3, `${template.id} 的必需模块少于 3 个。`);
     pushIf(errors, template.generatedArtifacts.length < 3, `${template.id} 的生成产物少于 3 个。`);
     pushIf(errors, template.validators.length < 3, `${template.id} 的验证规则少于 3 个。`);

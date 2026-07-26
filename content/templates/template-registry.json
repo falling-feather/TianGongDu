@@ -1,6 +1,6 @@
 {
   "$schema": "../schemas/template-registry.schema.json",
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "templates": [
     {
       "id": "template_core_npc",
@@ -91,6 +91,16 @@
       "generatedArtifacts": ["contentSource", "localizationKeys", "streamingFixture", "performanceScenarios", "previewProfile"],
       "previewProfile": "region_workbench",
       "validators": ["stable_id", "route_connectivity", "streaming_boundaries", "content_density", "resolution_diff", "performance_tier"]
+    },
+    {
+      "id": "template_craft_process",
+      "version": "1.0.0",
+      "contentType": "craftProcess",
+      "requiredModules": ["identity", "need", "materials", "workstation", "orderedSteps", "trial", "recoverableRework", "outputUse"],
+      "optionalModules": ["quality", "inventory", "order", "regionFeedback"],
+      "generatedArtifacts": ["contentSource", "localizationKeys", "traversalFixture", "failureReworkFixture", "previewProfile"],
+      "previewProfile": "craft_workbench",
+      "validators": ["stable_id", "material_choices", "step_reachability", "trial_reachability", "recoverable_failure", "no_free_loop"]
     }
   ]
 }

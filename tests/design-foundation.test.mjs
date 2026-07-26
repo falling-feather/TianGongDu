@@ -21,7 +21,7 @@ test("1.0 内容规模达到承诺下限", async () => {
   assert.equal(summary.questChains, 18);
   assert.equal(summary.enemyFamilies, 25);
   assert.equal(summary.f1VerticalSlice, "f1_rainy_umbrella_trial");
-  assert.equal(summary.templates, 9);
+  assert.equal(summary.templates, 10);
   assert.equal(summary.coreLanguage, "C++20");
   assert.equal(summary.engine, "Axmol");
   assert.equal(summary.viewModel, "2.5d-oblique-panoramic");

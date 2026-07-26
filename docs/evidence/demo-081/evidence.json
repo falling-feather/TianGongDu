@@ -1,0 +1,69 @@
+{
+  "taskId": "DEMO-081",
+  "productVersion": "Demo 0.8.1",
+  "commit": "40108a32fa0fff313fb36110646704ec04ef2b2e",
+  "browser": {
+    "requested": "edge",
+    "used": "edge",
+    "version": "150.0.4078.99"
+  },
+  "url": "http://127.0.0.1:60149/tiangongdu-system-demo.html?qa=1",
+  "initial": {
+    "ready": true,
+    "playerX": 0,
+    "playerY": -3250,
+    "gateOpen": false,
+    "retryCount": 0,
+    "blockedMoveCount": 0,
+    "packageByteCount": 2712,
+    "assetCount": 12
+  },
+  "blocked": {
+    "ready": true,
+    "playerX": 0,
+    "playerY": 350,
+    "gateOpen": false,
+    "retryCount": 0,
+    "blockedMoveCount": 27,
+    "packageByteCount": 2712,
+    "assetCount": 12
+  },
+  "opened": {
+    "ready": true,
+    "playerX": -1920,
+    "playerY": 350,
+    "gateOpen": true,
+    "retryCount": 0,
+    "blockedMoveCount": 27,
+    "packageByteCount": 2712,
+    "assetCount": 12
+  },
+  "crossed": {
+    "ready": true,
+    "playerX": -1920,
+    "playerY": 2270,
+    "gateOpen": true,
+    "retryCount": 0,
+    "blockedMoveCount": 27,
+    "packageByteCount": 2712,
+    "assetCount": 12
+  },
+  "retried": {
+    "ready": true,
+    "playerX": -1250,
+    "playerY": -3000,
+    "gateOpen": false,
+    "retryCount": 1,
+    "blockedMoveCount": 27,
+    "packageByteCount": 2712,
+    "assetCount": 12
+  },
+  "consoleErrors": [],
+  "pageErrors": [],
+  "requestErrors": [],
+  "screenshots": [
+    "01-initial-closed-gate.png",
+    "02-opened-and-crossed.png",
+    "03-retried-closed-gate.png"
+  ]
+}

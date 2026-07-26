@@ -9,13 +9,13 @@
 | 问题 | 结论 |
 | --- | --- |
 | 现有 F1 灰盒能运行吗 | 能。Web 灰盒已有移动、基础战斗、任务、两路线、四阶段 Boss、双结算、存档与固定回放，继续作为回归基线 |
-| 新的系统型 Demo 能直接给玩家玩吗 | 不能。当前只有数据、编译、导出、薄运行和资源解析底座，尚无正式 Windows 窗口、隔离 Web 玩家宿主、完整敌人波次和画面接线 |
-| 编辑器能添加人物和敌人吗 | 底层编辑状态支持新增/修改/删除命令；公开页面目前只会编辑已有的玩家、敌人摆位、障碍、安全点、互动点和机关，没有新增/复制/删除按钮 |
+| 新的系统型 Demo 能直接给玩家玩吗 | 还不能作为完整 Demo。当前已有真实 Web Internal Blockout，可移动、操作机关、开门和局部重试，也能从 Workbench Launch/Safe Reload；尚无正式 Windows 窗口、两波战斗、工艺经营和 NPC |
+| 编辑器能添加人物和敌人吗 | 公开页面已能新增/复制/受控删除或重建六类场地对象，并提供二维画布；Actor 目前只是 placement，敌人 profile/duty/skill、阵营、职责和战斗行为进入 0.8.3 |
 | 工艺经营系统已经实现吗 | 还没有。工艺循环、地区经济和三地差异已有设计规范，但没有通用材料、工序、工位、订单、品质/返工和工坊状态 Runtime，也没有对应编辑面板 |
-| 编辑器能完整制作关卡吗 | 还不能。波次、目标、工艺经营数据、二维摆放画布、一键试玩和快速重载仍未完成 |
+| 编辑器能完整制作关卡吗 | 还不能。六类对象、受控资源选择、二维摆放和 Web Launch/Safe Reload 已完成；波次、目标、工艺经营、完整 Undo/Redo 和 Windows Launch 仍未完成 |
 | Windows 和 Web 是否已证明同一 Demo | 核心与包格式已有共同测试；玩家可见的同包双端 Preview 仍未完成 |
 
-工程底座完成度约为 **50%–55%**；按“设计师能制作、玩家能完成工艺经营与战斗闭环”的系统型 Demo 口径约为 **30%–35%**。这些数字用于排期，不是发布质量分数。
+工程底座完成度约为 **52%–57%**；按“设计师能制作、玩家能完成工艺经营与战斗闭环”的系统型 Demo 口径约为 **38%–43%**。这些数字用于排期，不是发布质量分数。
 
 ## 系统型 Demo 目标
 
@@ -39,21 +39,23 @@
 - F1 Web Shell、IndexedDB/Profile 奖励原子持久化、重复奖励保护和故障回归。
 - 唯一作者源 [`content/design/system-demo.sandbox.json`](content/design/system-demo.sandbox.json)。
 - 有界 `.tgdsbx` 包、唯一 C++ 编译/校验器、last-valid provider、JS/WASM 桥和 canonical Export。
-- Workbench 的文件打开、现有对象属性编辑、保存、重载、并发保护和共享诊断。
+- Workbench 的文件打开、六类对象 CRUD、二维画布、受控 region/Stable Asset 选择、保存、重载、并发保护、共享诊断、Export 和 Web Launch/Safe Reload。
 - Sandbox 薄运行链：权威玩家位姿、相对移动、typed interaction → mechanism → dynamic blocker，以及局部安全点重试。
 - 12 个 Stable Asset ID、24 个 Standard/Low 灰盒产物和失败关闭的资源解析候选。
+- 隔离的真实系统 Demo Web Host：加载唯一 canonical 包，显示可辨灰盒对象，并支持移动、关门碰撞、operate 开门和 local retry。
 - 现有 7 Beat、两路线、Boss、双结算、存档与浏览器自动路线作为回归基线。
 
 ## 当前最短开发路径
 
 产品里程碑改用 `Demo 0.8.x`，工程提交仍沿用 `V2.2.1`：
 
-1. `0.8.0`：冻结唯一启动目标，审计旧代码、分支和 worktree，只列清单、不盲删。
-2. `0.8.1`：3–5 天内交付首个新 Demo Web 画面，可移动、操作机关、开门和重试。
-3. `0.8.2–0.8.3`：编辑器能新增/摆放对象并启动场景；同一场景运行两波敌人与目标。
-4. `0.8.4–0.8.5`：实装一段江南伞作技艺和一个小型工坊经营闭环。
-5. `0.8.6–0.8.7`：完善战斗手感，并加入沈砚、骆青禾、阿棠三名代表 NPC。
-6. `0.8.8–0.8.9`：完成状态恢复、Windows/Web 同包、表现优化和真人 Demo 验收。
+1. `0.8.0`（已完成）：冻结唯一启动目标，审计旧代码、分支和 worktree，只列清单、不盲删。
+2. `0.8.1`（已完成）：交付首个新 Demo Web 画面，可移动、操作机关、开门和重试。
+3. `0.8.2`（已完成）：编辑器能新增/摆放六类对象，并安全启动/重载同一 Web Host。
+4. `0.8.3`（下一任务）：在同一场景运行两波敌人、目标和 terminal。
+5. `0.8.4–0.8.5`：实装一段江南伞作技艺和一个小型工坊经营闭环。
+6. `0.8.6–0.8.7`：完善战斗手感，并加入沈砚、骆青禾、阿棠三名代表 NPC。
+7. `0.8.8–0.8.9`：完成状态恢复、Windows/Web 同包、表现优化和真人 Demo 验收。
 
 不再常驻合同、包体、平台、内容、UI、美术、QA 等多条工作组。新主开发最多同时开两条功能分支；每项任务由一人直接认领，候选出现后再集中 Review 和 QA。
 
@@ -84,6 +86,8 @@ npm test
 npm run validate:design
 npm run lint:architecture
 npm run check:web-abi
+npm run test:system-demo-web
+npm run test:system-demo-workbench
 ```
 
 Native、Web Single、浏览器和 Preview 的完整命令按 [`docs/01-developer/16-测试CI与发布门禁.md`](docs/01-developer/16-测试CI与发布门禁.md) 执行。命令行测试、CTest 或 Workbench 下载都不能单独证明“玩家可见 Demo 已完成”。

@@ -1,6 +1,6 @@
 {
   "format": "tgd.sandbox.authoring",
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "runtime": {
     "packageId": "system-demo.package",
     "sandboxId": "system-demo.sandbox",
@@ -278,6 +278,36 @@
         "mechanismId": "mechanism.system_demo.gate",
         "activation": "one_shot_activate",
         "targetGroundBlockerId": "blocker.system_demo.gate"
+      }
+    ],
+    "actorBindings": [
+      {
+        "actorId": "actor.system_demo.entry.slot_a",
+        "profileId": "jn_enemy_leaking_umbrella_doll",
+        "faction": "hostile",
+        "duty": "pressure",
+        "maxHealth": 54
+      },
+      {
+        "actorId": "actor.system_demo.entry.slot_b",
+        "profileId": "jn_enemy_towline_water_hand",
+        "faction": "hostile",
+        "duty": "flanker",
+        "maxHealth": 42
+      },
+      {
+        "actorId": "actor.system_demo.followup.slot_a",
+        "profileId": "jn_enemy_leaking_umbrella_doll",
+        "faction": "hostile",
+        "duty": "pressure",
+        "maxHealth": 62
+      },
+      {
+        "actorId": "actor.system_demo.followup.slot_b",
+        "profileId": "jn_enemy_towline_water_hand",
+        "faction": "hostile",
+        "duty": "flanker",
+        "maxHealth": 78
       }
     ]
   },

@@ -26,7 +26,9 @@ const OBJECT_DEFINITIONS = Object.freeze({
   mechanisms: Object.freeze({
     collection: "mechanisms",
     assetKind: "mechanism"
-  })
+  }),
+  waves: Object.freeze({ collection: "waves", editableOnly: true }),
+  objectives: Object.freeze({ collection: "objectives", editableOnly: true })
 });
 const OBJECT_KINDS = new Set(Object.keys(OBJECT_DEFINITIONS));
 const EMPTY_DIAGNOSTICS = Object.freeze([]);
@@ -216,6 +218,91 @@ function updateCandidate(document, kind, id, values) {
   const collection = candidate.runtime[kind];
   const match = findUnique(collection, "id", id, kind + " record");
 
+  if (kind === "waves") {
+    expectExactObject(
+      values,
+      [
+        "regionId",
+        "predecessorWaveId",
+        "trigger",
+        "spawns",
+        ...(hasEditorLabel ? ["editorLabel"] : [])
+      ],
+      "wave values"
+    );
+    expectExactObject(values.trigger, ["kind", "targetId"], "wave trigger");
+    if (!Array.isArray(values.spawns)) {
+      fail("invalid_request", "wave spawns must be an array");
+    }
+    const spawns = values.spawns.map((spawn) => {
+      expectExactObject(
+        spawn,
+        ["actorId", "delayTicks", "spawnOrder"],
+        "wave spawn"
+      );
+      return {
+        waveId: id,
+        actorId: spawn.actorId,
+        delayTicks: spawn.delayTicks,
+        spawnOrder: spawn.spawnOrder
+      };
+    });
+    collection[match.index] = {
+      id,
+      regionId: values.regionId,
+      predecessorWaveId: values.predecessorWaveId,
+      trigger: {
+        kind: values.trigger.kind,
+        targetId: values.trigger.targetId
+      }
+    };
+    candidate.runtime.waveSpawns = candidate.runtime.waveSpawns
+      .filter((spawn) => spawn.waveId !== id)
+      .concat(spawns);
+    if (hasEditorLabel) {
+      updateEditorLabel(candidate, id, values.editorLabel);
+    }
+    return candidate;
+  }
+
+  if (kind === "objectives") {
+    expectExactObject(
+      values,
+      [
+        "regionId",
+        "predecessorObjectiveId",
+        "completion",
+        "terminal",
+        ...(hasEditorLabel ? ["editorLabel"] : [])
+      ],
+      "objective values"
+    );
+    expectExactObject(
+      values.completion,
+      ["kind", "targetId"],
+      "objective completion"
+    );
+    expectBoolean(values.terminal, "terminal");
+    collection[match.index] = {
+      id,
+      regionId: values.regionId,
+      predecessorObjectiveId: values.predecessorObjectiveId,
+      completion: {
+        kind: values.completion.kind,
+        targetId: values.completion.targetId
+      }
+    };
+    if (values.terminal) {
+      candidate.runtime.completionObjectiveId = id;
+    } else if (candidate.runtime.completionObjectiveId === id) {
+      candidate.runtime.completionObjectiveId = "";
+    }
+    if (hasEditorLabel) {
+      updateEditorLabel(candidate, id, values.editorLabel);
+    }
+    return candidate;
+  }
+
   if (kind === "groundBlockers") {
     expectExactObject(
       values,
@@ -258,11 +345,39 @@ function updateCandidate(document, kind, id, values) {
     "facingMillidegrees",
     ...(hasEditorLabel ? ["editorLabel"] : [])
   ];
-  if (kind === "interactions" || kind === "mechanisms") {
+  const hasBinding =
+    isPlainObject(values) &&
+    Object.prototype.hasOwnProperty.call(values, "binding");
+  if (
+    (kind === "actors" && hasBinding) ||
+    kind === "interactions" ||
+    kind === "mechanisms"
+  ) {
     keys.push("binding");
   }
   expectExactObject(values, keys, kind + " values");
   collection[match.index] = placementFrom(match.record, values);
+
+  if (kind === "actors" && hasBinding && values.binding !== null) {
+    expectExactObject(
+      values.binding,
+      ["profileId", "faction", "duty", "maxHealth"],
+      "actor gameplay binding"
+    );
+    const binding = findUnique(
+      candidate.runtime.actorBindings,
+      "actorId",
+      id,
+      "actor gameplay binding"
+    );
+    candidate.runtime.actorBindings[binding.index] = {
+      actorId: id,
+      profileId: values.binding.profileId,
+      faction: values.binding.faction,
+      duty: values.binding.duty,
+      maxHealth: values.binding.maxHealth
+    };
+  }
 
   if (kind === "interactions" && values.binding !== null) {
     expectExactObject(
@@ -490,6 +605,15 @@ function addObjectCandidate(document, kind, id, label, sourceId, mode) {
         spawnOrder: nextSpawnOrder(runtime, sourceSpawn.waveId)
       });
     }
+    const sourceBinding = runtime.actorBindings.find(
+      (binding) => binding.actorId === source.id
+    );
+    if (sourceBinding) {
+      runtime.actorBindings.push({
+        ...sourceBinding,
+        actorId: id
+      });
+    }
   }
   if (kind === "interactions" && source) {
     const sourceBinding = runtime.interactionBindings.find(
@@ -545,6 +669,9 @@ function deleteObjectCandidate(document, kind, id) {
   if (kind === "actors") {
     runtime.waveSpawns = runtime.waveSpawns.filter(
       (spawn) => spawn.actorId !== id
+    );
+    runtime.actorBindings = runtime.actorBindings.filter(
+      (binding) => binding.actorId !== id
     );
   }
   if (kind === "interactions") {
@@ -869,6 +996,9 @@ export function createWorkbenchController({
     );
     requireOpen();
     const kind = expectObjectKind(request.kind);
+    if (OBJECT_DEFINITIONS[kind].editableOnly) {
+      fail("invalid_request", "this panel does not support object creation");
+    }
     const id = expectString(request.id, "id");
     const label = expectAuthorLabel(request.label);
     const sourceId = expectNullableString(request.sourceId, "sourceId");
@@ -898,6 +1028,9 @@ export function createWorkbenchController({
     );
     requireOpen();
     const kind = expectObjectKind(request.kind);
+    if (OBJECT_DEFINITIONS[kind].editableOnly) {
+      fail("invalid_request", "this panel does not support object deletion");
+    }
     const id = expectString(request.id, "id");
     expectRevision(request.expectedRevision);
     if (request.expectedRevision !== editorState.revision) {

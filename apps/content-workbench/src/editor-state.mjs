@@ -46,6 +46,12 @@ const COLLECTIONS = Object.freeze({
     (record) => record.mechanismId,
     expectStringKey
   ],
+  actorBindings: [
+    "runtime",
+    "actorBindings",
+    (record) => record.actorId,
+    expectStringKey
+  ],
   editorItems: ["editor", "items", (record) => record.id, expectStringKey]
 });
 

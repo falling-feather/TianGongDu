@@ -109,6 +109,18 @@ test("object creation owns IDs, bindings, wave membership, and editor labels", a
       spawnOrder: 2
     }
   );
+  assert.deepEqual(
+    controller.view().document.runtime.actorBindings.find(
+      ({ actorId }) => actorId === actor.id
+    ),
+    {
+      actorId: actor.id,
+      profileId: "jn_enemy_leaking_umbrella_doll",
+      faction: "hostile",
+      duty: "pressure",
+      maxHealth: 54
+    }
+  );
   assert.equal(
     controller.view().document.editor.items.find(({ id }) => id === actor.id)
       ?.label,
@@ -207,6 +219,12 @@ test("player replacement and dependent delete operations stay atomic", async () 
     ),
     false
   );
+  assert.equal(
+    controller.view().document.runtime.actorBindings.some(
+      ({ actorId }) => actorId === "actor.system_demo.entry.slot_a"
+    ),
+    false
+  );
 
   controller.deleteObject({
     kind: "interactions",
@@ -244,6 +262,118 @@ test("editor label changes remain editor-only and round-trip through update", as
     controller.view().document.runtime.actors.find(({ id }) => id === actor.id),
     actor
   );
+});
+
+test("actor gameplay bindings and authored wave/objective panels update atomically", async () => {
+  const controller = await openedController();
+  const opened = controller.view().document;
+  const actor = opened.runtime.actors[0];
+
+  controller.updateObject({
+    kind: "actors",
+    id: actor.id,
+    values: {
+      regionId: actor.regionId,
+      assetId: actor.assetId,
+      pose: actor.pose,
+      facingMillidegrees: actor.facingMillidegrees,
+      binding: {
+        profileId: "jn_enemy_towline_water_hand",
+        faction: "hostile",
+        duty: "controller",
+        maxHealth: 91
+      }
+    },
+    expectedRevision: 0
+  });
+  assert.deepEqual(
+    controller.view().document.runtime.actorBindings.find(
+      ({ actorId }) => actorId === actor.id
+    ),
+    {
+      actorId: actor.id,
+      profileId: "jn_enemy_towline_water_hand",
+      faction: "hostile",
+      duty: "controller",
+      maxHealth: 91
+    }
+  );
+
+  const entryWave = controller
+    .view()
+    .document.runtime.waves.find(({ id }) => id === "wave.system_demo.entry");
+  const entrySpawns = controller
+    .view()
+    .document.runtime.waveSpawns.filter(
+      ({ waveId }) => waveId === entryWave.id
+    );
+  controller.updateObject({
+    kind: "waves",
+    id: entryWave.id,
+    values: {
+      regionId: entryWave.regionId,
+      predecessorWaveId: entryWave.predecessorWaveId,
+      trigger: entryWave.trigger,
+      spawns: entrySpawns.map((spawn, index) => ({
+        actorId: spawn.actorId,
+        delayTicks: 6 + index,
+        spawnOrder: spawn.spawnOrder
+      }))
+    },
+    expectedRevision: 1
+  });
+  assert.deepEqual(
+    controller
+      .view()
+      .document.runtime.waveSpawns.filter(
+        ({ waveId }) => waveId === entryWave.id
+      )
+      .map(({ delayTicks }) => delayTicks),
+    [6, 7]
+  );
+
+  const terminal = controller
+    .view()
+    .document.runtime.objectives.find(
+      ({ id }) => id === "objective.system_demo.terminal"
+    );
+  controller.updateObject({
+    kind: "objectives",
+    id: terminal.id,
+    values: {
+      regionId: terminal.regionId,
+      predecessorObjectiveId: terminal.predecessorObjectiveId,
+      completion: {
+        kind: "wave_completed",
+        targetId: "wave.system_demo.entry"
+      },
+      terminal: true
+    },
+    expectedRevision: 2
+  });
+  assert.equal(
+    controller.view().document.runtime.completionObjectiveId,
+    terminal.id
+  );
+  assert.equal(controller.view().revision, 3);
+
+  assert.throws(
+    () =>
+      controller.updateObject({
+        kind: "waves",
+        id: entryWave.id,
+        values: {
+          regionId: entryWave.regionId,
+          predecessorWaveId: entryWave.predecessorWaveId,
+          trigger: entryWave.trigger,
+          spawns: entrySpawns,
+          unsupportedCreate: true
+        },
+        expectedRevision: 3
+      }),
+    (error) => error.code === "invalid_request"
+  );
+  assert.equal(controller.view().revision, 3);
 });
 
 test("Preview publication owns a fresh package and stale edits preserve the last publication", async () => {

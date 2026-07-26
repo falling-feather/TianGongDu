@@ -14,11 +14,11 @@ inline constexpr std::array<std::uint8_t, 8> sandbox_pack_magic{
     'T', 'G', 'D', 'S', 'B', 'X', 0, 0,
 };
 inline constexpr std::uint16_t sandbox_pack_format_major = 1;
-inline constexpr std::uint16_t sandbox_pack_format_minor = 1;
+inline constexpr std::uint16_t sandbox_pack_format_minor = 2;
 inline constexpr std::uint16_t sandbox_content_api_major = 1;
 inline constexpr std::uint16_t sandbox_content_api_minor = 0;
 inline constexpr std::uint16_t sandbox_authoring_schema_major = 1;
-inline constexpr std::uint16_t sandbox_authoring_schema_minor = 1;
+inline constexpr std::uint16_t sandbox_authoring_schema_minor = 2;
 inline constexpr std::uint16_t sandbox_authoring_schema_patch = 0;
 inline constexpr std::size_t sandbox_pack_header_bytes = 96;
 inline constexpr std::size_t sandbox_pack_directory_entry_bytes = 24;
@@ -70,6 +70,7 @@ enum class SandboxPackSectionType : std::uint16_t {
     objectives = 13,
     interaction_gameplay_bindings = 14,
     mechanism_gameplay_bindings = 15,
+    actor_gameplay_bindings = 16,
 };
 
 inline constexpr std::uint32_t sandbox_pack_metadata_record_bytes = 64;
@@ -86,6 +87,7 @@ inline constexpr std::uint32_t sandbox_pack_wave_spawn_record_bytes = 32;
 inline constexpr std::uint32_t sandbox_pack_objective_record_bytes = 64;
 inline constexpr std::uint32_t sandbox_pack_interaction_gameplay_binding_record_bytes = 32;
 inline constexpr std::uint32_t sandbox_pack_mechanism_gameplay_binding_record_bytes = 32;
+inline constexpr std::uint32_t sandbox_pack_actor_gameplay_binding_record_bytes = 40;
 
 enum class SandboxPackageError : std::uint8_t {
     none,

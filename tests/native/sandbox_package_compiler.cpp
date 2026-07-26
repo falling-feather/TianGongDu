@@ -18,7 +18,7 @@ using namespace tgd::contracts;
 using namespace tgd::content;
 
 static_assert(tgd::contracts::sandbox_authoring_schema_major == 1);
-static_assert(tgd::contracts::sandbox_authoring_schema_minor == 1);
+static_assert(tgd::contracts::sandbox_authoring_schema_minor == 2);
 static_assert(tgd::contracts::sandbox_authoring_schema_patch == 0);
 static_assert(static_cast<std::uint8_t>(SandboxPackageCompileStatus::succeeded) == 1);
 static_assert(static_cast<std::uint8_t>(SandboxPackageCompileStatus::producer_rejected) == 2);
@@ -90,6 +90,10 @@ struct Fixture final {
         {"sandbox.mechanism", SandboxMechanismActivation::one_shot_activate,
          "sandbox.blocker"},
     }};
+    std::array<SandboxAuthoringActorBinding, 1> actor_bindings{{
+        {"sandbox.actor", "profile.actor", CombatFaction::hostile,
+         EncounterTacticalDuty::pressure, 50},
+    }};
     SandboxAuthoringRuntimeView runtime{};
 
     Fixture() { rebind(); }
@@ -120,6 +124,7 @@ struct Fixture final {
             objectives,
             interaction_bindings,
             mechanism_bindings,
+            actor_bindings,
         };
     }
 };

@@ -243,10 +243,12 @@ export async function validateProject(projectRoot = defaultRoot) {
   const technicalSchemaPath = join(root, "content", "schemas", "technical-baseline.schema.json");
   const actionRegistryPath = join(root, "content", "design", "action-registry.json");
   const actionSchemaPath = join(root, "content", "schemas", "action-registry.schema.json");
+  const systemDemoPath = join(root, "content", "design", "system-demo.sandbox.json");
   const catalog = JSON.parse(await readFile(catalogPath, "utf8"));
   const templateRegistry = JSON.parse(await readFile(templateRegistryPath, "utf8"));
   const technicalBaseline = JSON.parse(await readFile(technicalBaselinePath, "utf8"));
   const actionRegistry = JSON.parse(await readFile(actionRegistryPath, "utf8"));
+  const systemDemo = JSON.parse(await readFile(systemDemoPath, "utf8"));
   JSON.parse(await readFile(schemaPath, "utf8"));
   JSON.parse(await readFile(templateSchemaPath, "utf8"));
   JSON.parse(await readFile(technicalSchemaPath, "utf8"));
@@ -413,6 +415,29 @@ export async function validateProject(projectRoot = defaultRoot) {
   const chapterIds = new Set(catalog.mainChapters.map((chapter) => chapter.id));
   const questChainIds = new Set(catalog.questChains.map((quest) => quest.id));
   const enemyFamilyIds = new Set(catalog.enemyFamilies.map((enemy) => enemy.id));
+  const systemDemoActorIds = new Set(
+    systemDemo.runtime.actors.map((actor) => actor.id)
+  );
+  const systemDemoBindingActorIds = systemDemo.runtime.actorBindings.map(
+    (binding) => binding.actorId
+  );
+  pushIf(
+    errors,
+    countDuplicates(systemDemoBindingActorIds).length > 0,
+    "系统 Demo 敌人 Gameplay binding 不得重复 Actor ID。"
+  );
+  for (const binding of systemDemo.runtime.actorBindings) {
+    pushIf(
+      errors,
+      !systemDemoActorIds.has(binding.actorId),
+      `系统 Demo 敌人 Gameplay binding 引用了不存在的 Actor：${binding.actorId}`
+    );
+    pushIf(
+      errors,
+      !enemyFamilyIds.has(binding.profileId),
+      `系统 Demo 敌人 profileId 未登记在 v1-content-catalog.json：${binding.profileId}`
+    );
+  }
   const subregions = catalog.regions.flatMap((region) => region.subregions);
   const allIds = [
     ...catalog.combatSystems.map((entry) => entry.id),

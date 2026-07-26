@@ -31,14 +31,17 @@ function minimalResult() {
   return bytes;
 }
 
-function artifactResult(packageBytes = Uint8Array.of(0x54, 0x47, 0x44, 0x53)) {
+function artifactResult(
+  packageBytes = Uint8Array.of(0x54, 0x47, 0x44, 0x53),
+  abiMinor = 1
+) {
   const bytes = new Uint8Array(136 + packageBytes.length);
   bytes.set(minimalResult(), 0);
   const data = new DataView(bytes.buffer);
   data.setUint32(68, 136, true);
   data.setUint32(72, 136, true);
   data.setUint32(76, bytes.length, true);
-  data.setUint16(82, 1, true);
+  data.setUint16(82, abiMinor, true);
   data.setUint32(120, 136, true);
   data.setUint32(124, packageBytes.length, true);
   bytes.set(packageBytes, 136);
@@ -193,7 +196,7 @@ test("client accepts ABI 1.0 without inventing a canonical artifact", async () =
   assert.equal(result.packageBytes, null);
   client.destroy();
 
-  for (const version of [0x00000001, 0x00010002, 0x00020000]) {
+  for (const version of [0x00000001, 0x00010003, 0x00020000]) {
     const rejected = growingMock();
     rejected._tgd_sandbox_compiler_service_abi_version = () => version;
     assert.throws(() => SandboxPackageServiceClient.create(rejected),
@@ -201,12 +204,18 @@ test("client accepts ABI 1.0 without inventing a canonical artifact", async () =
   }
 });
 
-test("ABI 1.1 decoder returns owning canonical package bytes and rejects bad coverage", () => {
+test("ABI 1.1/1.2 decoder returns owning canonical package bytes and rejects bad coverage", () => {
   const source = artifactResult(Uint8Array.of(1, 2, 3, 4));
   const decoded = decodeSandboxPackageServiceResult(source);
   assert.deepEqual(decoded.packageBytes, Uint8Array.of(1, 2, 3, 4));
   source.fill(0);
   assert.deepEqual(decoded.packageBytes, Uint8Array.of(1, 2, 3, 4));
+  assert.deepEqual(
+    decodeSandboxPackageServiceResult(
+      artifactResult(Uint8Array.of(4, 3, 2, 1), 2)
+    ).packageBytes,
+    Uint8Array.of(4, 3, 2, 1)
+  );
 
   const mutations = [
     (data) => data.setUint32(120, 135, true),

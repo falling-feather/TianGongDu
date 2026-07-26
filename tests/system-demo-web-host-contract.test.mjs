@@ -93,3 +93,47 @@ test("Demo 0.8.2 Workbench route proves CRUD, atomic Preview swap, and last-vali
     );
   }
 });
+
+test("Demo 0.8.3 owns explicit actor gameplay bindings and a two-wave encounter route", async () => {
+  const [rootCmake, layer, encounterHeader, encounterSource, browserRoute, workbench] =
+    await Promise.all([
+      read("CMakeLists.txt"),
+      read("apps/system-demo-web/Source/SystemDemoLayer.cpp"),
+      read("src/gameplay/include/tgd/gameplay/sandbox_encounter_session.hpp"),
+      read("src/gameplay/src/sandbox_encounter_session.cpp"),
+      read("tests/browser/system-demo-web-host.mjs"),
+      read("apps/content-workbench/public/workbench.mjs")
+    ]);
+  const implementation = `${layer}\n${encounterHeader}\n${encounterSource}`;
+
+  for (const token of [
+    "SandboxEncounterSession",
+    "DeterministicCombatResolver",
+    "DeterministicEncounterDirector",
+    "active_hostile_count",
+    "terminal_completed",
+    "restart"
+  ]) {
+    assert.match(implementation, new RegExp(token));
+  }
+  for (const token of [
+    "sandbox_encounter_session.cpp",
+    "actorBindings",
+    "profileId",
+    "maxHealth",
+    "predecessorWaveId",
+    "completionTargetId"
+  ]) {
+    assert.match(`${rootCmake}\n${workbench}`, new RegExp(token));
+  }
+  for (const token of [
+    "repeatedTriggerCount",
+    "playerHealth === 0",
+    "completedWaveCount",
+    "completedObjectiveCount",
+    "terminalCompleted",
+    "acceptedAttackCount"
+  ]) {
+    assert.match(browserRoute, new RegExp(token));
+  }
+});

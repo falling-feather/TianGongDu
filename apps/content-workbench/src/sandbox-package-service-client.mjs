@@ -1,5 +1,6 @@
 const ABI_VERSION_1_0 = 0x00010000;
 const ABI_VERSION_1_1 = 0x00010001;
+const ABI_VERSION_1_2 = 0x00010002;
 const MAX_CANONICAL_PACKAGE_BYTES = 4 * 1024 * 1024;
 const HEADER_BYTES = 120;
 const ARTIFACT_BYTES = 16;
@@ -83,7 +84,7 @@ export function decodeSandboxPackageServiceResult(source) {
   if (
     data.getUint8(0) !== 1 ||
     abiMajor !== 1 ||
-    (abiMinor !== 0 && abiMinor !== 1) ||
+    (abiMinor !== 0 && abiMinor !== 1 && abiMinor !== 2) ||
     bytes.byteLength < prefixBytes ||
     total !== bytes.byteLength ||
     diagnosticsOffset !== prefixBytes ||
@@ -94,9 +95,9 @@ export function decodeSandboxPackageServiceResult(source) {
   }
   if (outcome < 1 || outcome > 7 || compileStatus < 1 || compileStatus > 4 ||
       packageError > 18 ||
-      !((bindingCode >= 1 && bindingCode <= 21) || bindingCode === 255) ||
-      !((bindingDomain >= 1 && bindingDomain <= 4) || bindingDomain === 255) ||
-      !((bindingField >= 1 && bindingField <= 7) || bindingField === 65535)) {
+      !((bindingCode >= 1 && bindingCode <= 30) || bindingCode === 255) ||
+      !((bindingDomain >= 1 && bindingDomain <= 6) || bindingDomain === 255) ||
+      !((bindingField >= 1 && bindingField <= 12) || bindingField === 65535)) {
     throw new SandboxPackageServiceTransportError(9, "unknown result enum");
   }
   if (data.getUint16(86, true) !== 0) {
@@ -109,7 +110,7 @@ export function decodeSandboxPackageServiceResult(source) {
   }
   let packageOffset = 0;
   let packageLength = 0;
-  if (abiMinor === 1) {
+  if (abiMinor >= 1) {
     packageOffset = data.getUint32(120, true);
     packageLength = data.getUint32(124, true);
     for (let index = 128; index < ABI_1_1_PREFIX_BYTES; index += 1) {
@@ -210,7 +211,7 @@ export function decodeSandboxPackageServiceResult(source) {
     nextIdOffset = end;
   }
   let packageBytes = null;
-  if (abiMinor === 1 && outcome === 1) {
+  if (abiMinor >= 1 && outcome === 1) {
     if (packageLength === 0 || packageOffset !== nextIdOffset ||
         packageOffset > total || packageLength > total - packageOffset ||
         packageOffset + packageLength !== total) {
@@ -218,7 +219,7 @@ export function decodeSandboxPackageServiceResult(source) {
     }
     packageBytes = bytesAt(bytes, packageOffset, packageLength, total);
   } else {
-    if ((abiMinor === 1 && (packageOffset !== 0 || packageLength !== 0)) ||
+    if ((abiMinor >= 1 && (packageOffset !== 0 || packageLength !== 0)) ||
         nextIdOffset !== total) {
       throw new SandboxPackageServiceTransportError(9, "unexpected package or trailing bytes");
     }
@@ -248,6 +249,10 @@ const triggerKinds = Object.freeze({
 });
 const completionKinds = Object.freeze({
   interaction_completed: 1, mechanism_activated: 2, wave_completed: 3
+});
+const actorFactions = Object.freeze({ hostile: 1 });
+const actorDuties = Object.freeze({
+  pressure: 0, flanker: 1, harrier: 2, controller: 3
 });
 
 function structuralError(path, expected) {
@@ -374,7 +379,7 @@ function validateStructuralInput(runtime, expectedIdentity) {
     "packageId", "sandboxId", "bounds", "completionObjectiveId", "player",
     "regions", "assets", "actors", "groundBlockers", "safePoints",
     "interactions", "mechanisms", "waves", "waveSpawns", "objectives",
-    "interactionBindings", "mechanismBindings"
+    "interactionBindings", "mechanismBindings", "actorBindings"
   ]);
   for (const name of ["packageId", "sandboxId", "completionObjectiveId"])
     expectString(root[name], "runtime." + name, strings);
@@ -458,6 +463,16 @@ function validateStructuralInput(runtime, expectedIdentity) {
     expectString(record.targetGroundBlockerId, path + ".targetGroundBlockerId", strings);
     expectString(record.activation, path + ".activation", strings);
   });
+  expectArray(root.actorBindings, "runtime.actorBindings").forEach((value, index) => {
+    const path = "runtime.actorBindings[" + index + "]";
+    const record = expectObject(value, path,
+      ["actorId", "profileId", "faction", "duty", "maxHealth"]);
+    expectString(record.actorId, path + ".actorId", strings);
+    expectString(record.profileId, path + ".profileId", strings);
+    expectString(record.faction, path + ".faction", strings);
+    expectString(record.duty, path + ".duty", strings);
+    expectInteger(record.maxHealth, -2147483648, 2147483647, path + ".maxHealth");
+  });
   return strings;
 }
 
@@ -484,15 +499,20 @@ function writePose(data, offset, pose) {
 }
 
 export class SandboxPackageServiceClient {
-  constructor(module, serviceHandle) {
+  constructor(module, serviceHandle, abiVersion) {
     this.module = module;
     this.serviceHandle = serviceHandle;
+    this.abiVersion = abiVersion;
     this.destroyed = false;
   }
 
   static create(module) {
     const abiVersion = call(module, "tgd_sandbox_compiler_service_abi_version");
-    if (abiVersion !== ABI_VERSION_1_0 && abiVersion !== ABI_VERSION_1_1) {
+    if (
+      abiVersion !== ABI_VERSION_1_0 &&
+      abiVersion !== ABI_VERSION_1_1 &&
+      abiVersion !== ABI_VERSION_1_2
+    ) {
       throw new SandboxPackageServiceTransportError(9, "incompatible ABI");
     }
     const pointer = allocate(module, 8);
@@ -502,7 +522,7 @@ export class SandboxPackageServiceClient {
       if (typeof handle !== "bigint" || handle === 0n) {
         throw new SandboxPackageServiceTransportError(9, "service handle is not BigInt");
       }
-      return new SandboxPackageServiceClient(module, handle);
+      return new SandboxPackageServiceClient(module, handle, abiVersion);
     } finally {
       module._free(pointer);
     }
@@ -627,6 +647,15 @@ export class SandboxPackageServiceClient {
         record.setUint32(4, text(value.targetGroundBlockerId), true);
         record.setUint8(8, value.activation === "one_shot_activate" ? 1 : 255);
       });
+      if (this.abiVersion === ABI_VERSION_1_2) {
+        for (const value of runtime.actorBindings) invoke("tgd_sandbox_compile_request_append_actor_binding", 16, (record) => {
+          record.setUint32(0, text(value.actorId), true);
+          record.setUint32(4, text(value.profileId), true);
+          record.setInt32(8, value.maxHealth, true);
+          record.setUint8(12, enumValue(actorFactions, value.faction));
+          record.setUint8(13, enumValue(actorDuties, value.duty));
+        });
+      }
       module.HEAPU8.fill(0, scratch, scratch + 4);
       const status = call(module, "tgd_sandbox_compile_request_submit",
         this.serviceHandle, request, output, MAX_RESULT_BYTES, scratch);

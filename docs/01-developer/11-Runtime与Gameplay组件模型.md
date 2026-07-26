@@ -455,3 +455,15 @@ dynamic blocker 不保存 `gateOpen`。Coordinator 逐项以 exact ground-blocke
 movement、operate 与 standalone retry 都先构造完整私有 mutable candidate，校验 Session/collision exact-key 投影和逐字段 checksum 后，以 no-fail `unique_ptr` swap 发布。任一失败保留旧 live aggregate 地址、identity、snapshot 与 checksum。standalone retry 只重建本地 Session 三组件、authored safe-point pose 与 dynamic collision，并开启新的 runtime/session generation；它不代表 Objective/Wave/Encounter/Combat 或死亡恢复聚合事务。
 
 当前状态是 **Thin Runtime Integrated in Demo 0.8.1 Internal Web Blockout / Not release Preview-ready**。`SystemDemoLayer` 只提交 movement/operate/retry command 并只读 snapshot/collision，门开视觉来自 `ground_blocker_state`，没有第二份 `gateOpen` 玩法真相。Actor duty/AI/profile/loadout/skill、Objective/Wave/Encounter/Combat、聚合 retry、正式 Platform 输入、Windows 与发布 Preview 均为 Open。
+
+## 39. Sandbox 两波目标战斗会话
+
+`SandboxEncounterSession` 是 `DEMO-083` 的固定容量 Gameplay Owner。它借用已验证且在 Host aggregate 生命周期内稳定的 `SandboxDefinition` 与 `SandboxGameplayBindingDefinition`，把 Actor Gameplay binding 映射为现有 `DeterministicCombatResolver` 的 Actor 配置和 `DeterministicEncounterDirector` 的职责配置；Presentation、Workbench 和资源名都不拥有 faction、duty、profile 或生命值。初始化要求非空 Wave/Spawn/Objective 图、非零 player actor、容量不越界，并再次调用唯一 `validate_sandbox_gameplay_binding`；失败不产生可运行的局部会话。
+
+当前会话执行已发布的单 predecessor Wave/Objective 图：机关首次激活可完成 Objective，Objective 或前置 Wave 可激活下一 Wave，`delay_ticks` 到期后按 authored Actor placement 刷出，全部点名 Actor 倒地才完成该 Wave，metadata 指定的 Objective 完成才进入 terminal。首次机关事件先在整份会话候选上完成图推进和刷怪准备，再整体替换 live 状态；刷怪准备失败时，机关事件、Objective、Wave、Combat、Director、sequence 和 checksum 均保留触发前状态。重复机关事件只增加可观察的 repeat 计数，不重复刷怪。
+
+玩家轻/重击与敌方计划都进入既有 Combat Resolver；会话只提供 `light/heavy` 两种最小输入、最近合法 hostile 目标选择和固定 60 Hz 单 Tick 推进，不在 Axmol 节点或 JavaScript 中扣血。`SandboxEncounterSnapshot` 是 Host/QA 的只读边界，包含 player health/defeated、active wave、active/defeated hostile 数、completed wave/objective 数、terminal、accepted attack/repeated trigger 计数和组合 checksum。距离排序使用对完整 `int32` 坐标域安全的无符号平方与饱和加法，不允许有符号溢出影响目标选择。
+
+`restart()` 从当前 authored safe-point pose 重建 Combat、Director、Wave、Spawn、Objective、机关触发记录和输入计数；Web Host 的 `R` 同时调用既有 thin runtime retry 与 encounter restart，因此当前页面可从玩家倒地或 terminal 返回关闭门、零波次、零目标和满生命初态。该操作仍是 **单 Host 内的局部整组重建**：没有离开/返回持久化、跨 package version 迁移、工艺/工坊状态、Profile 或 provider+Session+Collision+Assets 的通用 prepare/commit 协调；这些继续由 `DEMO-088` 收口。
+
+`tests/native/sandbox_encounter_session.cpp` 覆盖两次固定输入 checksum、两波四 Actor 完成、重复触发幂等、玩家倒地、局部重建，以及刷怪准备失败时触发前状态完全保持。`tests/browser/system-demo-web-host.mjs` 再从真实 Edge 覆盖关门阻挡、开门首波、重复操作、自然倒地、死亡重试、两波 terminal 和 terminal 后重试。当前状态是 **Demo 0.8.3 Implemented Internal Web Combat Loop / Not combat-feel candidate**：正式 Action 映射、防守/闪避/架势/技能、精英差异、8–12 分钟真人节奏、Windows 与三浏览器放行仍为 Open。

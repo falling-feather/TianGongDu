@@ -4,6 +4,7 @@
 #include <array>
 #include <cstdint>
 #include <cstdlib>
+#include <iomanip>
 #include <iostream>
 #include <span>
 #include <string_view>
@@ -40,6 +41,7 @@ constexpr auto blocker_asset = content_id("asset.blocker");
 constexpr auto safe_asset = content_id("asset.safe");
 constexpr auto interaction_asset = content_id("asset.interaction");
 constexpr auto mechanism_asset = content_id("asset.mechanism");
+constexpr auto actor_profile_id = content_id("profile.actor");
 
 struct Fixture final {
     std::array<SandboxRegionDefinition, 1> regions{{
@@ -83,6 +85,10 @@ struct Fixture final {
     std::array<SandboxMechanismGameplayBinding, 1> mechanism_bindings{{
         {mechanism_id, SandboxMechanismActivation::one_shot_activate, blocker_id},
     }};
+    std::array<SandboxActorGameplayBinding, 1> actor_bindings{{
+        {actor_id, actor_profile_id, CombatFaction::hostile,
+         EncounterTacticalDuty::pressure, 50},
+    }};
     SandboxDefinition definition{};
     SandboxGameplayBindingDefinition binding{};
 
@@ -106,7 +112,7 @@ struct Fixture final {
             spawns,
             objectives,
         };
-        binding = {interaction_bindings, mechanism_bindings};
+        binding = {interaction_bindings, mechanism_bindings, actor_bindings};
     }
 };
 
@@ -159,18 +165,30 @@ void check_round_trip() {
     expect(encoded.validation.valid(), "valid fixture failed validation");
     expect(!encoded.bytes.empty(), "valid fixture produced no bytes");
     constexpr Sha256Digest expected_hash{
-        0xcd, 0x05, 0x23, 0x19, 0xe0, 0x92, 0x3e, 0xf4,
-        0x17, 0x74, 0xd0, 0xaa, 0xe4, 0xd1, 0x8c, 0xcc,
-        0x28, 0x48, 0xa8, 0x12, 0xe4, 0x7f, 0x64, 0x78,
-        0x25, 0x14, 0x4b, 0xed, 0xea, 0xa8, 0x45, 0x73,
+        0x9f, 0x6d, 0x6a, 0xe7, 0x2d, 0xdf, 0x28, 0xf2,
+        0x22, 0xaf, 0x03, 0x35, 0x83, 0xed, 0xf0, 0xe4,
+        0xc0, 0xf0, 0x56, 0xbd, 0x83, 0x3f, 0x53, 0xf9,
+        0xdf, 0xd4, 0x32, 0xf8, 0xc6, 0xfc, 0xc1, 0xb9,
     };
-    expect(encoded.fingerprint == expected_hash, "canonical hash changed");
-    expect(read_le<std::uint16_t>(encoded.bytes, 10) == 1, "format minor mismatch");
-    expect(read_le<std::uint32_t>(encoded.bytes, 32) == 15, "section count mismatch");
+    if (encoded.fingerprint != expected_hash) {
+        std::cerr << "canonical hash actual=";
+        for (const auto byte : encoded.fingerprint) {
+            std::cerr << std::hex << std::setw(2) << std::setfill('0')
+                      << static_cast<unsigned>(byte);
+        }
+        std::cerr << std::dec << '\n';
+        fail("canonical hash changed");
+    }
+    expect(read_le<std::uint16_t>(encoded.bytes, 10) == 2, "format minor mismatch");
+    expect(read_le<std::uint32_t>(encoded.bytes, 32) == 16, "section count mismatch");
     expect(read_le<std::uint32_t>(encoded.bytes, directory_entry(14) + 8) == 1,
            "interaction binding section missing");
     expect(read_le<std::uint32_t>(encoded.bytes, directory_entry(15) + 12) == 32,
            "mechanism binding width mismatch");
+    expect(read_le<std::uint32_t>(encoded.bytes, directory_entry(16) + 8) == 1,
+           "actor binding section missing");
+    expect(read_le<std::uint32_t>(encoded.bytes, directory_entry(16) + 12) == 40,
+           "actor binding width mismatch");
 
     auto decoded = decode_sandbox_package(encoded.bytes);
     expect(decoded.validation.valid() && decoded.document != nullptr, "round trip failed");
@@ -178,6 +196,10 @@ void check_round_trip() {
            "owned string mismatch");
     expect(decoded.document->gameplay_binding().interaction_bindings.size() == 1,
            "owned binding mismatch");
+    expect(decoded.document->gameplay_binding().actor_bindings.size() == 1 &&
+               decoded.document->gameplay_binding().actor_bindings.front().profile_id ==
+                   actor_profile_id,
+           "owned actor binding mismatch");
     const auto reencoded = encode_sandbox_package(
         decoded.document->definition(), decoded.document->gameplay_binding()
     );
@@ -449,13 +471,15 @@ void check_empty_binding_sections() {
     Fixture fixture;
     fixture.definition.interactions = {};
     fixture.definition.mechanisms = {};
-    fixture.binding = {};
+    fixture.binding = {{}, {}, fixture.actor_bindings};
     const auto encoded = encode_sandbox_package(fixture.definition, fixture.binding);
     expect(encoded.validation.valid(), "legal core with empty binding sets failed");
     expect(read_le<std::uint32_t>(encoded.bytes, directory_entry(14) + 8) == 0,
            "empty section 14 missing");
     expect(read_le<std::uint32_t>(encoded.bytes, directory_entry(15) + 8) == 0,
            "empty section 15 missing");
+    expect(read_le<std::uint32_t>(encoded.bytes, directory_entry(16) + 8) == 1,
+           "required actor binding section missing");
     SandboxDefinition empty{};
     const auto shell = encode_sandbox_package(empty, {});
     expect(!shell.validation.valid() && shell.bytes.empty(), "empty shell was accepted");
@@ -526,8 +550,8 @@ void check_corruption() {
     reseal(bytes);
     expect_decode_failure(bytes, SandboxPackageError::invalid_directory);
     bytes = encoded.bytes;
-    patch_le(bytes, directory_entry(15), std::uint16_t{16});
-    patch_le(bytes, directory_entry(15) + 4, sandbox_pack_section_optional);
+    patch_le(bytes, directory_entry(16), std::uint16_t{17});
+    patch_le(bytes, directory_entry(16) + 4, sandbox_pack_section_optional);
     reseal(bytes);
     expect_decode_failure(bytes, SandboxPackageError::missing_section);
     bytes = encoded.bytes;
@@ -544,25 +568,25 @@ void check_corruption() {
     reseal(bytes);
     expect_decode_failure(bytes, SandboxPackageError::invalid_stable_id);
     bytes = encoded.bytes;
-    patch_le(bytes, directory_entry(15) + 16, std::uint32_t{0xffff'fff8U});
+    patch_le(bytes, directory_entry(16) + 16, std::uint32_t{0xffff'fff8U});
     reseal(bytes);
     expect_decode_failure(bytes, SandboxPackageError::invalid_directory);
 
     bytes = encoded.bytes;
     constexpr std::size_t old_directory_end =
-        sandbox_pack_header_bytes + 15U * sandbox_pack_directory_entry_bytes;
+        sandbox_pack_header_bytes + 16U * sandbox_pack_directory_entry_bytes;
     bytes.insert(bytes.begin() + static_cast<std::ptrdiff_t>(old_directory_end),
                  sandbox_pack_directory_entry_bytes, 0);
-    for (std::uint16_t type = 1; type <= 15; ++type) {
+    for (std::uint16_t type = 1; type <= 16; ++type) {
         const auto offset_field = directory_entry(type) + 16;
         patch_le(bytes, offset_field, read_le<std::uint32_t>(bytes, offset_field) + 24U);
     }
     const auto optional = old_directory_end;
-    patch_le(bytes, optional, std::uint16_t{16});
+    patch_le(bytes, optional, std::uint16_t{17});
     patch_le(bytes, optional + 2, std::uint16_t{99});
     patch_le(bytes, optional + 4, sandbox_pack_section_optional);
     patch_le(bytes, optional + 16, static_cast<std::uint32_t>(bytes.size()));
-    patch_le(bytes, 32, std::uint32_t{16});
+    patch_le(bytes, 32, std::uint32_t{17});
     patch_le(bytes, 40, static_cast<std::uint32_t>(bytes.size()));
     reseal(bytes);
     auto optional_decoded = decode_sandbox_package(bytes);
@@ -576,15 +600,17 @@ void check_corruption() {
 }  // namespace
 
 int main() {
-    static_assert(sandbox_pack_format_major == 1 && sandbox_pack_format_minor == 1);
+    static_assert(sandbox_pack_format_major == 1 && sandbox_pack_format_minor == 2);
     static_assert(sandbox_content_api_major == 1 && sandbox_content_api_minor == 0);
     static_assert(sandbox_authoring_schema_major == 1);
-    static_assert(sandbox_authoring_schema_minor == 1);
+    static_assert(sandbox_authoring_schema_minor == 2);
     static_assert(sandbox_authoring_schema_patch == 0);
     static_assert(static_cast<std::uint16_t>(SandboxPackSectionType::interaction_gameplay_bindings) == 14);
     static_assert(static_cast<std::uint16_t>(SandboxPackSectionType::mechanism_gameplay_bindings) == 15);
+    static_assert(static_cast<std::uint16_t>(SandboxPackSectionType::actor_gameplay_bindings) == 16);
     static_assert(sandbox_pack_interaction_gameplay_binding_record_bytes == 32);
     static_assert(sandbox_pack_mechanism_gameplay_binding_record_bytes == 32);
+    static_assert(sandbox_pack_actor_gameplay_binding_record_bytes == 40);
     check_round_trip();
     check_owned_lifetime();
     check_core_validation();

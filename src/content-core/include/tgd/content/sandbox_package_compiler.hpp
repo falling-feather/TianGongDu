@@ -102,6 +102,16 @@ struct SandboxAuthoringMechanismBinding final {
     std::string_view target_ground_blocker_id{};
 };
 
+struct SandboxAuthoringActorBinding final {
+    std::string_view actor_id{};
+    std::string_view profile_id{};
+    contracts::CombatFaction faction{contracts::CombatFaction::neutral};
+    contracts::EncounterTacticalDuty duty{
+        contracts::EncounterTacticalDuty::pressure
+    };
+    std::int32_t max_health{};
+};
+
 // Synchronous, non-owning projection of the normalized authoring runtime domain.
 // The caller retains every string and array until compile_sandbox_package returns.
 // JSON parsing and closed-shape validation remain owned by Content Workbench.
@@ -123,6 +133,7 @@ struct SandboxAuthoringRuntimeView final {
     std::span<const SandboxAuthoringObjective> objectives{};
     std::span<const SandboxAuthoringInteractionBinding> interaction_bindings{};
     std::span<const SandboxAuthoringMechanismBinding> mechanism_bindings{};
+    std::span<const SandboxAuthoringActorBinding> actor_bindings{};
 };
 
 enum class SandboxPackageCompileStatus : std::uint8_t {

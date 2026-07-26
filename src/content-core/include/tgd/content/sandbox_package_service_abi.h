@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 #define TGD_SANDBOX_COMPILER_SERVICE_ABI_MAJOR UINT16_C(1)
-#define TGD_SANDBOX_COMPILER_SERVICE_ABI_MINOR UINT16_C(1)
+#define TGD_SANDBOX_COMPILER_SERVICE_ABI_MINOR UINT16_C(2)
 #define TGD_SANDBOX_COMPILER_SERVICE_MAX_SERVICES UINT32_C(8)
 #define TGD_SANDBOX_COMPILER_SERVICE_MAX_REQUESTS UINT32_C(32)
 #define TGD_SANDBOX_COMPILER_SERVICE_MAX_STRING_REFS UINT32_C(4096)
@@ -158,6 +158,15 @@ typedef struct tgd_sandbox_service_mechanism_binding {
     uint8_t reserved[3];
 } tgd_sandbox_service_mechanism_binding;
 
+typedef struct tgd_sandbox_service_actor_binding {
+    tgd_sandbox_request_string_ref actor_id;
+    tgd_sandbox_request_string_ref profile_id;
+    int32_t max_health;
+    uint8_t faction;
+    uint8_t duty;
+    uint8_t reserved[2];
+} tgd_sandbox_service_actor_binding;
+
 typedef struct tgd_sandbox_service_result_header {
     uint8_t complete;
     uint8_t outcome;
@@ -188,7 +197,7 @@ typedef struct tgd_sandbox_service_result_header {
     uint8_t reserved[16];
 } tgd_sandbox_service_result_header;
 
-// ABI 1.1 appends this descriptor after the unchanged ABI 1.0 result header.
+// ABI 1.1+ appends this descriptor after the unchanged ABI 1.0 result header.
 // A published result owns package_bytes_length canonical .tgdsbx bytes at
 // package_bytes_offset. Every non-published result stores zero for both fields.
 typedef struct tgd_sandbox_service_result_artifact {
@@ -273,6 +282,7 @@ TGD_SANDBOX_DECLARE_APPEND(wave_spawn, tgd_sandbox_service_wave_spawn);
 TGD_SANDBOX_DECLARE_APPEND(objective, tgd_sandbox_service_objective);
 TGD_SANDBOX_DECLARE_APPEND(interaction_binding, tgd_sandbox_service_interaction_binding);
 TGD_SANDBOX_DECLARE_APPEND(mechanism_binding, tgd_sandbox_service_mechanism_binding);
+TGD_SANDBOX_DECLARE_APPEND(actor_binding, tgd_sandbox_service_actor_binding);
 #undef TGD_SANDBOX_DECLARE_APPEND
 int32_t tgd_sandbox_compile_request_submit(
     tgd_sandbox_service_handle service,

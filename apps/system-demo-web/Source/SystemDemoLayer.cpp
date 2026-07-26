@@ -117,6 +117,22 @@ void solidPolygon(ax::DrawNode *draw,
   return "INVALID";
 }
 
+[[nodiscard]] std::string dutyLabel(
+    const tgd::contracts::EncounterTacticalDuty duty) {
+  using Duty = tgd::contracts::EncounterTacticalDuty;
+  switch (duty) {
+  case Duty::pressure:
+    return "PRESSURE";
+  case Duty::flanker:
+    return "FLANKER";
+  case Duty::harrier:
+    return "HARRIER";
+  case Duty::controller:
+    return "CONTROLLER";
+  }
+  return "INVALID";
+}
+
 } // namespace
 
 SystemDemoLayer::~SystemDemoLayer() {
@@ -132,7 +148,7 @@ bool SystemDemoLayer::init() {
   active_layer = this;
   createBackdrop();
 
-  auto *title = makeLabel("TIANGONGDU / SYSTEM DEMO 0.8.1", 24.0F,
+  auto *title = makeLabel("TIANGONGDU / SYSTEM DEMO 0.8.3", 24.0F,
                           ax::Color4B(239, 219, 173, 255));
   auto *badge =
       makeLabel("INTERNAL BLOCKOUT", 13.0F, ax::Color4B(114, 224, 200, 255));
@@ -164,7 +180,8 @@ bool SystemDemoLayer::init() {
   createKeyboardInput();
   refreshPresentation();
   ready_ = true;
-  message_ = "READY / CLOSE THE LOOP: BLOCK, OPERATE, CROSS, RETRY";
+  message_ =
+      "READY / OPEN THE GATE, CLEAR TWO AUTHORED WAVES, RETRY LOCALLY";
   scheduleUpdate();
   return true;
 }
@@ -177,6 +194,7 @@ void SystemDemoLayer::update(const float delta_seconds) {
   std::uint32_t steps{};
   while (fixed_step_accumulator_ >= fixed_step_seconds && steps < 6U) {
     applyMovementStep();
+    advanceEncounterStep();
     fixed_step_accumulator_ -= fixed_step_seconds;
     ++steps;
   }
@@ -215,6 +233,50 @@ std::uint32_t SystemDemoLayer::qaPackageByteCount() const noexcept {
 std::uint32_t SystemDemoLayer::qaAssetCount() const noexcept {
   return asset_count_;
 }
+
+std::int32_t SystemDemoLayer::qaPlayerHealth() const noexcept {
+  return encounter_.snapshot().player_health;
+}
+
+std::uint32_t SystemDemoLayer::qaActiveHostileCount() const noexcept {
+  return encounter_.snapshot().active_hostile_count;
+}
+
+std::uint32_t SystemDemoLayer::qaDefeatedHostileCount() const noexcept {
+  return encounter_.snapshot().defeated_hostile_count;
+}
+
+std::uint32_t SystemDemoLayer::qaCompletedWaveCount() const noexcept {
+  return encounter_.snapshot().completed_wave_count;
+}
+
+std::uint32_t SystemDemoLayer::qaCompletedObjectiveCount() const noexcept {
+  return encounter_.snapshot().completed_objective_count;
+}
+
+bool SystemDemoLayer::qaTerminalCompleted() const noexcept {
+  return encounter_.snapshot().terminal_completed;
+}
+
+std::uint32_t SystemDemoLayer::qaAcceptedAttackCount() const noexcept {
+  return encounter_.snapshot().accepted_attack_count;
+}
+
+std::uint32_t SystemDemoLayer::qaRepeatedTriggerCount() const noexcept {
+  return encounter_.snapshot().repeated_trigger_count;
+}
+
+void SystemDemoLayer::qaOperate() noexcept { submitOperate(); }
+
+void SystemDemoLayer::qaAttackLight() noexcept {
+  submitAttack(tgd::gameplay::SandboxEncounterAttack::light);
+}
+
+void SystemDemoLayer::qaAttackHeavy() noexcept {
+  submitAttack(tgd::gameplay::SandboxEncounterAttack::heavy);
+}
+
+void SystemDemoLayer::qaRetry() noexcept { retryLocal(); }
 
 bool SystemDemoLayer::loadRuntimeAndAssets() noexcept {
   auto bytes = readBytes(workbench_preview_package_path);
@@ -303,10 +365,15 @@ bool SystemDemoLayer::loadRuntimeAndAssets() noexcept {
   if (live_document == nullptr || live_assets == nullptr ||
       live_assets->size() !=
           tgd::presentation::sandbox_runtime_asset_slot_count ||
+      live_document->definition().actors.empty() ||
+      live_document->definition().waves.empty() ||
+      live_document->definition().wave_spawns.empty() ||
+      live_document->definition().objectives.empty() ||
       live_document->definition().interactions.empty() ||
       live_document->definition().ground_blockers.empty() ||
       live_document->gameplay_binding().interaction_bindings.empty() ||
-      live_document->gameplay_binding().mechanism_bindings.empty()) {
+      live_document->gameplay_binding().mechanism_bindings.empty() ||
+      live_document->gameplay_binding().actor_bindings.empty()) {
     message_ = "BOOT FAILED / PUBLISHED SYSTEM DEMO SHAPE DRIFTED";
     return false;
   }
@@ -347,9 +414,17 @@ bool SystemDemoLayer::loadRuntimeAndAssets() noexcept {
   gate_blocker_index_ = static_cast<std::size_t>(
       blocker - live_definition.ground_blockers.begin());
   interaction_key_ = interaction->id.key;
+  target_mechanism_key_ = interaction_binding.target_mechanism_id.key;
   interaction_pose_ = interaction->pose;
   interaction_range_mm_ = interaction_binding.range_mm;
   asset_count_ = static_cast<std::uint32_t>(live_assets->size());
+  const auto runtime_snapshot = coordinator_.snapshot();
+  if (encounter_.initialize(live_definition, gameplay_binding, player_actor,
+                            runtime_snapshot.session.player_pose) !=
+      tgd::gameplay::SandboxEncounterBuildError::none) {
+    message_ = "BOOT FAILED / AUTHORED ENCOUNTER DID NOT INITIALIZE";
+    return false;
+  }
   gate_open_ = currentGateOpen();
   return true;
 }
@@ -499,6 +574,7 @@ void SystemDemoLayer::createWorldPresentation() {
     }
   }
 
+  actor_presentation_count_ = 0;
   for (const auto &actor : definition.actors) {
     auto *actor_node = createAssetSprite(
         actor.asset_id.name, actor.asset_id.key, SandboxAssetKind::actor,
@@ -508,13 +584,25 @@ void SystemDemoLayer::createWorldPresentation() {
     }
     const auto position = project(actor.pose);
     actor_node->setPosition(position);
-    actor_node->setOpacity(150);
+    actor_node->setOpacity(46);
     world_layer_->addChild(actor_node, depthOrder(position.y));
-    auto *slot = makeLabel("AUTHORED WAVE SLOT", 9.0F,
-                           ax::Color4B(178, 205, 193, 210), {0.5F, 0.0F});
+    const auto *binding = encounter_.actor_binding(actor.id.key);
+    const auto slot_text =
+        binding == nullptr
+            ? std::string{"PLACEMENT ONLY"}
+            : dutyLabel(binding->duty) + " / WAITING";
+    auto *slot = makeLabel(slot_text, 9.0F,
+                           ax::Color4B(142, 173, 168, 180), {0.5F, 0.0F});
     if (slot != nullptr) {
       slot->setPosition(position + ax::Vec2(0.0F, -16.0F));
       world_layer_->addChild(slot, depthOrder(position.y) + 1);
+    }
+    if (actor_presentation_count_ < actor_presentations_.size()) {
+      actor_presentations_[actor_presentation_count_++] = {
+          actor.id.key,
+          actor_node,
+          slot,
+      };
     }
   }
 
@@ -588,9 +676,9 @@ void SystemDemoLayer::createRegistryPanel() {
 }
 
 void SystemDemoLayer::createHud() {
-  auto *controls =
-      makeLabel("WASD / ARROWS  MOVE    F  OPERATE    R  LOCAL RETRY", 13.0F,
-                ax::Color4B(224, 228, 199, 255));
+  auto *controls = makeLabel(
+      "WASD / ARROWS  MOVE    F  OPERATE    J/SPACE  LIGHT    K  HEAVY    R  RETRY",
+      12.0F, ax::Color4B(224, 228, 199, 255));
   if (controls != nullptr) {
     controls->setPosition({316.0F, 634.0F});
     addChild(controls, 20'000);
@@ -600,6 +688,10 @@ void SystemDemoLayer::createHud() {
                                  ax::Color4B(239, 169, 100, 255));
   player_status_label_ =
       makeLabel("PLAYER", 12.0F, ax::Color4B(170, 209, 200, 255));
+  wave_status_label_ =
+      makeLabel("WAVE / WAITING", 12.0F, ax::Color4B(170, 209, 200, 255));
+  objective_status_label_ =
+      makeLabel("OBJECTIVES / 0", 12.0F, ax::Color4B(170, 209, 200, 255));
   prompt_label_ = makeLabel("MOVE TO THE GATE CONSOLE", 18.0F,
                             ax::Color4B(239, 219, 173, 255), {0.5F, 0.5F});
   message_label_ = makeLabel(message_, 11.0F, ax::Color4B(144, 186, 178, 255));
@@ -610,6 +702,14 @@ void SystemDemoLayer::createHud() {
   if (player_status_label_ != nullptr) {
     player_status_label_->setPosition({1010.0F, 664.0F});
     addChild(player_status_label_, 20'000);
+  }
+  if (wave_status_label_ != nullptr) {
+    wave_status_label_->setPosition({1010.0F, 638.0F});
+    addChild(wave_status_label_, 20'000);
+  }
+  if (objective_status_label_ != nullptr) {
+    objective_status_label_->setPosition({1010.0F, 612.0F});
+    addChild(objective_status_label_, 20'000);
   }
   if (prompt_label_ != nullptr) {
     prompt_label_->setPosition({780.0F, 42.0F});
@@ -633,6 +733,15 @@ void SystemDemoLayer::createKeyboardInput() {
       retryLocal();
       return;
     }
+    if (key == ax::EventKeyboard::KeyCode::KEY_J ||
+        key == ax::EventKeyboard::KeyCode::KEY_SPACE) {
+      submitAttack(tgd::gameplay::SandboxEncounterAttack::light);
+      return;
+    }
+    if (key == ax::EventKeyboard::KeyCode::KEY_K) {
+      submitAttack(tgd::gameplay::SandboxEncounterAttack::heavy);
+      return;
+    }
     setDirection(key, true);
   };
   listener->onKeyReleased = [this](const ax::EventKeyboard::KeyCode key,
@@ -641,6 +750,10 @@ void SystemDemoLayer::createKeyboardInput() {
 }
 
 void SystemDemoLayer::applyMovementStep() noexcept {
+  if (encounter_.snapshot().player_defeated) {
+    directions_.fill(false);
+    return;
+  }
   const auto horizontal =
       static_cast<std::int32_t>(
           directions_[static_cast<std::size_t>(Direction::right)]) -
@@ -675,8 +788,40 @@ void SystemDemoLayer::applyMovementStep() noexcept {
   }
 }
 
+void SystemDemoLayer::advanceEncounterStep() noexcept {
+  const auto before = encounter_.snapshot();
+  if (!before.initialized || before.player_defeated ||
+      before.terminal_completed) {
+    return;
+  }
+  const auto pose = coordinator_.snapshot().session.player_pose;
+  const auto advanced = encounter_.advance_one_tick(pose);
+  using Disposition = tgd::gameplay::SandboxEncounterStepDisposition;
+  if (advanced.disposition == Disposition::player_defeated) {
+    directions_.fill(false);
+    message_ = "PLAYER DOWN / R RESTARTS THE LOCAL GATE AND TWO-WAVE ROUTE";
+  } else if (advanced.disposition == Disposition::terminal_completed) {
+    directions_.fill(false);
+    message_ = "TERMINAL OBJECTIVE COMPLETE / TWO AUTHORED WAVES CLEARED";
+  } else if (advanced.disposition != Disposition::advanced) {
+    directions_.fill(false);
+    message_ = "ENCOUNTER STEP REJECTED / DETERMINISTIC STATE PRESERVED";
+  }
+}
+
 void SystemDemoLayer::submitOperate() noexcept {
   const auto before = coordinator_.snapshot();
+  auto encounter_candidate = encounter_;
+  const auto triggered =
+      encounter_candidate.notify_mechanism_activated(target_mechanism_key_);
+  const bool trigger_ready =
+      triggered == tgd::gameplay::SandboxEncounterEventDisposition::applied ||
+      triggered == tgd::gameplay::SandboxEncounterEventDisposition::repeated;
+  if (!trigger_ready) {
+    message_ = "OPERATE REJECTED / ENCOUNTER PREFLIGHT PRESERVED BOTH STATES";
+    refreshPresentation();
+    return;
+  }
   const auto operated = coordinator_.submit_operate({
       before.runtime_generation,
       before.session.last_command_sequence + 1U,
@@ -684,15 +829,55 @@ void SystemDemoLayer::submitOperate() noexcept {
       interaction_key_,
   });
   if (operated.disposition == SandboxRuntimeCommandDisposition::applied) {
-    message_ = "OPERATE APPLIED / MECHANISM OPENED THE GROUND BLOCKER";
+    if (triggered ==
+        tgd::gameplay::SandboxEncounterEventDisposition::applied) {
+      encounter_ = std::move(encounter_candidate);
+      message_ = "GATE OPEN / OBJECTIVE COMPLETE / WAVE 1 ACTIVE";
+    } else {
+      message_ = "OPERATE REJECTED / RUNTIME AND ENCOUNTER STATE DRIFT";
+    }
   } else if (operated.disposition ==
              SandboxRuntimeCommandDisposition::session_rejected) {
     message_ = "OPERATE REJECTED / MOVE WITHIN 1200 MM OF THE CONSOLE";
   } else if (operated.disposition ==
              SandboxRuntimeCommandDisposition::repeated) {
-    message_ = "OPERATE REPEATED / GATE IS ALREADY OPEN";
+    if (triggered ==
+        tgd::gameplay::SandboxEncounterEventDisposition::repeated) {
+      encounter_ = std::move(encounter_candidate);
+      message_ = "OPERATE REPEATED / NO DUPLICATE WAVE SPAWN";
+    } else {
+      message_ = "OPERATE REPEATED / ENCOUNTER STATE DRIFT PRESERVED";
+    }
   } else {
     message_ = "OPERATE REJECTED / RUNTIME STATE PRESERVED";
+  }
+  refreshPresentation();
+}
+
+void SystemDemoLayer::submitAttack(
+    const tgd::gameplay::SandboxEncounterAttack attack) noexcept {
+  using Disposition = tgd::gameplay::SandboxEncounterAttackDisposition;
+  const auto queued = encounter_.queue_player_attack(attack);
+  switch (queued) {
+  case Disposition::queued:
+    message_ = attack == tgd::gameplay::SandboxEncounterAttack::heavy
+                   ? "HEAVY ATTACK QUEUED / NEAREST ACTIVE HOSTILE"
+                   : "LIGHT ATTACK QUEUED / NEAREST ACTIVE HOSTILE";
+    break;
+  case Disposition::already_queued:
+    message_ = "ATTACK ALREADY QUEUED / WAIT FOR THE NEXT FIXED TICK";
+    break;
+  case Disposition::player_defeated:
+    message_ = "PLAYER DOWN / R TO RESTART THE LOCAL ROUTE";
+    break;
+  case Disposition::no_active_target:
+    message_ = gate_open_ ? "NO ACTIVE TARGET / ADVANCE THE AUTHORED ROUTE"
+                          : "NO ACTIVE TARGET / OPEN THE GATE FIRST";
+    break;
+  case Disposition::invalid_state:
+  case Disposition::invalid:
+    message_ = "ATTACK REJECTED / ENCOUNTER STATE PRESERVED";
+    break;
   }
   refreshPresentation();
 }
@@ -704,10 +889,17 @@ void SystemDemoLayer::retryLocal() noexcept {
       before.session.last_command_sequence + 1U,
   });
   if (retried.disposition == SandboxRuntimeCommandDisposition::applied) {
-    ++retry_count_;
-    directions_.fill(false);
-    fixed_step_accumulator_ = 0.0F;
-    message_ = "LOCAL RETRY / SAFE POINT RESTORED / GATE CLOSED";
+    const auto restarted =
+        encounter_.restart(retried.snapshot.session.player_pose);
+    if (restarted == tgd::gameplay::SandboxEncounterBuildError::none) {
+      ++retry_count_;
+      directions_.fill(false);
+      fixed_step_accumulator_ = 0.0F;
+      message_ =
+          "LOCAL RETRY / SAFE POINT, GATE, WAVES, OBJECTIVES RESTORED";
+    } else {
+      message_ = "LOCAL RETRY / ENCOUNTER RESTART REJECTED";
+    }
   } else {
     message_ = "LOCAL RETRY REJECTED / RUNTIME STATE PRESERVED";
   }
@@ -719,10 +911,65 @@ void SystemDemoLayer::refreshPresentation() noexcept {
   if (!snapshot.initialized) {
     return;
   }
+  const auto encounter_snapshot = encounter_.snapshot();
   if (player_node_ != nullptr && world_layer_ != nullptr) {
     const auto position = project(snapshot.session.player_pose);
     player_node_->setPosition(position);
+    player_node_->setOpacity(encounter_snapshot.player_defeated ? 105 : 255);
+    player_node_->setColor(encounter_snapshot.player_defeated
+                               ? ax::Color3B(139, 139, 139)
+                               : ax::Color3B::WHITE);
     world_layer_->reorderChild(player_node_, depthOrder(position.y) + 10);
+  }
+
+  const auto combat_actors = encounter_.combat_actors();
+  for (std::size_t index = 0; index < actor_presentation_count_; ++index) {
+    auto &presentation = actor_presentations_[index];
+    const auto combat_actor =
+        std::find_if(combat_actors.begin(), combat_actors.end(),
+                     [&presentation](const auto &candidate) {
+                       return candidate.actor == presentation.actor;
+                     });
+    if (combat_actor == combat_actors.end() || presentation.sprite == nullptr) {
+      continue;
+    }
+    const auto position = project(combat_actor->pose);
+    presentation.sprite->setPosition(position);
+    presentation.sprite->setOpacity(combat_actor->defeated
+                                        ? 72
+                                        : (combat_actor->active ? 255 : 46));
+    presentation.sprite->setColor(combat_actor->defeated
+                                      ? ax::Color3B(116, 116, 116)
+                                      : ax::Color3B::WHITE);
+    if (world_layer_ != nullptr) {
+      world_layer_->reorderChild(presentation.sprite, depthOrder(position.y));
+    }
+    if (presentation.status != nullptr) {
+      const auto *binding = encounter_.actor_binding(presentation.actor);
+      const auto duty =
+          binding == nullptr ? std::string{"ACTOR"} : dutyLabel(binding->duty);
+      if (combat_actor->defeated) {
+        presentation.status->setString(duty + " / DEFEATED");
+        presentation.status->setTextColor(
+            ax::Color4B(153, 153, 153, 205));
+      } else if (combat_actor->active) {
+        presentation.status->setString(
+            duty + " / HP " +
+            std::to_string(combat_actor->resources.health) + "/" +
+            std::to_string(combat_actor->resources.health_max));
+        presentation.status->setTextColor(
+            ax::Color4B(245, 189, 117, 255));
+      } else {
+        presentation.status->setString(duty + " / WAITING");
+        presentation.status->setTextColor(
+            ax::Color4B(142, 173, 168, 170));
+      }
+      presentation.status->setPosition(position + ax::Vec2(0.0F, -16.0F));
+      if (world_layer_ != nullptr) {
+        world_layer_->reorderChild(presentation.status,
+                                   depthOrder(position.y) + 1);
+      }
+    }
   }
 
   gate_open_ = currentGateOpen();
@@ -739,13 +986,46 @@ void SystemDemoLayer::refreshPresentation() noexcept {
   }
   if (player_status_label_ != nullptr) {
     player_status_label_->setString(
-        "PLAYER / X " + std::to_string(snapshot.session.player_pose.x) +
-        " / Y " + std::to_string(snapshot.session.player_pose.y) + " / GEN " +
-        std::to_string(snapshot.runtime_generation));
+        "PLAYER / HP " + std::to_string(encounter_snapshot.player_health) +
+        "/" + std::to_string(encounter_snapshot.player_health_max) + " / X " +
+        std::to_string(snapshot.session.player_pose.x) + " / Y " +
+        std::to_string(snapshot.session.player_pose.y));
+    player_status_label_->setTextColor(
+        encounter_snapshot.player_defeated
+            ? ax::Color4B(255, 128, 118, 255)
+            : ax::Color4B(170, 209, 200, 255));
+  }
+  if (wave_status_label_ != nullptr) {
+    wave_status_label_->setString(
+        "WAVES / " +
+        std::to_string(encounter_snapshot.completed_wave_count) + "/2 / " +
+        activeWaveName() + " / HOSTILES " +
+        std::to_string(encounter_snapshot.active_hostile_count));
+  }
+  if (objective_status_label_ != nullptr) {
+    objective_status_label_->setString(
+        encounter_snapshot.terminal_completed
+            ? "OBJECTIVES / 2/2 / TERMINAL COMPLETE"
+            : "OBJECTIVES / " +
+                  std::to_string(
+                      encounter_snapshot.completed_objective_count) +
+                  "/2 / ROUTE ACTIVE");
+    objective_status_label_->setTextColor(
+        encounter_snapshot.terminal_completed
+            ? ax::Color4B(112, 224, 190, 255)
+            : ax::Color4B(170, 209, 200, 255));
   }
   if (prompt_label_ != nullptr) {
-    if (gate_open_) {
-      prompt_label_->setString("GATE OPEN / CROSS THE THRESHOLD / R TO RETRY");
+    if (encounter_snapshot.player_defeated) {
+      prompt_label_->setString("PLAYER DOWN / R TO RESTART THE LOCAL ROUTE");
+    } else if (encounter_snapshot.terminal_completed) {
+      prompt_label_->setString(
+          "TWO WAVES COMPLETE / TERMINAL OBJECTIVE PASSED / R TO REPLAY");
+    } else if (encounter_snapshot.active_hostile_count > 0) {
+      prompt_label_->setString(
+          "J OR SPACE / LIGHT    K / HEAVY    CLEAR THE ACTIVE WAVE");
+    } else if (gate_open_) {
+      prompt_label_->setString("GATE OPEN / AUTHORED WAVE TRANSITION");
     } else if (playerInOperateRange()) {
       prompt_label_->setString("F / OPERATE THE GATE CONSOLE");
     } else {
@@ -756,6 +1036,25 @@ void SystemDemoLayer::refreshPresentation() noexcept {
   if (message_label_ != nullptr) {
     message_label_->setString(message_);
   }
+}
+
+std::string SystemDemoLayer::activeWaveName() const {
+  const auto active_wave = encounter_.snapshot().active_wave;
+  const auto *document = coordinator_.document();
+  if (active_wave == 0 || document == nullptr) {
+    return "WAITING";
+  }
+  const auto &waves = document->definition().waves;
+  const auto found =
+      std::find_if(waves.begin(), waves.end(), [active_wave](const auto &wave) {
+        return wave.id.key == active_wave;
+      });
+  if (found == waves.end()) {
+    return "UNKNOWN";
+  }
+  const std::string name{found->id.name};
+  const auto segment = name.find_last_of('.');
+  return segment == std::string::npos ? name : name.substr(segment + 1);
 }
 
 void SystemDemoLayer::setDirection(const ax::EventKeyboard::KeyCode key,
@@ -937,6 +1236,81 @@ tgd_system_demo_qa_package_byte_count() {
 TGD_SYSTEM_DEMO_KEEPALIVE std::uint32_t tgd_system_demo_qa_asset_count() {
   const auto *layer = SystemDemoLayer::active();
   return layer != nullptr ? layer->qaAssetCount() : 0U;
+}
+
+TGD_SYSTEM_DEMO_KEEPALIVE std::int32_t
+tgd_system_demo_qa_player_health() {
+  const auto *layer = SystemDemoLayer::active();
+  return layer != nullptr ? layer->qaPlayerHealth() : 0;
+}
+
+TGD_SYSTEM_DEMO_KEEPALIVE std::uint32_t
+tgd_system_demo_qa_active_hostile_count() {
+  const auto *layer = SystemDemoLayer::active();
+  return layer != nullptr ? layer->qaActiveHostileCount() : 0U;
+}
+
+TGD_SYSTEM_DEMO_KEEPALIVE std::uint32_t
+tgd_system_demo_qa_defeated_hostile_count() {
+  const auto *layer = SystemDemoLayer::active();
+  return layer != nullptr ? layer->qaDefeatedHostileCount() : 0U;
+}
+
+TGD_SYSTEM_DEMO_KEEPALIVE std::uint32_t
+tgd_system_demo_qa_completed_wave_count() {
+  const auto *layer = SystemDemoLayer::active();
+  return layer != nullptr ? layer->qaCompletedWaveCount() : 0U;
+}
+
+TGD_SYSTEM_DEMO_KEEPALIVE std::uint32_t
+tgd_system_demo_qa_completed_objective_count() {
+  const auto *layer = SystemDemoLayer::active();
+  return layer != nullptr ? layer->qaCompletedObjectiveCount() : 0U;
+}
+
+TGD_SYSTEM_DEMO_KEEPALIVE int tgd_system_demo_qa_terminal_completed() {
+  const auto *layer = SystemDemoLayer::active();
+  return layer != nullptr && layer->qaTerminalCompleted() ? 1 : 0;
+}
+
+TGD_SYSTEM_DEMO_KEEPALIVE std::uint32_t
+tgd_system_demo_qa_accepted_attack_count() {
+  const auto *layer = SystemDemoLayer::active();
+  return layer != nullptr ? layer->qaAcceptedAttackCount() : 0U;
+}
+
+TGD_SYSTEM_DEMO_KEEPALIVE std::uint32_t
+tgd_system_demo_qa_repeated_trigger_count() {
+  const auto *layer = SystemDemoLayer::active();
+  return layer != nullptr ? layer->qaRepeatedTriggerCount() : 0U;
+}
+
+TGD_SYSTEM_DEMO_KEEPALIVE void tgd_system_demo_qa_operate() {
+  auto *layer = SystemDemoLayer::active();
+  if (layer != nullptr) {
+    layer->qaOperate();
+  }
+}
+
+TGD_SYSTEM_DEMO_KEEPALIVE void tgd_system_demo_qa_attack_light() {
+  auto *layer = SystemDemoLayer::active();
+  if (layer != nullptr) {
+    layer->qaAttackLight();
+  }
+}
+
+TGD_SYSTEM_DEMO_KEEPALIVE void tgd_system_demo_qa_attack_heavy() {
+  auto *layer = SystemDemoLayer::active();
+  if (layer != nullptr) {
+    layer->qaAttackHeavy();
+  }
+}
+
+TGD_SYSTEM_DEMO_KEEPALIVE void tgd_system_demo_qa_retry() {
+  auto *layer = SystemDemoLayer::active();
+  if (layer != nullptr) {
+    layer->qaRetry();
+  }
 }
 
 } // extern "C"

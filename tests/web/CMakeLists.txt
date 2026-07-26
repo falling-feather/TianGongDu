@@ -93,7 +93,7 @@ target_link_options(
     "-sINVOKE_RUN=0"
     "-sEXIT_RUNTIME=0"
     "-sALLOW_MEMORY_GROWTH=1"
-    "SHELL:-sEXPORTED_FUNCTIONS=['_malloc','_free','_tgd_sandbox_service_run_contract_probe','_tgd_sandbox_service_write_invalid_utf8_result','_tgd_sandbox_compiler_service_abi_version','_tgd_sandbox_compiler_service_create','_tgd_sandbox_compiler_service_destroy','_tgd_sandbox_compiler_service_read_identity','_tgd_sandbox_compile_request_create','_tgd_sandbox_compile_request_cancel','_tgd_sandbox_compile_request_copy_utf8','_tgd_sandbox_compile_request_set_metadata','_tgd_sandbox_compile_request_set_player','_tgd_sandbox_compile_request_append_region','_tgd_sandbox_compile_request_append_asset','_tgd_sandbox_compile_request_append_actor','_tgd_sandbox_compile_request_append_ground_blocker','_tgd_sandbox_compile_request_append_safe_point','_tgd_sandbox_compile_request_append_interaction','_tgd_sandbox_compile_request_append_mechanism','_tgd_sandbox_compile_request_append_wave','_tgd_sandbox_compile_request_append_wave_spawn','_tgd_sandbox_compile_request_append_objective','_tgd_sandbox_compile_request_append_interaction_binding','_tgd_sandbox_compile_request_append_mechanism_binding','_tgd_sandbox_compile_request_submit']"
+    "SHELL:-sEXPORTED_FUNCTIONS=['_malloc','_free','_tgd_sandbox_service_run_contract_probe','_tgd_sandbox_service_write_invalid_utf8_result','_tgd_sandbox_compiler_service_abi_version','_tgd_sandbox_compiler_service_create','_tgd_sandbox_compiler_service_destroy','_tgd_sandbox_compiler_service_read_identity','_tgd_sandbox_compile_request_create','_tgd_sandbox_compile_request_cancel','_tgd_sandbox_compile_request_copy_utf8','_tgd_sandbox_compile_request_set_metadata','_tgd_sandbox_compile_request_set_player','_tgd_sandbox_compile_request_append_region','_tgd_sandbox_compile_request_append_asset','_tgd_sandbox_compile_request_append_actor','_tgd_sandbox_compile_request_append_ground_blocker','_tgd_sandbox_compile_request_append_safe_point','_tgd_sandbox_compile_request_append_interaction','_tgd_sandbox_compile_request_append_mechanism','_tgd_sandbox_compile_request_append_wave','_tgd_sandbox_compile_request_append_wave_spawn','_tgd_sandbox_compile_request_append_objective','_tgd_sandbox_compile_request_append_interaction_binding','_tgd_sandbox_compile_request_append_mechanism_binding','_tgd_sandbox_compile_request_append_actor_binding','_tgd_sandbox_compile_request_submit']"
 )
 set_target_properties(
   tgd_web_sandbox_package_service_abi
@@ -130,7 +130,7 @@ const [modulePath, wasmPath, clientPath, sourcePath, outputPath, changedOutputPa
   process.argv.slice(2);
 const sourceBytes = await readFile(sourcePath);
 const sourceHash = createHash("sha256").update(sourceBytes).digest("hex");
-if (sourceHash !== "67a1be5216edc7cebfbe7a2433a8daa5425fb6ded15ee632b741302b0b57221d") {
+if (sourceHash !== "07fa5537fc617e0686605a4b7eaeb20ceea24ab7696f5db63e42b23e68e0bb69") {
   throw new Error("system-demo author source SHA-256 drifted: " + sourceHash);
 }
 
@@ -159,12 +159,20 @@ const requirePublished = (result, generation) => {
 try {
   const first = client.publish(authoring.runtime);
   requirePublished(first, 1);
-  if (first.packageBytes.length !== 2712 ||
-      packageHash(first.packageBytes) !==
-        "89a7c36ff185867fabb0aab79cb68f4f428a4a62179dadfb8d229eedee8d7ff6" ||
-      hex(first.identity.checksum) !==
-        "c84aedeefc1e77b881906e2ed51d0e9d9beaf9be3375e428f0a9eda5ac09cef8") {
-    throw new Error("system-demo canonical package identity drifted");
+  const firstIdentity = {
+    bytes: first.packageBytes.length,
+    packageSha256: packageHash(first.packageBytes),
+    providerChecksum: hex(first.identity.checksum),
+  };
+  if (firstIdentity.bytes !== 2960 ||
+      firstIdentity.packageSha256 !==
+        "a09ce35e58a48c01b15d4946de8e380d752760142ddbefee7bce7f7476b0252e" ||
+      firstIdentity.providerChecksum !==
+        "0cfd8c17732278074deb08dccf5f1eb5d4abf1f59ffbaa1de610eeac7d87e2e9") {
+    throw new Error(
+      "system-demo canonical package identity drifted: " +
+        JSON.stringify(firstIdentity)
+    );
   }
 
   const second = client.publish(authoring.runtime);

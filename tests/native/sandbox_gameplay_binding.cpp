@@ -80,6 +80,9 @@ static_assert(static_cast<std::uint8_t>(SandboxGameplayBindingValidationCode::va
 static_assert(
     static_cast<std::uint8_t>(SandboxGameplayBindingValidationCode::unreferenced_mechanism) == 21
 );
+static_assert(
+    static_cast<std::uint8_t>(SandboxGameplayBindingValidationCode::missing_actor_binding) == 30
+);
 static_assert(static_cast<std::uint8_t>(SandboxGameplayBindingValidationCode::invalid) == 255);
 static_assert(
     static_cast<std::uint8_t>(
@@ -89,11 +92,20 @@ static_assert(
 static_assert(
     static_cast<std::uint8_t>(SandboxGameplayBindingValidationDomain::core_mechanism) == 4
 );
+static_assert(
+    static_cast<std::uint8_t>(SandboxGameplayBindingValidationDomain::actor_binding) == 5
+);
+static_assert(
+    static_cast<std::uint8_t>(SandboxGameplayBindingValidationDomain::core_actor) == 6
+);
 static_assert(static_cast<std::uint8_t>(SandboxGameplayBindingValidationDomain::invalid) == 255);
 static_assert(
     static_cast<std::uint16_t>(
         SandboxGameplayBindingValidationField::target_ground_blocker_id
     ) == 7
+);
+static_assert(
+    static_cast<std::uint16_t>(SandboxGameplayBindingValidationField::max_health) == 12
 );
 static_assert(
     static_cast<std::uint16_t>(SandboxGameplayBindingValidationField::invalid) == 65'535
@@ -212,6 +224,12 @@ constexpr ContentId blocker_one = content_id("sandbox.blocker.one");
 constexpr ContentId blocker_two = content_id("sandbox.blocker.two");
 constexpr ContentId safe_point_one = content_id("sandbox.safe-point.one");
 constexpr ContentId extra_id = content_id("sandbox.extra");
+constexpr ContentId actor_one = content_id("sandbox.actor.one");
+constexpr ContentId actor_two = content_id("sandbox.actor.two");
+constexpr ContentId wave_one = content_id("sandbox.wave.one");
+constexpr ContentId wave_two = content_id("sandbox.wave.two");
+constexpr ContentId profile_one = content_id("profile.actor.one");
+constexpr ContentId profile_two = content_id("profile.actor.two");
 
 SandboxInteractionDefinition interaction_definition(ContentId id) {
     SandboxInteractionDefinition result{};
@@ -291,6 +309,34 @@ struct Fixture final {
 
     [[nodiscard]] SandboxGameplayBindingDefinition binding() const noexcept {
         return {interaction_bindings, mechanism_bindings};
+    }
+};
+
+struct ActorFixture final {
+    std::array<SandboxActorDefinition, 2> actors{{
+        {actor_one},
+        {actor_two},
+    }};
+    std::array<SandboxWaveSpawnDefinition, 2> spawns{{
+        {wave_one, actor_one, 0, 0},
+        {wave_two, actor_two, 0, 0},
+    }};
+    std::array<SandboxActorGameplayBinding, 2> actor_bindings{{
+        {actor_one, profile_one, CombatFaction::hostile,
+         EncounterTacticalDuty::pressure, 50},
+        {actor_two, profile_two, CombatFaction::hostile,
+         EncounterTacticalDuty::flanker, 75},
+    }};
+
+    [[nodiscard]] SandboxDefinition core() const noexcept {
+        SandboxDefinition result{};
+        result.actors = actors;
+        result.wave_spawns = spawns;
+        return result;
+    }
+
+    [[nodiscard]] SandboxGameplayBindingDefinition binding() const noexcept {
+        return {{}, {}, actor_bindings};
     }
 };
 
@@ -646,6 +692,124 @@ void test_mechanism_binding_failures() {
     }
 }
 
+void test_actor_binding_failures() {
+    using Code = SandboxGameplayBindingValidationCode;
+    using Domain = SandboxGameplayBindingValidationDomain;
+    using Field = SandboxGameplayBindingValidationField;
+
+    {
+        const ActorFixture fixture;
+        expect(
+            sandbox_gameplay_binding_is_valid(
+                validate_sandbox_gameplay_binding(fixture.core(), fixture.binding())
+            ),
+            "complete wave-spawn actor bindings validate"
+        );
+    }
+    {
+        ActorFixture fixture;
+        fixture.actor_bindings[0].actor_id = {};
+        expect_error(
+            validate_sandbox_gameplay_binding(fixture.core(), fixture.binding()),
+            Code::invalid_actor_id, Domain::actor_binding, Field::actor_id, 0,
+            "zero actor ID fails"
+        );
+    }
+    {
+        ActorFixture fixture;
+        fixture.actor_bindings[0].actor_id = extra_id;
+        expect_error(
+            validate_sandbox_gameplay_binding(fixture.core(), fixture.binding()),
+            Code::dangling_actor_id, Domain::actor_binding, Field::actor_id, 0,
+            "binding for an unknown actor fails"
+        );
+    }
+    {
+        ActorFixture fixture;
+        fixture.actor_bindings[1].actor_id = actor_one;
+        expect_error(
+            validate_sandbox_gameplay_binding(fixture.core(), fixture.binding()),
+            Code::duplicate_actor_binding, Domain::actor_binding, Field::actor_id, 1,
+            "duplicate actor binding fails"
+        );
+    }
+    {
+        ActorFixture fixture;
+        fixture.actor_bindings[0].profile_id = {};
+        expect_error(
+            validate_sandbox_gameplay_binding(fixture.core(), fixture.binding()),
+            Code::invalid_profile_id, Domain::actor_binding, Field::profile_id, 0,
+            "zero gameplay profile ID fails"
+        );
+    }
+    for (const auto faction : {
+             CombatFaction::player,
+             CombatFaction::neutral,
+             static_cast<CombatFaction>(255),
+         }) {
+        ActorFixture fixture;
+        fixture.actor_bindings[0].faction = faction;
+        expect_error(
+            validate_sandbox_gameplay_binding(fixture.core(), fixture.binding()),
+            Code::invalid_actor_faction, Domain::actor_binding, Field::faction, 0,
+            "non-hostile actor faction fails closed"
+        );
+    }
+    for (const auto duty : {
+             static_cast<EncounterTacticalDuty>(4),
+             static_cast<EncounterTacticalDuty>(255),
+         }) {
+        ActorFixture fixture;
+        fixture.actor_bindings[0].duty = duty;
+        expect_error(
+            validate_sandbox_gameplay_binding(fixture.core(), fixture.binding()),
+            Code::invalid_actor_duty, Domain::actor_binding, Field::duty, 0,
+            "unknown actor duty fails closed"
+        );
+    }
+    for (const auto health : {0, sandbox_actor_max_health_max + 1}) {
+        ActorFixture fixture;
+        fixture.actor_bindings[0].max_health = health;
+        expect_error(
+            validate_sandbox_gameplay_binding(fixture.core(), fixture.binding()),
+            Code::invalid_actor_max_health, Domain::actor_binding, Field::max_health, 0,
+            "out-of-range actor health fails"
+        );
+    }
+    {
+        ActorFixture fixture;
+        const SandboxGameplayBindingDefinition partial{
+            {}, {},
+            std::span<const SandboxActorGameplayBinding>{fixture.actor_bindings}.first(1),
+        };
+        const auto result = validate_sandbox_gameplay_binding(fixture.core(), partial);
+        expect_error(
+            result, Code::missing_actor_binding, Domain::core_actor, Field::actor_id, 1,
+            "every wave-spawn actor requires an explicit gameplay binding"
+        );
+        expect(
+            result.subject == actor_two.key && result.related == wave_two.key,
+            "missing actor binding locates actor and authored wave"
+        );
+    }
+    {
+        ActorFixture fixture;
+        auto core = fixture.core();
+        core.wave_spawns =
+            std::span<const SandboxWaveSpawnDefinition>{fixture.spawns}.first(1);
+        const SandboxGameplayBindingDefinition first_only{
+            {}, {},
+            std::span<const SandboxActorGameplayBinding>{fixture.actor_bindings}.first(1),
+        };
+        expect(
+            sandbox_gameplay_binding_is_valid(
+                validate_sandbox_gameplay_binding(core, first_only)
+            ),
+            "an unspawned placement may remain placement-only"
+        );
+    }
+}
+
 void test_capacity_failures() {
     using Code = SandboxGameplayBindingValidationCode;
     using Domain = SandboxGameplayBindingValidationDomain;
@@ -675,6 +839,18 @@ void test_capacity_failures() {
         static_cast<std::uint32_t>(too_many_mechanisms.size()),
         "mechanism binding capacity is bounded"
     );
+
+    std::array<SandboxActorGameplayBinding, sandbox_actor_capacity + 1>
+        too_many_actors{};
+    const SandboxGameplayBindingDefinition actor_overflow{{}, {}, too_many_actors};
+    expect_error(
+        validate_sandbox_gameplay_binding(empty_core, actor_overflow),
+        Code::too_many_actor_bindings,
+        Domain::actor_binding,
+        Field::actor_id,
+        static_cast<std::uint32_t>(too_many_actors.size()),
+        "actor binding capacity is bounded"
+    );
 }
 
 }  // namespace
@@ -684,6 +860,7 @@ int main() {
     test_valid_and_empty_bindings();
     test_interaction_binding_failures();
     test_mechanism_binding_failures();
+    test_actor_binding_failures();
     test_capacity_failures();
 
     return failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;

@@ -134,6 +134,20 @@ const GROUPS = [
     prefix: "mechanism.system_demo",
     assetKind: "mechanism",
     records: (runtime) => runtime.mechanisms
+  },
+  {
+    key: "waves",
+    label: "Waves",
+    prefix: "wave.system_demo",
+    authoringOnly: true,
+    records: (runtime) => runtime.waves
+  },
+  {
+    key: "objectives",
+    label: "Objectives",
+    prefix: "objective.system_demo",
+    authoringOnly: true,
+    records: (runtime) => runtime.objectives
   }
 ];
 
@@ -715,6 +729,122 @@ function fieldsFor(group, record) {
     })
   ];
 
+  if (group.key === "waves") {
+    fields.push(
+      textField("regionId", "Region ID", record.regionId, {
+        kind: "enum",
+        options: optionsForRegion()
+      }),
+      textField(
+        "predecessorWaveId",
+        "Predecessor Wave",
+        record.predecessorWaveId,
+        {
+          kind: "enum",
+          options: ["", ...state.document.runtime.waves
+            .filter((value) => value.id !== record.id)
+            .map((value) => value.id)]
+        }
+      ),
+      { section: "Wave Trigger" },
+      textField("triggerKind", "Trigger Kind", record.trigger.kind, {
+        kind: "enum",
+        options: [
+          "session_started",
+          "interaction_completed",
+          "mechanism_activated",
+          "objective_completed",
+          "wave_completed"
+        ]
+      }),
+      textField("triggerTargetId", "Trigger Target ID", record.trigger.targetId, {
+        kind: "enum",
+        options: [
+          "",
+          ...state.document.runtime.interactions.map(({ id }) => id),
+          ...state.document.runtime.mechanisms.map(({ id }) => id),
+          ...state.document.runtime.objectives.map(({ id }) => id),
+          ...state.document.runtime.waves.map(({ id }) => id)
+        ]
+      })
+    );
+    const spawns = state.document.runtime.waveSpawns
+      .filter((spawn) => spawn.waveId === record.id)
+      .sort((left, right) =>
+        left.spawnOrder - right.spawnOrder ||
+        left.actorId.localeCompare(right.actorId)
+      );
+    spawns.forEach((spawn, index) => {
+      fields.push({ section: "Spawn " + (index + 1) });
+      fields.push(
+        textField("spawnActorId_" + index, "Actor ID", spawn.actorId, {
+          kind: "enum",
+          options: state.document.runtime.actors.map(({ id }) => id)
+        }),
+        textField("spawnDelayTicks_" + index, "Delay (ticks)", spawn.delayTicks, {
+          kind: "integer",
+          min: 0,
+          max: UINT32_MAX
+        }),
+        textField("spawnOrder_" + index, "Spawn Order", spawn.spawnOrder, {
+          kind: "integer",
+          min: 0,
+          max: UINT16_MAX
+        })
+      );
+    });
+    return fields;
+  }
+
+  if (group.key === "objectives") {
+    fields.push(
+      textField("regionId", "Region ID", record.regionId, {
+        kind: "enum",
+        options: optionsForRegion()
+      }),
+      textField(
+        "predecessorObjectiveId",
+        "Predecessor Objective",
+        record.predecessorObjectiveId,
+        {
+          kind: "enum",
+          options: ["", ...state.document.runtime.objectives
+            .filter((value) => value.id !== record.id)
+            .map((value) => value.id)]
+        }
+      ),
+      { section: "Objective Completion" },
+      textField("completionKind", "Completion Kind", record.completion.kind, {
+        kind: "enum",
+        options: [
+          "interaction_completed",
+          "mechanism_activated",
+          "wave_completed"
+        ]
+      }),
+      textField(
+        "completionTargetId",
+        "Completion Target ID",
+        record.completion.targetId,
+        {
+          kind: "enum",
+          options: [
+            ...state.document.runtime.interactions.map(({ id }) => id),
+            ...state.document.runtime.mechanisms.map(({ id }) => id),
+            ...state.document.runtime.waves.map(({ id }) => id)
+          ]
+        }
+      ),
+      textField(
+        "terminal",
+        "Package Terminal",
+        state.document.runtime.completionObjectiveId === record.id ? "yes" : "no",
+        { kind: "enum", options: ["yes", "no"] }
+      )
+    );
+    return fields;
+  }
+
   if (group.key === "groundBlockers") {
     fields.push(
       textField("regionId", "Region ID", record.regionId, {
@@ -741,6 +871,32 @@ function fieldsFor(group, record) {
   }
 
   fields.push(...placementFields(group, record));
+  if (group.key === "actors") {
+    const binding = state.document.runtime.actorBindings.find(
+      (value) => value.actorId === record.id
+    );
+    if (binding) {
+      fields.push({ section: "Actor Gameplay Binding（显式入包）" });
+      fields.push(
+        textField("profileId", "Content Catalog Profile ID", binding.profileId, {
+          wide: true
+        }),
+        textField("faction", "Faction", binding.faction, {
+          kind: "enum",
+          options: ["hostile"]
+        }),
+        textField("duty", "Tactical Duty", binding.duty, {
+          kind: "enum",
+          options: ["pressure", "flanker", "harrier", "controller"]
+        }),
+        textField("maxHealth", "Max Health", binding.maxHealth, {
+          kind: "integer",
+          min: 1,
+          max: 100000
+        })
+      );
+    }
+  }
   if (group.key === "player") {
     fields.splice(
       4,
@@ -1034,24 +1190,33 @@ function updateObjectActionAvailability() {
     authorActionInFlight() ||
     contentCheckInFlight ||
     packageExportInFlight;
-  elements.createObjectButton.disabled = !state.opened;
-  elements.createObjectButton.setAttribute("aria-disabled", String(blocked));
+  const authoringOnly = group?.authoringOnly === true;
+  elements.createObjectButton.disabled = !state.opened || authoringOnly;
+  elements.createObjectButton.setAttribute(
+    "aria-disabled",
+    String(blocked || authoringOnly)
+  );
   elements.createObjectButton.textContent =
-    group?.singular ? "重建" : "新增";
-  elements.duplicateObjectButton.disabled = !record;
+    authoringOnly ? "面板" : group?.singular ? "重建" : "新增";
+  elements.duplicateObjectButton.disabled = !record || authoringOnly;
   elements.duplicateObjectButton.setAttribute(
     "aria-disabled",
-    String(blocked || !record)
+    String(blocked || !record || authoringOnly)
   );
   elements.duplicateObjectButton.textContent =
-    group?.singular ? "复制并替换" : "复制";
-  elements.deleteObjectButton.disabled = !record || group?.singular === true;
+    authoringOnly ? "不可复制" : group?.singular ? "复制并替换" : "复制";
+  elements.deleteObjectButton.disabled =
+    !record || group?.singular === true || authoringOnly;
   elements.deleteObjectButton.setAttribute(
     "aria-disabled",
-    String(blocked || !record || group?.singular === true)
+    String(blocked || !record || group?.singular === true || authoringOnly)
   );
   elements.deleteObjectButton.title =
-    group?.singular === true ? "全包必须保留唯一玩家起点" : "";
+    authoringOnly
+      ? "0.8.3 面板只编辑既有 Wave/Objective 拓扑"
+      : group?.singular === true
+        ? "全包必须保留唯一玩家起点"
+        : "";
 }
 
 function svgElement(name, attributes = {}) {
@@ -1253,6 +1418,9 @@ function renderCanvas() {
     );
   }
   for (const group of GROUPS) {
+    if (group.authoringOnly) {
+      continue;
+    }
     for (const record of recordsFor(group)) {
       if (group.key === "groundBlockers") {
         appendCanvasBlocker(group, record);
@@ -1302,6 +1470,19 @@ function valuesForCanvasUpdate(group, record, deltaX, deltaY) {
           operation: binding.operation,
           rangeMm: binding.rangeMm,
           targetMechanismId: binding.targetMechanismId
+        }
+      : null;
+  }
+  if (group.key === "actors") {
+    const binding = state.document.runtime.actorBindings.find(
+      (candidate) => candidate.actorId === record.id
+    );
+    values.binding = binding
+      ? {
+          profileId: binding.profileId,
+          faction: binding.faction,
+          duty: binding.duty,
+          maxHealth: binding.maxHealth
         }
       : null;
   }
@@ -1530,6 +1711,42 @@ function parseFormValues() {
 }
 
 function requestValues(raw) {
+  if (selectedGroup === "waves") {
+    const record = currentRecord();
+    const spawnCount = state.document.runtime.waveSpawns.filter(
+      (spawn) => spawn.waveId === record.id
+    ).length;
+    const spawns = [];
+    for (let index = 0; index < spawnCount; index += 1) {
+      spawns.push({
+        actorId: raw["spawnActorId_" + index],
+        delayTicks: raw["spawnDelayTicks_" + index],
+        spawnOrder: raw["spawnOrder_" + index]
+      });
+    }
+    return {
+      regionId: raw.regionId,
+      predecessorWaveId: raw.predecessorWaveId,
+      trigger: {
+        kind: raw.triggerKind,
+        targetId: raw.triggerTargetId
+      },
+      spawns,
+      editorLabel: raw.editorLabel
+    };
+  }
+  if (selectedGroup === "objectives") {
+    return {
+      regionId: raw.regionId,
+      predecessorObjectiveId: raw.predecessorObjectiveId,
+      completion: {
+        kind: raw.completionKind,
+        targetId: raw.completionTargetId
+      },
+      terminal: raw.terminal === "yes",
+      editorLabel: raw.editorLabel
+    };
+  }
   if (selectedGroup === "groundBlockers") {
     return raw;
   }
@@ -1547,6 +1764,16 @@ function requestValues(raw) {
   };
   if (selectedGroup === "player") {
     values.initialSafePointId = raw.initialSafePointId;
+  }
+  if (selectedGroup === "actors") {
+    values.binding = Object.prototype.hasOwnProperty.call(raw, "profileId")
+      ? {
+          profileId: raw.profileId,
+          faction: raw.faction,
+          duty: raw.duty,
+          maxHealth: raw.maxHealth
+        }
+      : null;
   }
   if (selectedGroup === "interactions") {
     values.binding = Object.prototype.hasOwnProperty.call(raw, "operation")

@@ -19,7 +19,7 @@ bool AppDelegate::applicationDidFinishLaunching() {
   auto *render_view = director->getRenderView();
   if (render_view == nullptr) {
     render_view = ax::RenderViewImpl::createWithRect(
-        "TianGongDu System Demo 0.8.1",
+        "TianGongDu System Demo 0.8.3",
         ax::Rect(0.0F, 0.0F, design_width, design_height));
     director->setRenderView(render_view);
   }

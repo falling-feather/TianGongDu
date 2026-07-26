@@ -1,5 +1,6 @@
 #pragma once
 
+#include <tgd/contracts/combat_types.hpp>
 #include <tgd/contracts/sandbox_definition.hpp>
 #include <tgd/contracts/sandbox_pack.hpp>
 
@@ -11,6 +12,8 @@ namespace tgd::contracts {
 
 inline constexpr std::int32_t sandbox_operate_range_min_mm = 500;
 inline constexpr std::int32_t sandbox_operate_range_max_mm = 3'000;
+inline constexpr std::int32_t sandbox_actor_max_health_min = 1;
+inline constexpr std::int32_t sandbox_actor_max_health_max = 100'000;
 
 enum class SandboxInteractionOperation : std::uint8_t {
     operate = 1,
@@ -45,11 +48,25 @@ struct SandboxMechanismGameplayBinding final {
     ) noexcept = default;
 };
 
+struct SandboxActorGameplayBinding final {
+    ContentId actor_id{};
+    ContentId profile_id{};
+    CombatFaction faction{CombatFaction::neutral};
+    EncounterTacticalDuty duty{EncounterTacticalDuty::pressure};
+    std::int32_t max_health{};
+
+    [[nodiscard]] friend constexpr bool operator==(
+        const SandboxActorGameplayBinding&,
+        const SandboxActorGameplayBinding&
+    ) noexcept = default;
+};
+
 // Immutable and non-owning. The caller retains every referenced binding record
 // for the full lifetime of this view.
 struct SandboxGameplayBindingDefinition final {
     std::span<const SandboxInteractionGameplayBinding> interaction_bindings{};
     std::span<const SandboxMechanismGameplayBinding> mechanism_bindings{};
+    std::span<const SandboxActorGameplayBinding> actor_bindings{};
 };
 
 enum class SandboxInteractionState : std::uint8_t {
@@ -257,6 +274,15 @@ enum class SandboxGameplayBindingValidationCode : std::uint8_t {
     missing_mechanism_binding = 19,
     duplicate_target_mechanism_writer = 20,
     unreferenced_mechanism = 21,
+    too_many_actor_bindings = 22,
+    invalid_actor_id = 23,
+    dangling_actor_id = 24,
+    duplicate_actor_binding = 25,
+    invalid_profile_id = 26,
+    invalid_actor_faction = 27,
+    invalid_actor_duty = 28,
+    invalid_actor_max_health = 29,
+    missing_actor_binding = 30,
     invalid = 255,
 };
 
@@ -265,6 +291,8 @@ enum class SandboxGameplayBindingValidationDomain : std::uint8_t {
     mechanism_binding = 2,
     core_interaction = 3,
     core_mechanism = 4,
+    actor_binding = 5,
+    core_actor = 6,
     invalid = 255,
 };
 
@@ -276,6 +304,11 @@ enum class SandboxGameplayBindingValidationField : std::uint16_t {
     mechanism_id = 5,
     activation = 6,
     target_ground_blocker_id = 7,
+    actor_id = 8,
+    profile_id = 9,
+    faction = 10,
+    duty = 11,
+    max_health = 12,
     invalid = 65'535,
 };
 

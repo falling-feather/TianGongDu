@@ -56,7 +56,16 @@ const BINDING_MESSAGES = Object.freeze({
   18: "同一 Ground Blocker 存在多个写入者。",
   19: "Mechanism 缺少所需 Binding。",
   20: "同一目标 Mechanism 存在多个写入者。",
-  21: "存在未被 Interaction 引用的 Mechanism。"
+  21: "存在未被 Interaction 引用的 Mechanism。",
+  22: "Actor Gameplay Binding 数量超过容量。",
+  23: "Actor Gameplay Binding 的 Actor ID 无效。",
+  24: "Actor Gameplay Binding 指向不存在的 Actor。",
+  25: "同一 Actor 存在重复 Gameplay Binding。",
+  26: "Actor Gameplay Binding 的 Profile ID 无效。",
+  27: "Actor Gameplay Binding 的 Faction 无效。",
+  28: "Actor Gameplay Binding 的 Tactical Duty 无效。",
+  29: "Actor Gameplay Binding 的 Max Health 无效。",
+  30: "Wave Spawn 引用的 Actor 缺少 Gameplay Binding。"
 });
 
 const PACKAGE_FIELDS = Object.freeze({
@@ -84,7 +93,12 @@ const BINDING_FIELDS = Object.freeze({
   4: "targetMechanismId",
   5: "id",
   6: "activation",
-  7: "targetGroundBlockerId"
+  7: "targetGroundBlockerId",
+  8: "id",
+  9: "profileId",
+  10: "faction",
+  11: "duty",
+  12: "maxHealth"
 });
 
 const VISIBLE_FIELDS = Object.freeze({
@@ -97,7 +111,11 @@ const VISIBLE_FIELDS = Object.freeze({
     "y",
     "height",
     "floorLayer",
-    "facingMillidegrees"
+    "facingMillidegrees",
+    "profileId",
+    "faction",
+    "duty",
+    "maxHealth"
   ]),
   actors: new Set([
     "id",
@@ -194,7 +212,7 @@ function packageRecord(runtime, section, recordIndex) {
   return { group: entry[0], record: entry[1][recordIndex] };
 }
 
-function bindingRecord(runtime, domain, recordIndex) {
+function bindingRecord(runtime, domain, recordIndex, subjectId) {
   if (domain === 1) {
     const binding = runtime.interactionBindings[recordIndex];
     const record = binding
@@ -216,6 +234,17 @@ function bindingRecord(runtime, domain, recordIndex) {
   if (domain === 4) {
     const record = runtime.mechanisms[recordIndex];
     return record ? { group: "mechanisms", record } : null;
+  }
+  if (domain === 5) {
+    const binding = runtime.actorBindings[recordIndex];
+    const record = binding
+      ? runtime.actors.find(({ id }) => id === binding.actorId)
+      : null;
+    return record ? { group: "actors", record } : null;
+  }
+  if (domain === 6) {
+    const record = runtime.actors.find(({ id }) => id === subjectId);
+    return record ? { group: "actors", record } : null;
   }
   return null;
 }
@@ -255,9 +284,9 @@ function presentPackageDiagnostic(raw, runtime) {
 }
 
 function presentBindingDiagnostic(raw, runtime) {
-  const code = expectInteger(raw?.code, 2, 21);
-  const domain = expectInteger(raw?.domain, 1, 4);
-  const fieldCode = expectInteger(raw?.field, 1, 7);
+  const code = expectInteger(raw?.code, 2, 30);
+  const domain = expectInteger(raw?.domain, 1, 6);
+  const fieldCode = expectInteger(raw?.field, 1, 12);
   const recordIndex = expectInteger(raw?.recordIndex, 0, 0xffffffff);
   const subjectId = expectOptionalId(raw?.subjectId);
   expectOptionalId(raw?.relatedId);
@@ -266,7 +295,7 @@ function presentBindingDiagnostic(raw, runtime) {
     severity: "error",
     message: BINDING_MESSAGES[code],
     locator: locatorFor(
-      bindingRecord(runtime, domain, recordIndex),
+      bindingRecord(runtime, domain, recordIndex, subjectId),
       field,
       subjectId
     )

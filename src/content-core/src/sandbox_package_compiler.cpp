@@ -42,6 +42,7 @@ struct ProjectedPackage final {
     std::vector<contracts::SandboxObjectiveDefinition> objectives{};
     std::vector<contracts::SandboxInteractionGameplayBinding> interaction_bindings{};
     std::vector<contracts::SandboxMechanismGameplayBinding> mechanism_bindings{};
+    std::vector<contracts::SandboxActorGameplayBinding> actor_bindings{};
     contracts::SandboxDefinition definition{};
     contracts::SandboxGameplayBindingDefinition gameplay_binding{};
 
@@ -194,6 +195,19 @@ struct ProjectedPackage final {
                       authored_id(value.target_ground_blocker_id),
                   };
               }
+          )),
+          actor_bindings(project_records<contracts::SandboxActorGameplayBinding>(
+              runtime.actor_bindings,
+              contracts::sandbox_actor_capacity,
+              [](const auto& value) {
+                  return contracts::SandboxActorGameplayBinding{
+                      authored_id(value.actor_id),
+                      authored_id(value.profile_id),
+                      value.faction,
+                      value.duty,
+                      value.max_health,
+                  };
+              }
           )) {
         definition = {
             authored_id(runtime.package_id),
@@ -219,7 +233,11 @@ struct ProjectedPackage final {
             wave_spawns,
             objectives,
         };
-        gameplay_binding = {interaction_bindings, mechanism_bindings};
+        gameplay_binding = {
+            interaction_bindings,
+            mechanism_bindings,
+            actor_bindings,
+        };
     }
 };
 

@@ -36,6 +36,7 @@ static_assert(sizeof(tgd_sandbox_service_wave_spawn) == 16);
 static_assert(sizeof(tgd_sandbox_service_objective) == 20);
 static_assert(sizeof(tgd_sandbox_service_interaction_binding) == 16);
 static_assert(sizeof(tgd_sandbox_service_mechanism_binding) == 12);
+static_assert(sizeof(tgd_sandbox_service_actor_binding) == 16);
 static_assert(sizeof(tgd_sandbox_service_result_header) == 120);
 static_assert(sizeof(tgd_sandbox_service_result_artifact) == 16);
 static_assert(sizeof(tgd_sandbox_service_diagnostic) == 48);
@@ -260,12 +261,20 @@ struct Builder final {
             mechanism, blocker,
             static_cast<std::uint8_t>(SandboxMechanismActivation::one_shot_activate), {0, 0, 0},
         };
+        const tgd_sandbox_service_actor_binding actor_binding{
+            actor, text("profile.actor"), 50,
+            static_cast<std::uint8_t>(CombatFaction::hostile),
+            static_cast<std::uint8_t>(EncounterTacticalDuty::pressure), {0, 0},
+        };
         expect(tgd_sandbox_compile_request_append_interaction_binding(
                    service, request, &interaction_binding) == 1,
                "interaction binding append failed");
         expect(tgd_sandbox_compile_request_append_mechanism_binding(
                    service, request, &mechanism_binding) == 1,
                "mechanism binding append failed");
+        expect(tgd_sandbox_compile_request_append_actor_binding(
+                   service, request, &actor_binding) == 1,
+               "actor binding append failed");
     }
 
     [[nodiscard]] Result submit(std::uint32_t capacity = TGD_SANDBOX_COMPILER_SERVICE_MAX_RESULT_BYTES) const {
@@ -283,10 +292,10 @@ struct Builder final {
         );
         expect(result.header.complete == 1 && result.header.total_bytes == written,
                "service returned an incomplete result");
-        expect(result.header.abi_major == 1 && result.header.abi_minor == 1 &&
+        expect(result.header.abi_major == 1 && result.header.abi_minor == 2 &&
                    result.header.diagnostics_offset ==
                        TGD_SANDBOX_COMPILER_SERVICE_RESULT_PREFIX_BYTES,
-               "service returned a non-1.1 result prefix");
+               "service returned a non-1.2 result prefix");
         expect(result.artifact.reserved[0] == 0 && result.artifact.reserved[1] == 0,
                "service returned non-zero artifact reserved bytes");
         expect(result.header.diagnostic_count * sizeof(tgd_sandbox_service_diagnostic) +
@@ -316,6 +325,10 @@ void check_publish_and_determinism() {
                           decoded.document->fingerprint().end(),
                           std::begin(published.header.checksum)),
            "published package did not decode to its publication checksum");
+    expect(decoded.document->gameplay_binding().actor_bindings.size() == 1 &&
+               decoded.document->gameplay_binding().actor_bindings.front().profile_id.name ==
+                   "profile.actor",
+           "published package lost the actor gameplay binding");
     const auto generation_one = identity(service);
     expect(generation_one.generation == 1 &&
                std::equal(std::begin(generation_one.checksum), std::end(generation_one.checksum),
@@ -634,7 +647,7 @@ void check_invalid_utf8_diagnostic_output() {
 }  // namespace
 
 extern "C" std::int32_t tgd_sandbox_service_run_contract_probe() {
-    expect(tgd_sandbox_compiler_service_abi_version() == 0x0001'0001U,
+    expect(tgd_sandbox_compiler_service_abi_version() == 0x0001'0002U,
            "compiler service ABI version mismatch");
     check_publish_and_determinism();
     check_diagnostic_fidelity_and_preservation();

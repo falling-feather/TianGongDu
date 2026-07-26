@@ -16,7 +16,7 @@ const webRoot = resolve(buildDirectory, "dist/web");
 const evidenceDirectory = resolve(
   repositoryRoot,
   process.env.TGD_SYSTEM_DEMO_EVIDENCE_DIRECTORY ??
-    "build/evidence/demo-081-system-demo-web"
+    "build/evidence/demo-083-system-demo-web"
 );
 
 const requiredFiles = [
@@ -116,6 +116,26 @@ const hold = async (page, key, milliseconds) => {
   await page.waitForTimeout(120);
 };
 
+const fightToTerminal = async (page) => {
+  await page.keyboard.down("w");
+  try {
+    for (let attempt = 0; attempt < 120; attempt += 1) {
+      await page.keyboard.press(attempt % 3 === 0 ? "k" : "j");
+      await page.waitForTimeout(300);
+      const current = await state(page);
+      assert.equal(
+        current.playerHealth > 0,
+        true,
+        `player died during completion route at attempt ${attempt}`
+      );
+      if (current.terminalCompleted) return current;
+    }
+  } finally {
+    await page.keyboard.up("w");
+  }
+  assert.fail("two-wave terminal objective did not complete within the combat budget");
+};
+
 await ensureArtifacts();
 await mkdir(evidenceDirectory, { recursive: true });
 
@@ -161,12 +181,17 @@ try {
   await page.locator("#canvas").click();
 
   const initial = await state(page);
-  assert.equal(initial.packageByteCount, 2712, "canonical package byte count drifted");
+  assert.equal(initial.packageByteCount, 2960, "canonical package byte count drifted");
   assert.equal(initial.assetCount, 12, "resolved Stable Asset count drifted");
   assert.equal(initial.playerX, 0, "authored player spawn X drifted");
   assert.equal(initial.playerY, -3250, "authored player spawn Y drifted");
   assert.equal(initial.gateOpen, false, "gate must start closed");
   assert.equal(initial.retryCount, 0);
+  assert.equal(initial.playerHealth, 160);
+  assert.equal(initial.activeHostileCount, 0);
+  assert.equal(initial.completedWaveCount, 0);
+  assert.equal(initial.completedObjectiveCount, 0);
+  assert.equal(initial.terminalCompleted, false);
   await page.screenshot({
     path: resolve(evidenceDirectory, "01-initial-closed-gate.png"),
     fullPage: true
@@ -187,12 +212,39 @@ try {
   );
   const opened = await state(page);
   assert.equal(opened.gateOpen, true, "operate did not open the gate");
+  assert.equal(opened.completedObjectiveCount, 1);
+  assert.equal(opened.activeHostileCount, 2);
+  assert.equal(opened.completedWaveCount, 0);
 
-  await hold(page, "w", 520);
-  const crossed = await state(page);
-  assert.ok(crossed.playerY > 1100, `player did not cross opened gate: Y=${crossed.playerY}`);
+  await page.keyboard.press("f");
+  await page.waitForFunction(
+    () => window.__tgdSystemDemo.getState().repeatedTriggerCount === 1,
+    undefined,
+    { timeout: 5_000 }
+  );
+  const repeated = await state(page);
+  assert.equal(repeated.activeHostileCount, 2, "repeat operate duplicated wave spawns");
+  assert.equal(repeated.defeatedHostileCount, 0);
   await page.screenshot({
-    path: resolve(evidenceDirectory, "02-opened-and-crossed.png"),
+    path: resolve(evidenceDirectory, "02-wave-one-active-repeat-safe.png"),
+    fullPage: true
+  });
+
+  await page.waitForFunction(
+    () => window.__tgdSystemDemo.getState().playerHealth === 0,
+    undefined,
+    { timeout: 35_000 }
+  );
+  await page.waitForFunction(
+    () => document.getElementById("telemetry")?.textContent?.includes("hp 0"),
+    undefined,
+    { timeout: 1_000 }
+  );
+  const defeated = await state(page);
+  assert.equal(defeated.terminalCompleted, false);
+  assert.equal(defeated.activeHostileCount > 0, true);
+  await page.screenshot({
+    path: resolve(evidenceDirectory, "03-player-defeated.png"),
     fullPage: true
   });
 
@@ -207,10 +259,50 @@ try {
   assert.equal(retried.playerY, -3000, "retry did not restore authored safe point Y");
   assert.equal(retried.gateOpen, false, "retry did not restore the closed gate");
   assert.equal(retried.retryCount, 1);
+  assert.equal(retried.playerHealth, 160);
+  assert.equal(retried.activeHostileCount, 0);
+  assert.equal(retried.defeatedHostileCount, 0);
+  assert.equal(retried.completedWaveCount, 0);
+  assert.equal(retried.completedObjectiveCount, 0);
+  assert.equal(retried.terminalCompleted, false);
+  assert.equal(retried.repeatedTriggerCount, 0);
   await page.screenshot({
-    path: resolve(evidenceDirectory, "03-retried-closed-gate.png"),
+    path: resolve(evidenceDirectory, "04-death-retry-restored.png"),
     fullPage: true
   });
+
+  await hold(page, "w", 1_050);
+  await page.keyboard.press("f");
+  await page.waitForFunction(
+    () => window.__tgdSystemDemo.getState().activeHostileCount === 2,
+    undefined,
+    { timeout: 5_000 }
+  );
+  const terminal = await fightToTerminal(page);
+  assert.equal(terminal.defeatedHostileCount, 4);
+  assert.equal(terminal.activeHostileCount, 0);
+  assert.equal(terminal.completedWaveCount, 2);
+  assert.equal(terminal.completedObjectiveCount, 2);
+  assert.equal(terminal.terminalCompleted, true);
+  assert.ok(terminal.acceptedAttackCount > 0);
+  assert.ok(terminal.playerY > 1100, `player did not cross opened gate: Y=${terminal.playerY}`);
+  await page.screenshot({
+    path: resolve(evidenceDirectory, "05-two-waves-terminal-complete.png"),
+    fullPage: true
+  });
+
+  await page.keyboard.press("r");
+  await page.waitForFunction(
+    () => window.__tgdSystemDemo.getState().retryCount === 2,
+    undefined,
+    { timeout: 5_000 }
+  );
+  const terminalRetried = await state(page);
+  assert.equal(terminalRetried.gateOpen, false);
+  assert.equal(terminalRetried.playerHealth, 160);
+  assert.equal(terminalRetried.completedWaveCount, 0);
+  assert.equal(terminalRetried.completedObjectiveCount, 0);
+  assert.equal(terminalRetried.terminalCompleted, false);
 
   await page.waitForTimeout(500);
   const shellPageErrors = await page.evaluate(
@@ -222,8 +314,8 @@ try {
   assert.deepEqual(requestErrors, [], "browser request errors were emitted");
 
   routeEvidence = {
-    taskId: "DEMO-081",
-    productVersion: "Demo 0.8.1",
+    taskId: "DEMO-083",
+    productVersion: "Demo 0.8.3",
     commit: execFileSync("git", ["rev-parse", "HEAD"], {
       cwd: repositoryRoot,
       encoding: "utf8"
@@ -237,15 +329,20 @@ try {
     initial,
     blocked,
     opened,
-    crossed,
+    repeated,
+    defeated,
     retried,
+    terminal,
+    terminalRetried,
     consoleErrors,
     pageErrors,
     requestErrors,
     screenshots: [
       "01-initial-closed-gate.png",
-      "02-opened-and-crossed.png",
-      "03-retried-closed-gate.png"
+      "02-wave-one-active-repeat-safe.png",
+      "03-player-defeated.png",
+      "04-death-retry-restored.png",
+      "05-two-waves-terminal-complete.png"
     ]
   };
   await writeFile(
@@ -254,11 +351,17 @@ try {
     "utf8"
   );
   process.stdout.write(
-    `[demo-081] real Web route passed ${JSON.stringify({
+    `[demo-083] real Web route passed ${JSON.stringify({
       browser: routeEvidence.browser,
       blockedMoveCount: blocked.blockedMoveCount,
-      crossedY: crossed.playerY,
-      retryPose: [retried.playerX, retried.playerY],
+      repeatedTriggerCount: repeated.repeatedTriggerCount,
+      terminal: {
+        waves: terminal.completedWaveCount,
+        objectives: terminal.completedObjectiveCount,
+        defeatedHostiles: terminal.defeatedHostileCount,
+        acceptedAttacks: terminal.acceptedAttackCount
+      },
+      deathRetryPose: [retried.playerX, retried.playerY],
       evidenceDirectory
     })}\n`
   );

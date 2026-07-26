@@ -26,7 +26,7 @@ using contracts::SandboxDiagnosticField;
 using contracts::SandboxPackageError;
 using contracts::SandboxPackSectionType;
 
-constexpr std::uint16_t sandbox_known_section_count = 15;
+constexpr std::uint16_t sandbox_known_section_count = 16;
 
 [[nodiscard]] bool byte_less(std::string_view left, std::string_view right) noexcept {
     return std::lexicographical_compare(
@@ -888,6 +888,7 @@ struct SandboxPackageDocument::Storage final {
     std::vector<contracts::SandboxObjectiveDefinition> objectives{};
     std::vector<contracts::SandboxInteractionGameplayBinding> interaction_bindings{};
     std::vector<contracts::SandboxMechanismGameplayBinding> mechanism_bindings{};
+    std::vector<contracts::SandboxActorGameplayBinding> actor_bindings{};
 
     void bind_views() noexcept {
         definition.regions = regions;
@@ -902,6 +903,7 @@ struct SandboxPackageDocument::Storage final {
         definition.objectives = objectives;
         gameplay_binding.interaction_bindings = interaction_bindings;
         gameplay_binding.mechanism_bindings = mechanism_bindings;
+        gameplay_binding.actor_bindings = actor_bindings;
     }
 };
 
@@ -962,7 +964,9 @@ void collect_id(std::vector<std::string_view>& strings, ContentId id) {
         definition.safe_points.size() * 3 + definition.interactions.size() * 3 +
         definition.mechanisms.size() * 3 + definition.waves.size() * 4 +
         definition.wave_spawns.size() * 2 + definition.objectives.size() * 4 +
-        binding.interaction_bindings.size() * 2 + binding.mechanism_bindings.size() * 2
+        binding.interaction_bindings.size() * 2 +
+        binding.mechanism_bindings.size() * 2 +
+        binding.actor_bindings.size() * 2
     );
     collect_id(strings, definition.package_id);
     collect_id(strings, definition.id);
@@ -1010,6 +1014,10 @@ void collect_id(std::vector<std::string_view>& strings, ContentId id) {
     for (const auto& value : binding.mechanism_bindings) {
         collect_id(strings, value.mechanism_id);
         collect_id(strings, value.target_ground_blocker_id);
+    }
+    for (const auto& value : binding.actor_bindings) {
+        collect_id(strings, value.actor_id);
+        collect_id(strings, value.profile_id);
     }
     std::sort(strings.begin(), strings.end(), byte_less);
     strings.erase(std::unique(strings.begin(), strings.end()), strings.end());
@@ -1241,6 +1249,26 @@ template <typename Binding, typename IdGetter>
         append_zeroes(mechanism_binding_section.bytes, 4);
     }
     sections.push_back(std::move(mechanism_binding_section));
+
+    const auto actor_bindings = sorted_bindings(
+        binding.actor_bindings,
+        [](const auto& value) { return value.actor_id; }
+    );
+    EncodedSection actor_binding_section{
+        SandboxPackSectionType::actor_gameplay_bindings,
+        static_cast<std::uint32_t>(actor_bindings.size()),
+        contracts::sandbox_pack_actor_gameplay_binding_record_bytes
+    };
+    for (const auto& value : actor_bindings) {
+        append_id(actor_binding_section.bytes, strings, value.actor_id);
+        append_id(actor_binding_section.bytes, strings, value.profile_id);
+        append_le(actor_binding_section.bytes, static_cast<std::uint8_t>(value.faction));
+        append_le(actor_binding_section.bytes, static_cast<std::uint8_t>(value.duty));
+        append_zeroes(actor_binding_section.bytes, 2);
+        append_le(actor_binding_section.bytes, value.max_health);
+        append_zeroes(actor_binding_section.bytes, 8);
+    }
+    sections.push_back(std::move(actor_binding_section));
     return sections;
 }
 
@@ -1437,7 +1465,7 @@ struct DirectoryEntry final {
 [[nodiscard]] bool known_section(std::uint16_t type) noexcept {
     return type >= static_cast<std::uint16_t>(SandboxPackSectionType::strings) &&
            type <= static_cast<std::uint16_t>(
-                       SandboxPackSectionType::mechanism_gameplay_bindings
+                       SandboxPackSectionType::actor_gameplay_bindings
                    );
 }
 
@@ -1458,6 +1486,7 @@ struct DirectoryEntry final {
         case SandboxPackSectionType::objectives: return contracts::sandbox_pack_objective_record_bytes;
         case SandboxPackSectionType::interaction_gameplay_bindings: return contracts::sandbox_pack_interaction_gameplay_binding_record_bytes;
         case SandboxPackSectionType::mechanism_gameplay_bindings: return contracts::sandbox_pack_mechanism_gameplay_binding_record_bytes;
+        case SandboxPackSectionType::actor_gameplay_bindings: return contracts::sandbox_pack_actor_gameplay_binding_record_bytes;
     }
     return 0;
 }
@@ -1476,6 +1505,7 @@ struct DirectoryEntry final {
         case SandboxPackSectionType::interaction_gameplay_bindings: return contracts::sandbox_interaction_capacity;
         case SandboxPackSectionType::mechanisms:
         case SandboxPackSectionType::mechanism_gameplay_bindings: return contracts::sandbox_mechanism_capacity;
+        case SandboxPackSectionType::actor_gameplay_bindings: return contracts::sandbox_actor_capacity;
         case SandboxPackSectionType::waves: return contracts::sandbox_wave_capacity;
         case SandboxPackSectionType::wave_spawns: return contracts::sandbox_wave_spawn_capacity;
         case SandboxPackSectionType::objectives: return contracts::sandbox_objective_capacity;
@@ -1977,6 +2007,30 @@ DecodeSandboxPackageResult decode_sandbox_package(std::span<const std::uint8_t> 
             if (reader.remaining() != 0 ||
                 !bindings_are_ordered(std::span{storage->mechanism_bindings},
                                       [](const auto& value) { return value.mechanism_id; })) {
+                fail(SandboxPackageError::invalid_section); return result;
+            }
+        }
+        storage->actor_bindings.resize(
+            entry(SandboxPackSectionType::actor_gameplay_bindings)->count
+        );
+        {
+            auto reader = reader_for(SandboxPackSectionType::actor_gameplay_bindings);
+            for (auto& value : storage->actor_bindings) {
+                std::uint8_t faction = 0;
+                std::uint8_t duty = 0;
+                if (!read_id(reader, storage->strings, value.actor_id) ||
+                    !read_id(reader, storage->strings, value.profile_id) ||
+                    !reader.read(faction) || !reader.read(duty) ||
+                    !reader.read_zeroes(2) || !reader.read(value.max_health) ||
+                    !reader.read_zeroes(8)) {
+                    fail(SandboxPackageError::invalid_section); return result;
+                }
+                value.faction = static_cast<contracts::CombatFaction>(faction);
+                value.duty = static_cast<contracts::EncounterTacticalDuty>(duty);
+            }
+            if (reader.remaining() != 0 ||
+                !bindings_are_ordered(std::span{storage->actor_bindings},
+                                      [](const auto& value) { return value.actor_id; })) {
                 fail(SandboxPackageError::invalid_section); return result;
             }
         }

@@ -68,6 +68,7 @@ struct OwnedRequest final {
     std::vector<tgd_sandbox_service_objective> objectives{};
     std::vector<tgd_sandbox_service_interaction_binding> interaction_bindings{};
     std::vector<tgd_sandbox_service_mechanism_binding> mechanism_bindings{};
+    std::vector<tgd_sandbox_service_actor_binding> actor_bindings{};
     std::size_t copied_utf8_bytes{};
 };
 
@@ -198,6 +199,7 @@ struct RuntimeProjection final {
     std::vector<SandboxAuthoringObjective> objectives{};
     std::vector<SandboxAuthoringInteractionBinding> interaction_bindings{};
     std::vector<SandboxAuthoringMechanismBinding> mechanism_bindings{};
+    std::vector<SandboxAuthoringActorBinding> actor_bindings{};
     SandboxAuthoringRuntimeView view{};
 
     explicit RuntimeProjection(const OwnedRequest& request) {
@@ -263,6 +265,15 @@ struct RuntimeProjection final {
                 get_string(request, value.target_ground_blocker_id),
             });
         }
+        for (const auto& value : request.actor_bindings) {
+            actor_bindings.push_back({
+                get_string(request, value.actor_id),
+                get_string(request, value.profile_id),
+                static_cast<CombatFaction>(value.faction),
+                static_cast<EncounterTacticalDuty>(value.duty),
+                value.max_health,
+            });
+        }
         view = {
             get_string(request, metadata.package_id),
             get_string(request, metadata.sandbox_id),
@@ -275,7 +286,8 @@ struct RuntimeProjection final {
                 to_pose(player.pose), player.facing_millidegrees,
             },
             regions, assets, actors, blockers, safe_points, interactions, mechanisms,
-            waves, wave_spawns, objectives, interaction_bindings, mechanism_bindings,
+            waves, wave_spawns, objectives, interaction_bindings,
+            mechanism_bindings, actor_bindings,
         };
     }
 };
@@ -700,6 +712,10 @@ TGD_APPEND_DEFINITION(mechanism_binding, tgd_sandbox_service_mechanism_binding,
     mechanism_bindings, sandbox_mechanism_capacity + 1U,
     valid_ref(owned, value.mechanism_id) &&
     valid_ref(owned, value.target_ground_blocker_id) && all_zero(value.reserved))
+TGD_APPEND_DEFINITION(actor_binding, tgd_sandbox_service_actor_binding,
+    actor_bindings, sandbox_actor_capacity + 1U,
+    valid_ref(owned, value.actor_id) &&
+    valid_ref(owned, value.profile_id) && all_zero(value.reserved))
 
 #undef TGD_APPEND_DEFINITION
 

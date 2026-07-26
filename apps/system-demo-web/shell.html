@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <meta name="theme-color" content="#071218" />
     <link rel="icon" href="data:," />
-    <title>TianGongDu · System Demo 0.8.1</title>
+    <title>TianGongDu · System Demo 0.8.3</title>
     <style>
       :root {
         color-scheme: dark;
@@ -195,7 +195,7 @@
           <h1>TianGongDu System Demo</h1>
         </div>
         <div class="build">
-          Demo 0.8.1 / Web Single<br />
+          Demo 0.8.3 / Two-wave combat<br />
           unique .tgdsbx → C++ runtime → Axmol
         </div>
       </header>
@@ -206,7 +206,7 @@
           width="1280"
           height="720"
           tabindex="0"
-          aria-label="System Demo game canvas. Use WASD to move, F to operate, and R to retry."
+          aria-label="System Demo game canvas. Use WASD to move, F to operate, J or Space for a light attack, K for a heavy attack, and R to retry."
         ></canvas>
         <div class="loading" id="loading" data-ready="false" aria-live="polite">
           <div class="loading-card">
@@ -220,6 +220,8 @@
         <div class="controls" aria-label="Scene controls">
           <button type="button" id="focus-scene">Focus scene</button>
           <button type="button" id="operate">Operate · F</button>
+          <button type="button" id="light-attack">Light · J / Space</button>
+          <button type="button" id="heavy-attack">Heavy · K</button>
           <button type="button" id="retry">Local retry · R</button>
         </div>
         <div id="telemetry">runtime pending</div>
@@ -261,7 +263,22 @@
         retryCount: exported("tgd_system_demo_qa_retry_count"),
         blockedMoveCount: exported("tgd_system_demo_qa_blocked_move_count"),
         packageByteCount: exported("tgd_system_demo_qa_package_byte_count"),
-        assetCount: exported("tgd_system_demo_qa_asset_count")
+        assetCount: exported("tgd_system_demo_qa_asset_count"),
+        playerHealth: exported("tgd_system_demo_qa_player_health"),
+        activeHostileCount: exported("tgd_system_demo_qa_active_hostile_count"),
+        defeatedHostileCount: exported("tgd_system_demo_qa_defeated_hostile_count"),
+        completedWaveCount: exported("tgd_system_demo_qa_completed_wave_count"),
+        completedObjectiveCount: exported(
+          "tgd_system_demo_qa_completed_objective_count"
+        ),
+        terminalCompleted:
+          exported("tgd_system_demo_qa_terminal_completed") !== 0,
+        acceptedAttackCount: exported(
+          "tgd_system_demo_qa_accepted_attack_count"
+        ),
+        repeatedTriggerCount: exported(
+          "tgd_system_demo_qa_repeated_trigger_count"
+        )
       });
 
       const dispatchKey = (code, key) => {
@@ -276,7 +293,8 @@
           telemetryElement.textContent =
             `x ${state.playerX} / y ${state.playerY} / ` +
             `gate ${state.gateOpen ? "open" : "closed"} / ` +
-            `assets ${state.assetCount}`;
+            `hp ${state.playerHealth} / hostiles ${state.activeHostileCount} / ` +
+            `waves ${state.completedWaveCount}/2`;
         } catch {
           telemetryElement.textContent = "runtime pending";
         }
@@ -345,6 +363,12 @@
       document.getElementById("operate").addEventListener("click", () => {
         dispatchKey("KeyF", "f");
       });
+      document.getElementById("light-attack").addEventListener("click", () => {
+        dispatchKey("KeyJ", "j");
+      });
+      document.getElementById("heavy-attack").addEventListener("click", () => {
+        dispatchKey("KeyK", "k");
+      });
       document.getElementById("retry").addEventListener("click", () => {
         dispatchKey("KeyR", "r");
       });
@@ -369,6 +393,8 @@
         getPageErrors: () => [...pageErrors],
         focus: () => canvasElement.focus({ preventScroll: true }),
         pressOperate: () => dispatchKey("KeyF", "f"),
+        pressLightAttack: () => dispatchKey("KeyJ", "j"),
+        pressHeavyAttack: () => dispatchKey("KeyK", "k"),
         pressRetry: () => dispatchKey("KeyR", "r")
       });
 

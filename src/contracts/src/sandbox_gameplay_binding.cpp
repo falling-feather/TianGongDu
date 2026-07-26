@@ -42,6 +42,17 @@ template <typename Definition>
     };
 }
 
+[[nodiscard]] bool valid_actor_duty(EncounterTacticalDuty duty) noexcept {
+    switch (duty) {
+        case EncounterTacticalDuty::pressure:
+        case EncounterTacticalDuty::flanker:
+        case EncounterTacticalDuty::harrier:
+        case EncounterTacticalDuty::controller:
+            return true;
+    }
+    return false;
+}
+
 }  // namespace
 
 SandboxOperateRangeCheck sandbox_check_operate_range(
@@ -101,6 +112,16 @@ SandboxGameplayBindingValidationResult validate_sandbox_gameplay_binding(
             binding.mechanism_bindings.size(),
             Domain::mechanism_binding,
             Field::mechanism_id
+        );
+    }
+    if (binding.actor_bindings.size() > sandbox_actor_capacity) {
+        return failure(
+            Code::too_many_actor_bindings,
+            0,
+            0,
+            binding.actor_bindings.size(),
+            Domain::actor_binding,
+            Field::actor_id
         );
     }
 
@@ -273,6 +294,83 @@ SandboxGameplayBindingValidationResult validate_sandbox_gameplay_binding(
         }
     }
 
+    for (std::size_t index = 0; index < binding.actor_bindings.size(); ++index) {
+        const auto& current = binding.actor_bindings[index];
+        if (!valid_binding_id(current.actor_id)) {
+            return failure(
+                Code::invalid_actor_id,
+                current.actor_id.key,
+                0,
+                index,
+                Domain::actor_binding,
+                Field::actor_id
+            );
+        }
+        if (!contains_id(core.actors, current.actor_id)) {
+            return failure(
+                Code::dangling_actor_id,
+                current.actor_id.key,
+                0,
+                index,
+                Domain::actor_binding,
+                Field::actor_id
+            );
+        }
+        for (std::size_t prior = 0; prior < index; ++prior) {
+            if (binding.actor_bindings[prior].actor_id == current.actor_id) {
+                return failure(
+                    Code::duplicate_actor_binding,
+                    current.actor_id.key,
+                    current.actor_id.key,
+                    index,
+                    Domain::actor_binding,
+                    Field::actor_id
+                );
+            }
+        }
+        if (!valid_binding_id(current.profile_id)) {
+            return failure(
+                Code::invalid_profile_id,
+                current.actor_id.key,
+                current.profile_id.key,
+                index,
+                Domain::actor_binding,
+                Field::profile_id
+            );
+        }
+        if (current.faction != CombatFaction::hostile) {
+            return failure(
+                Code::invalid_actor_faction,
+                current.actor_id.key,
+                0,
+                index,
+                Domain::actor_binding,
+                Field::faction
+            );
+        }
+        if (!valid_actor_duty(current.duty)) {
+            return failure(
+                Code::invalid_actor_duty,
+                current.actor_id.key,
+                0,
+                index,
+                Domain::actor_binding,
+                Field::duty
+            );
+        }
+        if (current.max_health < sandbox_actor_max_health_min ||
+            current.max_health > sandbox_actor_max_health_max) {
+            return failure(
+                Code::invalid_actor_max_health,
+                current.actor_id.key,
+                0,
+                index,
+                Domain::actor_binding,
+                Field::max_health
+            );
+        }
+    }
+
     for (std::size_t index = 0; index < core.interactions.size(); ++index) {
         bool found = false;
         for (const auto& candidate : binding.interaction_bindings) {
@@ -309,6 +407,26 @@ SandboxGameplayBindingValidationResult validate_sandbox_gameplay_binding(
                 index,
                 Domain::core_mechanism,
                 Field::mechanism_id
+            );
+        }
+    }
+
+    for (std::size_t index = 0; index < core.wave_spawns.size(); ++index) {
+        bool found = false;
+        for (const auto& candidate : binding.actor_bindings) {
+            if (candidate.actor_id == core.wave_spawns[index].actor_id) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            return failure(
+                Code::missing_actor_binding,
+                core.wave_spawns[index].actor_id.key,
+                core.wave_spawns[index].wave_id.key,
+                index,
+                Domain::core_actor,
+                Field::actor_id
             );
         }
     }

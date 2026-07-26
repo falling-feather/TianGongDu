@@ -3,6 +3,7 @@
 #include <axmol.h>
 
 #include <tgd/contracts/sandbox_definition.hpp>
+#include <tgd/gameplay/sandbox_encounter_session.hpp>
 #include <tgd/integration/sandbox_runtime_coordinator.hpp>
 #include <tgd/presentation/sandbox_asset_resolver.hpp>
 
@@ -30,8 +31,26 @@ public:
   [[nodiscard]] std::uint32_t qaBlockedMoveCount() const noexcept;
   [[nodiscard]] std::uint32_t qaPackageByteCount() const noexcept;
   [[nodiscard]] std::uint32_t qaAssetCount() const noexcept;
+  [[nodiscard]] std::int32_t qaPlayerHealth() const noexcept;
+  [[nodiscard]] std::uint32_t qaActiveHostileCount() const noexcept;
+  [[nodiscard]] std::uint32_t qaDefeatedHostileCount() const noexcept;
+  [[nodiscard]] std::uint32_t qaCompletedWaveCount() const noexcept;
+  [[nodiscard]] std::uint32_t qaCompletedObjectiveCount() const noexcept;
+  [[nodiscard]] bool qaTerminalCompleted() const noexcept;
+  [[nodiscard]] std::uint32_t qaAcceptedAttackCount() const noexcept;
+  [[nodiscard]] std::uint32_t qaRepeatedTriggerCount() const noexcept;
+  void qaOperate() noexcept;
+  void qaAttackLight() noexcept;
+  void qaAttackHeavy() noexcept;
+  void qaRetry() noexcept;
 
 private:
+  struct ActorPresentation final {
+    tgd::contracts::StableActorKey actor{};
+    ax::Sprite *sprite{};
+    ax::Label *status{};
+  };
+
   enum class Direction : std::size_t {
     left = 0,
     right = 1,
@@ -46,7 +65,9 @@ private:
   void createHud();
   void createKeyboardInput();
   void applyMovementStep() noexcept;
+  void advanceEncounterStep() noexcept;
   void submitOperate() noexcept;
+  void submitAttack(tgd::gameplay::SandboxEncounterAttack attack) noexcept;
   void retryLocal() noexcept;
   void refreshPresentation() noexcept;
   void setDirection(ax::EventKeyboard::KeyCode key, bool down) noexcept;
@@ -61,9 +82,15 @@ private:
   sceneAssetExtent(tgd::contracts::SandboxAssetKind kind) const noexcept;
   [[nodiscard]] bool playerInOperateRange() const noexcept;
   [[nodiscard]] bool currentGateOpen() const noexcept;
+  [[nodiscard]] std::string activeWaveName() const;
 
   tgd::integration::SandboxRuntimeCoordinator coordinator_{};
+  tgd::gameplay::SandboxEncounterSession encounter_{};
   tgd::presentation::SandboxAssetResolver asset_resolver_{};
+  std::array<ActorPresentation,
+             tgd::gameplay::SandboxEncounterSession::hostile_capacity>
+      actor_presentations_{};
+  std::size_t actor_presentation_count_{};
   std::array<bool, 4> directions_{};
   float fixed_step_accumulator_{};
   std::uint32_t retry_count_{};
@@ -74,6 +101,7 @@ private:
   bool gate_open_{};
 
   tgd::contracts::StableContentKey interaction_key_{};
+  tgd::contracts::StableContentKey target_mechanism_key_{};
   tgd::contracts::GroundPoseMm interaction_pose_{};
   std::int32_t interaction_range_mm_{};
   std::size_t gate_blocker_index_{};
@@ -83,6 +111,8 @@ private:
   ax::Sprite *gate_node_{};
   ax::Label *gate_status_label_{};
   ax::Label *player_status_label_{};
+  ax::Label *wave_status_label_{};
+  ax::Label *objective_status_label_{};
   ax::Label *prompt_label_{};
   ax::Label *message_label_{};
   std::string message_{"BOOTING UNIQUE SYSTEM DEMO PACKAGE"};

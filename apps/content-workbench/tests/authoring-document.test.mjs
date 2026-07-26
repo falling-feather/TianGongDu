@@ -30,7 +30,7 @@ function expectFormatFailure(mutator) {
   );
 }
 
-test("strict 1.1.0 document round-trips as an owning frozen value", () => {
+test("strict 1.2.0 document round-trips as an owning frozen value", () => {
   const source = fixture();
   const normalized = normalizeSandboxAuthoringDocument(source);
   const originalX = normalized.runtime.player.pose.x;
@@ -127,7 +127,7 @@ test("editor-only changes never leak into the runtime projection", () => {
   );
 });
 
-test("migration is identity-only for 1.1.0", () => {
+test("migration is identity-only for 1.2.0", () => {
   assert.deepEqual(
     migrateSandboxAuthoringDocument(fixture()),
     normalizeSandboxAuthoringDocument(fixture())
@@ -152,6 +152,7 @@ test("unique system Demo author source has exact globally distinct Stable IDs", 
   assert.equal(source.runtime.objectives.length, 2);
   assert.equal(source.runtime.interactionBindings.length, 1);
   assert.equal(source.runtime.mechanismBindings.length, 1);
+  assert.equal(source.runtime.actorBindings.length, 4);
   assert.equal(source.editor.items.length, 13);
 
   const recordIds = [
@@ -206,6 +207,42 @@ test("unique system Demo source preserves the frozen typed chain and neutral wav
       [
         "actor.system_demo.followup.slot_b",
         "asset.system_demo.enemy.elite"
+      ]
+    ]
+  );
+  assert.deepEqual(
+    runtime.actorBindings.map(
+      ({ actorId, profileId, faction, duty, maxHealth }) =>
+        [actorId, profileId, faction, duty, maxHealth]
+    ),
+    [
+      [
+        "actor.system_demo.entry.slot_a",
+        "jn_enemy_leaking_umbrella_doll",
+        "hostile",
+        "pressure",
+        54
+      ],
+      [
+        "actor.system_demo.entry.slot_b",
+        "jn_enemy_towline_water_hand",
+        "hostile",
+        "flanker",
+        42
+      ],
+      [
+        "actor.system_demo.followup.slot_a",
+        "jn_enemy_leaking_umbrella_doll",
+        "hostile",
+        "pressure",
+        62
+      ],
+      [
+        "actor.system_demo.followup.slot_b",
+        "jn_enemy_towline_water_hand",
+        "hostile",
+        "flanker",
+        78
       ]
     ]
   );
@@ -380,6 +417,15 @@ test("unknown enums, unsafe integers, and capacities fail closed", () => {
     source.runtime.waveSpawns[0].delayTicks = -1;
   });
   expectFormatFailure((source) => {
+    source.runtime.actorBindings[0].faction = "friendly";
+  });
+  expectFormatFailure((source) => {
+    source.runtime.actorBindings[0].duty = "boss";
+  });
+  expectFormatFailure((source) => {
+    source.runtime.actorBindings[0].maxHealth = 0;
+  });
+  expectFormatFailure((source) => {
     const actor = source.runtime.actors[0];
     source.runtime.actors = Array.from({ length: 16 }, (_, index) => ({
       ...actor,
@@ -457,6 +503,13 @@ test("binding ranges and typed target shapes fail closed", () => {
   });
   expectFormatFailure((source) => {
     source.runtime.safePointBindings = [];
+  });
+  expectFormatFailure((source) => {
+    source.runtime.actorBindings[0].profileId = null;
+  });
+  expectFormatFailure((source) => {
+    source.runtime.actorBindings[0].assetId =
+      "asset.system_demo.enemy.pressure";
   });
 });
 

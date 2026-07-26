@@ -115,6 +115,10 @@ struct Fixture final {
         {"sandbox.adapter.mechanism.two", SandboxMechanismActivation::one_shot_activate,
          "sandbox.adapter.blocker.two"},
     }};
+    std::array<SandboxAuthoringActorBinding, 1> actor_bindings{{
+        {"sandbox.adapter.actor", "profile.actor", CombatFaction::hostile,
+         EncounterTacticalDuty::pressure, 50},
+    }};
     SandboxAuthoringRuntimeView runtime{};
 
     Fixture() { rebind(); }
@@ -139,6 +143,7 @@ struct Fixture final {
             objectives,
             interaction_bindings,
             mechanism_bindings,
+            actor_bindings,
         };
     }
 

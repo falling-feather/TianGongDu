@@ -1,5 +1,5 @@
 export const SANDBOX_AUTHORING_FORMAT = "tgd.sandbox.authoring";
-export const SANDBOX_AUTHORING_VERSION = "1.1.0";
+export const SANDBOX_AUTHORING_VERSION = "1.2.0";
 
 export const SANDBOX_AUTHORING_CAPACITIES = Object.freeze({
   regions: 16,
@@ -14,6 +14,7 @@ export const SANDBOX_AUTHORING_CAPACITIES = Object.freeze({
   objectives: 64,
   interactionBindings: 64,
   mechanismBindings: 16,
+  actorBindings: 15,
   editorItems: 512
 });
 
@@ -48,6 +49,13 @@ const COMPLETION_KINDS = new Set([
   "interaction_completed",
   "mechanism_activated",
   "wave_completed"
+]);
+const ACTOR_FACTIONS = new Set(["hostile"]);
+const ACTOR_DUTIES = new Set([
+  "pressure",
+  "flanker",
+  "harrier",
+  "controller"
 ]);
 
 const textEncoder = new TextEncoder();
@@ -168,6 +176,13 @@ function compareInteractionBindings(left, right) {
 function compareMechanismBindings(left, right) {
   return (
     compareStrings(left.mechanismId, right.mechanismId) ||
+    compareStableTie(left, right)
+  );
+}
+
+function compareActorBindings(left, right) {
+  return (
+    compareStrings(left.actorId, right.actorId) ||
     compareStableTie(left, right)
   );
 }
@@ -486,6 +501,23 @@ function normalizeMechanismBinding(value, path) {
   };
 }
 
+function normalizeActorBinding(value, path) {
+  const source = expectExactObject(value, path, [
+    "actorId",
+    "profileId",
+    "faction",
+    "duty",
+    "maxHealth"
+  ]);
+  return {
+    actorId: expectId(source.actorId, path + ".actorId"),
+    profileId: expectId(source.profileId, path + ".profileId"),
+    faction: expectEnum(source.faction, path + ".faction", ACTOR_FACTIONS),
+    duty: expectEnum(source.duty, path + ".duty", ACTOR_DUTIES),
+    maxHealth: expectInteger(source.maxHealth, path + ".maxHealth", 1, 100000)
+  };
+}
+
 function normalizeEditorItem(value, path) {
   const source = expectExactObject(value, path, [
     "id",
@@ -531,7 +563,8 @@ function normalizeRuntime(value, path) {
     "waveSpawns",
     "objectives",
     "interactionBindings",
-    "mechanismBindings"
+    "mechanismBindings",
+    "actorBindings"
   ]);
   return {
     packageId: expectId(source.packageId, path + ".packageId"),
@@ -625,6 +658,13 @@ function normalizeRuntime(value, path) {
       SANDBOX_AUTHORING_CAPACITIES.mechanismBindings,
       normalizeMechanismBinding,
       compareMechanismBindings
+    ),
+    actorBindings: normalizeArray(
+      source.actorBindings,
+      path + ".actorBindings",
+      SANDBOX_AUTHORING_CAPACITIES.actorBindings,
+      normalizeActorBinding,
+      compareActorBindings
     )
   };
 }

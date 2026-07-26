@@ -24,13 +24,21 @@
 
 namespace {
 
-std::atomic<bool> fail_next_allocation{};
+std::atomic<unsigned> allocation_failure_countdown{};
 
 } // namespace
 
 void *operator new(std::size_t size) {
-  if (fail_next_allocation.exchange(false)) {
-    throw std::bad_alloc{};
+  auto countdown =
+      allocation_failure_countdown.load(std::memory_order_relaxed);
+  while (countdown != 0U) {
+    if (allocation_failure_countdown.compare_exchange_weak(
+            countdown, countdown - 1U, std::memory_order_relaxed)) {
+      if (countdown == 1U) {
+        throw std::bad_alloc{};
+      }
+      break;
+    }
   }
   if (void *memory = std::malloc(size)) {
     return memory;
@@ -644,11 +652,13 @@ void check_registry_and_lookup_failures() {
 
   const auto *live = resolver.live_set();
   const auto identity = resolver.identity();
-  fail_next_allocation = true;
+  // Permit call-site bookkeeping, then fail an allocation after prepare enters
+  // its guarded construction path on MSVC Debug as well as release toolchains.
+  allocation_failure_countdown = 2U;
   auto allocation =
       resolver.prepare(registry, requirements, SandboxAssetQuality::standard,
                        source_identity(3, 3));
-  fail_next_allocation = false;
+  allocation_failure_countdown = 0U;
   expect(allocation.error == SandboxAssetResolveError::allocation_failed &&
              !allocation.prepared,
          "allocation failure did not fail closed");

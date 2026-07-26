@@ -63,6 +63,11 @@ static_assert(sandbox_pack_magic[0] == 'T');
 static_assert(sandbox_pack_magic[5] == 'X');
 static_assert(sandbox_pack_magic[6] == 0);
 static_assert(sandbox_pack_byte_order == SandboxPackByteOrder::little_endian);
+static_assert(sandbox_pack_format_major == 1);
+static_assert(sandbox_pack_format_minor == 2);
+static_assert(sandbox_authoring_schema_major == 1);
+static_assert(sandbox_authoring_schema_minor == 2);
+static_assert(sandbox_authoring_schema_patch == 0);
 static_assert(sandbox_pack_header_bytes == 96);
 static_assert(sandbox_pack_directory_entry_bytes == 24);
 static_assert(sandbox_pack_alignment_bytes == 8);
@@ -108,6 +113,19 @@ static_assert(static_cast<std::uint16_t>(SandboxPackSectionType::mechanisms) == 
 static_assert(static_cast<std::uint16_t>(SandboxPackSectionType::waves) == 11);
 static_assert(static_cast<std::uint16_t>(SandboxPackSectionType::wave_spawns) == 12);
 static_assert(static_cast<std::uint16_t>(SandboxPackSectionType::objectives) == 13);
+static_assert(
+    static_cast<std::uint16_t>(
+        SandboxPackSectionType::interaction_gameplay_bindings
+    ) == 14
+);
+static_assert(
+    static_cast<std::uint16_t>(
+        SandboxPackSectionType::mechanism_gameplay_bindings
+    ) == 15
+);
+static_assert(
+    static_cast<std::uint16_t>(SandboxPackSectionType::actor_gameplay_bindings) == 16
+);
 
 static_assert(sandbox_pack_metadata_record_bytes == 64);
 static_assert(sandbox_pack_region_record_bytes == 48);
@@ -121,6 +139,9 @@ static_assert(sandbox_pack_mechanism_record_bytes == 64);
 static_assert(sandbox_pack_wave_record_bytes == 64);
 static_assert(sandbox_pack_wave_spawn_record_bytes == 32);
 static_assert(sandbox_pack_objective_record_bytes == 64);
+static_assert(sandbox_pack_interaction_gameplay_binding_record_bytes == 32);
+static_assert(sandbox_pack_mechanism_gameplay_binding_record_bytes == 32);
+static_assert(sandbox_pack_actor_gameplay_binding_record_bytes == 40);
 static_assert(static_cast<std::uint16_t>(SandboxDiagnosticCode::duplicate_id) == 1);
 static_assert(static_cast<std::uint16_t>(SandboxDiagnosticCode::retry_inconsistent) == 25);
 static_assert(static_cast<std::uint16_t>(SandboxDiagnosticCode::web_budget_exceeded) == 32);

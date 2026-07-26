@@ -1,0 +1,138 @@
+{
+  "taskId": "DEMO-082",
+  "productVersion": "Demo 0.8.2",
+  "commit": "b7867c10336685af060dce9bbce7f98010baa8c9",
+  "browser": {
+    "requested": "edge",
+    "used": "edge",
+    "version": "150.0.4078.99"
+  },
+  "route": {
+    "url": "http://127.0.0.1:62841/",
+    "craftPanels": [
+      {
+        "kind": "craftMaterials",
+        "id": "material.jiangnan.umbrella.flexible_bark_paper_patch"
+      },
+      {
+        "kind": "craftWorkstations",
+        "id": "workstation.jiangnan.umbrella_tuning"
+      },
+      {
+        "kind": "craftProcesses",
+        "id": "craft_process.jiangnan.umbrella_canopy_tuning"
+      },
+      {
+        "kind": "craftSteps",
+        "id": "craft_step.jiangnan.umbrella.rain_trial"
+      }
+    ],
+    "createdActor": "actor.system_demo.entry.demo082",
+    "createdInteraction": "interaction.system_demo.console.demo082",
+    "removedInteraction": "interaction.system_demo.console",
+    "savedRevision": 4
+  },
+  "canvasMoves": {
+    "first": [
+      -650,
+      -550
+    ],
+    "reload": [
+      -550,
+      -450
+    ]
+  },
+  "launch": {
+    "publication": {
+      "token": "mBr7DaohemX101Al4QLHCQtvh34q2Ndv",
+      "generation": 1,
+      "revision": 4,
+      "packageSha256": "sha256:648bf6b2a61f11044b9036d51d55286c10de7f6a4298bfb862d2a878ed516b53",
+      "packageBytes": 4304,
+      "url": "/preview/tiangongdu-system-demo.html?workbenchPreview=mBr7DaohemX101Al4QLHCQtvh34q2Ndv&generation=1"
+    },
+    "runtime": {
+      "ready": true,
+      "playerX": 0,
+      "playerY": -3250,
+      "gateOpen": false,
+      "retryCount": 0,
+      "blockedMoveCount": 0,
+      "packageByteCount": 4304,
+      "assetCount": 12,
+      "playerHealth": 160,
+      "activeHostileCount": 0,
+      "defeatedHostileCount": 0,
+      "completedWaveCount": 0,
+      "completedObjectiveCount": 0,
+      "terminalCompleted": false,
+      "acceptedAttackCount": 0,
+      "repeatedTriggerCount": 0,
+      "craftMode": false,
+      "craftInRange": false,
+      "craftStage": 1,
+      "craftSelectedMaterial": 0,
+      "craftCompletedOperations": 0,
+      "craftTrialCount": 0,
+      "craftMistakeCount": 0,
+      "craftReworkCount": 0,
+      "craftCompleted": false
+    }
+  },
+  "reload": {
+    "publication": {
+      "token": "LPPpdIJn8ZgNZTSXI3plxW41UeF6YyyX",
+      "generation": 2,
+      "revision": 5,
+      "packageSha256": "sha256:e8bd11ab47da5647f082d26074b38683fa239c0860d9ec3fad67090b9e34c992",
+      "packageBytes": 4304,
+      "url": "/preview/tiangongdu-system-demo.html?workbenchPreview=LPPpdIJn8ZgNZTSXI3plxW41UeF6YyyX&generation=2"
+    },
+    "runtime": {
+      "ready": true,
+      "playerX": 0,
+      "playerY": -3250,
+      "gateOpen": false,
+      "retryCount": 0,
+      "blockedMoveCount": 0,
+      "packageByteCount": 4304,
+      "assetCount": 12,
+      "playerHealth": 160,
+      "activeHostileCount": 0,
+      "defeatedHostileCount": 0,
+      "completedWaveCount": 0,
+      "completedObjectiveCount": 0,
+      "terminalCompleted": false,
+      "acceptedAttackCount": 0,
+      "repeatedTriggerCount": 0,
+      "craftMode": false,
+      "craftInRange": false,
+      "craftStage": 1,
+      "craftSelectedMaterial": 0,
+      "craftCompletedOperations": 0,
+      "craftTrialCount": 0,
+      "craftMistakeCount": 0,
+      "craftReworkCount": 0,
+      "craftCompleted": false
+    },
+    "oldFrameStayedVisibleUntilReady": true
+  },
+  "invalidDraft": {
+    "revision": 6,
+    "rejectedInteraction": "interaction.system_demo.console.demo082.invalid",
+    "diagnosticCount": 1,
+    "keptPublicationGeneration": 2,
+    "keptLiveFrame": true
+  },
+  "consoleErrors": [],
+  "pageErrors": [],
+  "requestErrors": [],
+  "screenshots": [
+    "00-craft-update-only-panels.png",
+    "01-crud-diagnostic.png",
+    "02-launch-live.png",
+    "03-reload-keeps-live.png",
+    "04-reloaded-live.png",
+    "05-invalid-keeps-live.png"
+  ]
+}

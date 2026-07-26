@@ -467,3 +467,25 @@ movement、operate 与 standalone retry 都先构造完整私有 mutable candida
 `restart()` 从当前 authored safe-point pose 重建 Combat、Director、Wave、Spawn、Objective、机关触发记录和输入计数；Web Host 的 `R` 同时调用既有 thin runtime retry 与 encounter restart，因此当前页面可从玩家倒地或 terminal 返回关闭门、零波次、零目标和满生命初态。该操作仍是 **单 Host 内的局部整组重建**：没有离开/返回持久化、跨 package version 迁移、工艺/工坊状态、Profile 或 provider+Session+Collision+Assets 的通用 prepare/commit 协调；这些继续由 `DEMO-088` 收口。
 
 `tests/native/sandbox_encounter_session.cpp` 覆盖两次固定输入 checksum、两波四 Actor 完成、重复触发幂等、玩家倒地、局部重建，以及刷怪准备失败时触发前状态完全保持。`tests/browser/system-demo-web-host.mjs` 再从真实 Edge 覆盖关门阻挡、开门首波、重复操作、自然倒地、死亡重试、两波 terminal 和 terminal 后重试。当前状态是 **Demo 0.8.3 Implemented Internal Web Combat Loop / Not combat-feel candidate**：正式 Action 映射、防守/闪避/架势/技能、精英差异、8–12 分钟真人节奏、Windows 与三浏览器放行仍为 Open。
+
+## 40. Sandbox 工艺会话
+
+`CraftDefinition` 是 Demo 0.8.4 发布的通用、不可变、non-owning Definition view。它只表达材料、场景工位、工艺、材料选择结果和工序，不含“江南”“纸伞”或具体关卡 ID 分支。工位引用 package-core 的 region/asset/GroundPose；工艺引用 need、output、trial step；每项材料选择只把该材料映射为 `passes_trial` 或 `requires_rework`；步骤种类只有 `operation / trial / rework`。唯一 package validator 负责 ID、容量、引用、线性有序操作、唯一 trial/rework 和可恢复路径，Gameplay 不复制 wire 或作者诊断。
+
+`CraftSession` 是固定容量、确定性的 Gameplay Owner。初始化时借用在 Host aggregate 生命周期内稳定的 `CraftDefinition`，选择一个稳定 process key，并把该工艺的有序 operation key 复制到本地固定数组。有效工艺至少含两项线性 operation、恰一 trial、恰一以 trial 为 predecessor 的 rework，以及至少两种材料选择且同时覆盖直接通过和需返工结果；失败初始化不建立可运行状态。Session 不保存作者显示文案、DOM 节点、资产名、平台时间或随机数。
+
+权威阶段固定为：
+
+```text
+awaiting_material
+→ performing_operations
+→ trial_ready
+→ completed
+                ↘ rework_required → trial_ready → completed
+```
+
+`select_material` 只能在等待选材时执行；`perform_operation` 只能提交当前 expected step。未知材料、错误阶段和错序分别返回结构化 disposition，且 snapshot/checksum 完全不漂移。`run_trial` 只在操作全部完成时执行：直接通过材料完成会话；需返工材料的第一次试用增加 `trial_count + mistake_count` 并进入 `rework_required`。`perform_rework` 只在该阶段增加 `rework_count` 并返回 `trial_ready`，下一次试用才完成。`restart()` 从同一 Definition 重建等待选材初态，不保留材料、步骤、试用、失误或返工计数。
+
+`CraftSessionSnapshot` 是 Host/QA 的只读边界，包含 process/need/material/expected step/output、阶段、操作进度、trial/mistake/rework 计数、完成标志和逐字段小端稳定 checksum。当前 Host 只在玩家进入作者化工位范围后把键盘操作映射到上述命令；Axmol/JavaScript 负责输入和表现，不计算结果。Web 的 `R` 依次重建 craft、thin runtime 和 encounter，因此当前页面能恢复三者初态，但仍只是单 Host 局部整组重建，不是跨 package generation、Profile、离开返回和双端的通用事务。
+
+`tests/native/craft_session.cpp` 覆盖两种材料、正确顺序、错序零漂移、首次试用失败、返工复试、错误阶段、未知目标、restart 与双 Session checksum 一致；真实 Edge 路线再覆盖工位距离、玩家可读步骤和既有战斗回归。当前状态是 **Demo 0.8.4 Implemented Internal Web Craft Loop / Not workshop economy**：库存、工位占用、订单、成本、品质结算、交付、成品世界后果、持久化、非实现者试玩、Windows 和三浏览器仍由后续版本关闭。

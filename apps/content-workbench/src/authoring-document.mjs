@@ -1,5 +1,5 @@
 export const SANDBOX_AUTHORING_FORMAT = "tgd.sandbox.authoring";
-export const SANDBOX_AUTHORING_VERSION = "1.2.0";
+export const SANDBOX_AUTHORING_VERSION = "1.3.0";
 
 export const SANDBOX_AUTHORING_CAPACITIES = Object.freeze({
   regions: 16,
@@ -15,6 +15,11 @@ export const SANDBOX_AUTHORING_CAPACITIES = Object.freeze({
   interactionBindings: 64,
   mechanismBindings: 16,
   actorBindings: 15,
+  craftMaterials: 16,
+  craftWorkstations: 8,
+  craftProcesses: 8,
+  craftMaterialChoices: 32,
+  craftSteps: 32,
   editorItems: 512
 });
 
@@ -57,6 +62,11 @@ const ACTOR_DUTIES = new Set([
   "harrier",
   "controller"
 ]);
+const CRAFT_MATERIAL_OUTCOMES = new Set([
+  "passes_trial",
+  "requires_rework"
+]);
+const CRAFT_STEP_KINDS = new Set(["operation", "trial", "rework"]);
 
 const textEncoder = new TextEncoder();
 
@@ -183,6 +193,14 @@ function compareMechanismBindings(left, right) {
 function compareActorBindings(left, right) {
   return (
     compareStrings(left.actorId, right.actorId) ||
+    compareStableTie(left, right)
+  );
+}
+
+function compareCraftMaterialChoices(left, right) {
+  return (
+    compareStrings(left.processId, right.processId) ||
+    compareStrings(left.materialId, right.materialId) ||
     compareStableTie(left, right)
   );
 }
@@ -518,6 +536,69 @@ function normalizeActorBinding(value, path) {
   };
 }
 
+function normalizeCraftMaterial(value, path) {
+  const source = expectExactObject(value, path, ["id"]);
+  return { id: expectId(source.id, path + ".id") };
+}
+
+function normalizeCraftWorkstation(value, path) {
+  return normalizePlacement(value, path);
+}
+
+function normalizeCraftProcess(value, path) {
+  const source = expectExactObject(value, path, [
+    "id",
+    "workstationId",
+    "needId",
+    "outputItemId",
+    "trialStepId"
+  ]);
+  return {
+    id: expectId(source.id, path + ".id"),
+    workstationId: expectId(source.workstationId, path + ".workstationId"),
+    needId: expectId(source.needId, path + ".needId"),
+    outputItemId: expectId(source.outputItemId, path + ".outputItemId"),
+    trialStepId: expectId(source.trialStepId, path + ".trialStepId")
+  };
+}
+
+function normalizeCraftMaterialChoice(value, path) {
+  const source = expectExactObject(value, path, [
+    "processId",
+    "materialId",
+    "outcome"
+  ]);
+  return {
+    processId: expectId(source.processId, path + ".processId"),
+    materialId: expectId(source.materialId, path + ".materialId"),
+    outcome: expectEnum(
+      source.outcome,
+      path + ".outcome",
+      CRAFT_MATERIAL_OUTCOMES
+    )
+  };
+}
+
+function normalizeCraftStep(value, path) {
+  const source = expectExactObject(value, path, [
+    "id",
+    "processId",
+    "predecessorStepId",
+    "actionId",
+    "kind"
+  ]);
+  return {
+    id: expectId(source.id, path + ".id"),
+    processId: expectId(source.processId, path + ".processId"),
+    predecessorStepId: expectId(
+      source.predecessorStepId,
+      path + ".predecessorStepId"
+    ),
+    actionId: expectId(source.actionId, path + ".actionId"),
+    kind: expectEnum(source.kind, path + ".kind", CRAFT_STEP_KINDS)
+  };
+}
+
 function normalizeEditorItem(value, path) {
   const source = expectExactObject(value, path, [
     "id",
@@ -564,7 +645,12 @@ function normalizeRuntime(value, path) {
     "objectives",
     "interactionBindings",
     "mechanismBindings",
-    "actorBindings"
+    "actorBindings",
+    "craftMaterials",
+    "craftWorkstations",
+    "craftProcesses",
+    "craftMaterialChoices",
+    "craftSteps"
   ]);
   return {
     packageId: expectId(source.packageId, path + ".packageId"),
@@ -665,6 +751,41 @@ function normalizeRuntime(value, path) {
       SANDBOX_AUTHORING_CAPACITIES.actorBindings,
       normalizeActorBinding,
       compareActorBindings
+    ),
+    craftMaterials: normalizeArray(
+      source.craftMaterials,
+      path + ".craftMaterials",
+      SANDBOX_AUTHORING_CAPACITIES.craftMaterials,
+      normalizeCraftMaterial,
+      compareById
+    ),
+    craftWorkstations: normalizeArray(
+      source.craftWorkstations,
+      path + ".craftWorkstations",
+      SANDBOX_AUTHORING_CAPACITIES.craftWorkstations,
+      normalizeCraftWorkstation,
+      compareById
+    ),
+    craftProcesses: normalizeArray(
+      source.craftProcesses,
+      path + ".craftProcesses",
+      SANDBOX_AUTHORING_CAPACITIES.craftProcesses,
+      normalizeCraftProcess,
+      compareById
+    ),
+    craftMaterialChoices: normalizeArray(
+      source.craftMaterialChoices,
+      path + ".craftMaterialChoices",
+      SANDBOX_AUTHORING_CAPACITIES.craftMaterialChoices,
+      normalizeCraftMaterialChoice,
+      compareCraftMaterialChoices
+    ),
+    craftSteps: normalizeArray(
+      source.craftSteps,
+      path + ".craftSteps",
+      SANDBOX_AUTHORING_CAPACITIES.craftSteps,
+      normalizeCraftStep,
+      compareById
     )
   };
 }

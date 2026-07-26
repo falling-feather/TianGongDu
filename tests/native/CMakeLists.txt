@@ -169,6 +169,21 @@ add_test(
   COMMAND tgd_native_sandbox_encounter_session
 )
 
+add_executable(tgd_native_craft_session craft_session.cpp)
+target_compile_features(tgd_native_craft_session PRIVATE cxx_std_20)
+tgd_enable_strict_warnings(tgd_native_craft_session)
+target_link_libraries(
+  tgd_native_craft_session
+  PRIVATE
+    tgd_contracts
+    tgd_gameplay
+)
+
+add_test(
+  NAME tgd.native.craft-session
+  COMMAND tgd_native_craft_session
+)
+
 add_executable(tgd_native_sandbox_session_adapter sandbox_session_adapter.cpp)
 target_compile_features(tgd_native_sandbox_session_adapter PRIVATE cxx_std_20)
 tgd_enable_strict_warnings(tgd_native_sandbox_session_adapter)

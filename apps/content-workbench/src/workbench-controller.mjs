@@ -28,7 +28,24 @@ const OBJECT_DEFINITIONS = Object.freeze({
     assetKind: "mechanism"
   }),
   waves: Object.freeze({ collection: "waves", editableOnly: true }),
-  objectives: Object.freeze({ collection: "objectives", editableOnly: true })
+  objectives: Object.freeze({ collection: "objectives", editableOnly: true }),
+  craftMaterials: Object.freeze({
+    collection: "craftMaterials",
+    editableOnly: true
+  }),
+  craftWorkstations: Object.freeze({
+    collection: "craftWorkstations",
+    assetKind: "interaction",
+    editableOnly: true
+  }),
+  craftProcesses: Object.freeze({
+    collection: "craftProcesses",
+    editableOnly: true
+  }),
+  craftSteps: Object.freeze({
+    collection: "craftSteps",
+    editableOnly: true
+  })
 });
 const OBJECT_KINDS = new Set(Object.keys(OBJECT_DEFINITIONS));
 const EMPTY_DIAGNOSTICS = Object.freeze([]);
@@ -303,6 +320,82 @@ function updateCandidate(document, kind, id, values) {
     return candidate;
   }
 
+  if (kind === "craftMaterials") {
+    expectExactObject(values, ["editorLabel"], "craft material values");
+    updateEditorLabel(candidate, id, values.editorLabel);
+    return candidate;
+  }
+
+  if (kind === "craftProcesses") {
+    expectExactObject(
+      values,
+      [
+        "workstationId",
+        "needId",
+        "outputItemId",
+        "trialStepId",
+        "materialChoices",
+        ...(hasEditorLabel ? ["editorLabel"] : [])
+      ],
+      "craft process values"
+    );
+    if (!Array.isArray(values.materialChoices)) {
+      fail("invalid_request", "craft material choices must be an array");
+    }
+    const choices = values.materialChoices.map((choice) => {
+      expectExactObject(
+        choice,
+        ["materialId", "outcome"],
+        "craft material choice"
+      );
+      return {
+        processId: id,
+        materialId: choice.materialId,
+        outcome: choice.outcome
+      };
+    });
+    collection[match.index] = {
+      id,
+      workstationId: values.workstationId,
+      needId: values.needId,
+      outputItemId: values.outputItemId,
+      trialStepId: values.trialStepId
+    };
+    candidate.runtime.craftMaterialChoices =
+      candidate.runtime.craftMaterialChoices
+        .filter((choice) => choice.processId !== id)
+        .concat(choices);
+    if (hasEditorLabel) {
+      updateEditorLabel(candidate, id, values.editorLabel);
+    }
+    return candidate;
+  }
+
+  if (kind === "craftSteps") {
+    expectExactObject(
+      values,
+      [
+        "processId",
+        "predecessorStepId",
+        "actionId",
+        "kind",
+        ...(hasEditorLabel ? ["editorLabel"] : [])
+      ],
+      "craft step values"
+    );
+    collection[match.index] = {
+      id,
+      processId: values.processId,
+      predecessorStepId: values.predecessorStepId,
+      actionId: values.actionId,
+      kind: values.kind
+    };
+    if (hasEditorLabel) {
+      updateEditorLabel(candidate, id, values.editorLabel);
+    }
+    return candidate;
+  }
+
   if (kind === "groundBlockers") {
     expectExactObject(
       values,
@@ -436,7 +529,11 @@ function allStableIds(document) {
     ...runtime.interactions.map(({ id }) => id),
     ...runtime.mechanisms.map(({ id }) => id),
     ...runtime.waves.map(({ id }) => id),
-    ...runtime.objectives.map(({ id }) => id)
+    ...runtime.objectives.map(({ id }) => id),
+    ...runtime.craftMaterials.map(({ id }) => id),
+    ...runtime.craftWorkstations.map(({ id }) => id),
+    ...runtime.craftProcesses.map(({ id }) => id),
+    ...runtime.craftSteps.map(({ id }) => id)
   ]);
 }
 

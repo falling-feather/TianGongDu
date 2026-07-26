@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 #define TGD_SANDBOX_COMPILER_SERVICE_ABI_MAJOR UINT16_C(1)
-#define TGD_SANDBOX_COMPILER_SERVICE_ABI_MINOR UINT16_C(2)
+#define TGD_SANDBOX_COMPILER_SERVICE_ABI_MINOR UINT16_C(3)
 #define TGD_SANDBOX_COMPILER_SERVICE_MAX_SERVICES UINT32_C(8)
 #define TGD_SANDBOX_COMPILER_SERVICE_MAX_REQUESTS UINT32_C(32)
 #define TGD_SANDBOX_COMPILER_SERVICE_MAX_STRING_REFS UINT32_C(4096)
@@ -167,6 +167,34 @@ typedef struct tgd_sandbox_service_actor_binding {
     uint8_t reserved[2];
 } tgd_sandbox_service_actor_binding;
 
+typedef struct tgd_sandbox_service_craft_material {
+    tgd_sandbox_request_string_ref id;
+} tgd_sandbox_service_craft_material;
+
+typedef struct tgd_sandbox_service_craft_process {
+    tgd_sandbox_request_string_ref id;
+    tgd_sandbox_request_string_ref workstation_id;
+    tgd_sandbox_request_string_ref need_id;
+    tgd_sandbox_request_string_ref output_item_id;
+    tgd_sandbox_request_string_ref trial_step_id;
+} tgd_sandbox_service_craft_process;
+
+typedef struct tgd_sandbox_service_craft_material_choice {
+    tgd_sandbox_request_string_ref process_id;
+    tgd_sandbox_request_string_ref material_id;
+    uint8_t outcome;
+    uint8_t reserved[3];
+} tgd_sandbox_service_craft_material_choice;
+
+typedef struct tgd_sandbox_service_craft_step {
+    tgd_sandbox_request_string_ref id;
+    tgd_sandbox_request_string_ref process_id;
+    tgd_sandbox_request_string_ref predecessor_step_id;
+    tgd_sandbox_request_string_ref action_id;
+    uint8_t kind;
+    uint8_t reserved[3];
+} tgd_sandbox_service_craft_step;
+
 typedef struct tgd_sandbox_service_result_header {
     uint8_t complete;
     uint8_t outcome;
@@ -283,6 +311,11 @@ TGD_SANDBOX_DECLARE_APPEND(objective, tgd_sandbox_service_objective);
 TGD_SANDBOX_DECLARE_APPEND(interaction_binding, tgd_sandbox_service_interaction_binding);
 TGD_SANDBOX_DECLARE_APPEND(mechanism_binding, tgd_sandbox_service_mechanism_binding);
 TGD_SANDBOX_DECLARE_APPEND(actor_binding, tgd_sandbox_service_actor_binding);
+TGD_SANDBOX_DECLARE_APPEND(craft_material, tgd_sandbox_service_craft_material);
+TGD_SANDBOX_DECLARE_APPEND(craft_workstation, tgd_sandbox_service_placement);
+TGD_SANDBOX_DECLARE_APPEND(craft_process, tgd_sandbox_service_craft_process);
+TGD_SANDBOX_DECLARE_APPEND(craft_material_choice, tgd_sandbox_service_craft_material_choice);
+TGD_SANDBOX_DECLARE_APPEND(craft_step, tgd_sandbox_service_craft_step);
 #undef TGD_SANDBOX_DECLARE_APPEND
 int32_t tgd_sandbox_compile_request_submit(
     tgd_sandbox_service_handle service,

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <tgd/contracts/craft_definition.hpp>
 #include <tgd/contracts/sandbox_definition.hpp>
 #include <tgd/contracts/sandbox_gameplay_binding.hpp>
 #include <tgd/contracts/sandbox_pack.hpp>
@@ -27,7 +28,8 @@ struct SandboxPackageValidation final {
 // rules remain owned by validate_sandbox_gameplay_binding.
 [[nodiscard]] SandboxPackageValidation validate_sandbox_package(
     const contracts::SandboxDefinition& definition,
-    const contracts::SandboxGameplayBindingDefinition& gameplay_binding
+    const contracts::SandboxGameplayBindingDefinition& gameplay_binding,
+    const contracts::CraftDefinition& craft = {}
 ) noexcept;
 
 struct EncodeSandboxPackageResult final {
@@ -38,7 +40,8 @@ struct EncodeSandboxPackageResult final {
 
 [[nodiscard]] EncodeSandboxPackageResult encode_sandbox_package(
     const contracts::SandboxDefinition& definition,
-    const contracts::SandboxGameplayBindingDefinition& gameplay_binding
+    const contracts::SandboxGameplayBindingDefinition& gameplay_binding,
+    const contracts::CraftDefinition& craft = {}
 ) noexcept;
 
 struct DecodeSandboxPackageResult;
@@ -57,6 +60,7 @@ class SandboxPackageDocument final {
     [[nodiscard]] const contracts::SandboxDefinition& definition() const noexcept;
     [[nodiscard]] const contracts::SandboxGameplayBindingDefinition& gameplay_binding()
         const noexcept;
+    [[nodiscard]] const contracts::CraftDefinition& craft_definition() const noexcept;
     [[nodiscard]] const contracts::Sha256Digest& fingerprint() const noexcept;
 
   private:

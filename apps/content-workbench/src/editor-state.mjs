@@ -52,6 +52,45 @@ const COLLECTIONS = Object.freeze({
     (record) => record.actorId,
     expectStringKey
   ],
+  craftMaterials: [
+    "runtime",
+    "craftMaterials",
+    (record) => record.id,
+    expectStringKey
+  ],
+  craftWorkstations: [
+    "runtime",
+    "craftWorkstations",
+    (record) => record.id,
+    expectStringKey
+  ],
+  craftProcesses: [
+    "runtime",
+    "craftProcesses",
+    (record) => record.id,
+    expectStringKey
+  ],
+  craftMaterialChoices: [
+    "runtime",
+    "craftMaterialChoices",
+    (record) => JSON.stringify([record.processId, record.materialId]),
+    (value) => {
+      if (
+        !isPlainObject(value) ||
+        typeof value.processId !== "string" ||
+        typeof value.materialId !== "string"
+      ) {
+        throw new Error("craft material choice key has an invalid shape");
+      }
+      return JSON.stringify([value.processId, value.materialId]);
+    }
+  ],
+  craftSteps: [
+    "runtime",
+    "craftSteps",
+    (record) => record.id,
+    expectStringKey
+  ],
   editorItems: ["editor", "items", (record) => record.id, expectStringKey]
 });
 

@@ -30,7 +30,7 @@ function expectFormatFailure(mutator) {
   );
 }
 
-test("strict 1.2.0 document round-trips as an owning frozen value", () => {
+test("strict 1.3.0 document round-trips as an owning frozen value", () => {
   const source = fixture();
   const normalized = normalizeSandboxAuthoringDocument(source);
   const originalX = normalized.runtime.player.pose.x;
@@ -127,7 +127,7 @@ test("editor-only changes never leak into the runtime projection", () => {
   );
 });
 
-test("migration is identity-only for 1.2.0", () => {
+test("migration is identity-only for 1.3.0", () => {
   assert.deepEqual(
     migrateSandboxAuthoringDocument(fixture()),
     normalizeSandboxAuthoringDocument(fixture())
@@ -153,7 +153,12 @@ test("unique system Demo author source has exact globally distinct Stable IDs", 
   assert.equal(source.runtime.interactionBindings.length, 1);
   assert.equal(source.runtime.mechanismBindings.length, 1);
   assert.equal(source.runtime.actorBindings.length, 4);
-  assert.equal(source.editor.items.length, 13);
+  assert.equal(source.runtime.craftMaterials.length, 2);
+  assert.equal(source.runtime.craftWorkstations.length, 1);
+  assert.equal(source.runtime.craftProcesses.length, 1);
+  assert.equal(source.runtime.craftMaterialChoices.length, 2);
+  assert.equal(source.runtime.craftSteps.length, 4);
+  assert.equal(source.editor.items.length, 21);
 
   const recordIds = [
     source.runtime.packageId,
@@ -169,7 +174,11 @@ test("unique system Demo author source has exact globally distinct Stable IDs", 
     "interactions",
     "mechanisms",
     "waves",
-    "objectives"
+    "objectives",
+    "craftMaterials",
+    "craftWorkstations",
+    "craftProcesses",
+    "craftSteps"
   ]) {
     recordIds.push(...source.runtime[collection].map((record) => record.id));
   }
@@ -332,6 +341,45 @@ test("unique system Demo source preserves the frozen typed chain and neutral wav
       ]
     ]
   );
+  assert.deepEqual(runtime.craftMaterialChoices, [
+    {
+      processId: "craft_process.jiangnan.umbrella_canopy_tuning",
+      materialId: "material.jiangnan.umbrella.flexible_bark_paper_patch",
+      outcome: "passes_trial"
+    },
+    {
+      processId: "craft_process.jiangnan.umbrella_canopy_tuning",
+      materialId: "material.jiangnan.umbrella.stiff_salvage_paper_patch",
+      outcome: "requires_rework"
+    }
+  ]);
+  assert.deepEqual(
+    runtime.craftSteps.map(
+      ({ id, predecessorStepId, kind }) => [id, predecessorStepId, kind]
+    ),
+    [
+      [
+        "craft_step.jiangnan.umbrella.align_rib",
+        "",
+        "operation"
+      ],
+      [
+        "craft_step.jiangnan.umbrella.paste_patch",
+        "craft_step.jiangnan.umbrella.align_rib",
+        "operation"
+      ],
+      [
+        "craft_step.jiangnan.umbrella.rain_trial",
+        "craft_step.jiangnan.umbrella.paste_patch",
+        "trial"
+      ],
+      [
+        "craft_step.jiangnan.umbrella.retension",
+        "craft_step.jiangnan.umbrella.rain_trial",
+        "rework"
+      ]
+    ]
+  );
 
   const effectIds = runtime.assets
     .filter(({ kind }) => kind === "effect")
@@ -355,7 +403,11 @@ test("unique system Demo source preserves the frozen typed chain and neutral wav
     ...runtime.interactions.map(({ id }) => id),
     ...runtime.mechanisms.map(({ id }) => id),
     ...runtime.waves.map(({ id }) => id),
-    ...runtime.objectives.map(({ id }) => id)
+    ...runtime.objectives.map(({ id }) => id),
+    ...runtime.craftMaterials.map(({ id }) => id),
+    ...runtime.craftWorkstations.map(({ id }) => id),
+    ...runtime.craftProcesses.map(({ id }) => id),
+    ...runtime.craftSteps.map(({ id }) => id)
   ].sort();
   assert.deepEqual(
     editor.items.map(({ id }) => id).sort(),

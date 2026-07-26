@@ -137,3 +137,58 @@ test("Demo 0.8.3 owns explicit actor gameplay bindings and a two-wave encounter 
     assert.match(browserRoute, new RegExp(token));
   }
 });
+
+test("Demo 0.8.4 keeps authored craft, deterministic rework, Workbench, and the real Host on one package path", async () => {
+  const [
+    rootCmake,
+    packageHeader,
+    craftHeader,
+    craftSource,
+    layerHeader,
+    layerSource,
+    browserRoute,
+    workbench
+  ] = await Promise.all([
+    read("CMakeLists.txt"),
+    read("src/content-core/include/tgd/content/sandbox_package.hpp"),
+    read("src/gameplay/include/tgd/gameplay/craft_session.hpp"),
+    read("src/gameplay/src/craft_session.cpp"),
+    read("apps/system-demo-web/Source/SystemDemoLayer.hpp"),
+    read("apps/system-demo-web/Source/SystemDemoLayer.cpp"),
+    read("tests/browser/system-demo-web-host.mjs"),
+    read("apps/content-workbench/public/workbench.mjs")
+  ]);
+  const implementation =
+    `${rootCmake}\n${packageHeader}\n${craftHeader}\n${craftSource}\n` +
+    `${layerHeader}\n${layerSource}\n${workbench}`;
+
+  for (const token of [
+    "craft_session.cpp",
+    "craft_definition",
+    "CraftSessionStage",
+    "select_material",
+    "perform_operation",
+    "run_trial",
+    "perform_rework",
+    "craftMaterials",
+    "craftWorkstations",
+    "craftProcesses",
+    "craftSteps",
+    "workbench-preview.tgdsbx"
+  ]) {
+    assert.match(implementation, new RegExp(token));
+  }
+  for (const token of [
+    "craftSelectedMaterial",
+    "craftCompletedOperations",
+    "wrongOrder",
+    "reworkRequired",
+    "craftMistakeCount",
+    "craftReworkCount",
+    "craftCompleted",
+    "playerHealth === 0",
+    "terminalCompleted"
+  ]) {
+    assert.match(browserRoute, new RegExp(token));
+  }
+});

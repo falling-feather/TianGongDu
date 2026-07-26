@@ -98,7 +98,8 @@ function growingMock({ assetLimit = Infinity, failMallocAt = 0 } = {}) {
     malloc: 0,
     allocations: [],
     frees: [],
-    utf8Bytes: []
+    utf8Bytes: [],
+    appendByName: Object.create(null)
   };
   const module = {
     HEAPU8: new Uint8Array(memory.buffer),
@@ -159,11 +160,13 @@ function growingMock({ assetLimit = Infinity, failMallocAt = 0 } = {}) {
   const appendNames = [
     "region", "asset", "actor", "ground_blocker", "safe_point", "interaction",
     "mechanism", "wave", "wave_spawn", "objective", "interaction_binding",
-    "mechanism_binding"
+    "mechanism_binding", "actor_binding", "craft_material",
+    "craft_workstation", "craft_process", "craft_material_choice", "craft_step"
   ];
   for (const name of appendNames) {
     module["_tgd_sandbox_compile_request_append_" + name] = () => {
       counters.append += 1;
+      counters.appendByName[name] = (counters.appendByName[name] ?? 0) + 1;
       if (name === "asset" && counters.append > assetLimit) return 6;
       return 1;
     };
@@ -196,7 +199,7 @@ test("client accepts ABI 1.0 without inventing a canonical artifact", async () =
   assert.equal(result.packageBytes, null);
   client.destroy();
 
-  for (const version of [0x00000001, 0x00010003, 0x00020000]) {
+  for (const version of [0x00000001, 0x00010004, 0x00020000]) {
     const rejected = growingMock();
     rejected._tgd_sandbox_compiler_service_abi_version = () => version;
     assert.throws(() => SandboxPackageServiceClient.create(rejected),
@@ -204,7 +207,34 @@ test("client accepts ABI 1.0 without inventing a canonical artifact", async () =
   }
 });
 
-test("ABI 1.1/1.2 decoder returns owning canonical package bytes and rejects bad coverage", () => {
+test("ABI 1.3 marshals the complete generic craft definition", async () => {
+  const module = growingMock();
+  module._tgd_sandbox_compiler_service_abi_version = () => 0x00010003;
+  module._tgd_sandbox_compile_request_submit =
+    (_service, _request, output, _capacity, written) => {
+      module.counters.submit += 1;
+      const result = artifactResult(Uint8Array.of(0x54, 0x47, 0x44, 0x53), 3);
+      module.HEAPU8.set(result, output);
+      new DataView(module.HEAPU8.buffer).setUint32(
+        written,
+        result.length,
+        true
+      );
+      return 1;
+    };
+  const client = SandboxPackageServiceClient.create(module);
+  const result = client.publish(await validRuntime());
+  assert.deepEqual(result.packageBytes, Uint8Array.of(0x54, 0x47, 0x44, 0x53));
+  assert.equal(module.counters.appendByName.actor_binding, 4);
+  assert.equal(module.counters.appendByName.craft_material, 2);
+  assert.equal(module.counters.appendByName.craft_workstation, 1);
+  assert.equal(module.counters.appendByName.craft_process, 1);
+  assert.equal(module.counters.appendByName.craft_material_choice, 2);
+  assert.equal(module.counters.appendByName.craft_step, 4);
+  client.destroy();
+});
+
+test("ABI 1.1–1.3 decoder returns owning canonical package bytes and rejects bad coverage", () => {
   const source = artifactResult(Uint8Array.of(1, 2, 3, 4));
   const decoded = decodeSandboxPackageServiceResult(source);
   assert.deepEqual(decoded.packageBytes, Uint8Array.of(1, 2, 3, 4));
@@ -314,7 +344,7 @@ test("result decoder rejects unknown enums and non-canonical ID coverage", () =>
     (data) => data.setUint8(1, 0),
     (data) => data.setUint8(2, 255),
     (data) => data.setUint8(3, 255),
-    (data) => data.setUint16(120, 34, true),
+    (data) => data.setUint16(120, 40, true),
     (data) => data.setUint8(122, 255),
     (data) => data.setUint8(123, 14),
     (data) => data.setUint16(124, 65535, true),

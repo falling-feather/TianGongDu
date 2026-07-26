@@ -26,7 +26,7 @@ using contracts::SandboxDiagnosticField;
 using contracts::SandboxPackageError;
 using contracts::SandboxPackSectionType;
 
-constexpr std::uint16_t sandbox_known_section_count = 16;
+constexpr std::uint16_t sandbox_known_section_count = 21;
 
 [[nodiscard]] bool byte_less(std::string_view left, std::string_view right) noexcept {
     return std::lexicographical_compare(
@@ -840,15 +840,532 @@ void sort_diagnostics(std::vector<SandboxDiagnostic>& diagnostics) {
     return diagnostics;
 }
 
+[[nodiscard]] bool valid_craft_material_outcome(
+    contracts::CraftMaterialOutcome outcome
+) noexcept {
+    return outcome == contracts::CraftMaterialOutcome::passes_trial ||
+           outcome == contracts::CraftMaterialOutcome::requires_rework;
+}
+
+[[nodiscard]] bool valid_craft_step_kind(contracts::CraftStepKind kind) noexcept {
+    return kind == contracts::CraftStepKind::operation ||
+           kind == contracts::CraftStepKind::trial ||
+           kind == contracts::CraftStepKind::rework;
+}
+
+[[nodiscard]] std::vector<SandboxDiagnostic> validate_craft_definition(
+    const contracts::SandboxDefinition& sandbox,
+    const contracts::CraftDefinition& craft
+) {
+    std::vector<SandboxDiagnostic> diagnostics;
+    const bool empty = craft.materials.empty() && craft.workstations.empty() &&
+                       craft.processes.empty() && craft.material_choices.empty() &&
+                       craft.steps.empty();
+    if (empty) {
+        return diagnostics;
+    }
+
+    const auto capacity = [&](std::size_t size,
+                              std::size_t maximum,
+                              SandboxDiagnosticDomain domain) {
+        if (size > maximum) {
+            add_diagnostic(
+                diagnostics,
+                SandboxDiagnosticCode::capacity_exceeded,
+                domain,
+                size,
+                SandboxDiagnosticField::none
+            );
+        }
+    };
+    capacity(
+        craft.materials.size(),
+        contracts::sandbox_craft_material_capacity,
+        SandboxDiagnosticDomain::craft_materials
+    );
+    capacity(
+        craft.workstations.size(),
+        contracts::sandbox_craft_workstation_capacity,
+        SandboxDiagnosticDomain::craft_workstations
+    );
+    capacity(
+        craft.processes.size(),
+        contracts::sandbox_craft_process_capacity,
+        SandboxDiagnosticDomain::craft_processes
+    );
+    capacity(
+        craft.material_choices.size(),
+        contracts::sandbox_craft_material_choice_capacity,
+        SandboxDiagnosticDomain::craft_material_choices
+    );
+    capacity(
+        craft.steps.size(),
+        contracts::sandbox_craft_step_capacity,
+        SandboxDiagnosticDomain::craft_steps
+    );
+
+    if (craft.materials.empty()) {
+        add_diagnostic(
+            diagnostics,
+            SandboxDiagnosticCode::invalid_craft_material,
+            SandboxDiagnosticDomain::craft_materials,
+            0,
+            SandboxDiagnosticField::id
+        );
+    }
+    if (craft.workstations.empty()) {
+        add_diagnostic(
+            diagnostics,
+            SandboxDiagnosticCode::invalid_craft_workstation,
+            SandboxDiagnosticDomain::craft_workstations,
+            0,
+            SandboxDiagnosticField::id
+        );
+    }
+    if (craft.processes.empty()) {
+        add_diagnostic(
+            diagnostics,
+            SandboxDiagnosticCode::invalid_craft_process,
+            SandboxDiagnosticDomain::craft_processes,
+            0,
+            SandboxDiagnosticField::id
+        );
+    }
+    if (craft.material_choices.empty()) {
+        add_diagnostic(
+            diagnostics,
+            SandboxDiagnosticCode::invalid_craft_material_choice,
+            SandboxDiagnosticDomain::craft_material_choices,
+            0,
+            SandboxDiagnosticField::material_id
+        );
+    }
+    if (craft.steps.empty()) {
+        add_diagnostic(
+            diagnostics,
+            SandboxDiagnosticCode::invalid_craft_step,
+            SandboxDiagnosticDomain::craft_steps,
+            0,
+            SandboxDiagnosticField::id
+        );
+    }
+
+    validate_unique_ids(
+        diagnostics,
+        craft.materials,
+        SandboxDiagnosticDomain::craft_materials
+    );
+    validate_unique_ids(
+        diagnostics,
+        craft.workstations,
+        SandboxDiagnosticDomain::craft_workstations
+    );
+    validate_unique_ids(
+        diagnostics,
+        craft.processes,
+        SandboxDiagnosticDomain::craft_processes
+    );
+    validate_unique_ids(
+        diagnostics,
+        craft.steps,
+        SandboxDiagnosticDomain::craft_steps
+    );
+
+    for (std::size_t index = 0; index < craft.materials.size(); ++index) {
+        validate_required_id(
+            diagnostics,
+            craft.materials[index].id,
+            SandboxDiagnosticCode::invalid_craft_material,
+            SandboxDiagnosticDomain::craft_materials,
+            index,
+            SandboxDiagnosticField::id
+        );
+    }
+
+    for (std::size_t index = 0; index < craft.workstations.size(); ++index) {
+        const auto& value = craft.workstations[index];
+        validate_required_id(
+            diagnostics,
+            value.id,
+            SandboxDiagnosticCode::invalid_craft_workstation,
+            SandboxDiagnosticDomain::craft_workstations,
+            index,
+            SandboxDiagnosticField::id
+        );
+        const auto* region = find_id(sandbox.regions, value.region_id);
+        if (region == nullptr) {
+            add_diagnostic(
+                diagnostics,
+                SandboxDiagnosticCode::missing_region,
+                SandboxDiagnosticDomain::craft_workstations,
+                index,
+                SandboxDiagnosticField::region_id,
+                value.id.key,
+                value.region_id.key
+            );
+        }
+        const auto* asset = find_id(sandbox.assets, value.asset_id);
+        if (asset == nullptr) {
+            add_diagnostic(
+                diagnostics,
+                SandboxDiagnosticCode::missing_asset,
+                SandboxDiagnosticDomain::craft_workstations,
+                index,
+                SandboxDiagnosticField::asset_id,
+                value.id.key,
+                value.asset_id.key
+            );
+        } else if (asset->kind != contracts::SandboxAssetKind::interaction) {
+            add_diagnostic(
+                diagnostics,
+                SandboxDiagnosticCode::asset_kind_mismatch,
+                SandboxDiagnosticDomain::craft_workstations,
+                index,
+                SandboxDiagnosticField::asset_id,
+                value.id.key,
+                value.asset_id.key
+            );
+        }
+        auto outside = first_outside_pose_field(sandbox.bounds, value.pose);
+        if (outside == SandboxDiagnosticField::none && region != nullptr) {
+            outside = first_outside_pose_field(region->bounds, value.pose);
+        }
+        if (outside != SandboxDiagnosticField::none ||
+            value.facing_millidegrees >= 360'000U) {
+            add_diagnostic(
+                diagnostics,
+                SandboxDiagnosticCode::invalid_craft_workstation,
+                SandboxDiagnosticDomain::craft_workstations,
+                index,
+                outside != SandboxDiagnosticField::none
+                    ? outside
+                    : SandboxDiagnosticField::facing_millidegrees,
+                value.id.key,
+                value.region_id.key
+            );
+        }
+    }
+
+    for (std::size_t index = 0; index < craft.processes.size(); ++index) {
+        const auto& value = craft.processes[index];
+        validate_required_id(
+            diagnostics,
+            value.id,
+            SandboxDiagnosticCode::invalid_craft_process,
+            SandboxDiagnosticDomain::craft_processes,
+            index,
+            SandboxDiagnosticField::id
+        );
+        const auto required_reference = [&](ContentId id, SandboxDiagnosticField field) {
+            if (!valid_id(id)) {
+                add_diagnostic(
+                    diagnostics,
+                    SandboxDiagnosticCode::invalid_craft_process,
+                    SandboxDiagnosticDomain::craft_processes,
+                    index,
+                    field,
+                    value.id.key,
+                    id.key
+                );
+            }
+        };
+        required_reference(value.workstation_id, SandboxDiagnosticField::workstation_id);
+        required_reference(value.need_id, SandboxDiagnosticField::need_id);
+        required_reference(value.output_item_id, SandboxDiagnosticField::output_item_id);
+        required_reference(value.trial_step_id, SandboxDiagnosticField::trial_step_id);
+        if (find_id(craft.workstations, value.workstation_id) == nullptr) {
+            add_diagnostic(
+                diagnostics,
+                SandboxDiagnosticCode::missing_reference,
+                SandboxDiagnosticDomain::craft_processes,
+                index,
+                SandboxDiagnosticField::workstation_id,
+                value.id.key,
+                value.workstation_id.key
+            );
+        }
+    }
+
+    for (std::size_t index = 0; index < craft.material_choices.size(); ++index) {
+        const auto& value = craft.material_choices[index];
+        if (find_id(craft.processes, value.process_id) == nullptr) {
+            add_diagnostic(
+                diagnostics,
+                SandboxDiagnosticCode::missing_reference,
+                SandboxDiagnosticDomain::craft_material_choices,
+                index,
+                SandboxDiagnosticField::process_id,
+                value.process_id.key,
+                value.process_id.key
+            );
+        }
+        if (find_id(craft.materials, value.material_id) == nullptr) {
+            add_diagnostic(
+                diagnostics,
+                SandboxDiagnosticCode::missing_reference,
+                SandboxDiagnosticDomain::craft_material_choices,
+                index,
+                SandboxDiagnosticField::material_id,
+                value.process_id.key,
+                value.material_id.key
+            );
+        }
+        if (!valid_craft_material_outcome(value.outcome)) {
+            add_diagnostic(
+                diagnostics,
+                SandboxDiagnosticCode::invalid_craft_material_choice,
+                SandboxDiagnosticDomain::craft_material_choices,
+                index,
+                SandboxDiagnosticField::material_outcome,
+                value.process_id.key,
+                value.material_id.key
+            );
+        }
+        for (std::size_t prior = 0; prior < index; ++prior) {
+            if (craft.material_choices[prior].process_id == value.process_id &&
+                craft.material_choices[prior].material_id == value.material_id) {
+                add_diagnostic(
+                    diagnostics,
+                    SandboxDiagnosticCode::duplicate_id,
+                    SandboxDiagnosticDomain::craft_material_choices,
+                    index,
+                    SandboxDiagnosticField::material_id,
+                    value.process_id.key,
+                    value.material_id.key
+                );
+                break;
+            }
+        }
+    }
+
+    for (std::size_t index = 0; index < craft.steps.size(); ++index) {
+        const auto& value = craft.steps[index];
+        validate_required_id(
+            diagnostics,
+            value.id,
+            SandboxDiagnosticCode::invalid_craft_step,
+            SandboxDiagnosticDomain::craft_steps,
+            index,
+            SandboxDiagnosticField::id
+        );
+        if (find_id(craft.processes, value.process_id) == nullptr) {
+            add_diagnostic(
+                diagnostics,
+                SandboxDiagnosticCode::missing_reference,
+                SandboxDiagnosticDomain::craft_steps,
+                index,
+                SandboxDiagnosticField::process_id,
+                value.id.key,
+                value.process_id.key
+            );
+        }
+        if (!empty_id(value.predecessor_step_id)) {
+            const auto* predecessor = find_id(craft.steps, value.predecessor_step_id);
+            if (predecessor == nullptr || predecessor->process_id != value.process_id) {
+                add_diagnostic(
+                    diagnostics,
+                    SandboxDiagnosticCode::missing_reference,
+                    SandboxDiagnosticDomain::craft_steps,
+                    index,
+                    SandboxDiagnosticField::predecessor_step_id,
+                    value.id.key,
+                    value.predecessor_step_id.key
+                );
+            }
+        }
+        if (!valid_id(value.action_id)) {
+            add_diagnostic(
+                diagnostics,
+                SandboxDiagnosticCode::invalid_craft_step,
+                SandboxDiagnosticDomain::craft_steps,
+                index,
+                SandboxDiagnosticField::action_id,
+                value.id.key,
+                value.action_id.key
+            );
+        }
+        if (!valid_craft_step_kind(value.kind)) {
+            add_diagnostic(
+                diagnostics,
+                SandboxDiagnosticCode::invalid_craft_step,
+                SandboxDiagnosticDomain::craft_steps,
+                index,
+                SandboxDiagnosticField::craft_step_kind,
+                value.id.key
+            );
+        }
+    }
+    validate_predecessor_graph(
+        diagnostics,
+        craft.steps,
+        [](const auto& value) { return value.predecessor_step_id; },
+        SandboxDiagnosticDomain::craft_steps,
+        SandboxDiagnosticField::predecessor_step_id
+    );
+
+    for (std::size_t process_index = 0;
+         process_index < craft.processes.size();
+         ++process_index) {
+        const auto& process = craft.processes[process_index];
+        std::vector<const contracts::CraftStepDefinition*> operations;
+        std::vector<const contracts::CraftStepDefinition*> trials;
+        std::vector<const contracts::CraftStepDefinition*> reworks;
+        for (const auto& step : craft.steps) {
+            if (step.process_id != process.id) continue;
+            if (step.kind == contracts::CraftStepKind::operation) {
+                operations.push_back(&step);
+            } else if (step.kind == contracts::CraftStepKind::trial) {
+                trials.push_back(&step);
+            } else if (step.kind == contracts::CraftStepKind::rework) {
+                reworks.push_back(&step);
+            }
+        }
+
+        const auto choice_count = static_cast<std::size_t>(std::count_if(
+            craft.material_choices.begin(),
+            craft.material_choices.end(),
+            [&process](const auto& choice) { return choice.process_id == process.id; }
+        ));
+        const bool has_pass = std::any_of(
+            craft.material_choices.begin(),
+            craft.material_choices.end(),
+            [&process](const auto& choice) {
+                return choice.process_id == process.id &&
+                       choice.outcome == contracts::CraftMaterialOutcome::passes_trial;
+            }
+        );
+        const bool has_rework_material = std::any_of(
+            craft.material_choices.begin(),
+            craft.material_choices.end(),
+            [&process](const auto& choice) {
+                return choice.process_id == process.id &&
+                       choice.outcome == contracts::CraftMaterialOutcome::requires_rework;
+            }
+        );
+        if (choice_count < 2 || !has_pass || !has_rework_material) {
+            add_diagnostic(
+                diagnostics,
+                SandboxDiagnosticCode::craft_rework_path_missing,
+                SandboxDiagnosticDomain::craft_processes,
+                process_index,
+                SandboxDiagnosticField::material_outcome,
+                process.id.key
+            );
+        }
+
+        if (operations.size() < 2 || trials.size() != 1 || reworks.size() != 1) {
+            add_diagnostic(
+                diagnostics,
+                SandboxDiagnosticCode::craft_rework_path_missing,
+                SandboxDiagnosticDomain::craft_processes,
+                process_index,
+                SandboxDiagnosticField::trial_step_id,
+                process.id.key,
+                process.trial_step_id.key
+            );
+            continue;
+        }
+        const auto* trial = trials.front();
+        const auto* rework = reworks.front();
+        if (trial->id != process.trial_step_id) {
+            add_diagnostic(
+                diagnostics,
+                SandboxDiagnosticCode::invalid_craft_process,
+                SandboxDiagnosticDomain::craft_processes,
+                process_index,
+                SandboxDiagnosticField::trial_step_id,
+                process.id.key,
+                process.trial_step_id.key
+            );
+        }
+
+        std::size_t roots = 0;
+        const contracts::CraftStepDefinition* last_operation = nullptr;
+        for (const auto* operation : operations) {
+            if (empty_id(operation->predecessor_step_id)) {
+                ++roots;
+            } else {
+                const auto* predecessor = find_id(craft.steps, operation->predecessor_step_id);
+                if (predecessor == nullptr ||
+                    predecessor->kind != contracts::CraftStepKind::operation ||
+                    predecessor->process_id != process.id) {
+                    add_diagnostic(
+                        diagnostics,
+                        SandboxDiagnosticCode::invalid_craft_step,
+                        SandboxDiagnosticDomain::craft_steps,
+                        static_cast<std::size_t>(operation - craft.steps.data()),
+                        SandboxDiagnosticField::predecessor_step_id,
+                        operation->id.key,
+                        operation->predecessor_step_id.key
+                    );
+                }
+            }
+            const auto successor_count = static_cast<std::size_t>(std::count_if(
+                operations.begin(),
+                operations.end(),
+                [operation](const auto* candidate) {
+                    return candidate->predecessor_step_id == operation->id;
+                }
+            ));
+            if (successor_count == 0) {
+                if (last_operation != nullptr) {
+                    add_diagnostic(
+                        diagnostics,
+                        SandboxDiagnosticCode::invalid_craft_step,
+                        SandboxDiagnosticDomain::craft_processes,
+                        process_index,
+                        SandboxDiagnosticField::predecessor_step_id,
+                        process.id.key
+                    );
+                }
+                last_operation = operation;
+            } else if (successor_count > 1) {
+                add_diagnostic(
+                    diagnostics,
+                    SandboxDiagnosticCode::invalid_craft_step,
+                    SandboxDiagnosticDomain::craft_steps,
+                    static_cast<std::size_t>(operation - craft.steps.data()),
+                    SandboxDiagnosticField::predecessor_step_id,
+                    operation->id.key
+                );
+            }
+        }
+        if (roots != 1 || last_operation == nullptr ||
+            trial->predecessor_step_id != last_operation->id ||
+            rework->predecessor_step_id != trial->id) {
+            add_diagnostic(
+                diagnostics,
+                SandboxDiagnosticCode::craft_rework_path_missing,
+                SandboxDiagnosticDomain::craft_processes,
+                process_index,
+                SandboxDiagnosticField::predecessor_step_id,
+                process.id.key,
+                process.trial_step_id.key
+            );
+        }
+    }
+
+    sort_diagnostics(diagnostics);
+    return diagnostics;
+}
+
 }  // namespace
 
 SandboxPackageValidation validate_sandbox_package(
     const contracts::SandboxDefinition& definition,
-    const contracts::SandboxGameplayBindingDefinition& gameplay_binding
+    const contracts::SandboxGameplayBindingDefinition& gameplay_binding,
+    const contracts::CraftDefinition& craft
 ) noexcept {
     SandboxPackageValidation result{};
     try {
         result.diagnostics = validate_package_core(definition);
+        auto craft_diagnostics = validate_craft_definition(definition, craft);
+        result.diagnostics.insert(
+            result.diagnostics.end(),
+            craft_diagnostics.begin(),
+            craft_diagnostics.end()
+        );
+        sort_diagnostics(result.diagnostics);
         if (!result.diagnostics.empty()) {
             result.error = SandboxPackageError::semantic_validation_failed;
             return result;
@@ -876,6 +1393,7 @@ struct SandboxPackageDocument::Storage final {
     std::vector<std::string> strings{};
     contracts::SandboxDefinition definition{};
     contracts::SandboxGameplayBindingDefinition gameplay_binding{};
+    contracts::CraftDefinition craft_definition{};
     std::vector<contracts::SandboxRegionDefinition> regions{};
     std::vector<contracts::SandboxAssetReferenceDefinition> assets{};
     std::vector<contracts::SandboxActorDefinition> actors{};
@@ -889,6 +1407,11 @@ struct SandboxPackageDocument::Storage final {
     std::vector<contracts::SandboxInteractionGameplayBinding> interaction_bindings{};
     std::vector<contracts::SandboxMechanismGameplayBinding> mechanism_bindings{};
     std::vector<contracts::SandboxActorGameplayBinding> actor_bindings{};
+    std::vector<contracts::CraftMaterialDefinition> craft_materials{};
+    std::vector<contracts::CraftWorkstationDefinition> craft_workstations{};
+    std::vector<contracts::CraftProcessDefinition> craft_processes{};
+    std::vector<contracts::CraftMaterialChoiceDefinition> craft_material_choices{};
+    std::vector<contracts::CraftStepDefinition> craft_steps{};
 
     void bind_views() noexcept {
         definition.regions = regions;
@@ -904,6 +1427,11 @@ struct SandboxPackageDocument::Storage final {
         gameplay_binding.interaction_bindings = interaction_bindings;
         gameplay_binding.mechanism_bindings = mechanism_bindings;
         gameplay_binding.actor_bindings = actor_bindings;
+        craft_definition.materials = craft_materials;
+        craft_definition.workstations = craft_workstations;
+        craft_definition.processes = craft_processes;
+        craft_definition.material_choices = craft_material_choices;
+        craft_definition.steps = craft_steps;
     }
 };
 
@@ -955,7 +1483,8 @@ void collect_id(std::vector<std::string_view>& strings, ContentId id) {
 
 [[nodiscard]] std::vector<std::string_view> collect_strings(
     const contracts::SandboxDefinition& definition,
-    const contracts::SandboxGameplayBindingDefinition& binding
+    const contracts::SandboxGameplayBindingDefinition& binding,
+    const contracts::CraftDefinition& craft
 ) {
     std::vector<std::string_view> strings;
     strings.reserve(
@@ -966,7 +1495,12 @@ void collect_id(std::vector<std::string_view>& strings, ContentId id) {
         definition.wave_spawns.size() * 2 + definition.objectives.size() * 4 +
         binding.interaction_bindings.size() * 2 +
         binding.mechanism_bindings.size() * 2 +
-        binding.actor_bindings.size() * 2
+        binding.actor_bindings.size() * 2 +
+        craft.materials.size() +
+        craft.workstations.size() * 3 +
+        craft.processes.size() * 5 +
+        craft.material_choices.size() * 2 +
+        craft.steps.size() * 4
     );
     collect_id(strings, definition.package_id);
     collect_id(strings, definition.id);
@@ -1018,6 +1552,31 @@ void collect_id(std::vector<std::string_view>& strings, ContentId id) {
     for (const auto& value : binding.actor_bindings) {
         collect_id(strings, value.actor_id);
         collect_id(strings, value.profile_id);
+    }
+    for (const auto& value : craft.materials) {
+        collect_id(strings, value.id);
+    }
+    for (const auto& value : craft.workstations) {
+        collect_id(strings, value.id);
+        collect_id(strings, value.region_id);
+        collect_id(strings, value.asset_id);
+    }
+    for (const auto& value : craft.processes) {
+        collect_id(strings, value.id);
+        collect_id(strings, value.workstation_id);
+        collect_id(strings, value.need_id);
+        collect_id(strings, value.output_item_id);
+        collect_id(strings, value.trial_step_id);
+    }
+    for (const auto& value : craft.material_choices) {
+        collect_id(strings, value.process_id);
+        collect_id(strings, value.material_id);
+    }
+    for (const auto& value : craft.steps) {
+        collect_id(strings, value.id);
+        collect_id(strings, value.process_id);
+        collect_id(strings, value.predecessor_step_id);
+        collect_id(strings, value.action_id);
     }
     std::sort(strings.begin(), strings.end(), byte_less);
     strings.erase(std::unique(strings.begin(), strings.end()), strings.end());
@@ -1094,6 +1653,7 @@ template <typename Binding, typename IdGetter>
 [[nodiscard]] std::vector<EncodedSection> encode_sections(
     const contracts::SandboxDefinition& definition,
     const contracts::SandboxGameplayBindingDefinition& binding,
+    const contracts::CraftDefinition& craft,
     std::span<const std::string_view> strings
 ) {
     std::vector<EncodedSection> sections;
@@ -1269,6 +1829,101 @@ template <typename Binding, typename IdGetter>
         append_zeroes(actor_binding_section.bytes, 8);
     }
     sections.push_back(std::move(actor_binding_section));
+
+    const auto craft_materials = sorted_by_id(craft.materials);
+    EncodedSection craft_material_section{
+        SandboxPackSectionType::craft_materials,
+        static_cast<std::uint32_t>(craft_materials.size()),
+        contracts::sandbox_pack_craft_material_record_bytes
+    };
+    for (const auto& value : craft_materials) {
+        append_id(craft_material_section.bytes, strings, value.id);
+        append_zeroes(craft_material_section.bytes, 4);
+    }
+    sections.push_back(std::move(craft_material_section));
+
+    const auto craft_workstations = sorted_by_id(craft.workstations);
+    EncodedSection craft_workstation_section{
+        SandboxPackSectionType::craft_workstations,
+        static_cast<std::uint32_t>(craft_workstations.size()),
+        contracts::sandbox_pack_craft_workstation_record_bytes
+    };
+    for (const auto& value : craft_workstations) {
+        append_placement(craft_workstation_section, value);
+    }
+    sections.push_back(std::move(craft_workstation_section));
+
+    const auto craft_processes = sorted_by_id(craft.processes);
+    EncodedSection craft_process_section{
+        SandboxPackSectionType::craft_processes,
+        static_cast<std::uint32_t>(craft_processes.size()),
+        contracts::sandbox_pack_craft_process_record_bytes
+    };
+    for (const auto& value : craft_processes) {
+        append_id(craft_process_section.bytes, strings, value.id);
+        append_id(craft_process_section.bytes, strings, value.workstation_id);
+        append_id(craft_process_section.bytes, strings, value.need_id);
+        append_id(craft_process_section.bytes, strings, value.output_item_id);
+        append_id(craft_process_section.bytes, strings, value.trial_step_id);
+        append_zeroes(craft_process_section.bytes, 4);
+    }
+    sections.push_back(std::move(craft_process_section));
+
+    std::vector<contracts::CraftMaterialChoiceDefinition> craft_material_choices(
+        craft.material_choices.begin(),
+        craft.material_choices.end()
+    );
+    std::sort(
+        craft_material_choices.begin(),
+        craft_material_choices.end(),
+        [](const auto& left, const auto& right) {
+            return std::tuple{
+                       left.process_id.key,
+                       left.process_id.name,
+                       left.material_id.key,
+                       left.material_id.name,
+                       static_cast<std::uint8_t>(left.outcome),
+                   } <
+                   std::tuple{
+                       right.process_id.key,
+                       right.process_id.name,
+                       right.material_id.key,
+                       right.material_id.name,
+                       static_cast<std::uint8_t>(right.outcome),
+                   };
+        }
+    );
+    EncodedSection craft_material_choice_section{
+        SandboxPackSectionType::craft_material_choices,
+        static_cast<std::uint32_t>(craft_material_choices.size()),
+        contracts::sandbox_pack_craft_material_choice_record_bytes
+    };
+    for (const auto& value : craft_material_choices) {
+        append_id(craft_material_choice_section.bytes, strings, value.process_id);
+        append_id(craft_material_choice_section.bytes, strings, value.material_id);
+        append_le(
+            craft_material_choice_section.bytes,
+            static_cast<std::uint8_t>(value.outcome)
+        );
+        append_zeroes(craft_material_choice_section.bytes, 7);
+    }
+    sections.push_back(std::move(craft_material_choice_section));
+
+    const auto craft_steps = sorted_by_id(craft.steps);
+    EncodedSection craft_step_section{
+        SandboxPackSectionType::craft_steps,
+        static_cast<std::uint32_t>(craft_steps.size()),
+        contracts::sandbox_pack_craft_step_record_bytes
+    };
+    for (const auto& value : craft_steps) {
+        append_id(craft_step_section.bytes, strings, value.id);
+        append_id(craft_step_section.bytes, strings, value.process_id);
+        append_id(craft_step_section.bytes, strings, value.predecessor_step_id);
+        append_id(craft_step_section.bytes, strings, value.action_id);
+        append_le(craft_step_section.bytes, static_cast<std::uint8_t>(value.kind));
+        append_zeroes(craft_step_section.bytes, 15);
+    }
+    sections.push_back(std::move(craft_step_section));
     return sections;
 }
 
@@ -1276,15 +1931,16 @@ template <typename Binding, typename IdGetter>
 
 EncodeSandboxPackageResult encode_sandbox_package(
     const contracts::SandboxDefinition& definition,
-    const contracts::SandboxGameplayBindingDefinition& gameplay_binding
+    const contracts::SandboxGameplayBindingDefinition& gameplay_binding,
+    const contracts::CraftDefinition& craft
 ) noexcept {
     EncodeSandboxPackageResult result{};
-    result.validation = validate_sandbox_package(definition, gameplay_binding);
+    result.validation = validate_sandbox_package(definition, gameplay_binding, craft);
     if (!result.validation.valid()) {
         return result;
     }
     try {
-        const auto strings = collect_strings(definition, gameplay_binding);
+        const auto strings = collect_strings(definition, gameplay_binding, craft);
         if (strings.size() > contracts::sandbox_pack_max_strings) {
             result.validation.error = SandboxPackageError::invalid_string_table;
             return result;
@@ -1297,7 +1953,7 @@ EncodeSandboxPackageResult encode_sandbox_package(
             result.validation.error = SandboxPackageError::invalid_string_table;
             return result;
         }
-        auto sections = encode_sections(definition, gameplay_binding, strings);
+        auto sections = encode_sections(definition, gameplay_binding, craft, strings);
         const auto directory_bytes = sections.size() * contracts::sandbox_pack_directory_entry_bytes;
         result.bytes.assign(contracts::sandbox_pack_header_bytes + directory_bytes, 0);
         for (auto& section : sections) {
@@ -1465,7 +2121,7 @@ struct DirectoryEntry final {
 [[nodiscard]] bool known_section(std::uint16_t type) noexcept {
     return type >= static_cast<std::uint16_t>(SandboxPackSectionType::strings) &&
            type <= static_cast<std::uint16_t>(
-                       SandboxPackSectionType::actor_gameplay_bindings
+                       SandboxPackSectionType::craft_steps
                    );
 }
 
@@ -1487,6 +2143,11 @@ struct DirectoryEntry final {
         case SandboxPackSectionType::interaction_gameplay_bindings: return contracts::sandbox_pack_interaction_gameplay_binding_record_bytes;
         case SandboxPackSectionType::mechanism_gameplay_bindings: return contracts::sandbox_pack_mechanism_gameplay_binding_record_bytes;
         case SandboxPackSectionType::actor_gameplay_bindings: return contracts::sandbox_pack_actor_gameplay_binding_record_bytes;
+        case SandboxPackSectionType::craft_materials: return contracts::sandbox_pack_craft_material_record_bytes;
+        case SandboxPackSectionType::craft_workstations: return contracts::sandbox_pack_craft_workstation_record_bytes;
+        case SandboxPackSectionType::craft_processes: return contracts::sandbox_pack_craft_process_record_bytes;
+        case SandboxPackSectionType::craft_material_choices: return contracts::sandbox_pack_craft_material_choice_record_bytes;
+        case SandboxPackSectionType::craft_steps: return contracts::sandbox_pack_craft_step_record_bytes;
     }
     return 0;
 }
@@ -1509,6 +2170,11 @@ struct DirectoryEntry final {
         case SandboxPackSectionType::waves: return contracts::sandbox_wave_capacity;
         case SandboxPackSectionType::wave_spawns: return contracts::sandbox_wave_spawn_capacity;
         case SandboxPackSectionType::objectives: return contracts::sandbox_objective_capacity;
+        case SandboxPackSectionType::craft_materials: return contracts::sandbox_craft_material_capacity;
+        case SandboxPackSectionType::craft_workstations: return contracts::sandbox_craft_workstation_capacity;
+        case SandboxPackSectionType::craft_processes: return contracts::sandbox_craft_process_capacity;
+        case SandboxPackSectionType::craft_material_choices: return contracts::sandbox_craft_material_choice_capacity;
+        case SandboxPackSectionType::craft_steps: return contracts::sandbox_craft_step_capacity;
     }
     return 0;
 }
@@ -1781,6 +2447,10 @@ SandboxPackageDocument::gameplay_binding() const noexcept {
     return storage_->gameplay_binding;
 }
 
+const contracts::CraftDefinition& SandboxPackageDocument::craft_definition() const noexcept {
+    return storage_->craft_definition;
+}
+
 const contracts::Sha256Digest& SandboxPackageDocument::fingerprint() const noexcept {
     return storage_->fingerprint;
 }
@@ -2034,8 +2704,112 @@ DecodeSandboxPackageResult decode_sandbox_package(std::span<const std::uint8_t> 
                 fail(SandboxPackageError::invalid_section); return result;
             }
         }
+        storage->craft_materials.resize(
+            entry(SandboxPackSectionType::craft_materials)->count
+        );
+        {
+            auto reader = reader_for(SandboxPackSectionType::craft_materials);
+            for (auto& value : storage->craft_materials) {
+                if (!read_id(reader, storage->strings, value.id) ||
+                    !reader.read_zeroes(4)) {
+                    fail(SandboxPackageError::invalid_section); return result;
+                }
+            }
+            if (reader.remaining() != 0 ||
+                !records_are_ordered(std::span{storage->craft_materials})) {
+                fail(SandboxPackageError::invalid_section); return result;
+            }
+        }
+        if (!placements(
+                SandboxPackSectionType::craft_workstations,
+                storage->craft_workstations
+            )) {
+            fail(SandboxPackageError::invalid_section); return result;
+        }
+        storage->craft_processes.resize(
+            entry(SandboxPackSectionType::craft_processes)->count
+        );
+        {
+            auto reader = reader_for(SandboxPackSectionType::craft_processes);
+            for (auto& value : storage->craft_processes) {
+                if (!read_id(reader, storage->strings, value.id) ||
+                    !read_id(reader, storage->strings, value.workstation_id) ||
+                    !read_id(reader, storage->strings, value.need_id) ||
+                    !read_id(reader, storage->strings, value.output_item_id) ||
+                    !read_id(reader, storage->strings, value.trial_step_id) ||
+                    !reader.read_zeroes(4)) {
+                    fail(SandboxPackageError::invalid_section); return result;
+                }
+            }
+            if (reader.remaining() != 0 ||
+                !records_are_ordered(std::span{storage->craft_processes})) {
+                fail(SandboxPackageError::invalid_section); return result;
+            }
+        }
+        storage->craft_material_choices.resize(
+            entry(SandboxPackSectionType::craft_material_choices)->count
+        );
+        {
+            auto reader = reader_for(SandboxPackSectionType::craft_material_choices);
+            for (auto& value : storage->craft_material_choices) {
+                std::uint8_t outcome = 0;
+                if (!read_id(reader, storage->strings, value.process_id) ||
+                    !read_id(reader, storage->strings, value.material_id) ||
+                    !reader.read(outcome) || !reader.read_zeroes(7)) {
+                    fail(SandboxPackageError::invalid_section); return result;
+                }
+                value.outcome = static_cast<contracts::CraftMaterialOutcome>(outcome);
+            }
+            const auto less = [](const auto& left, const auto& right) {
+                return std::tuple{
+                           left.process_id.key,
+                           left.process_id.name,
+                           left.material_id.key,
+                           left.material_id.name,
+                           static_cast<std::uint8_t>(left.outcome),
+                       } <
+                       std::tuple{
+                           right.process_id.key,
+                           right.process_id.name,
+                           right.material_id.key,
+                           right.material_id.name,
+                           static_cast<std::uint8_t>(right.outcome),
+                       };
+            };
+            if (reader.remaining() != 0 ||
+                !std::is_sorted(
+                    storage->craft_material_choices.begin(),
+                    storage->craft_material_choices.end(),
+                    less
+                )) {
+                fail(SandboxPackageError::invalid_section); return result;
+            }
+        }
+        storage->craft_steps.resize(entry(SandboxPackSectionType::craft_steps)->count);
+        {
+            auto reader = reader_for(SandboxPackSectionType::craft_steps);
+            for (auto& value : storage->craft_steps) {
+                std::uint8_t kind = 0;
+                if (!read_id(reader, storage->strings, value.id) ||
+                    !read_id(reader, storage->strings, value.process_id) ||
+                    !read_id(reader, storage->strings, value.predecessor_step_id) ||
+                    !read_id(reader, storage->strings, value.action_id) ||
+                    !reader.read(kind) || !reader.read_zeroes(15)) {
+                    fail(SandboxPackageError::invalid_section); return result;
+                }
+                value.kind = static_cast<contracts::CraftStepKind>(kind);
+            }
+            if (reader.remaining() != 0 ||
+                !records_are_ordered(std::span{storage->craft_steps})) {
+                fail(SandboxPackageError::invalid_section); return result;
+            }
+        }
         storage->bind_views();
-        result.validation = validate_sandbox_package(storage->definition, storage->gameplay_binding);
+        result.validation = validate_sandbox_package(
+            storage->definition,
+            storage->gameplay_binding,
+            storage->craft_definition
+        );
         if (!result.validation.valid()) return result;
         result.document = std::unique_ptr<SandboxPackageDocument>(
             new SandboxPackageDocument(std::move(storage))

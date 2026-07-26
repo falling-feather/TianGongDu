@@ -37,6 +37,10 @@ static_assert(sizeof(tgd_sandbox_service_objective) == 20);
 static_assert(sizeof(tgd_sandbox_service_interaction_binding) == 16);
 static_assert(sizeof(tgd_sandbox_service_mechanism_binding) == 12);
 static_assert(sizeof(tgd_sandbox_service_actor_binding) == 16);
+static_assert(sizeof(tgd_sandbox_service_craft_material) == 4);
+static_assert(sizeof(tgd_sandbox_service_craft_process) == 20);
+static_assert(sizeof(tgd_sandbox_service_craft_material_choice) == 12);
+static_assert(sizeof(tgd_sandbox_service_craft_step) == 20);
 static_assert(sizeof(tgd_sandbox_service_result_header) == 120);
 static_assert(sizeof(tgd_sandbox_service_result_artifact) == 16);
 static_assert(sizeof(tgd_sandbox_service_diagnostic) == 48);
@@ -275,6 +279,71 @@ struct Builder final {
         expect(tgd_sandbox_compile_request_append_actor_binding(
                    service, request, &actor_binding) == 1,
                "actor binding append failed");
+
+        const auto craft_process = text("craft.process.demo");
+        const auto craft_workstation = text("craft.workstation.demo");
+        const auto craft_material_pass = text("craft.material.pass");
+        const auto craft_material_rework = text("craft.material.rework");
+        const auto craft_step_align = text("craft.step.align");
+        const auto craft_step_paste = text("craft.step.paste");
+        const auto craft_step_trial = text("craft.step.trial");
+        const auto craft_step_rework = text("craft.step.rework");
+        const tgd_sandbox_service_craft_material material_pass_record{
+            craft_material_pass
+        };
+        const tgd_sandbox_service_craft_material material_rework_record{
+            craft_material_rework
+        };
+        const tgd_sandbox_service_placement workstation_record{
+            craft_workstation, region, interaction_asset, {-500, 500, 0, 0, 0}, 0,
+        };
+        const tgd_sandbox_service_craft_process process_record{
+            craft_process, craft_workstation, text("craft.need.demo"),
+            text("craft.output.demo"), craft_step_trial,
+        };
+        const tgd_sandbox_service_craft_material_choice pass_choice{
+            craft_process, craft_material_pass,
+            static_cast<std::uint8_t>(CraftMaterialOutcome::passes_trial),
+            {0, 0, 0},
+        };
+        const tgd_sandbox_service_craft_material_choice rework_choice{
+            craft_process, craft_material_rework,
+            static_cast<std::uint8_t>(CraftMaterialOutcome::requires_rework),
+            {0, 0, 0},
+        };
+        std::array<tgd_sandbox_service_craft_step, 4> craft_steps{{
+            {craft_step_align, craft_process, empty, text("craft.action.align"),
+             static_cast<std::uint8_t>(CraftStepKind::operation), {0, 0, 0}},
+            {craft_step_paste, craft_process, craft_step_align, text("craft.action.paste"),
+             static_cast<std::uint8_t>(CraftStepKind::operation), {0, 0, 0}},
+            {craft_step_trial, craft_process, craft_step_paste, text("craft.action.trial"),
+             static_cast<std::uint8_t>(CraftStepKind::trial), {0, 0, 0}},
+            {craft_step_rework, craft_process, craft_step_trial, text("craft.action.rework"),
+             static_cast<std::uint8_t>(CraftStepKind::rework), {0, 0, 0}},
+        }};
+        expect(tgd_sandbox_compile_request_append_craft_material(
+                   service, request, &material_pass_record) == 1,
+               "craft material pass append failed");
+        expect(tgd_sandbox_compile_request_append_craft_material(
+                   service, request, &material_rework_record) == 1,
+               "craft material rework append failed");
+        expect(tgd_sandbox_compile_request_append_craft_workstation(
+                   service, request, &workstation_record) == 1,
+               "craft workstation append failed");
+        expect(tgd_sandbox_compile_request_append_craft_process(
+                   service, request, &process_record) == 1,
+               "craft process append failed");
+        expect(tgd_sandbox_compile_request_append_craft_material_choice(
+                   service, request, &pass_choice) == 1,
+               "craft pass choice append failed");
+        expect(tgd_sandbox_compile_request_append_craft_material_choice(
+                   service, request, &rework_choice) == 1,
+               "craft rework choice append failed");
+        for (const auto& craft_step : craft_steps) {
+            expect(tgd_sandbox_compile_request_append_craft_step(
+                       service, request, &craft_step) == 1,
+                   "craft step append failed");
+        }
     }
 
     [[nodiscard]] Result submit(std::uint32_t capacity = TGD_SANDBOX_COMPILER_SERVICE_MAX_RESULT_BYTES) const {
@@ -292,7 +361,7 @@ struct Builder final {
         );
         expect(result.header.complete == 1 && result.header.total_bytes == written,
                "service returned an incomplete result");
-        expect(result.header.abi_major == 1 && result.header.abi_minor == 2 &&
+        expect(result.header.abi_major == 1 && result.header.abi_minor == 3 &&
                    result.header.diagnostics_offset ==
                        TGD_SANDBOX_COMPILER_SERVICE_RESULT_PREFIX_BYTES,
                "service returned a non-1.2 result prefix");
@@ -329,6 +398,10 @@ void check_publish_and_determinism() {
                decoded.document->gameplay_binding().actor_bindings.front().profile_id.name ==
                    "profile.actor",
            "published package lost the actor gameplay binding");
+    expect(decoded.document->craft_definition().materials.size() == 2 &&
+               decoded.document->craft_definition().processes.size() == 1 &&
+               decoded.document->craft_definition().steps.size() == 4,
+           "published package lost the craft definition");
     const auto generation_one = identity(service);
     expect(generation_one.generation == 1 &&
                std::equal(std::begin(generation_one.checksum), std::end(generation_one.checksum),
@@ -647,7 +720,7 @@ void check_invalid_utf8_diagnostic_output() {
 }  // namespace
 
 extern "C" std::int32_t tgd_sandbox_service_run_contract_probe() {
-    expect(tgd_sandbox_compiler_service_abi_version() == 0x0001'0002U,
+    expect(tgd_sandbox_compiler_service_abi_version() == 0x0001'0003U,
            "compiler service ABI version mismatch");
     check_publish_and_determinism();
     check_diagnostic_fidelity_and_preservation();

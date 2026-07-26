@@ -148,6 +148,35 @@ const GROUPS = [
     prefix: "objective.system_demo",
     authoringOnly: true,
     records: (runtime) => runtime.objectives
+  },
+  {
+    key: "craftMaterials",
+    label: "Craft Materials",
+    prefix: "material.craft",
+    authoringOnly: true,
+    records: (runtime) => runtime.craftMaterials
+  },
+  {
+    key: "craftWorkstations",
+    label: "Craft Workstations",
+    prefix: "workstation.craft",
+    assetKind: "interaction",
+    authoringOnly: true,
+    records: (runtime) => runtime.craftWorkstations
+  },
+  {
+    key: "craftProcesses",
+    label: "Craft Processes",
+    prefix: "craft_process",
+    authoringOnly: true,
+    records: (runtime) => runtime.craftProcesses
+  },
+  {
+    key: "craftSteps",
+    label: "Craft Steps",
+    prefix: "craft_step",
+    authoringOnly: true,
+    records: (runtime) => runtime.craftSteps
   }
 ];
 
@@ -304,7 +333,11 @@ function runtimeIds() {
     ...runtime.interactions.map(({ id }) => id),
     ...runtime.mechanisms.map(({ id }) => id),
     ...runtime.waves.map(({ id }) => id),
-    ...runtime.objectives.map(({ id }) => id)
+    ...runtime.objectives.map(({ id }) => id),
+    ...runtime.craftMaterials.map(({ id }) => id),
+    ...runtime.craftWorkstations.map(({ id }) => id),
+    ...runtime.craftProcesses.map(({ id }) => id),
+    ...runtime.craftSteps.map(({ id }) => id)
   ]);
 }
 
@@ -841,6 +874,78 @@ function fieldsFor(group, record) {
         state.document.runtime.completionObjectiveId === record.id ? "yes" : "no",
         { kind: "enum", options: ["yes", "no"] }
       )
+    );
+    return fields;
+  }
+
+  if (group.key === "craftMaterials") {
+    return fields;
+  }
+
+  if (group.key === "craftProcesses") {
+    fields.push(
+      textField("workstationId", "Workstation ID", record.workstationId, {
+        kind: "enum",
+        options: state.document.runtime.craftWorkstations.map(({ id }) => id)
+      }),
+      textField("needId", "Need ID", record.needId, { wide: true }),
+      textField("outputItemId", "Output Item ID", record.outputItemId, {
+        wide: true
+      }),
+      textField("trialStepId", "Trial Step ID", record.trialStepId, {
+        kind: "enum",
+        options: state.document.runtime.craftSteps
+          .filter((step) => step.processId === record.id && step.kind === "trial")
+          .map(({ id }) => id)
+      })
+    );
+    const choices = state.document.runtime.craftMaterialChoices
+      .filter((choice) => choice.processId === record.id)
+      .sort((left, right) => left.materialId.localeCompare(right.materialId));
+    choices.forEach((choice, index) => {
+      fields.push({ section: "Material Choice " + (index + 1) });
+      fields.push(
+        textField("materialId_" + index, "Material ID", choice.materialId, {
+          kind: "enum",
+          options: state.document.runtime.craftMaterials.map(({ id }) => id)
+        }),
+        textField("materialOutcome_" + index, "Trial Outcome", choice.outcome, {
+          kind: "enum",
+          options: ["passes_trial", "requires_rework"]
+        })
+      );
+    });
+    return fields;
+  }
+
+  if (group.key === "craftSteps") {
+    fields.push(
+      textField("processId", "Craft Process ID", record.processId, {
+        kind: "enum",
+        options: state.document.runtime.craftProcesses.map(({ id }) => id)
+      }),
+      textField(
+        "predecessorStepId",
+        "Predecessor Step ID",
+        record.predecessorStepId,
+        {
+          kind: "enum",
+          options: [
+            "",
+            ...state.document.runtime.craftSteps
+              .filter(
+                (step) =>
+                  step.id !== record.id && step.processId === record.processId
+              )
+              .map(({ id }) => id)
+          ]
+        }
+      ),
+      textField("actionId", "Action ID", record.actionId, { wide: true }),
+      textField("kind", "Step Kind", record.kind, {
+        kind: "enum",
+        options: ["operation", "trial", "rework"]
+      })
     );
     return fields;
   }
@@ -1744,6 +1849,39 @@ function requestValues(raw) {
         targetId: raw.completionTargetId
       },
       terminal: raw.terminal === "yes",
+      editorLabel: raw.editorLabel
+    };
+  }
+  if (selectedGroup === "craftMaterials") {
+    return { editorLabel: raw.editorLabel };
+  }
+  if (selectedGroup === "craftProcesses") {
+    const record = currentRecord();
+    const materialCount = state.document.runtime.craftMaterialChoices.filter(
+      (choice) => choice.processId === record.id
+    ).length;
+    const materialChoices = [];
+    for (let index = 0; index < materialCount; index += 1) {
+      materialChoices.push({
+        materialId: raw["materialId_" + index],
+        outcome: raw["materialOutcome_" + index]
+      });
+    }
+    return {
+      workstationId: raw.workstationId,
+      needId: raw.needId,
+      outputItemId: raw.outputItemId,
+      trialStepId: raw.trialStepId,
+      materialChoices,
+      editorLabel: raw.editorLabel
+    };
+  }
+  if (selectedGroup === "craftSteps") {
+    return {
+      processId: raw.processId,
+      predecessorStepId: raw.predecessorStepId,
+      actionId: raw.actionId,
+      kind: raw.kind,
       editorLabel: raw.editorLabel
     };
   }

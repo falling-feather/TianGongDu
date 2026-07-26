@@ -1,6 +1,6 @@
 {
   "format": "tgd.sandbox.authoring",
-  "schemaVersion": "1.2.0",
+  "schemaVersion": "1.3.0",
   "runtime": {
     "packageId": "system-demo.package",
     "sandboxId": "system-demo.sandbox",
@@ -309,6 +309,79 @@
         "duty": "flanker",
         "maxHealth": 78
       }
+    ],
+    "craftMaterials": [
+      {
+        "id": "material.jiangnan.umbrella.flexible_bark_paper_patch"
+      },
+      {
+        "id": "material.jiangnan.umbrella.stiff_salvage_paper_patch"
+      }
+    ],
+    "craftWorkstations": [
+      {
+        "id": "workstation.jiangnan.umbrella_tuning",
+        "regionId": "region.system_demo.arena",
+        "assetId": "asset.system_demo.interaction.console",
+        "pose": {
+          "x": 1500,
+          "y": -2800,
+          "height": 0,
+          "floorLayer": 0
+        },
+        "facingMillidegrees": 270000
+      }
+    ],
+    "craftProcesses": [
+      {
+        "id": "craft_process.jiangnan.umbrella_canopy_tuning",
+        "workstationId": "workstation.jiangnan.umbrella_tuning",
+        "needId": "need.jiangnan.umbrella.canopy_tension",
+        "outputItemId": "item.jiangnan.umbrella.tuned_canopy",
+        "trialStepId": "craft_step.jiangnan.umbrella.rain_trial"
+      }
+    ],
+    "craftMaterialChoices": [
+      {
+        "processId": "craft_process.jiangnan.umbrella_canopy_tuning",
+        "materialId": "material.jiangnan.umbrella.flexible_bark_paper_patch",
+        "outcome": "passes_trial"
+      },
+      {
+        "processId": "craft_process.jiangnan.umbrella_canopy_tuning",
+        "materialId": "material.jiangnan.umbrella.stiff_salvage_paper_patch",
+        "outcome": "requires_rework"
+      }
+    ],
+    "craftSteps": [
+      {
+        "id": "craft_step.jiangnan.umbrella.align_rib",
+        "processId": "craft_process.jiangnan.umbrella_canopy_tuning",
+        "predecessorStepId": "",
+        "actionId": "craft_action.umbrella.align_rib",
+        "kind": "operation"
+      },
+      {
+        "id": "craft_step.jiangnan.umbrella.paste_patch",
+        "processId": "craft_process.jiangnan.umbrella_canopy_tuning",
+        "predecessorStepId": "craft_step.jiangnan.umbrella.align_rib",
+        "actionId": "craft_action.umbrella.paste_patch",
+        "kind": "operation"
+      },
+      {
+        "id": "craft_step.jiangnan.umbrella.rain_trial",
+        "processId": "craft_process.jiangnan.umbrella_canopy_tuning",
+        "predecessorStepId": "craft_step.jiangnan.umbrella.paste_patch",
+        "actionId": "craft_action.umbrella.rain_trial",
+        "kind": "trial"
+      },
+      {
+        "id": "craft_step.jiangnan.umbrella.retension",
+        "processId": "craft_process.jiangnan.umbrella_canopy_tuning",
+        "predecessorStepId": "craft_step.jiangnan.umbrella.rain_trial",
+        "actionId": "craft_action.umbrella.retension",
+        "kind": "rework"
+      }
     ]
   },
   "editor": {
@@ -404,6 +477,62 @@
         "ordinal": 12,
         "canvasX": 1360,
         "canvasY": 200
+      },
+      {
+        "id": "workstation.jiangnan.umbrella_tuning",
+        "label": "Umbrella Tuning Workstation",
+        "ordinal": 13,
+        "canvasX": 240,
+        "canvasY": 320
+      },
+      {
+        "id": "craft_process.jiangnan.umbrella_canopy_tuning",
+        "label": "Canopy Tension Need",
+        "ordinal": 14,
+        "canvasX": 400,
+        "canvasY": 320
+      },
+      {
+        "id": "material.jiangnan.umbrella.flexible_bark_paper_patch",
+        "label": "Flexible Paper Patch",
+        "ordinal": 15,
+        "canvasX": 560,
+        "canvasY": 280
+      },
+      {
+        "id": "material.jiangnan.umbrella.stiff_salvage_paper_patch",
+        "label": "Stiff Salvage Patch",
+        "ordinal": 16,
+        "canvasX": 560,
+        "canvasY": 360
+      },
+      {
+        "id": "craft_step.jiangnan.umbrella.align_rib",
+        "label": "Align Loose Rib",
+        "ordinal": 17,
+        "canvasX": 720,
+        "canvasY": 320
+      },
+      {
+        "id": "craft_step.jiangnan.umbrella.paste_patch",
+        "label": "Paste Canopy Patch",
+        "ordinal": 18,
+        "canvasX": 880,
+        "canvasY": 320
+      },
+      {
+        "id": "craft_step.jiangnan.umbrella.rain_trial",
+        "label": "Rain Trial",
+        "ordinal": 19,
+        "canvasX": 1040,
+        "canvasY": 320
+      },
+      {
+        "id": "craft_step.jiangnan.umbrella.retension",
+        "label": "Retension Rework",
+        "ordinal": 20,
+        "canvasX": 1200,
+        "canvasY": 320
       }
     ]
   }

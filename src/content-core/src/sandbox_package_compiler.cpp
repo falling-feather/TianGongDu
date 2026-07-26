@@ -43,8 +43,14 @@ struct ProjectedPackage final {
     std::vector<contracts::SandboxInteractionGameplayBinding> interaction_bindings{};
     std::vector<contracts::SandboxMechanismGameplayBinding> mechanism_bindings{};
     std::vector<contracts::SandboxActorGameplayBinding> actor_bindings{};
+    std::vector<contracts::CraftMaterialDefinition> craft_materials{};
+    std::vector<contracts::CraftWorkstationDefinition> craft_workstations{};
+    std::vector<contracts::CraftProcessDefinition> craft_processes{};
+    std::vector<contracts::CraftMaterialChoiceDefinition> craft_material_choices{};
+    std::vector<contracts::CraftStepDefinition> craft_steps{};
     contracts::SandboxDefinition definition{};
     contracts::SandboxGameplayBindingDefinition gameplay_binding{};
+    contracts::CraftDefinition craft_definition{};
 
     explicit ProjectedPackage(const SandboxAuthoringRuntimeView& runtime)
         : regions(project_records<contracts::SandboxRegionDefinition>(
@@ -208,6 +214,65 @@ struct ProjectedPackage final {
                       value.max_health,
                   };
               }
+          )),
+          craft_materials(project_records<contracts::CraftMaterialDefinition>(
+              runtime.craft_materials,
+              contracts::sandbox_craft_material_capacity,
+              [](const auto& value) {
+                  return contracts::CraftMaterialDefinition{authored_id(value.id)};
+              }
+          )),
+          craft_workstations(project_records<contracts::CraftWorkstationDefinition>(
+              runtime.craft_workstations,
+              contracts::sandbox_craft_workstation_capacity,
+              [](const auto& value) {
+                  return contracts::CraftWorkstationDefinition{
+                      authored_id(value.id),
+                      authored_id(value.region_id),
+                      authored_id(value.asset_id),
+                      value.pose,
+                      value.facing_millidegrees,
+                  };
+              }
+          )),
+          craft_processes(project_records<contracts::CraftProcessDefinition>(
+              runtime.craft_processes,
+              contracts::sandbox_craft_process_capacity,
+              [](const auto& value) {
+                  return contracts::CraftProcessDefinition{
+                      authored_id(value.id),
+                      authored_id(value.workstation_id),
+                      authored_id(value.need_id),
+                      authored_id(value.output_item_id),
+                      authored_id(value.trial_step_id),
+                  };
+              }
+          )),
+          craft_material_choices(
+              project_records<contracts::CraftMaterialChoiceDefinition>(
+                  runtime.craft_material_choices,
+                  contracts::sandbox_craft_material_choice_capacity,
+                  [](const auto& value) {
+                      return contracts::CraftMaterialChoiceDefinition{
+                          authored_id(value.process_id),
+                          authored_id(value.material_id),
+                          value.outcome,
+                      };
+                  }
+              )
+          ),
+          craft_steps(project_records<contracts::CraftStepDefinition>(
+              runtime.craft_steps,
+              contracts::sandbox_craft_step_capacity,
+              [](const auto& value) {
+                  return contracts::CraftStepDefinition{
+                      authored_id(value.id),
+                      authored_id(value.process_id),
+                      authored_id(value.predecessor_step_id),
+                      authored_id(value.action_id),
+                      value.kind,
+                  };
+              }
           )) {
         definition = {
             authored_id(runtime.package_id),
@@ -237,6 +302,13 @@ struct ProjectedPackage final {
             interaction_bindings,
             mechanism_bindings,
             actor_bindings,
+        };
+        craft_definition = {
+            craft_materials,
+            craft_workstations,
+            craft_processes,
+            craft_material_choices,
+            craft_steps,
         };
     }
 };
@@ -321,7 +393,11 @@ SandboxPackageCompileResult compile_sandbox_package(
 ) noexcept {
     try {
         const ProjectedPackage projected{runtime};
-        auto encoded = encode_sandbox_package(projected.definition, projected.gameplay_binding);
+        auto encoded = encode_sandbox_package(
+            projected.definition,
+            projected.gameplay_binding,
+            projected.craft_definition
+        );
         if (!encoded.validation.valid()) {
             return {
                 SandboxPackageCompileStatus::producer_rejected,

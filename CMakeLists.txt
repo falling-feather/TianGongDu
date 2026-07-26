@@ -105,6 +105,7 @@ target_sources(
   PRIVATE
     src/gameplay/src/combat_action_intent.cpp
     src/gameplay/src/combat_resolver.cpp
+    src/gameplay/src/craft_session.cpp
     src/gameplay/src/encounter_director.cpp
     src/gameplay/src/layer_probe.cpp
     src/gameplay/src/playtime_audit.cpp

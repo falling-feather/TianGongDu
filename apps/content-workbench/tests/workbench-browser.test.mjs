@@ -2228,7 +2228,7 @@ test(
     const downloadedPath = await download.path();
     assert.equal(typeof downloadedPath, "string");
     const downloadedBytes = await readFile(downloadedPath);
-    assert.equal(downloadedBytes.byteLength, 2960);
+    assert.equal(downloadedBytes.byteLength, 4128);
     assert.equal(downloadedBytes.byteLength, evidence.packageBytes);
     assert.equal(
       "sha256:" +
@@ -2237,7 +2237,7 @@ test(
     );
     assert.equal(
       evidence.packageSha256,
-      "sha256:a09ce35e58a48c01b15d4946de8e380d752760142ddbefee7bce7f7476b0252e"
+      "sha256:ff93c16e31ba8c6c62ecdd7134f0b64aed63386a3dde464d505837b040848975"
     );
     assert.equal(await focusLabel(page), "package-export-button");
     assert.equal(
@@ -2384,11 +2384,11 @@ test(
       createHash("sha256").update(bytes).digest("hex");
     assert.equal(
       digest(sourceBytes),
-      "07fa5537fc617e0686605a4b7eaeb20ceea24ab7696f5db63e42b23e68e0bb69"
+      "16ce86671277eddf2b55f1ef3cfb90f27a8ad0cb91be0221db89403882280abc"
     );
     assert.equal(
       digest(downloadedBytes),
-      "a09ce35e58a48c01b15d4946de8e380d752760142ddbefee7bce7f7476b0252e"
+      "ff93c16e31ba8c6c62ecdd7134f0b64aed63386a3dde464d505837b040848975"
     );
     t.diagnostic("real module browser: Edge " + browser.version());
     t.diagnostic("source sha256: " + digest(sourceBytes));

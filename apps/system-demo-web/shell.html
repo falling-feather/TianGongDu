@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <meta name="theme-color" content="#071218" />
     <link rel="icon" href="data:," />
-    <title>TianGongDu · System Demo 0.8.3</title>
+    <title>TianGongDu · System Demo 0.8.4</title>
     <style>
       :root {
         color-scheme: dark;
@@ -195,7 +195,7 @@
           <h1>TianGongDu System Demo</h1>
         </div>
         <div class="build">
-          Demo 0.8.3 / Two-wave combat<br />
+          Demo 0.8.4 / Craft trial + two-wave combat<br />
           unique .tgdsbx → C++ runtime → Axmol
         </div>
       </header>
@@ -206,7 +206,7 @@
           width="1280"
           height="720"
           tabindex="0"
-          aria-label="System Demo game canvas. Use WASD to move, F to operate, J or Space for a light attack, K for a heavy attack, and R to retry."
+          aria-label="System Demo game canvas. Use WASD to move, C to enter the craft workstation, 1 or 2 to choose material, 3 and 4 for ordered craft operations, T to trial, G to rework, F to operate the gate, J or Space for a light attack, K for a heavy attack, and R to retry."
         ></canvas>
         <div class="loading" id="loading" data-ready="false" aria-live="polite">
           <div class="loading-card">
@@ -219,6 +219,13 @@
       <footer>
         <div class="controls" aria-label="Scene controls">
           <button type="button" id="focus-scene">Focus scene</button>
+          <button type="button" id="craft-mode">Craft · C</button>
+          <button type="button" id="craft-flexible">Flexible paper · 1</button>
+          <button type="button" id="craft-salvage">Salvage paper · 2</button>
+          <button type="button" id="craft-align">Align · 3</button>
+          <button type="button" id="craft-paste">Paste · 4</button>
+          <button type="button" id="craft-trial">Rain trial · T</button>
+          <button type="button" id="craft-rework">Retension · G</button>
           <button type="button" id="operate">Operate · F</button>
           <button type="button" id="light-attack">Light · J / Space</button>
           <button type="button" id="heavy-attack">Heavy · K</button>
@@ -278,7 +285,20 @@
         ),
         repeatedTriggerCount: exported(
           "tgd_system_demo_qa_repeated_trigger_count"
-        )
+        ),
+        craftMode: exported("tgd_system_demo_qa_craft_mode") !== 0,
+        craftInRange: exported("tgd_system_demo_qa_craft_in_range") !== 0,
+        craftStage: exported("tgd_system_demo_qa_craft_stage"),
+        craftSelectedMaterial: exported(
+          "tgd_system_demo_qa_craft_selected_material"
+        ),
+        craftCompletedOperations: exported(
+          "tgd_system_demo_qa_craft_completed_operations"
+        ),
+        craftTrialCount: exported("tgd_system_demo_qa_craft_trial_count"),
+        craftMistakeCount: exported("tgd_system_demo_qa_craft_mistake_count"),
+        craftReworkCount: exported("tgd_system_demo_qa_craft_rework_count"),
+        craftCompleted: exported("tgd_system_demo_qa_craft_completed") !== 0
       });
 
       const dispatchKey = (code, key) => {
@@ -293,6 +313,7 @@
           telemetryElement.textContent =
             `x ${state.playerX} / y ${state.playerY} / ` +
             `gate ${state.gateOpen ? "open" : "closed"} / ` +
+            `craft ${state.craftStage}${state.craftCompleted ? " passed" : ""} / ` +
             `hp ${state.playerHealth} / hostiles ${state.activeHostileCount} / ` +
             `waves ${state.completedWaveCount}/2`;
         } catch {
@@ -360,6 +381,27 @@
       document.getElementById("focus-scene").addEventListener("click", () => {
         canvasElement.focus({ preventScroll: true });
       });
+      document.getElementById("craft-mode").addEventListener("click", () => {
+        dispatchKey("KeyC", "c");
+      });
+      document.getElementById("craft-flexible").addEventListener("click", () => {
+        dispatchKey("Digit1", "1");
+      });
+      document.getElementById("craft-salvage").addEventListener("click", () => {
+        dispatchKey("Digit2", "2");
+      });
+      document.getElementById("craft-align").addEventListener("click", () => {
+        dispatchKey("Digit3", "3");
+      });
+      document.getElementById("craft-paste").addEventListener("click", () => {
+        dispatchKey("Digit4", "4");
+      });
+      document.getElementById("craft-trial").addEventListener("click", () => {
+        dispatchKey("KeyT", "t");
+      });
+      document.getElementById("craft-rework").addEventListener("click", () => {
+        dispatchKey("KeyG", "g");
+      });
       document.getElementById("operate").addEventListener("click", () => {
         dispatchKey("KeyF", "f");
       });
@@ -392,6 +434,13 @@
         getState,
         getPageErrors: () => [...pageErrors],
         focus: () => canvasElement.focus({ preventScroll: true }),
+        pressCraftMode: () => dispatchKey("KeyC", "c"),
+        pressCraftFlexible: () => dispatchKey("Digit1", "1"),
+        pressCraftSalvage: () => dispatchKey("Digit2", "2"),
+        pressCraftAlign: () => dispatchKey("Digit3", "3"),
+        pressCraftPaste: () => dispatchKey("Digit4", "4"),
+        pressCraftTrial: () => dispatchKey("KeyT", "t"),
+        pressCraftRework: () => dispatchKey("KeyG", "g"),
         pressOperate: () => dispatchKey("KeyF", "f"),
         pressLightAttack: () => dispatchKey("KeyJ", "j"),
         pressHeavyAttack: () => dispatchKey("KeyK", "k"),

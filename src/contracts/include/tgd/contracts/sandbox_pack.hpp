@@ -14,11 +14,11 @@ inline constexpr std::array<std::uint8_t, 8> sandbox_pack_magic{
     'T', 'G', 'D', 'S', 'B', 'X', 0, 0,
 };
 inline constexpr std::uint16_t sandbox_pack_format_major = 1;
-inline constexpr std::uint16_t sandbox_pack_format_minor = 2;
+inline constexpr std::uint16_t sandbox_pack_format_minor = 3;
 inline constexpr std::uint16_t sandbox_content_api_major = 1;
 inline constexpr std::uint16_t sandbox_content_api_minor = 0;
 inline constexpr std::uint16_t sandbox_authoring_schema_major = 1;
-inline constexpr std::uint16_t sandbox_authoring_schema_minor = 2;
+inline constexpr std::uint16_t sandbox_authoring_schema_minor = 3;
 inline constexpr std::uint16_t sandbox_authoring_schema_patch = 0;
 inline constexpr std::size_t sandbox_pack_header_bytes = 96;
 inline constexpr std::size_t sandbox_pack_directory_entry_bytes = 24;
@@ -50,6 +50,11 @@ inline constexpr std::size_t sandbox_mechanism_capacity = 16;
 inline constexpr std::size_t sandbox_wave_capacity = 16;
 inline constexpr std::size_t sandbox_wave_spawn_capacity = 15;
 inline constexpr std::size_t sandbox_objective_capacity = 64;
+inline constexpr std::size_t sandbox_craft_material_capacity = 16;
+inline constexpr std::size_t sandbox_craft_workstation_capacity = 8;
+inline constexpr std::size_t sandbox_craft_process_capacity = 8;
+inline constexpr std::size_t sandbox_craft_material_choice_capacity = 32;
+inline constexpr std::size_t sandbox_craft_step_capacity = 32;
 
 inline constexpr std::uint32_t sandbox_pack_section_optional = 1U;
 
@@ -71,6 +76,11 @@ enum class SandboxPackSectionType : std::uint16_t {
     interaction_gameplay_bindings = 14,
     mechanism_gameplay_bindings = 15,
     actor_gameplay_bindings = 16,
+    craft_materials = 17,
+    craft_workstations = 18,
+    craft_processes = 19,
+    craft_material_choices = 20,
+    craft_steps = 21,
 };
 
 inline constexpr std::uint32_t sandbox_pack_metadata_record_bytes = 64;
@@ -88,6 +98,11 @@ inline constexpr std::uint32_t sandbox_pack_objective_record_bytes = 64;
 inline constexpr std::uint32_t sandbox_pack_interaction_gameplay_binding_record_bytes = 32;
 inline constexpr std::uint32_t sandbox_pack_mechanism_gameplay_binding_record_bytes = 32;
 inline constexpr std::uint32_t sandbox_pack_actor_gameplay_binding_record_bytes = 40;
+inline constexpr std::uint32_t sandbox_pack_craft_material_record_bytes = 16;
+inline constexpr std::uint32_t sandbox_pack_craft_workstation_record_bytes = 64;
+inline constexpr std::uint32_t sandbox_pack_craft_process_record_bytes = 64;
+inline constexpr std::uint32_t sandbox_pack_craft_material_choice_record_bytes = 32;
+inline constexpr std::uint32_t sandbox_pack_craft_step_record_bytes = 64;
 
 enum class SandboxPackageError : std::uint8_t {
     none,
@@ -148,6 +163,12 @@ enum class SandboxDiagnosticCode : std::uint16_t {
     license_blocked = 31,
     web_budget_exceeded = 32,
     invalid_stable_id = 33,
+    invalid_craft_material = 34,
+    invalid_craft_workstation = 35,
+    invalid_craft_process = 36,
+    invalid_craft_material_choice = 37,
+    invalid_craft_step = 38,
+    craft_rework_path_missing = 39,
 };
 
 enum class SandboxDiagnosticSeverity : std::uint8_t {
@@ -173,6 +194,11 @@ enum class SandboxDiagnosticDomain : std::uint8_t {
     waves = 11,
     wave_spawns = 12,
     objectives = 13,
+    craft_materials = 17,
+    craft_workstations = 18,
+    craft_processes = 19,
+    craft_material_choices = 20,
+    craft_steps = 21,
     invalid = 255,
 };
 
@@ -218,6 +244,16 @@ enum class SandboxDiagnosticField : std::uint16_t {
     web_budget = 36,
     package_id = 37,
     sandbox_id = 38,
+    workstation_id = 39,
+    need_id = 40,
+    output_item_id = 41,
+    trial_step_id = 42,
+    process_id = 43,
+    material_id = 44,
+    material_outcome = 45,
+    predecessor_step_id = 46,
+    action_id = 47,
+    craft_step_kind = 48,
     invalid = 65'535,
 };
 
@@ -258,6 +294,12 @@ enum class SandboxDiagnosticField : std::uint16_t {
         case SandboxDiagnosticCode::license_blocked:
         case SandboxDiagnosticCode::web_budget_exceeded:
         case SandboxDiagnosticCode::invalid_stable_id:
+        case SandboxDiagnosticCode::invalid_craft_material:
+        case SandboxDiagnosticCode::invalid_craft_workstation:
+        case SandboxDiagnosticCode::invalid_craft_process:
+        case SandboxDiagnosticCode::invalid_craft_material_choice:
+        case SandboxDiagnosticCode::invalid_craft_step:
+        case SandboxDiagnosticCode::craft_rework_path_missing:
             return SandboxDiagnosticSeverity::error;
     }
     return SandboxDiagnosticSeverity::invalid;

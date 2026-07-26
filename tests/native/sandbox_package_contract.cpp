@@ -64,9 +64,9 @@ static_assert(sandbox_pack_magic[5] == 'X');
 static_assert(sandbox_pack_magic[6] == 0);
 static_assert(sandbox_pack_byte_order == SandboxPackByteOrder::little_endian);
 static_assert(sandbox_pack_format_major == 1);
-static_assert(sandbox_pack_format_minor == 2);
+static_assert(sandbox_pack_format_minor == 3);
 static_assert(sandbox_authoring_schema_major == 1);
-static_assert(sandbox_authoring_schema_minor == 2);
+static_assert(sandbox_authoring_schema_minor == 3);
 static_assert(sandbox_authoring_schema_patch == 0);
 static_assert(sandbox_pack_header_bytes == 96);
 static_assert(sandbox_pack_directory_entry_bytes == 24);
@@ -210,7 +210,7 @@ static_assert(static_cast<std::uint16_t>(SandboxDiagnosticField::invalid) == 65'
 static_assert(!HasDiagnosticSeverityState<SandboxDiagnostic>);
 
 [[nodiscard]] constexpr bool all_sandbox_diagnostic_severities_are_mapped() noexcept {
-    for (std::uint16_t raw = 1; raw <= 33; ++raw) {
+    for (std::uint16_t raw = 1; raw <= 39; ++raw) {
         if (sandbox_diagnostic_severity(static_cast<SandboxDiagnosticCode>(raw)) !=
             SandboxDiagnosticSeverity::error) {
             return false;
@@ -225,7 +225,7 @@ static_assert(
     SandboxDiagnosticSeverity::invalid
 );
 static_assert(
-    sandbox_diagnostic_severity(static_cast<SandboxDiagnosticCode>(34)) ==
+    sandbox_diagnostic_severity(static_cast<SandboxDiagnosticCode>(40)) ==
     SandboxDiagnosticSeverity::invalid
 );
 static_assert(

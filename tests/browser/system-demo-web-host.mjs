@@ -16,7 +16,7 @@ const webRoot = resolve(buildDirectory, "dist/web");
 const evidenceDirectory = resolve(
   repositoryRoot,
   process.env.TGD_SYSTEM_DEMO_EVIDENCE_DIRECTORY ??
-    "build/evidence/demo-083-system-demo-web"
+    "build/evidence/demo-084-system-demo-web"
 );
 
 const requiredFiles = [
@@ -181,7 +181,7 @@ try {
   await page.locator("#canvas").click();
 
   const initial = await state(page);
-  assert.equal(initial.packageByteCount, 2960, "canonical package byte count drifted");
+  assert.equal(initial.packageByteCount, 4128, "canonical package byte count drifted");
   assert.equal(initial.assetCount, 12, "resolved Stable Asset count drifted");
   assert.equal(initial.playerX, 0, "authored player spawn X drifted");
   assert.equal(initial.playerY, -3250, "authored player spawn Y drifted");
@@ -192,10 +192,98 @@ try {
   assert.equal(initial.completedWaveCount, 0);
   assert.equal(initial.completedObjectiveCount, 0);
   assert.equal(initial.terminalCompleted, false);
+  assert.equal(initial.craftMode, false);
+  assert.equal(initial.craftInRange, false);
+  assert.equal(initial.craftStage, 1, "craft must await a material at boot");
+  assert.equal(initial.craftSelectedMaterial, 0);
+  assert.equal(initial.craftCompletedOperations, 0);
+  assert.equal(initial.craftTrialCount, 0);
+  assert.equal(initial.craftMistakeCount, 0);
+  assert.equal(initial.craftReworkCount, 0);
+  assert.equal(initial.craftCompleted, false);
   await page.screenshot({
-    path: resolve(evidenceDirectory, "01-initial-closed-gate.png"),
+    path: resolve(evidenceDirectory, "01-initial-craft-bench-and-closed-gate.png"),
     fullPage: true
   });
+
+  await hold(page, "d", 360);
+  await page.waitForFunction(
+    () => window.__tgdSystemDemo.getState().craftInRange === true,
+    undefined,
+    { timeout: 5_000 }
+  );
+  await page.keyboard.press("c");
+  await page.waitForFunction(
+    () => window.__tgdSystemDemo.getState().craftMode === true,
+    undefined,
+    { timeout: 5_000 }
+  );
+  const craftOpened = await state(page);
+  assert.equal(craftOpened.craftStage, 1);
+  assert.equal(craftOpened.craftSelectedMaterial, 0);
+  await page.screenshot({
+    path: resolve(evidenceDirectory, "02-craft-need-and-material-choice.png"),
+    fullPage: true
+  });
+
+  await page.keyboard.press("2");
+  await page.keyboard.press("4");
+  const wrongOrder = await state(page);
+  assert.equal(wrongOrder.craftSelectedMaterial, 2);
+  assert.equal(wrongOrder.craftStage, 2);
+  assert.equal(
+    wrongOrder.craftCompletedOperations,
+    0,
+    "out-of-order paste mutated craft progress"
+  );
+
+  await page.keyboard.press("3");
+  await page.keyboard.press("4");
+  const trialReady = await state(page);
+  assert.equal(trialReady.craftCompletedOperations, 2);
+  assert.equal(trialReady.craftStage, 3);
+
+  await page.keyboard.press("t");
+  await page.waitForFunction(
+    () => window.__tgdSystemDemo.getState().craftStage === 4,
+    undefined,
+    { timeout: 5_000 }
+  );
+  const reworkRequired = await state(page);
+  assert.equal(reworkRequired.craftTrialCount, 1);
+  assert.equal(reworkRequired.craftMistakeCount, 1);
+  assert.equal(reworkRequired.craftReworkCount, 0);
+  assert.equal(reworkRequired.craftCompleted, false);
+  await page.screenshot({
+    path: resolve(evidenceDirectory, "03-rain-trial-rework-required.png"),
+    fullPage: true
+  });
+
+  await page.keyboard.press("g");
+  const reworked = await state(page);
+  assert.equal(reworked.craftStage, 3);
+  assert.equal(reworked.craftReworkCount, 1);
+  await page.keyboard.press("t");
+  await page.waitForFunction(
+    () => window.__tgdSystemDemo.getState().craftCompleted === true,
+    undefined,
+    { timeout: 5_000 }
+  );
+  const craftCompleted = await state(page);
+  assert.equal(craftCompleted.craftStage, 5);
+  assert.equal(craftCompleted.craftTrialCount, 2);
+  assert.equal(craftCompleted.craftMistakeCount, 1);
+  assert.equal(craftCompleted.craftReworkCount, 1);
+  await page.screenshot({
+    path: resolve(evidenceDirectory, "04-reworked-canopy-retrial-passed.png"),
+    fullPage: true
+  });
+  await page.keyboard.press("c");
+  await page.waitForFunction(
+    () => window.__tgdSystemDemo.getState().craftMode === false,
+    undefined,
+    { timeout: 5_000 }
+  );
 
   await hold(page, "w", 1_450);
   const blocked = await state(page);
@@ -203,7 +291,7 @@ try {
   assert.ok(blocked.blockedMoveCount > 0, "closed gate never blocked movement");
   assert.ok(blocked.playerY <= 400, `player crossed closed gate at Y=${blocked.playerY}`);
 
-  await hold(page, "a", 520);
+  await hold(page, "a", 760);
   await page.keyboard.press("f");
   await page.waitForFunction(
     () => window.__tgdSystemDemo.getState().gateOpen === true,
@@ -226,7 +314,7 @@ try {
   assert.equal(repeated.activeHostileCount, 2, "repeat operate duplicated wave spawns");
   assert.equal(repeated.defeatedHostileCount, 0);
   await page.screenshot({
-    path: resolve(evidenceDirectory, "02-wave-one-active-repeat-safe.png"),
+    path: resolve(evidenceDirectory, "05-wave-one-active-repeat-safe.png"),
     fullPage: true
   });
 
@@ -244,7 +332,7 @@ try {
   assert.equal(defeated.terminalCompleted, false);
   assert.equal(defeated.activeHostileCount > 0, true);
   await page.screenshot({
-    path: resolve(evidenceDirectory, "03-player-defeated.png"),
+    path: resolve(evidenceDirectory, "06-player-defeated.png"),
     fullPage: true
   });
 
@@ -266,8 +354,15 @@ try {
   assert.equal(retried.completedObjectiveCount, 0);
   assert.equal(retried.terminalCompleted, false);
   assert.equal(retried.repeatedTriggerCount, 0);
+  assert.equal(retried.craftStage, 1);
+  assert.equal(retried.craftSelectedMaterial, 0);
+  assert.equal(retried.craftCompletedOperations, 0);
+  assert.equal(retried.craftTrialCount, 0);
+  assert.equal(retried.craftMistakeCount, 0);
+  assert.equal(retried.craftReworkCount, 0);
+  assert.equal(retried.craftCompleted, false);
   await page.screenshot({
-    path: resolve(evidenceDirectory, "04-death-retry-restored.png"),
+    path: resolve(evidenceDirectory, "07-death-retry-restored-all-systems.png"),
     fullPage: true
   });
 
@@ -287,7 +382,7 @@ try {
   assert.ok(terminal.acceptedAttackCount > 0);
   assert.ok(terminal.playerY > 1100, `player did not cross opened gate: Y=${terminal.playerY}`);
   await page.screenshot({
-    path: resolve(evidenceDirectory, "05-two-waves-terminal-complete.png"),
+    path: resolve(evidenceDirectory, "08-two-waves-terminal-complete.png"),
     fullPage: true
   });
 
@@ -314,8 +409,8 @@ try {
   assert.deepEqual(requestErrors, [], "browser request errors were emitted");
 
   routeEvidence = {
-    taskId: "DEMO-083",
-    productVersion: "Demo 0.8.3",
+    taskId: "DEMO-084",
+    productVersion: "Demo 0.8.4",
     commit: execFileSync("git", ["rev-parse", "HEAD"], {
       cwd: repositoryRoot,
       encoding: "utf8"
@@ -327,6 +422,12 @@ try {
     },
     url: `${server.origin}/tiangongdu-system-demo.html?qa=1`,
     initial,
+    craftOpened,
+    wrongOrder,
+    trialReady,
+    reworkRequired,
+    reworked,
+    craftCompleted,
     blocked,
     opened,
     repeated,
@@ -338,11 +439,14 @@ try {
     pageErrors,
     requestErrors,
     screenshots: [
-      "01-initial-closed-gate.png",
-      "02-wave-one-active-repeat-safe.png",
-      "03-player-defeated.png",
-      "04-death-retry-restored.png",
-      "05-two-waves-terminal-complete.png"
+      "01-initial-craft-bench-and-closed-gate.png",
+      "02-craft-need-and-material-choice.png",
+      "03-rain-trial-rework-required.png",
+      "04-reworked-canopy-retrial-passed.png",
+      "05-wave-one-active-repeat-safe.png",
+      "06-player-defeated.png",
+      "07-death-retry-restored-all-systems.png",
+      "08-two-waves-terminal-complete.png"
     ]
   };
   await writeFile(
@@ -351,8 +455,16 @@ try {
     "utf8"
   );
   process.stdout.write(
-    `[demo-083] real Web route passed ${JSON.stringify({
+    `[demo-084] real Web craft + combat route passed ${JSON.stringify({
       browser: routeEvidence.browser,
+      craft: {
+        wrongOrderPreservedOperations:
+          wrongOrder.craftCompletedOperations,
+        trials: craftCompleted.craftTrialCount,
+        mistakes: craftCompleted.craftMistakeCount,
+        reworks: craftCompleted.craftReworkCount,
+        completed: craftCompleted.craftCompleted
+      },
       blockedMoveCount: blocked.blockedMoveCount,
       repeatedTriggerCount: repeated.repeatedTriggerCount,
       terminal: {

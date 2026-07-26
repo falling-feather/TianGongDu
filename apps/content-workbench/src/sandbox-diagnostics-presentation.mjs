@@ -36,6 +36,15 @@ const PACKAGE_MESSAGES = Object.freeze({
   33: "Stable ID 格式无效。"
 });
 
+const CRAFT_PACKAGE_MESSAGES = Object.freeze({
+  34: "Craft material definition is invalid.",
+  35: "Craft workstation definition is invalid.",
+  36: "Craft process definition is invalid.",
+  37: "Craft material choice is invalid.",
+  38: "Craft step definition is invalid.",
+  39: "Craft process has no complete trial and recoverable rework path."
+});
+
 const BINDING_MESSAGES = Object.freeze({
   2: "Interaction Binding 数量超过容量。",
   3: "Mechanism Binding 数量超过容量。",
@@ -84,6 +93,19 @@ const PACKAGE_FIELDS = Object.freeze({
   16: "height",
   17: "floorLayer",
   18: "facingMillidegrees"
+});
+
+const CRAFT_PACKAGE_FIELDS = Object.freeze({
+  39: "workstationId",
+  40: "needId",
+  41: "outputItemId",
+  42: "trialStepId",
+  43: "processId",
+  44: "materialId",
+  45: "outcome",
+  46: "predecessorStepId",
+  47: "actionId",
+  48: "kind"
 });
 
 const BINDING_FIELDS = Object.freeze({
@@ -176,6 +198,34 @@ const VISIBLE_FIELDS = Object.freeze({
   ])
 });
 
+const CRAFT_VISIBLE_FIELDS = Object.freeze({
+  craftMaterials: new Set(["id"]),
+  craftWorkstations: new Set([
+    "id",
+    "regionId",
+    "assetId",
+    "x",
+    "y",
+    "height",
+    "floorLayer",
+    "facingMillidegrees"
+  ]),
+  craftProcesses: new Set([
+    "id",
+    "workstationId",
+    "needId",
+    "outputItemId",
+    "trialStepId"
+  ]),
+  craftSteps: new Set([
+    "id",
+    "processId",
+    "predecessorStepId",
+    "actionId",
+    "kind"
+  ])
+});
+
 function invalidPresentation() {
   const error = new Error("Sandbox diagnostic presentation input is invalid");
   error.code = "diagnostic_presentation_invalid";
@@ -203,7 +253,19 @@ function packageRecord(runtime, section, recordIndex) {
     7: ["groundBlockers", runtime.groundBlockers],
     8: ["safePoints", runtime.safePoints],
     9: ["interactions", runtime.interactions],
-    10: ["mechanisms", runtime.mechanisms]
+    10: ["mechanisms", runtime.mechanisms],
+    17: ["craftMaterials", runtime.craftMaterials],
+    18: ["craftWorkstations", runtime.craftWorkstations],
+    19: ["craftProcesses", runtime.craftProcesses],
+    20: [
+      "craftProcesses",
+      runtime.craftMaterialChoices.map((choice) =>
+        runtime.craftProcesses.find(({ id }) => id === choice.processId) ?? {
+          id: choice.processId
+        }
+      )
+    ],
+    21: ["craftSteps", runtime.craftSteps]
   };
   const entry = collections[section];
   if (!entry || recordIndex >= entry[1].length) {
@@ -254,7 +316,7 @@ function locatorFor(entry, field, subjectId) {
     !entry ||
     subjectId === null ||
     entry.record.id !== subjectId ||
-    !VISIBLE_FIELDS[entry.group]?.has(field)
+    !(VISIBLE_FIELDS[entry.group] ?? CRAFT_VISIBLE_FIELDS[entry.group])?.has(field)
   ) {
     return null;
   }
@@ -266,17 +328,20 @@ function locatorFor(entry, field, subjectId) {
 }
 
 function presentPackageDiagnostic(raw, runtime) {
-  const code = expectInteger(raw?.code, 1, 33);
+  const code = expectInteger(raw?.code, 1, 39);
   const severity = expectInteger(raw?.severity, 1, 2);
-  const section = expectInteger(raw?.section, 0, 13);
-  const fieldCode = expectInteger(raw?.field, 0, 38);
+  const section = expectInteger(raw?.section, 0, 21);
+  if (section > 13 && section < 17) {
+    invalidPresentation();
+  }
+  const fieldCode = expectInteger(raw?.field, 0, 48);
   const recordIndex = expectInteger(raw?.recordIndex, 0, 0xffffffff);
   const subjectId = expectOptionalId(raw?.subjectId);
   expectOptionalId(raw?.relatedId);
-  const field = PACKAGE_FIELDS[fieldCode] ?? null;
+  const field = PACKAGE_FIELDS[fieldCode] ?? CRAFT_PACKAGE_FIELDS[fieldCode] ?? null;
   return Object.freeze({
     severity: severity === 1 ? "error" : "warning",
-    message: PACKAGE_MESSAGES[code],
+    message: PACKAGE_MESSAGES[code] ?? CRAFT_PACKAGE_MESSAGES[code],
     locator: field
       ? locatorFor(packageRecord(runtime, section, recordIndex), field, subjectId)
       : null

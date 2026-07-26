@@ -112,6 +112,42 @@ struct SandboxAuthoringActorBinding final {
     std::int32_t max_health{};
 };
 
+struct SandboxAuthoringCraftMaterial final {
+    std::string_view id{};
+};
+
+struct SandboxAuthoringCraftWorkstation final {
+    std::string_view id{};
+    std::string_view region_id{};
+    std::string_view asset_id{};
+    contracts::GroundPoseMm pose{};
+    std::uint32_t facing_millidegrees{};
+};
+
+struct SandboxAuthoringCraftProcess final {
+    std::string_view id{};
+    std::string_view workstation_id{};
+    std::string_view need_id{};
+    std::string_view output_item_id{};
+    std::string_view trial_step_id{};
+};
+
+struct SandboxAuthoringCraftMaterialChoice final {
+    std::string_view process_id{};
+    std::string_view material_id{};
+    contracts::CraftMaterialOutcome outcome{
+        contracts::CraftMaterialOutcome::invalid
+    };
+};
+
+struct SandboxAuthoringCraftStep final {
+    std::string_view id{};
+    std::string_view process_id{};
+    std::string_view predecessor_step_id{};
+    std::string_view action_id{};
+    contracts::CraftStepKind kind{contracts::CraftStepKind::invalid};
+};
+
 // Synchronous, non-owning projection of the normalized authoring runtime domain.
 // The caller retains every string and array until compile_sandbox_package returns.
 // JSON parsing and closed-shape validation remain owned by Content Workbench.
@@ -134,6 +170,11 @@ struct SandboxAuthoringRuntimeView final {
     std::span<const SandboxAuthoringInteractionBinding> interaction_bindings{};
     std::span<const SandboxAuthoringMechanismBinding> mechanism_bindings{};
     std::span<const SandboxAuthoringActorBinding> actor_bindings{};
+    std::span<const SandboxAuthoringCraftMaterial> craft_materials{};
+    std::span<const SandboxAuthoringCraftWorkstation> craft_workstations{};
+    std::span<const SandboxAuthoringCraftProcess> craft_processes{};
+    std::span<const SandboxAuthoringCraftMaterialChoice> craft_material_choices{};
+    std::span<const SandboxAuthoringCraftStep> craft_steps{};
 };
 
 enum class SandboxPackageCompileStatus : std::uint8_t {

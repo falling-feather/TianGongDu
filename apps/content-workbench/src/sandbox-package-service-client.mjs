@@ -1,6 +1,7 @@
 const ABI_VERSION_1_0 = 0x00010000;
 const ABI_VERSION_1_1 = 0x00010001;
 const ABI_VERSION_1_2 = 0x00010002;
+const ABI_VERSION_1_3 = 0x00010003;
 const MAX_CANONICAL_PACKAGE_BYTES = 4 * 1024 * 1024;
 const HEADER_BYTES = 120;
 const ARTIFACT_BYTES = 16;
@@ -84,7 +85,7 @@ export function decodeSandboxPackageServiceResult(source) {
   if (
     data.getUint8(0) !== 1 ||
     abiMajor !== 1 ||
-    (abiMinor !== 0 && abiMinor !== 1 && abiMinor !== 2) ||
+    (abiMinor !== 0 && abiMinor !== 1 && abiMinor !== 2 && abiMinor !== 3) ||
     bytes.byteLength < prefixBytes ||
     total !== bytes.byteLength ||
     diagnosticsOffset !== prefixBytes ||
@@ -129,8 +130,8 @@ export function decodeSandboxPackageServiceResult(source) {
     const section = data.getUint8(offset + 3);
     const field = data.getUint16(offset + 4, true);
     if ((flags & ~3) !== 0 || data.getUint32(offset + 44, true) !== 0 ||
-        code < 1 || code > 33 || (severity !== 1 && severity !== 2) ||
-        section > 13 || field > 38) {
+        code < 1 || code > 39 || (severity !== 1 && severity !== 2) ||
+        (section > 13 && (section < 17 || section > 21)) || field > 48) {
       throw new SandboxPackageServiceTransportError(9, "invalid diagnostic flags");
     }
     const subjectOffset = data.getUint32(offset + 28, true);
@@ -253,6 +254,12 @@ const completionKinds = Object.freeze({
 const actorFactions = Object.freeze({ hostile: 1 });
 const actorDuties = Object.freeze({
   pressure: 0, flanker: 1, harrier: 2, controller: 3
+});
+const craftMaterialOutcomes = Object.freeze({
+  passes_trial: 1, requires_rework: 2
+});
+const craftStepKinds = Object.freeze({
+  operation: 1, trial: 2, rework: 3
 });
 
 function structuralError(path, expected) {
@@ -379,7 +386,9 @@ function validateStructuralInput(runtime, expectedIdentity) {
     "packageId", "sandboxId", "bounds", "completionObjectiveId", "player",
     "regions", "assets", "actors", "groundBlockers", "safePoints",
     "interactions", "mechanisms", "waves", "waveSpawns", "objectives",
-    "interactionBindings", "mechanismBindings", "actorBindings"
+    "interactionBindings", "mechanismBindings", "actorBindings",
+    "craftMaterials", "craftWorkstations", "craftProcesses",
+    "craftMaterialChoices", "craftSteps"
   ]);
   for (const name of ["packageId", "sandboxId", "completionObjectiveId"])
     expectString(root[name], "runtime." + name, strings);
@@ -473,6 +482,53 @@ function validateStructuralInput(runtime, expectedIdentity) {
     expectString(record.duty, path + ".duty", strings);
     expectInteger(record.maxHealth, -2147483648, 2147483647, path + ".maxHealth");
   });
+  expectArray(root.craftMaterials, "runtime.craftMaterials").forEach((value, index) => {
+    const path = "runtime.craftMaterials[" + index + "]";
+    const record = expectObject(value, path, ["id"]);
+    expectString(record.id, path + ".id", strings);
+  });
+  expectArray(root.craftWorkstations, "runtime.craftWorkstations").forEach(
+    (value, index) =>
+      checkPlacement(
+        value,
+        "runtime.craftWorkstations[" + index + "]",
+        strings
+      )
+  );
+  expectArray(root.craftProcesses, "runtime.craftProcesses").forEach((value, index) => {
+    const path = "runtime.craftProcesses[" + index + "]";
+    const record = expectObject(value, path, [
+      "id", "workstationId", "needId", "outputItemId", "trialStepId"
+    ]);
+    for (const name of [
+      "id", "workstationId", "needId", "outputItemId", "trialStepId"
+    ]) {
+      expectString(record[name], path + "." + name, strings);
+    }
+  });
+  expectArray(
+    root.craftMaterialChoices,
+    "runtime.craftMaterialChoices"
+  ).forEach((value, index) => {
+    const path = "runtime.craftMaterialChoices[" + index + "]";
+    const record = expectObject(value, path, [
+      "processId", "materialId", "outcome"
+    ]);
+    expectString(record.processId, path + ".processId", strings);
+    expectString(record.materialId, path + ".materialId", strings);
+    expectString(record.outcome, path + ".outcome", strings);
+  });
+  expectArray(root.craftSteps, "runtime.craftSteps").forEach((value, index) => {
+    const path = "runtime.craftSteps[" + index + "]";
+    const record = expectObject(value, path, [
+      "id", "processId", "predecessorStepId", "actionId", "kind"
+    ]);
+    for (const name of [
+      "id", "processId", "predecessorStepId", "actionId", "kind"
+    ]) {
+      expectString(record[name], path + "." + name, strings);
+    }
+  });
   return strings;
 }
 
@@ -511,7 +567,8 @@ export class SandboxPackageServiceClient {
     if (
       abiVersion !== ABI_VERSION_1_0 &&
       abiVersion !== ABI_VERSION_1_1 &&
-      abiVersion !== ABI_VERSION_1_2
+      abiVersion !== ABI_VERSION_1_2 &&
+      abiVersion !== ABI_VERSION_1_3
     ) {
       throw new SandboxPackageServiceTransportError(9, "incompatible ABI");
     }
@@ -647,7 +704,7 @@ export class SandboxPackageServiceClient {
         record.setUint32(4, text(value.targetGroundBlockerId), true);
         record.setUint8(8, value.activation === "one_shot_activate" ? 1 : 255);
       });
-      if (this.abiVersion === ABI_VERSION_1_2) {
+      if (this.abiVersion >= ABI_VERSION_1_2) {
         for (const value of runtime.actorBindings) invoke("tgd_sandbox_compile_request_append_actor_binding", 16, (record) => {
           record.setUint32(0, text(value.actorId), true);
           record.setUint32(4, text(value.profileId), true);
@@ -655,6 +712,42 @@ export class SandboxPackageServiceClient {
           record.setUint8(12, enumValue(actorFactions, value.faction));
           record.setUint8(13, enumValue(actorDuties, value.duty));
         });
+      }
+      if (this.abiVersion === ABI_VERSION_1_3) {
+        for (const value of runtime.craftMaterials)
+          invoke("tgd_sandbox_compile_request_append_craft_material", 4, (record) => {
+            record.setUint32(0, text(value.id), true);
+          });
+        for (const value of runtime.craftWorkstations)
+          invoke("tgd_sandbox_compile_request_append_craft_workstation", 32, (record) => {
+            record.setUint32(0, text(value.id), true);
+            record.setUint32(4, text(value.regionId), true);
+            record.setUint32(8, text(value.assetId), true);
+            writePose(record, 12, value.pose);
+            record.setUint32(28, value.facingMillidegrees, true);
+          });
+        for (const value of runtime.craftProcesses)
+          invoke("tgd_sandbox_compile_request_append_craft_process", 20, (record) => {
+            record.setUint32(0, text(value.id), true);
+            record.setUint32(4, text(value.workstationId), true);
+            record.setUint32(8, text(value.needId), true);
+            record.setUint32(12, text(value.outputItemId), true);
+            record.setUint32(16, text(value.trialStepId), true);
+          });
+        for (const value of runtime.craftMaterialChoices)
+          invoke("tgd_sandbox_compile_request_append_craft_material_choice", 12, (record) => {
+            record.setUint32(0, text(value.processId), true);
+            record.setUint32(4, text(value.materialId), true);
+            record.setUint8(8, enumValue(craftMaterialOutcomes, value.outcome));
+          });
+        for (const value of runtime.craftSteps)
+          invoke("tgd_sandbox_compile_request_append_craft_step", 20, (record) => {
+            record.setUint32(0, text(value.id), true);
+            record.setUint32(4, text(value.processId), true);
+            record.setUint32(8, text(value.predecessorStepId), true);
+            record.setUint32(12, text(value.actionId), true);
+            record.setUint8(16, enumValue(craftStepKinds, value.kind));
+          });
       }
       module.HEAPU8.fill(0, scratch, scratch + 4);
       const status = call(module, "tgd_sandbox_compile_request_submit",

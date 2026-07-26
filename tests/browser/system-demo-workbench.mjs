@@ -42,6 +42,42 @@ const interactionId = "interaction.system_demo.console.demo082";
 const invalidInteractionId =
   "interaction.system_demo.console.demo082.invalid";
 const sourceInteractionId = "interaction.system_demo.console";
+const craftPanels = [
+  {
+    kind: "craftMaterials",
+    id: "material.jiangnan.umbrella.flexible_bark_paper_patch",
+    fields: ["editorLabel"]
+  },
+  {
+    kind: "craftWorkstations",
+    id: "workstation.jiangnan.umbrella_tuning",
+    fields: ["editorLabel", "regionId", "assetId", "x", "y"]
+  },
+  {
+    kind: "craftProcesses",
+    id: "craft_process.jiangnan.umbrella_canopy_tuning",
+    fields: [
+      "editorLabel",
+      "workstationId",
+      "needId",
+      "outputItemId",
+      "trialStepId",
+      "materialOutcome_0",
+      "materialOutcome_1"
+    ]
+  },
+  {
+    kind: "craftSteps",
+    id: "craft_step.jiangnan.umbrella.rain_trial",
+    fields: [
+      "editorLabel",
+      "processId",
+      "predecessorStepId",
+      "actionId",
+      "kind"
+    ]
+  }
+];
 
 const requiredArtifacts = [
   "dist/web/tiangongdu-system-demo.html",
@@ -180,6 +216,33 @@ try {
       "system-demo.sandbox.json"
   );
 
+  for (const panel of craftPanels) {
+    await selectTreeObject(page, panel.kind, panel.id);
+    for (const field of panel.fields) {
+      assert.equal(
+        await page.locator(`#inspector-form [name="${field}"]`).count(),
+        1,
+        `${panel.kind} did not render ${field}`
+      );
+    }
+    assert.equal(
+      await page.locator("#duplicate-object-button").getAttribute(
+        "aria-disabled"
+      ),
+      "true"
+    );
+    assert.equal(
+      await page.locator("#delete-object-button").getAttribute(
+        "aria-disabled"
+      ),
+      "true"
+    );
+  }
+  await page.screenshot({
+    path: path.join(evidenceDirectory, "00-craft-update-only-panels.png"),
+    fullPage: true
+  });
+
   await selectTreeObject(page, "actors", sourceActorId);
   await duplicateSelected(page, {
     id: actorId,
@@ -301,6 +364,8 @@ try {
   assert.equal(launchedRuntime.ready, true);
   assert.equal(launchedRuntime.assetCount, 12);
   assert.equal(launchedRuntime.packageByteCount, launchPublication.packageBytes);
+  assert.equal(launchedRuntime.craftStage, 1);
+  assert.equal(launchedRuntime.craftCompleted, false);
   await page.screenshot({
     path: path.join(evidenceDirectory, "02-launch-live.png"),
     fullPage: true
@@ -452,6 +517,7 @@ try {
     },
     route: {
       url: running.url,
+      craftPanels: craftPanels.map(({ kind, id }) => ({ kind, id })),
       createdActor: actorId,
       createdInteraction: interactionId,
       removedInteraction: sourceInteractionId,
@@ -488,6 +554,7 @@ try {
     pageErrors,
     requestErrors,
     screenshots: [
+      "00-craft-update-only-panels.png",
       "01-crud-diagnostic.png",
       "02-launch-live.png",
       "03-reload-keeps-live.png",
@@ -510,6 +577,7 @@ try {
       ],
       packageChanged:
         launchPublication.packageSha256 !== reloadPublication.packageSha256,
+      craftPanels: craftPanels.length,
       evidenceDirectory
     })}\n`
   );

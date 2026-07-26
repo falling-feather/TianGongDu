@@ -376,6 +376,102 @@ test("actor gameplay bindings and authored wave/objective panels update atomical
   assert.equal(controller.view().revision, 3);
 });
 
+test("craft material, workstation, process, and step panels update one valid authoring document", async () => {
+  const controller = await openedController();
+  const material = controller.view().document.runtime.craftMaterials[0];
+  controller.updateObject({
+    kind: "craftMaterials",
+    id: material.id,
+    values: { editorLabel: "Flexible Trial Patch" },
+    expectedRevision: 0
+  });
+  assert.equal(
+    controller.view().document.editor.items.find(({ id }) => id === material.id)
+      ?.label,
+    "Flexible Trial Patch"
+  );
+
+  const workstation = controller.view().document.runtime.craftWorkstations[0];
+  controller.updateObject({
+    kind: "craftWorkstations",
+    id: workstation.id,
+    values: {
+      regionId: workstation.regionId,
+      assetId: workstation.assetId,
+      pose: { ...workstation.pose, x: workstation.pose.x - 100 },
+      facingMillidegrees: 180000,
+      editorLabel: "Canopy Tuning Bench"
+    },
+    expectedRevision: 1
+  });
+  assert.equal(
+    controller.view().document.runtime.craftWorkstations[0].pose.x,
+    workstation.pose.x - 100
+  );
+
+  const process = controller.view().document.runtime.craftProcesses[0];
+  const choices = controller.view().document.runtime.craftMaterialChoices
+    .filter(({ processId }) => processId === process.id)
+    .map(({ materialId, outcome }) => ({ materialId, outcome }));
+  controller.updateObject({
+    kind: "craftProcesses",
+    id: process.id,
+    values: {
+      workstationId: process.workstationId,
+      needId: "need.jiangnan.umbrella.canopy_tension.preview",
+      outputItemId: process.outputItemId,
+      trialStepId: process.trialStepId,
+      materialChoices: choices,
+      editorLabel: "Canopy Tuning Preview"
+    },
+    expectedRevision: 2
+  });
+  assert.deepEqual(
+    controller.view().document.runtime.craftMaterialChoices
+      .filter(({ processId }) => processId === process.id)
+      .map(({ materialId, outcome }) => ({ materialId, outcome })),
+    choices
+  );
+
+  const step = controller.view().document.runtime.craftSteps[0];
+  controller.updateObject({
+    kind: "craftSteps",
+    id: step.id,
+    values: {
+      processId: step.processId,
+      predecessorStepId: step.predecessorStepId,
+      actionId: "craft_action.umbrella.align_rib.preview",
+      kind: step.kind,
+      editorLabel: "Align Ribs Preview"
+    },
+    expectedRevision: 3
+  });
+  assert.equal(
+    controller.view().document.runtime.craftSteps[0].actionId,
+    "craft_action.umbrella.align_rib.preview"
+  );
+  assert.equal(controller.view().revision, 4);
+
+  assert.throws(
+    () =>
+      controller.updateObject({
+        kind: "craftProcesses",
+        id: process.id,
+        values: {
+          workstationId: process.workstationId,
+          needId: process.needId,
+          outputItemId: process.outputItemId,
+          trialStepId: process.trialStepId,
+          materialChoices: choices,
+          unsupportedCreate: true
+        },
+        expectedRevision: 4
+      }),
+    (error) => error.code === "invalid_request"
+  );
+  assert.equal(controller.view().revision, 4);
+});
+
 test("Preview publication owns a fresh package and stale edits preserve the last publication", async () => {
   const controller = await openedController({
     compilerService: compilerService(),

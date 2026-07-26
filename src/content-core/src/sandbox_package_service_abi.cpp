@@ -69,6 +69,11 @@ struct OwnedRequest final {
     std::vector<tgd_sandbox_service_interaction_binding> interaction_bindings{};
     std::vector<tgd_sandbox_service_mechanism_binding> mechanism_bindings{};
     std::vector<tgd_sandbox_service_actor_binding> actor_bindings{};
+    std::vector<tgd_sandbox_service_craft_material> craft_materials{};
+    std::vector<tgd_sandbox_service_placement> craft_workstations{};
+    std::vector<tgd_sandbox_service_craft_process> craft_processes{};
+    std::vector<tgd_sandbox_service_craft_material_choice> craft_material_choices{};
+    std::vector<tgd_sandbox_service_craft_step> craft_steps{};
     std::size_t copied_utf8_bytes{};
 };
 
@@ -200,6 +205,11 @@ struct RuntimeProjection final {
     std::vector<SandboxAuthoringInteractionBinding> interaction_bindings{};
     std::vector<SandboxAuthoringMechanismBinding> mechanism_bindings{};
     std::vector<SandboxAuthoringActorBinding> actor_bindings{};
+    std::vector<SandboxAuthoringCraftMaterial> craft_materials{};
+    std::vector<SandboxAuthoringCraftWorkstation> craft_workstations{};
+    std::vector<SandboxAuthoringCraftProcess> craft_processes{};
+    std::vector<SandboxAuthoringCraftMaterialChoice> craft_material_choices{};
+    std::vector<SandboxAuthoringCraftStep> craft_steps{};
     SandboxAuthoringRuntimeView view{};
 
     explicit RuntimeProjection(const OwnedRequest& request) {
@@ -274,6 +284,43 @@ struct RuntimeProjection final {
                 value.max_health,
             });
         }
+        for (const auto& value : request.craft_materials) {
+            craft_materials.push_back({get_string(request, value.id)});
+        }
+        for (const auto& value : request.craft_workstations) {
+            craft_workstations.push_back({
+                get_string(request, value.id),
+                get_string(request, value.region_id),
+                get_string(request, value.asset_id),
+                to_pose(value.pose),
+                value.facing_millidegrees,
+            });
+        }
+        for (const auto& value : request.craft_processes) {
+            craft_processes.push_back({
+                get_string(request, value.id),
+                get_string(request, value.workstation_id),
+                get_string(request, value.need_id),
+                get_string(request, value.output_item_id),
+                get_string(request, value.trial_step_id),
+            });
+        }
+        for (const auto& value : request.craft_material_choices) {
+            craft_material_choices.push_back({
+                get_string(request, value.process_id),
+                get_string(request, value.material_id),
+                static_cast<CraftMaterialOutcome>(value.outcome),
+            });
+        }
+        for (const auto& value : request.craft_steps) {
+            craft_steps.push_back({
+                get_string(request, value.id),
+                get_string(request, value.process_id),
+                get_string(request, value.predecessor_step_id),
+                get_string(request, value.action_id),
+                static_cast<CraftStepKind>(value.kind),
+            });
+        }
         view = {
             get_string(request, metadata.package_id),
             get_string(request, metadata.sandbox_id),
@@ -287,7 +334,9 @@ struct RuntimeProjection final {
             },
             regions, assets, actors, blockers, safe_points, interactions, mechanisms,
             waves, wave_spawns, objectives, interaction_bindings,
-            mechanism_bindings, actor_bindings,
+            mechanism_bindings, actor_bindings, craft_materials,
+            craft_workstations, craft_processes, craft_material_choices,
+            craft_steps,
         };
     }
 };
@@ -716,6 +765,28 @@ TGD_APPEND_DEFINITION(actor_binding, tgd_sandbox_service_actor_binding,
     actor_bindings, sandbox_actor_capacity + 1U,
     valid_ref(owned, value.actor_id) &&
     valid_ref(owned, value.profile_id) && all_zero(value.reserved))
+TGD_APPEND_DEFINITION(craft_material, tgd_sandbox_service_craft_material,
+    craft_materials, sandbox_craft_material_capacity + 1U,
+    valid_ref(owned, value.id))
+TGD_APPEND_DEFINITION(craft_workstation, tgd_sandbox_service_placement,
+    craft_workstations, sandbox_craft_workstation_capacity + 1U,
+    valid_ref(owned, value.id) && valid_ref(owned, value.region_id) &&
+    valid_ref(owned, value.asset_id) && value.pose.reserved == 0)
+TGD_APPEND_DEFINITION(craft_process, tgd_sandbox_service_craft_process,
+    craft_processes, sandbox_craft_process_capacity + 1U,
+    valid_ref(owned, value.id) && valid_ref(owned, value.workstation_id) &&
+    valid_ref(owned, value.need_id) && valid_ref(owned, value.output_item_id) &&
+    valid_ref(owned, value.trial_step_id))
+TGD_APPEND_DEFINITION(craft_material_choice,
+    tgd_sandbox_service_craft_material_choice, craft_material_choices,
+    sandbox_craft_material_choice_capacity + 1U,
+    valid_ref(owned, value.process_id) &&
+    valid_ref(owned, value.material_id) && all_zero(value.reserved))
+TGD_APPEND_DEFINITION(craft_step, tgd_sandbox_service_craft_step,
+    craft_steps, sandbox_craft_step_capacity + 1U,
+    valid_ref(owned, value.id) && valid_ref(owned, value.process_id) &&
+    valid_ref(owned, value.predecessor_step_id) &&
+    valid_ref(owned, value.action_id) && all_zero(value.reserved))
 
 #undef TGD_APPEND_DEFINITION
 

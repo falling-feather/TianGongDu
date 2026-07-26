@@ -74,8 +74,8 @@ const architectureSkeleton = [
 
 const handoffContractMarkers = [
   ["docs/00-项目总纲.md", ["体验指导优先级", "《斗战神》是整体体验的第一指导", "团队交付入口", "第一轮必读顺序", "任务卡必须同时写明"]],
-  ["docs/01-开发者文档.md", ["团队拓扑与模块所有权", "Definition of Ready", "首个 Bootstrap 迭代", "工程能力工作包索引", "DEV-CAP-04"]],
-  ["docs/02-版本规划与验收.md", ["f1_rainy_umbrella_trial", "2.5D 斜向全景", "当前可交接成熟度", "0–30 / 31–60 / 61–90", "标准证据包", "F1 跨团队派工表", "F1-DEV-04", "任务卡复制模板"]],
+  ["docs/01-开发者文档.md", ["当前实现事实", "当前未完成模块", "必须遵守的开发准则", "工作项 DoR 与 DoD", "二级开发手册"]],
+  ["docs/02-版本规划与验收.md", ["系统型 Demo 目标画面", "Demo 阶段与时间估算", "模块完成度与后续工作", "系统型 Demo 放行条件", "必须保留的回归基线", "PLATFORM-001", "TOOLS-004", "GAME-005"]],
   ["docs/04-游戏设计总纲.md", ["2.5D 斜向全景空间与相机", "玩家本体、推进与装备边界", "F1 战斗手感种子", "命名遭遇等级"]],
   ["docs/05-世界与叙事圣经.md", ["玩家角色正史边界", "技术年代感与幻想边界", "天工院介入程序"]],
   ["docs/06-内容生产规范.md", ["内容 Definition of Ready", "template_elite_encounter", "F1 金标准实例"]],
@@ -181,8 +181,8 @@ async function validateHandoffDocumentation(root, errors) {
 
   const planning = await readFile(join(root, "docs", "02-版本规划与验收.md"), "utf8");
   pushIf(errors, planning.includes("当前处于 **F0.1"), "F0.1 已完成，02 不得继续把它写成当前阶段。");
-  pushIf(errors, !planning.includes("### 4.1 F1 硬门") || !planning.includes("### 4.2 F1 条件/决策 Spike"), "F1 必须区分硬门与条件/决策 Spike。");
-  pushIf(errors, !planning.includes("不是无条件上线承诺"), "30/60/90 必须声明团队容量前提与非无条件工期。");
+  pushIf(errors, !planning.includes("是规划窗口，不是固定交付承诺"), "系统型 Demo 估算必须声明为规划窗口而非固定交付承诺。");
+  pushIf(errors, !planning.includes("当前仍只保留主开发、平台预览和独立 QA 三条活跃线"), "02 必须明确当前只保留三条活跃协作线。");
 
   const developerGuide = await readFile(join(root, "docs", "01-开发者文档.md"), "utf8");
   pushIf(errors, developerGuide.includes("共同 Owner"), "01 不得使用共同 Owner；必须有单一最终 A。");
@@ -194,10 +194,7 @@ async function validateHandoffDocumentation(root, errors) {
       pushIf(errors, !owner || /\s[+/]\s|共同\s*Owner|、.*负责人/.test(owner), `${label} 必须恰有一个最终 Owner：${line}`);
     }
   };
-  assertSingleOwnerRows(planning, "| R-", 3, "风险项");
-  assertSingleOwnerRows(planning, "| 0–30", 2, "G1");
-  assertSingleOwnerRows(planning, "| 31–60", 2, "G2");
-  assertSingleOwnerRows(planning, "| 61–90", 2, "G3");
+  assertSingleOwnerRows(planning, "| R-SD-", 3, "系统型 Demo 风险项");
   const indexSource = await readFile(join(root, "docs", "09-术语与索引.md"), "utf8");
   assertSingleOwnerRows(indexSource, "| OQ-", 4, "待决问题");
 

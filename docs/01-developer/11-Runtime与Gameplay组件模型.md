@@ -488,4 +488,24 @@ awaiting_material
 
 `CraftSessionSnapshot` 是 Host/QA 的只读边界，包含 process/need/material/expected step/output、阶段、操作进度、trial/mistake/rework 计数、完成标志和逐字段小端稳定 checksum。当前 Host 只在玩家进入作者化工位范围后把键盘操作映射到上述命令；Axmol/JavaScript 负责输入和表现，不计算结果。Web 的 `R` 依次重建 craft、thin runtime 和 encounter，因此当前页面能恢复三者初态，但仍只是单 Host 局部整组重建，不是跨 package generation、Profile、离开返回和双端的通用事务。
 
-`tests/native/craft_session.cpp` 覆盖两种材料、正确顺序、错序零漂移、首次试用失败、返工复试、错误阶段、未知目标、restart 与双 Session checksum 一致；真实 Edge 路线再覆盖工位距离、玩家可读步骤和既有战斗回归。当前状态是 **Demo 0.8.4 Implemented Internal Web Craft Loop / Not workshop economy**：库存、工位占用、订单、成本、品质结算、交付、成品世界后果、持久化、非实现者试玩、Windows 和三浏览器仍由后续版本关闭。
+`tests/native/craft_session.cpp` 覆盖两种材料、正确顺序、错序零漂移、首次试用失败、返工复试、错误阶段、未知目标、restart 与双 Session checksum 一致；真实 Edge 路线再覆盖工位距离、玩家可读步骤和既有战斗回归。当前状态是 **Demo 0.8.4 Craft Primitive Consumed by Demo 0.8.5 Workshop Loop**：`CraftSession` 仍只拥有工艺步骤状态；库存、资金、工位、品质和订单由第 41 节的组合会话持有，不回填 Craft 或 Presentation。持久化、非实现者试玩、Windows 和三浏览器仍由后续版本关闭。
+
+## 41. Sandbox 工坊经营会话
+
+`WorkshopDefinition` 是 Demo 0.8.5 发布的通用、不可变、non-owning Definition view，由 `workshops / material_stocks / orders` 三组记录组成。Workshop 只引用一个已发布 Craft workstation 并给出非负初始资金；每项 stock 以 workshop + material 复合身份给出正成本、有限数量、`1–10000` 基础品质与不溢出 `10000` 的返工增益；Order 引用同一 workshop 的 Craft process，给出需求量、最低品质、非负奖励，以及一个显式 `operate_route_interaction` 后果引用。Definition 不含“江南”“纸伞”、DOM 控件、平台时间、资源文件名或运行中余额。
+
+唯一 package validator 要求 workshop/workstation、order/process/workshop、stock/material 和后果 interaction 的 typed 引用全部存在且 domain 相符；同一 workshop/material 不得重复。每个订单至少要有两条库存充足、资金可负担、最终品质达标且成本/品质/是否返工至少一项不同的材料路线；完全不可交付或没有真实取舍分别产生 `workshop_order_undeliverable / workshop_tradeoff_missing` 诊断。UI 不复制这些语义规则。
+
+`WorkshopSession` 是固定容量、确定性的 Gameplay Owner，并组合一个私有 `CraftSession`。初始化借用同一 owning package 生命周期内稳定的 Craft/Workshop Definition，以精确 workshop/order key 建立有限库存、资金、空闲工位和未完成订单；重复 initialize 或失败构建保留既有有效状态。所有公开动作先复制完整候选，只有成功才整体替换：
+
+- `select_material` 先检查材料、库存和资金，再让 Craft 接受同一材料；成功时一次扣减库存/资金、增加累计支出、设置基础品质并占用工位。
+- `perform_operation / run_trial` 只转发到私有 Craft 权威阶段；错序、错误阶段和未知目标不改变经营或 Craft checksum。
+- `perform_rework` 只有 Craft 接受后才把该 stock 的品质增益饱和加到当前成品，并返回可复试阶段。
+- `deliver_order` 只接受已完成、仍占用工位且品质达标的 output；按需求量推进交付，完成时只发一次奖励、释放工位并暴露 authored route interaction key。重复交付返回 `already_fulfilled`，不重复资金或后果。
+- `restart` 从同一 Definition 重建初始资金、库存、工位、品质、订单和 Craft 状态；不依赖墙钟、随机数或表现动画。
+
+`WorkshopSessionSnapshot` 包含 workshop/workstation/order/process、选材/output/route key、资金/累计支出、品质/阈值、交付量、工位/output/fulfilled 状态、嵌套 Craft snapshot 和逐字段小端 checksum；stock 数量通过稳定 material key 查询。Axmol/JavaScript 只读这些值，不保存第二份经营状态。
+
+Demo 0.8.5 Host 的交付不是直接设置 `shortcutOpen`。它先在 Workshop 与 Encounter 私有候选中验证订单和 mechanism 事件，再向既有 `SandboxRuntimeCoordinator` 提交 authored shortcut interaction；只有 typed interaction → mechanism → ground blocker 链成功后才无失败地提交两个 Gameplay 候选。唯一作者包把原横向 blocker 分成左侧主门和右侧屋顶捷径：交付只关闭右侧 blocker，玩家可实际穿过右路，而左侧主门仍保持 solid，之后仍须按原 operate 路线开启并触发战斗。
+
+`tests/native/workshop_session.cpp` 覆盖两种成本/品质路线、有限库存、资金不足、工位占用、错序零漂移、雨试失败、返工品质、订单阈值、一次性奖励/后果、重复 initialize、restart 与双 Session checksum；package round-trip 另证明 Craft + Workshop bytes/hash 规范重编码不变。真实 Edge 路线覆盖资金 `100→70→95`、库存 `2→1`、品质 `6500→8400`、重复交付幂等、右侧捷径穿越、左侧主门阻挡、死亡恢复和既有两波 terminal。当前状态是 **Demo 0.8.5 Implemented Internal Web Workshop Loop / Not aggregate economy persistence**：多订单/多并行工位、复杂市场、地区持久化、离开返回、Profile、Windows、三浏览器和非实现者试玩仍为 Open。

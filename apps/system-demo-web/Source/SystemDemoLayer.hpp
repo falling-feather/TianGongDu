@@ -3,8 +3,8 @@
 #include <axmol.h>
 
 #include <tgd/contracts/sandbox_definition.hpp>
-#include <tgd/gameplay/craft_session.hpp>
 #include <tgd/gameplay/sandbox_encounter_session.hpp>
+#include <tgd/gameplay/workshop_session.hpp>
 #include <tgd/integration/sandbox_runtime_coordinator.hpp>
 #include <tgd/presentation/sandbox_asset_resolver.hpp>
 
@@ -49,7 +49,15 @@ public:
   [[nodiscard]] std::uint32_t qaCraftMistakeCount() const noexcept;
   [[nodiscard]] std::uint32_t qaCraftReworkCount() const noexcept;
   [[nodiscard]] bool qaCraftCompleted() const noexcept;
+  [[nodiscard]] std::int32_t qaWorkshopFunds() const noexcept;
+  [[nodiscard]] std::int32_t qaWorkshopSpentFunds() const noexcept;
+  [[nodiscard]] std::uint32_t qaWorkshopStock(std::size_t index) const noexcept;
+  [[nodiscard]] std::uint32_t qaWorkshopQuality() const noexcept;
+  [[nodiscard]] bool qaWorkshopOccupied() const noexcept;
+  [[nodiscard]] bool qaOrderFulfilled() const noexcept;
+  [[nodiscard]] bool qaShortcutOpen() const noexcept;
   void qaOperate() noexcept;
+  void qaDeliverOrder() noexcept;
   void qaAttackLight() noexcept;
   void qaAttackHeavy() noexcept;
   void qaRetry() noexcept;
@@ -84,6 +92,7 @@ private:
   void performCraftOperation(std::size_t operation_index) noexcept;
   void runCraftTrial() noexcept;
   void performCraftRework() noexcept;
+  void deliverWorkshopOrder() noexcept;
   void retryLocal() noexcept;
   void refreshPresentation() noexcept;
   void setDirection(ax::EventKeyboard::KeyCode key, bool down) noexcept;
@@ -99,11 +108,12 @@ private:
   [[nodiscard]] bool playerInOperateRange() const noexcept;
   [[nodiscard]] bool playerInCraftRange() const noexcept;
   [[nodiscard]] bool currentGateOpen() const noexcept;
+  [[nodiscard]] bool currentShortcutOpen() const noexcept;
   [[nodiscard]] std::string activeWaveName() const;
 
   tgd::integration::SandboxRuntimeCoordinator coordinator_{};
   tgd::gameplay::SandboxEncounterSession encounter_{};
-  tgd::gameplay::CraftSession craft_session_{};
+  tgd::gameplay::WorkshopSession workshop_session_{};
   tgd::presentation::SandboxAssetResolver asset_resolver_{};
   std::array<ActorPresentation,
              tgd::gameplay::SandboxEncounterSession::hostile_capacity>
@@ -117,6 +127,7 @@ private:
   std::uint32_t asset_count_{};
   bool ready_{};
   bool gate_open_{};
+  bool shortcut_open_{};
   bool craft_mode_{};
 
   tgd::contracts::StableContentKey interaction_key_{};
@@ -124,6 +135,9 @@ private:
   tgd::contracts::GroundPoseMm interaction_pose_{};
   std::int32_t interaction_range_mm_{};
   std::size_t gate_blocker_index_{};
+  std::size_t shortcut_blocker_index_{};
+  tgd::contracts::StableContentKey shortcut_interaction_key_{};
+  tgd::contracts::StableContentKey shortcut_mechanism_key_{};
   std::array<tgd::contracts::StableContentKey, 2> craft_material_keys_{};
   std::array<tgd::contracts::StableContentKey, 2> craft_operation_keys_{};
   tgd::contracts::StableContentKey craft_workstation_asset_key_{};
@@ -133,6 +147,7 @@ private:
   ax::Node *world_layer_{};
   ax::Sprite *player_node_{};
   ax::Sprite *gate_node_{};
+  ax::Sprite *shortcut_node_{};
   ax::Label *gate_status_label_{};
   ax::Label *player_status_label_{};
   ax::Label *wave_status_label_{};
@@ -146,6 +161,8 @@ private:
   ax::Label *craft_material_label_{};
   ax::Label *craft_steps_label_{};
   ax::Label *craft_hint_label_{};
+  ax::Label *workshop_status_label_{};
+  ax::Label *order_status_label_{};
   std::string message_{"BOOTING UNIQUE SYSTEM DEMO PACKAGE"};
 };
 

@@ -232,8 +232,15 @@ test("player replacement and dependent delete operations stay atomic", async () 
     expectedRevision: 2
   });
   assert.equal(
+    controller.view().document.runtime.interactionBindings.some(
+      ({ interactionId }) =>
+        interactionId === "interaction.system_demo.console"
+    ),
+    false
+  );
+  assert.equal(
     controller.view().document.runtime.interactionBindings.length,
-    0
+    1
   );
   assert.equal(controller.view().revision, 3);
 });
@@ -470,6 +477,98 @@ test("craft material, workstation, process, and step panels update one valid aut
     (error) => error.code === "invalid_request"
   );
   assert.equal(controller.view().revision, 4);
+});
+
+test("workshop stock and order panels update the economy and consequence atomically", async () => {
+  const controller = await openedController();
+  const opened = controller.view().document;
+  const workshop = opened.runtime.workshops[0];
+  const stocks = opened.runtime.workshopMaterialStocks
+    .filter(({ workshopId }) => workshopId === workshop.id)
+    .map(
+      ({
+        materialId,
+        unitCost,
+        initialQuantity,
+        baseQuality,
+        reworkQualityGain
+      }) => ({
+        materialId,
+        unitCost,
+        initialQuantity,
+        baseQuality,
+        reworkQualityGain
+      })
+    );
+
+  controller.updateObject({
+    kind: "workshops",
+    id: workshop.id,
+    values: {
+      workstationId: workshop.workstationId,
+      initialFunds: 110,
+      materialStocks: stocks.map((stock, index) => ({
+        ...stock,
+        initialQuantity: stock.initialQuantity + index + 1
+      })),
+      editorLabel: "Umbrella Lane Workshop Preview"
+    },
+    expectedRevision: 0
+  });
+  assert.equal(
+    controller.view().document.runtime.workshops[0].initialFunds,
+    110
+  );
+  assert.deepEqual(
+    controller.view().document.runtime.workshopMaterialStocks.map(
+      ({ initialQuantity }) => initialQuantity
+    ),
+    [2, 4]
+  );
+
+  const order = controller.view().document.runtime.workshopOrders[0];
+  controller.updateObject({
+    kind: "workshopOrders",
+    id: order.id,
+    values: {
+      workshopId: order.workshopId,
+      processId: order.processId,
+      requiredQuantity: order.requiredQuantity,
+      minimumQuality: order.minimumQuality,
+      rewardFunds: 30,
+      consequenceKind: order.consequenceKind,
+      consequenceTargetId: order.consequenceTargetId,
+      editorLabel: "Roof Shortcut Order Preview"
+    },
+    expectedRevision: 1
+  });
+  assert.equal(
+    controller.view().document.runtime.workshopOrders[0].rewardFunds,
+    30
+  );
+  assert.equal(controller.view().revision, 2);
+
+  assert.throws(
+    () =>
+      controller.updateObject({
+        kind: "workshops",
+        id: workshop.id,
+        values: {
+          workstationId: workshop.workstationId,
+          initialFunds: 110,
+          materialStocks: "not-an-array"
+        },
+        expectedRevision: 2
+      }),
+    (error) => error.code === "invalid_request"
+  );
+  assert.equal(controller.view().revision, 2);
+  assert.deepEqual(
+    controller.view().document.runtime.workshopMaterialStocks.map(
+      ({ initialQuantity }) => initialQuantity
+    ),
+    [2, 4]
+  );
 });
 
 test("Preview publication owns a fresh package and stale edits preserve the last publication", async () => {

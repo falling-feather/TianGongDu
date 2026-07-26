@@ -1,5 +1,6 @@
 const INT16_MIN = -32768;
 const INT16_MAX = 32767;
+const UINT16_MAX = 65535;
 const INT32_MIN = -2147483648;
 const INT32_MAX = 2147483647;
 const UINT32_MAX = 4294967295;
@@ -177,6 +178,20 @@ const GROUPS = [
     prefix: "craft_step",
     authoringOnly: true,
     records: (runtime) => runtime.craftSteps
+  },
+  {
+    key: "workshops",
+    label: "Workshops",
+    prefix: "workshop",
+    authoringOnly: true,
+    records: (runtime) => runtime.workshops
+  },
+  {
+    key: "workshopOrders",
+    label: "Workshop Orders",
+    prefix: "order",
+    authoringOnly: true,
+    records: (runtime) => runtime.workshopOrders
   }
 ];
 
@@ -946,6 +961,99 @@ function fieldsFor(group, record) {
         kind: "enum",
         options: ["operation", "trial", "rework"]
       })
+    );
+    return fields;
+  }
+
+  if (group.key === "workshops") {
+    fields.push(
+      textField("workstationId", "Craft Workstation ID", record.workstationId, {
+        kind: "enum",
+        options: state.document.runtime.craftWorkstations.map(({ id }) => id)
+      }),
+      textField("initialFunds", "Initial Funds", record.initialFunds, {
+        kind: "integer",
+        min: 0,
+        max: INT32_MAX
+      })
+    );
+    const stocks = state.document.runtime.workshopMaterialStocks
+      .filter((stock) => stock.workshopId === record.id)
+      .sort((left, right) => left.materialId.localeCompare(right.materialId));
+    stocks.forEach((stock, index) => {
+      fields.push({ section: "Finite Material Stock " + (index + 1) });
+      fields.push(
+        textField("stockMaterialId_" + index, "Material ID", stock.materialId, {
+          kind: "enum",
+          options: state.document.runtime.craftMaterials.map(({ id }) => id)
+        }),
+        textField("stockUnitCost_" + index, "Unit Cost", stock.unitCost, {
+          kind: "integer",
+          min: 1,
+          max: INT32_MAX
+        }),
+        textField(
+          "stockInitialQuantity_" + index,
+          "Initial Quantity",
+          stock.initialQuantity,
+          { kind: "integer", min: 1, max: UINT16_MAX }
+        ),
+        textField(
+          "stockBaseQuality_" + index,
+          "Base Quality (0–10000)",
+          stock.baseQuality,
+          { kind: "integer", min: 1, max: 10000 }
+        ),
+        textField(
+          "stockReworkQualityGain_" + index,
+          "Rework Quality Gain",
+          stock.reworkQualityGain,
+          { kind: "integer", min: 0, max: 10000 }
+        )
+      );
+    });
+    return fields;
+  }
+
+  if (group.key === "workshopOrders") {
+    fields.push(
+      textField("workshopId", "Workshop ID", record.workshopId, {
+        kind: "enum",
+        options: state.document.runtime.workshops.map(({ id }) => id)
+      }),
+      textField("processId", "Craft Process ID", record.processId, {
+        kind: "enum",
+        options: state.document.runtime.craftProcesses.map(({ id }) => id)
+      }),
+      textField("requiredQuantity", "Required Quantity", record.requiredQuantity, {
+        kind: "integer",
+        min: 1,
+        max: UINT16_MAX
+      }),
+      textField("minimumQuality", "Minimum Quality", record.minimumQuality, {
+        kind: "integer",
+        min: 1,
+        max: 10000
+      }),
+      textField("rewardFunds", "Reward Funds", record.rewardFunds, {
+        kind: "integer",
+        min: 0,
+        max: INT32_MAX
+      }),
+      { section: "Delivery Consequence" },
+      textField("consequenceKind", "Consequence Kind", record.consequenceKind, {
+        kind: "enum",
+        options: ["operate_route_interaction"]
+      }),
+      textField(
+        "consequenceTargetId",
+        "Route Interaction ID",
+        record.consequenceTargetId,
+        {
+          kind: "enum",
+          options: state.document.runtime.interactions.map(({ id }) => id)
+        }
+      )
     );
     return fields;
   }
@@ -1882,6 +1990,40 @@ function requestValues(raw) {
       predecessorStepId: raw.predecessorStepId,
       actionId: raw.actionId,
       kind: raw.kind,
+      editorLabel: raw.editorLabel
+    };
+  }
+  if (selectedGroup === "workshops") {
+    const record = currentRecord();
+    const stockCount = state.document.runtime.workshopMaterialStocks.filter(
+      (stock) => stock.workshopId === record.id
+    ).length;
+    const materialStocks = [];
+    for (let index = 0; index < stockCount; index += 1) {
+      materialStocks.push({
+        materialId: raw["stockMaterialId_" + index],
+        unitCost: raw["stockUnitCost_" + index],
+        initialQuantity: raw["stockInitialQuantity_" + index],
+        baseQuality: raw["stockBaseQuality_" + index],
+        reworkQualityGain: raw["stockReworkQualityGain_" + index]
+      });
+    }
+    return {
+      workstationId: raw.workstationId,
+      initialFunds: raw.initialFunds,
+      materialStocks,
+      editorLabel: raw.editorLabel
+    };
+  }
+  if (selectedGroup === "workshopOrders") {
+    return {
+      workshopId: raw.workshopId,
+      processId: raw.processId,
+      requiredQuantity: raw.requiredQuantity,
+      minimumQuality: raw.minimumQuality,
+      rewardFunds: raw.rewardFunds,
+      consequenceKind: raw.consequenceKind,
+      consequenceTargetId: raw.consequenceTargetId,
       editorLabel: raw.editorLabel
     };
   }

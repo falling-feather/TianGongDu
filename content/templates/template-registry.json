@@ -94,13 +94,13 @@
     },
     {
       "id": "template_craft_process",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "contentType": "craftProcess",
       "requiredModules": ["identity", "need", "materials", "workstation", "orderedSteps", "trial", "recoverableRework", "outputUse"],
       "optionalModules": ["quality", "inventory", "order", "regionFeedback"],
       "generatedArtifacts": ["contentSource", "localizationKeys", "traversalFixture", "failureReworkFixture", "previewProfile"],
       "previewProfile": "craft_workbench",
-      "validators": ["stable_id", "material_choices", "step_reachability", "trial_reachability", "recoverable_failure", "no_free_loop"]
+      "validators": ["stable_id", "material_choices", "step_reachability", "trial_reachability", "recoverable_failure", "finite_inventory", "order_deliverability", "workshop_tradeoff", "explicit_consequence", "no_free_loop"]
     }
   ]
 }

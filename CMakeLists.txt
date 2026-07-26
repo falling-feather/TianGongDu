@@ -116,6 +116,7 @@ target_sources(
     src/gameplay/src/sandbox_encounter_session.cpp
     src/gameplay/src/session_input_state.cpp
     src/gameplay/src/vertical_slice_session.cpp
+    src/gameplay/src/workshop_session.cpp
 )
 target_include_directories(
   tgd_gameplay

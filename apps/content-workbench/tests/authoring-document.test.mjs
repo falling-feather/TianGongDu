@@ -30,7 +30,7 @@ function expectFormatFailure(mutator) {
   );
 }
 
-test("strict 1.3.0 document round-trips as an owning frozen value", () => {
+test("strict 1.4.0 document round-trips as an owning frozen value", () => {
   const source = fixture();
   const normalized = normalizeSandboxAuthoringDocument(source);
   const originalX = normalized.runtime.player.pose.x;
@@ -127,7 +127,7 @@ test("editor-only changes never leak into the runtime projection", () => {
   );
 });
 
-test("migration is identity-only for 1.3.0", () => {
+test("migration is identity-only for 1.4.0", () => {
   assert.deepEqual(
     migrateSandboxAuthoringDocument(fixture()),
     normalizeSandboxAuthoringDocument(fixture())
@@ -150,15 +150,18 @@ test("unique system Demo author source has exact globally distinct Stable IDs", 
   assert.equal(source.runtime.waves.length, 2);
   assert.equal(source.runtime.waveSpawns.length, 4);
   assert.equal(source.runtime.objectives.length, 2);
-  assert.equal(source.runtime.interactionBindings.length, 1);
-  assert.equal(source.runtime.mechanismBindings.length, 1);
+  assert.equal(source.runtime.interactionBindings.length, 2);
+  assert.equal(source.runtime.mechanismBindings.length, 2);
   assert.equal(source.runtime.actorBindings.length, 4);
   assert.equal(source.runtime.craftMaterials.length, 2);
   assert.equal(source.runtime.craftWorkstations.length, 1);
   assert.equal(source.runtime.craftProcesses.length, 1);
   assert.equal(source.runtime.craftMaterialChoices.length, 2);
   assert.equal(source.runtime.craftSteps.length, 4);
-  assert.equal(source.editor.items.length, 21);
+  assert.equal(source.runtime.workshops.length, 1);
+  assert.equal(source.runtime.workshopMaterialStocks.length, 2);
+  assert.equal(source.runtime.workshopOrders.length, 1);
+  assert.equal(source.editor.items.length, 26);
 
   const recordIds = [
     source.runtime.packageId,
@@ -178,7 +181,9 @@ test("unique system Demo author source has exact globally distinct Stable IDs", 
     "craftMaterials",
     "craftWorkstations",
     "craftProcesses",
-    "craftSteps"
+    "craftSteps",
+    "workshops",
+    "workshopOrders"
   ]) {
     recordIds.push(...source.runtime[collection].map((record) => record.id));
   }
@@ -293,6 +298,12 @@ test("unique system Demo source preserves the frozen typed chain and neutral wav
       operation: "operate",
       rangeMm: 1200,
       targetMechanismId: "mechanism.system_demo.gate"
+    },
+    {
+      interactionId: "interaction.system_demo.workshop_shortcut",
+      operation: "operate",
+      rangeMm: 1200,
+      targetMechanismId: "mechanism.system_demo.roof_shortcut"
     }
   ]);
   assert.deepEqual(runtime.mechanismBindings, [
@@ -300,6 +311,11 @@ test("unique system Demo source preserves the frozen typed chain and neutral wav
       mechanismId: "mechanism.system_demo.gate",
       activation: "one_shot_activate",
       targetGroundBlockerId: "blocker.system_demo.gate"
+    },
+    {
+      mechanismId: "mechanism.system_demo.roof_shortcut",
+      activation: "one_shot_activate",
+      targetGroundBlockerId: "blocker.system_demo.roof_shortcut"
     }
   ]);
   assert.deepEqual(
@@ -380,6 +396,45 @@ test("unique system Demo source preserves the frozen typed chain and neutral wav
       ]
     ]
   );
+  assert.deepEqual(runtime.workshops, [
+    {
+      id: "workshop.jiangnan.umbrella_lane",
+      workstationId: "workstation.jiangnan.umbrella_tuning",
+      initialFunds: 100
+    }
+  ]);
+  assert.deepEqual(runtime.workshopMaterialStocks, [
+    {
+      workshopId: "workshop.jiangnan.umbrella_lane",
+      materialId:
+        "material.jiangnan.umbrella.flexible_bark_paper_patch",
+      unitCost: 80,
+      initialQuantity: 1,
+      baseQuality: 9000,
+      reworkQualityGain: 0
+    },
+    {
+      workshopId: "workshop.jiangnan.umbrella_lane",
+      materialId:
+        "material.jiangnan.umbrella.stiff_salvage_paper_patch",
+      unitCost: 30,
+      initialQuantity: 2,
+      baseQuality: 6500,
+      reworkQualityGain: 1900
+    }
+  ]);
+  assert.deepEqual(runtime.workshopOrders, [
+    {
+      id: "order.jiangnan.umbrella_roof_shortcut",
+      workshopId: "workshop.jiangnan.umbrella_lane",
+      processId: "craft_process.jiangnan.umbrella_canopy_tuning",
+      requiredQuantity: 1,
+      minimumQuality: 8000,
+      rewardFunds: 25,
+      consequenceKind: "operate_route_interaction",
+      consequenceTargetId: "interaction.system_demo.workshop_shortcut"
+    }
+  ]);
 
   const effectIds = runtime.assets
     .filter(({ kind }) => kind === "effect")
@@ -407,7 +462,9 @@ test("unique system Demo source preserves the frozen typed chain and neutral wav
     ...runtime.craftMaterials.map(({ id }) => id),
     ...runtime.craftWorkstations.map(({ id }) => id),
     ...runtime.craftProcesses.map(({ id }) => id),
-    ...runtime.craftSteps.map(({ id }) => id)
+    ...runtime.craftSteps.map(({ id }) => id),
+    ...runtime.workshops.map(({ id }) => id),
+    ...runtime.workshopOrders.map(({ id }) => id)
   ].sort();
   assert.deepEqual(
     editor.items.map(({ id }) => id).sort(),

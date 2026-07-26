@@ -74,6 +74,10 @@ struct OwnedRequest final {
     std::vector<tgd_sandbox_service_craft_process> craft_processes{};
     std::vector<tgd_sandbox_service_craft_material_choice> craft_material_choices{};
     std::vector<tgd_sandbox_service_craft_step> craft_steps{};
+    std::vector<tgd_sandbox_service_workshop> workshops{};
+    std::vector<tgd_sandbox_service_workshop_material_stock>
+        workshop_material_stocks{};
+    std::vector<tgd_sandbox_service_workshop_order> workshop_orders{};
     std::size_t copied_utf8_bytes{};
 };
 
@@ -210,6 +214,10 @@ struct RuntimeProjection final {
     std::vector<SandboxAuthoringCraftProcess> craft_processes{};
     std::vector<SandboxAuthoringCraftMaterialChoice> craft_material_choices{};
     std::vector<SandboxAuthoringCraftStep> craft_steps{};
+    std::vector<SandboxAuthoringWorkshop> workshops{};
+    std::vector<SandboxAuthoringWorkshopMaterialStock>
+        workshop_material_stocks{};
+    std::vector<SandboxAuthoringWorkshopOrder> workshop_orders{};
     SandboxAuthoringRuntimeView view{};
 
     explicit RuntimeProjection(const OwnedRequest& request) {
@@ -321,6 +329,37 @@ struct RuntimeProjection final {
                 static_cast<CraftStepKind>(value.kind),
             });
         }
+        for (const auto& value : request.workshops) {
+            workshops.push_back({
+                get_string(request, value.id),
+                get_string(request, value.workstation_id),
+                value.initial_funds,
+            });
+        }
+        for (const auto& value : request.workshop_material_stocks) {
+            workshop_material_stocks.push_back({
+                get_string(request, value.workshop_id),
+                get_string(request, value.material_id),
+                value.unit_cost,
+                value.initial_quantity,
+                value.base_quality,
+                value.rework_quality_gain,
+            });
+        }
+        for (const auto& value : request.workshop_orders) {
+            workshop_orders.push_back({
+                get_string(request, value.id),
+                get_string(request, value.workshop_id),
+                get_string(request, value.process_id),
+                get_string(request, value.consequence_target_id),
+                value.required_quantity,
+                value.minimum_quality,
+                value.reward_funds,
+                static_cast<WorkshopOrderConsequenceKind>(
+                    value.consequence_kind
+                ),
+            });
+        }
         view = {
             get_string(request, metadata.package_id),
             get_string(request, metadata.sandbox_id),
@@ -336,7 +375,7 @@ struct RuntimeProjection final {
             waves, wave_spawns, objectives, interaction_bindings,
             mechanism_bindings, actor_bindings, craft_materials,
             craft_workstations, craft_processes, craft_material_choices,
-            craft_steps,
+            craft_steps, workshops, workshop_material_stocks, workshop_orders,
         };
     }
 };
@@ -787,6 +826,21 @@ TGD_APPEND_DEFINITION(craft_step, tgd_sandbox_service_craft_step,
     valid_ref(owned, value.id) && valid_ref(owned, value.process_id) &&
     valid_ref(owned, value.predecessor_step_id) &&
     valid_ref(owned, value.action_id) && all_zero(value.reserved))
+TGD_APPEND_DEFINITION(workshop, tgd_sandbox_service_workshop,
+    workshops, sandbox_workshop_capacity + 1U,
+    valid_ref(owned, value.id) && valid_ref(owned, value.workstation_id) &&
+    value.reserved == 0)
+TGD_APPEND_DEFINITION(workshop_material_stock,
+    tgd_sandbox_service_workshop_material_stock, workshop_material_stocks,
+    sandbox_workshop_material_stock_capacity + 1U,
+    valid_ref(owned, value.workshop_id) &&
+    valid_ref(owned, value.material_id) && value.reserved == 0)
+TGD_APPEND_DEFINITION(workshop_order, tgd_sandbox_service_workshop_order,
+    workshop_orders, sandbox_workshop_order_capacity + 1U,
+    valid_ref(owned, value.id) && valid_ref(owned, value.workshop_id) &&
+    valid_ref(owned, value.process_id) &&
+    valid_ref(owned, value.consequence_target_id) &&
+    all_zero(value.reserved))
 
 #undef TGD_APPEND_DEFINITION
 

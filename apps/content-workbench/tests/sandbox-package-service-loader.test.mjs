@@ -30,7 +30,7 @@ function validRuntime() {
   );
 }
 
-function generatedModuleSource(counterKey, { abi = 0x00010000, initialize = true } = {}) {
+function generatedModuleSource(counterKey, { abi = 0x00010004, initialize = true } = {}) {
   const initializationGuard = initialize ? "" :
     `if (!globalThis[${JSON.stringify(`${counterKey}_ready`)}]) throw new Error("fixture initialization failure");`;
   return `
@@ -81,7 +81,7 @@ const buffer = new ArrayBuffer(8 * 1024 * 1024);
     _tgd_sandbox_compile_request_submit(_service, _request, output, _capacity, written) {
       counters.submit += 1;
       generation += 1;
-      module.HEAPU8.fill(0, output, output + 120);
+      module.HEAPU8.fill(0, output, output + 140);
       const data = new DataView(buffer);
       data.setUint8(output, 1);
       data.setUint8(output + 1, 1);
@@ -90,18 +90,24 @@ const buffer = new ArrayBuffer(8 * 1024 * 1024);
       data.setUint8(output + 44, 1);
       data.setUint8(output + 45, 255);
       data.setUint16(output + 46, 65535, true);
-      data.setUint32(output + 68, 120, true);
-      data.setUint32(output + 72, 120, true);
-      data.setUint32(output + 76, 120, true);
+      data.setUint32(output + 68, 136, true);
+      data.setUint32(output + 72, 136, true);
+      data.setUint32(output + 76, 140, true);
       data.setUint16(output + 80, 1, true);
-      data.setUint32(written, 120, true);
+      data.setUint16(output + 82, 4, true);
+      data.setUint32(output + 120, 136, true);
+      data.setUint32(output + 124, 4, true);
+      module.HEAPU8.set([0x54, 0x47, 0x44, 0x53], output + 136);
+      data.setUint32(written, 140, true);
       return 1;
     }
   };
   for (const name of [
     "region", "asset", "actor", "ground_blocker", "safe_point", "interaction",
     "mechanism", "wave", "wave_spawn", "objective", "interaction_binding",
-    "mechanism_binding"
+    "mechanism_binding", "actor_binding", "craft_material",
+    "craft_workstation", "craft_process", "craft_material_choice", "craft_step",
+    "workshop", "workshop_material_stock", "workshop_order"
   ]) module["_tgd_sandbox_compile_request_append_" + name] = () => 1;
   return module;
 }

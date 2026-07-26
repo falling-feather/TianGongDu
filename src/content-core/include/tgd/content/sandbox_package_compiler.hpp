@@ -148,6 +148,34 @@ struct SandboxAuthoringCraftStep final {
     contracts::CraftStepKind kind{contracts::CraftStepKind::invalid};
 };
 
+struct SandboxAuthoringWorkshop final {
+    std::string_view id{};
+    std::string_view workstation_id{};
+    std::int32_t initial_funds{};
+};
+
+struct SandboxAuthoringWorkshopMaterialStock final {
+    std::string_view workshop_id{};
+    std::string_view material_id{};
+    std::int32_t unit_cost{};
+    std::uint16_t initial_quantity{};
+    std::uint16_t base_quality{};
+    std::uint16_t rework_quality_gain{};
+};
+
+struct SandboxAuthoringWorkshopOrder final {
+    std::string_view id{};
+    std::string_view workshop_id{};
+    std::string_view process_id{};
+    std::string_view consequence_target_id{};
+    std::uint16_t required_quantity{};
+    std::uint16_t minimum_quality{};
+    std::int32_t reward_funds{};
+    contracts::WorkshopOrderConsequenceKind consequence_kind{
+        contracts::WorkshopOrderConsequenceKind::invalid
+    };
+};
+
 // Synchronous, non-owning projection of the normalized authoring runtime domain.
 // The caller retains every string and array until compile_sandbox_package returns.
 // JSON parsing and closed-shape validation remain owned by Content Workbench.
@@ -175,6 +203,10 @@ struct SandboxAuthoringRuntimeView final {
     std::span<const SandboxAuthoringCraftProcess> craft_processes{};
     std::span<const SandboxAuthoringCraftMaterialChoice> craft_material_choices{};
     std::span<const SandboxAuthoringCraftStep> craft_steps{};
+    std::span<const SandboxAuthoringWorkshop> workshops{};
+    std::span<const SandboxAuthoringWorkshopMaterialStock>
+        workshop_material_stocks{};
+    std::span<const SandboxAuthoringWorkshopOrder> workshop_orders{};
 };
 
 enum class SandboxPackageCompileStatus : std::uint8_t {

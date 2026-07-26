@@ -91,6 +91,33 @@ const COLLECTIONS = Object.freeze({
     (record) => record.id,
     expectStringKey
   ],
+  workshops: [
+    "runtime",
+    "workshops",
+    (record) => record.id,
+    expectStringKey
+  ],
+  workshopMaterialStocks: [
+    "runtime",
+    "workshopMaterialStocks",
+    (record) => JSON.stringify([record.workshopId, record.materialId]),
+    (value) => {
+      if (
+        !isPlainObject(value) ||
+        typeof value.workshopId !== "string" ||
+        typeof value.materialId !== "string"
+      ) {
+        throw new Error("workshop material stock key has an invalid shape");
+      }
+      return JSON.stringify([value.workshopId, value.materialId]);
+    }
+  ],
+  workshopOrders: [
+    "runtime",
+    "workshopOrders",
+    (record) => record.id,
+    expectStringKey
+  ],
   editorItems: ["editor", "items", (record) => record.id, expectStringKey]
 });
 

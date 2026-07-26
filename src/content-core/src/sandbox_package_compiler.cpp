@@ -48,9 +48,14 @@ struct ProjectedPackage final {
     std::vector<contracts::CraftProcessDefinition> craft_processes{};
     std::vector<contracts::CraftMaterialChoiceDefinition> craft_material_choices{};
     std::vector<contracts::CraftStepDefinition> craft_steps{};
+    std::vector<contracts::WorkshopDefinitionRecord> workshops{};
+    std::vector<contracts::WorkshopMaterialStockDefinition>
+        workshop_material_stocks{};
+    std::vector<contracts::WorkshopOrderDefinition> workshop_orders{};
     contracts::SandboxDefinition definition{};
     contracts::SandboxGameplayBindingDefinition gameplay_binding{};
     contracts::CraftDefinition craft_definition{};
+    contracts::WorkshopDefinition workshop_definition{};
 
     explicit ProjectedPackage(const SandboxAuthoringRuntimeView& runtime)
         : regions(project_records<contracts::SandboxRegionDefinition>(
@@ -273,6 +278,49 @@ struct ProjectedPackage final {
                       value.kind,
                   };
               }
+          )),
+          workshops(project_records<contracts::WorkshopDefinitionRecord>(
+              runtime.workshops,
+              contracts::sandbox_workshop_capacity,
+              [](const auto& value) {
+                  return contracts::WorkshopDefinitionRecord{
+                      authored_id(value.id),
+                      authored_id(value.workstation_id),
+                      value.initial_funds,
+                  };
+              }
+          )),
+          workshop_material_stocks(
+              project_records<contracts::WorkshopMaterialStockDefinition>(
+                  runtime.workshop_material_stocks,
+                  contracts::sandbox_workshop_material_stock_capacity,
+                  [](const auto& value) {
+                      return contracts::WorkshopMaterialStockDefinition{
+                          authored_id(value.workshop_id),
+                          authored_id(value.material_id),
+                          value.unit_cost,
+                          value.initial_quantity,
+                          value.base_quality,
+                          value.rework_quality_gain,
+                      };
+                  }
+              )
+          ),
+          workshop_orders(project_records<contracts::WorkshopOrderDefinition>(
+              runtime.workshop_orders,
+              contracts::sandbox_workshop_order_capacity,
+              [](const auto& value) {
+                  return contracts::WorkshopOrderDefinition{
+                      authored_id(value.id),
+                      authored_id(value.workshop_id),
+                      authored_id(value.process_id),
+                      authored_id(value.consequence_target_id),
+                      value.required_quantity,
+                      value.minimum_quality,
+                      value.reward_funds,
+                      value.consequence_kind,
+                  };
+              }
           )) {
         definition = {
             authored_id(runtime.package_id),
@@ -309,6 +357,11 @@ struct ProjectedPackage final {
             craft_processes,
             craft_material_choices,
             craft_steps,
+        };
+        workshop_definition = {
+            workshops,
+            workshop_material_stocks,
+            workshop_orders,
         };
     }
 };
@@ -396,7 +449,8 @@ SandboxPackageCompileResult compile_sandbox_package(
         auto encoded = encode_sandbox_package(
             projected.definition,
             projected.gameplay_binding,
-            projected.craft_definition
+            projected.craft_definition,
+            projected.workshop_definition
         );
         if (!encoded.validation.valid()) {
             return {

@@ -64,9 +64,9 @@ static_assert(sandbox_pack_magic[5] == 'X');
 static_assert(sandbox_pack_magic[6] == 0);
 static_assert(sandbox_pack_byte_order == SandboxPackByteOrder::little_endian);
 static_assert(sandbox_pack_format_major == 1);
-static_assert(sandbox_pack_format_minor == 3);
+static_assert(sandbox_pack_format_minor == 4);
 static_assert(sandbox_authoring_schema_major == 1);
-static_assert(sandbox_authoring_schema_minor == 3);
+static_assert(sandbox_authoring_schema_minor == 4);
 static_assert(sandbox_authoring_schema_patch == 0);
 static_assert(sandbox_pack_header_bytes == 96);
 static_assert(sandbox_pack_directory_entry_bytes == 24);
@@ -90,6 +90,9 @@ static_assert(sandbox_mechanism_capacity == 16);
 static_assert(sandbox_wave_capacity == 16);
 static_assert(sandbox_wave_spawn_capacity == 15);
 static_assert(sandbox_objective_capacity == 64);
+static_assert(sandbox_workshop_capacity == 8);
+static_assert(sandbox_workshop_material_stock_capacity == 32);
+static_assert(sandbox_workshop_order_capacity == 16);
 
 static_assert(static_cast<std::uint8_t>(SandboxAssetKind::player) == 1);
 static_assert(static_cast<std::uint8_t>(SandboxAssetKind::safe_point) == 6);
@@ -142,6 +145,9 @@ static_assert(sandbox_pack_objective_record_bytes == 64);
 static_assert(sandbox_pack_interaction_gameplay_binding_record_bytes == 32);
 static_assert(sandbox_pack_mechanism_gameplay_binding_record_bytes == 32);
 static_assert(sandbox_pack_actor_gameplay_binding_record_bytes == 40);
+static_assert(sandbox_pack_workshop_record_bytes == 32);
+static_assert(sandbox_pack_workshop_material_stock_record_bytes == 48);
+static_assert(sandbox_pack_workshop_order_record_bytes == 64);
 static_assert(static_cast<std::uint16_t>(SandboxDiagnosticCode::duplicate_id) == 1);
 static_assert(static_cast<std::uint16_t>(SandboxDiagnosticCode::retry_inconsistent) == 25);
 static_assert(static_cast<std::uint16_t>(SandboxDiagnosticCode::web_budget_exceeded) == 32);
@@ -179,6 +185,14 @@ static_assert(static_cast<std::uint8_t>(SandboxDiagnosticSeverity::invalid) == 2
 static_assert(static_cast<std::uint8_t>(SandboxDiagnosticDomain::package) == 0);
 static_assert(static_cast<std::uint8_t>(SandboxDiagnosticDomain::actors) == 6);
 static_assert(static_cast<std::uint8_t>(SandboxDiagnosticDomain::objectives) == 13);
+static_assert(static_cast<std::uint8_t>(SandboxDiagnosticDomain::workshops) == 22);
+static_assert(
+    static_cast<std::uint8_t>(SandboxDiagnosticDomain::workshop_material_stocks) ==
+    23
+);
+static_assert(
+    static_cast<std::uint8_t>(SandboxDiagnosticDomain::workshop_orders) == 24
+);
 static_assert(static_cast<std::uint8_t>(SandboxDiagnosticDomain::invalid) == 255);
 static_assert(static_cast<std::uint16_t>(SandboxDiagnosticField::none) == 0);
 static_assert(static_cast<std::uint16_t>(SandboxDiagnosticField::id) == 1);
@@ -206,11 +220,15 @@ static_assert(static_cast<std::uint16_t>(SandboxDiagnosticField::predecessor_obj
 static_assert(static_cast<std::uint16_t>(SandboxDiagnosticField::completion_kind) == 27);
 static_assert(static_cast<std::uint16_t>(SandboxDiagnosticField::completion_target_id) == 28);
 static_assert(static_cast<std::uint16_t>(SandboxDiagnosticField::web_budget) == 36);
+static_assert(
+    static_cast<std::uint16_t>(SandboxDiagnosticField::consequence_target_id) ==
+    59
+);
 static_assert(static_cast<std::uint16_t>(SandboxDiagnosticField::invalid) == 65'535);
 static_assert(!HasDiagnosticSeverityState<SandboxDiagnostic>);
 
 [[nodiscard]] constexpr bool all_sandbox_diagnostic_severities_are_mapped() noexcept {
-    for (std::uint16_t raw = 1; raw <= 39; ++raw) {
+    for (std::uint16_t raw = 1; raw <= 44; ++raw) {
         if (sandbox_diagnostic_severity(static_cast<SandboxDiagnosticCode>(raw)) !=
             SandboxDiagnosticSeverity::error) {
             return false;
@@ -225,7 +243,7 @@ static_assert(
     SandboxDiagnosticSeverity::invalid
 );
 static_assert(
-    sandbox_diagnostic_severity(static_cast<SandboxDiagnosticCode>(40)) ==
+    sandbox_diagnostic_severity(static_cast<SandboxDiagnosticCode>(45)) ==
     SandboxDiagnosticSeverity::invalid
 );
 static_assert(

@@ -45,6 +45,14 @@ const OBJECT_DEFINITIONS = Object.freeze({
   craftSteps: Object.freeze({
     collection: "craftSteps",
     editableOnly: true
+  }),
+  workshops: Object.freeze({
+    collection: "workshops",
+    editableOnly: true
+  }),
+  workshopOrders: Object.freeze({
+    collection: "workshopOrders",
+    editableOnly: true
   })
 });
 const OBJECT_KINDS = new Set(Object.keys(OBJECT_DEFINITIONS));
@@ -396,6 +404,87 @@ function updateCandidate(document, kind, id, values) {
     return candidate;
   }
 
+  if (kind === "workshops") {
+    expectExactObject(
+      values,
+      [
+        "workstationId",
+        "initialFunds",
+        "materialStocks",
+        ...(hasEditorLabel ? ["editorLabel"] : [])
+      ],
+      "workshop values"
+    );
+    if (!Array.isArray(values.materialStocks)) {
+      fail("invalid_request", "workshop material stocks must be an array");
+    }
+    const stocks = values.materialStocks.map((stock) => {
+      expectExactObject(
+        stock,
+        [
+          "materialId",
+          "unitCost",
+          "initialQuantity",
+          "baseQuality",
+          "reworkQualityGain"
+        ],
+        "workshop material stock"
+      );
+      return {
+        workshopId: id,
+        materialId: stock.materialId,
+        unitCost: stock.unitCost,
+        initialQuantity: stock.initialQuantity,
+        baseQuality: stock.baseQuality,
+        reworkQualityGain: stock.reworkQualityGain
+      };
+    });
+    collection[match.index] = {
+      id,
+      workstationId: values.workstationId,
+      initialFunds: values.initialFunds
+    };
+    candidate.runtime.workshopMaterialStocks =
+      candidate.runtime.workshopMaterialStocks
+        .filter((stock) => stock.workshopId !== id)
+        .concat(stocks);
+    if (hasEditorLabel) {
+      updateEditorLabel(candidate, id, values.editorLabel);
+    }
+    return candidate;
+  }
+
+  if (kind === "workshopOrders") {
+    expectExactObject(
+      values,
+      [
+        "workshopId",
+        "processId",
+        "requiredQuantity",
+        "minimumQuality",
+        "rewardFunds",
+        "consequenceKind",
+        "consequenceTargetId",
+        ...(hasEditorLabel ? ["editorLabel"] : [])
+      ],
+      "workshop order values"
+    );
+    collection[match.index] = {
+      id,
+      workshopId: values.workshopId,
+      processId: values.processId,
+      requiredQuantity: values.requiredQuantity,
+      minimumQuality: values.minimumQuality,
+      rewardFunds: values.rewardFunds,
+      consequenceKind: values.consequenceKind,
+      consequenceTargetId: values.consequenceTargetId
+    };
+    if (hasEditorLabel) {
+      updateEditorLabel(candidate, id, values.editorLabel);
+    }
+    return candidate;
+  }
+
   if (kind === "groundBlockers") {
     expectExactObject(
       values,
@@ -533,7 +622,9 @@ function allStableIds(document) {
     ...runtime.craftMaterials.map(({ id }) => id),
     ...runtime.craftWorkstations.map(({ id }) => id),
     ...runtime.craftProcesses.map(({ id }) => id),
-    ...runtime.craftSteps.map(({ id }) => id)
+    ...runtime.craftSteps.map(({ id }) => id),
+    ...runtime.workshops.map(({ id }) => id),
+    ...runtime.workshopOrders.map(({ id }) => id)
   ]);
 }
 

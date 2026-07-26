@@ -1,5 +1,5 @@
 export const SANDBOX_AUTHORING_FORMAT = "tgd.sandbox.authoring";
-export const SANDBOX_AUTHORING_VERSION = "1.3.0";
+export const SANDBOX_AUTHORING_VERSION = "1.4.0";
 
 export const SANDBOX_AUTHORING_CAPACITIES = Object.freeze({
   regions: 16,
@@ -20,6 +20,9 @@ export const SANDBOX_AUTHORING_CAPACITIES = Object.freeze({
   craftProcesses: 8,
   craftMaterialChoices: 32,
   craftSteps: 32,
+  workshops: 8,
+  workshopMaterialStocks: 32,
+  workshopOrders: 16,
   editorItems: 512
 });
 
@@ -67,6 +70,9 @@ const CRAFT_MATERIAL_OUTCOMES = new Set([
   "requires_rework"
 ]);
 const CRAFT_STEP_KINDS = new Set(["operation", "trial", "rework"]);
+const WORKSHOP_ORDER_CONSEQUENCE_KINDS = new Set([
+  "operate_route_interaction"
+]);
 
 const textEncoder = new TextEncoder();
 
@@ -200,6 +206,14 @@ function compareActorBindings(left, right) {
 function compareCraftMaterialChoices(left, right) {
   return (
     compareStrings(left.processId, right.processId) ||
+    compareStrings(left.materialId, right.materialId) ||
+    compareStableTie(left, right)
+  );
+}
+
+function compareWorkshopMaterialStocks(left, right) {
+  return (
+    compareStrings(left.workshopId, right.workshopId) ||
     compareStrings(left.materialId, right.materialId) ||
     compareStableTie(left, right)
   );
@@ -599,6 +613,103 @@ function normalizeCraftStep(value, path) {
   };
 }
 
+function normalizeWorkshop(value, path) {
+  const source = expectExactObject(value, path, [
+    "id",
+    "workstationId",
+    "initialFunds"
+  ]);
+  return {
+    id: expectId(source.id, path + ".id"),
+    workstationId: expectId(source.workstationId, path + ".workstationId"),
+    initialFunds: expectInteger(
+      source.initialFunds,
+      path + ".initialFunds",
+      0,
+      INT32_MAX
+    )
+  };
+}
+
+function normalizeWorkshopMaterialStock(value, path) {
+  const source = expectExactObject(value, path, [
+    "workshopId",
+    "materialId",
+    "unitCost",
+    "initialQuantity",
+    "baseQuality",
+    "reworkQualityGain"
+  ]);
+  return {
+    workshopId: expectId(source.workshopId, path + ".workshopId"),
+    materialId: expectId(source.materialId, path + ".materialId"),
+    unitCost: expectInteger(source.unitCost, path + ".unitCost", 1, INT32_MAX),
+    initialQuantity: expectInteger(
+      source.initialQuantity,
+      path + ".initialQuantity",
+      1,
+      UINT16_MAX
+    ),
+    baseQuality: expectInteger(
+      source.baseQuality,
+      path + ".baseQuality",
+      1,
+      10000
+    ),
+    reworkQualityGain: expectInteger(
+      source.reworkQualityGain,
+      path + ".reworkQualityGain",
+      0,
+      10000
+    )
+  };
+}
+
+function normalizeWorkshopOrder(value, path) {
+  const source = expectExactObject(value, path, [
+    "id",
+    "workshopId",
+    "processId",
+    "requiredQuantity",
+    "minimumQuality",
+    "rewardFunds",
+    "consequenceKind",
+    "consequenceTargetId"
+  ]);
+  return {
+    id: expectId(source.id, path + ".id"),
+    workshopId: expectId(source.workshopId, path + ".workshopId"),
+    processId: expectId(source.processId, path + ".processId"),
+    requiredQuantity: expectInteger(
+      source.requiredQuantity,
+      path + ".requiredQuantity",
+      1,
+      UINT16_MAX
+    ),
+    minimumQuality: expectInteger(
+      source.minimumQuality,
+      path + ".minimumQuality",
+      1,
+      10000
+    ),
+    rewardFunds: expectInteger(
+      source.rewardFunds,
+      path + ".rewardFunds",
+      0,
+      INT32_MAX
+    ),
+    consequenceKind: expectEnum(
+      source.consequenceKind,
+      path + ".consequenceKind",
+      WORKSHOP_ORDER_CONSEQUENCE_KINDS
+    ),
+    consequenceTargetId: expectId(
+      source.consequenceTargetId,
+      path + ".consequenceTargetId"
+    )
+  };
+}
+
 function normalizeEditorItem(value, path) {
   const source = expectExactObject(value, path, [
     "id",
@@ -650,7 +761,10 @@ function normalizeRuntime(value, path) {
     "craftWorkstations",
     "craftProcesses",
     "craftMaterialChoices",
-    "craftSteps"
+    "craftSteps",
+    "workshops",
+    "workshopMaterialStocks",
+    "workshopOrders"
   ]);
   return {
     packageId: expectId(source.packageId, path + ".packageId"),
@@ -785,6 +899,27 @@ function normalizeRuntime(value, path) {
       path + ".craftSteps",
       SANDBOX_AUTHORING_CAPACITIES.craftSteps,
       normalizeCraftStep,
+      compareById
+    ),
+    workshops: normalizeArray(
+      source.workshops,
+      path + ".workshops",
+      SANDBOX_AUTHORING_CAPACITIES.workshops,
+      normalizeWorkshop,
+      compareById
+    ),
+    workshopMaterialStocks: normalizeArray(
+      source.workshopMaterialStocks,
+      path + ".workshopMaterialStocks",
+      SANDBOX_AUTHORING_CAPACITIES.workshopMaterialStocks,
+      normalizeWorkshopMaterialStock,
+      compareWorkshopMaterialStocks
+    ),
+    workshopOrders: normalizeArray(
+      source.workshopOrders,
+      path + ".workshopOrders",
+      SANDBOX_AUTHORING_CAPACITIES.workshopOrders,
+      normalizeWorkshopOrder,
       compareById
     )
   };

@@ -93,7 +93,7 @@ target_link_options(
     "-sINVOKE_RUN=0"
     "-sEXIT_RUNTIME=0"
     "-sALLOW_MEMORY_GROWTH=1"
-    "SHELL:-sEXPORTED_FUNCTIONS=['_malloc','_free','_tgd_sandbox_service_run_contract_probe','_tgd_sandbox_service_write_invalid_utf8_result','_tgd_sandbox_compiler_service_abi_version','_tgd_sandbox_compiler_service_create','_tgd_sandbox_compiler_service_destroy','_tgd_sandbox_compiler_service_read_identity','_tgd_sandbox_compile_request_create','_tgd_sandbox_compile_request_cancel','_tgd_sandbox_compile_request_copy_utf8','_tgd_sandbox_compile_request_set_metadata','_tgd_sandbox_compile_request_set_player','_tgd_sandbox_compile_request_append_region','_tgd_sandbox_compile_request_append_asset','_tgd_sandbox_compile_request_append_actor','_tgd_sandbox_compile_request_append_ground_blocker','_tgd_sandbox_compile_request_append_safe_point','_tgd_sandbox_compile_request_append_interaction','_tgd_sandbox_compile_request_append_mechanism','_tgd_sandbox_compile_request_append_wave','_tgd_sandbox_compile_request_append_wave_spawn','_tgd_sandbox_compile_request_append_objective','_tgd_sandbox_compile_request_append_interaction_binding','_tgd_sandbox_compile_request_append_mechanism_binding','_tgd_sandbox_compile_request_append_actor_binding','_tgd_sandbox_compile_request_append_craft_material','_tgd_sandbox_compile_request_append_craft_workstation','_tgd_sandbox_compile_request_append_craft_process','_tgd_sandbox_compile_request_append_craft_material_choice','_tgd_sandbox_compile_request_append_craft_step','_tgd_sandbox_compile_request_submit']"
+    "SHELL:-sEXPORTED_FUNCTIONS=['_malloc','_free','_tgd_sandbox_service_run_contract_probe','_tgd_sandbox_service_write_invalid_utf8_result','_tgd_sandbox_compiler_service_abi_version','_tgd_sandbox_compiler_service_create','_tgd_sandbox_compiler_service_destroy','_tgd_sandbox_compiler_service_read_identity','_tgd_sandbox_compile_request_create','_tgd_sandbox_compile_request_cancel','_tgd_sandbox_compile_request_copy_utf8','_tgd_sandbox_compile_request_set_metadata','_tgd_sandbox_compile_request_set_player','_tgd_sandbox_compile_request_append_region','_tgd_sandbox_compile_request_append_asset','_tgd_sandbox_compile_request_append_actor','_tgd_sandbox_compile_request_append_ground_blocker','_tgd_sandbox_compile_request_append_safe_point','_tgd_sandbox_compile_request_append_interaction','_tgd_sandbox_compile_request_append_mechanism','_tgd_sandbox_compile_request_append_wave','_tgd_sandbox_compile_request_append_wave_spawn','_tgd_sandbox_compile_request_append_objective','_tgd_sandbox_compile_request_append_interaction_binding','_tgd_sandbox_compile_request_append_mechanism_binding','_tgd_sandbox_compile_request_append_actor_binding','_tgd_sandbox_compile_request_append_craft_material','_tgd_sandbox_compile_request_append_craft_workstation','_tgd_sandbox_compile_request_append_craft_process','_tgd_sandbox_compile_request_append_craft_material_choice','_tgd_sandbox_compile_request_append_craft_step','_tgd_sandbox_compile_request_append_workshop','_tgd_sandbox_compile_request_append_workshop_material_stock','_tgd_sandbox_compile_request_append_workshop_order','_tgd_sandbox_compile_request_submit']"
 )
 set_target_properties(
   tgd_web_sandbox_package_service_abi
@@ -130,7 +130,7 @@ const [modulePath, wasmPath, clientPath, sourcePath, outputPath, changedOutputPa
   process.argv.slice(2);
 const sourceBytes = await readFile(sourcePath);
 const sourceHash = createHash("sha256").update(sourceBytes).digest("hex");
-if (sourceHash !== "16ce86671277eddf2b55f1ef3cfb90f27a8ad0cb91be0221db89403882280abc") {
+if (sourceHash !== "ae9584df6f74fcf9cc3e15c9977ce7d443637268a9a114dc1ddf204ac2911210") {
   throw new Error("system-demo author source SHA-256 drifted: " + sourceHash);
 }
 
@@ -164,11 +164,11 @@ try {
     packageSha256: packageHash(first.packageBytes),
     providerChecksum: hex(first.identity.checksum),
   };
-  if (firstIdentity.bytes !== 4128 ||
+  if (firstIdentity.bytes !== 4832 ||
       firstIdentity.packageSha256 !==
-        "ff93c16e31ba8c6c62ecdd7134f0b64aed63386a3dde464d505837b040848975" ||
+        "b51f99aab88ccb4cefc4a945cf00c36de726c5478e302e281bb0c58603e3112e" ||
       firstIdentity.providerChecksum !==
-        "a56f05e188731a11525af38a599506b3361b5d5107444c87f81d0d65f8532e78") {
+        "d3001d59da2792f72bdf121ae6585aa24a4a8a3b26116a24ab8e23954a4dcebe") {
     throw new Error(
       "system-demo canonical package identity drifted: " +
         JSON.stringify(firstIdentity)

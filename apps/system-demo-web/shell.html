@@ -195,7 +195,7 @@
           <h1>TianGongDu System Demo</h1>
         </div>
         <div class="build">
-          Demo 0.8.4 / Craft trial + two-wave combat<br />
+          Demo 0.8.5 / Workshop order + alternate route<br />
           unique .tgdsbx → C++ runtime → Axmol
         </div>
       </header>
@@ -206,7 +206,7 @@
           width="1280"
           height="720"
           tabindex="0"
-          aria-label="System Demo game canvas. Use WASD to move, C to enter the craft workstation, 1 or 2 to choose material, 3 and 4 for ordered craft operations, T to trial, G to rework, F to operate the gate, J or Space for a light attack, K for a heavy attack, and R to retry."
+          aria-label="System Demo game canvas. Use WASD to move, C to enter the craft workstation, 1 or 2 to buy and choose material, 3 and 4 for ordered craft operations, T to trial, G to rework, Y to deliver the workshop order, F to operate the gate, J or Space for a light attack, K for a heavy attack, and R to retry."
         ></canvas>
         <div class="loading" id="loading" data-ready="false" aria-live="polite">
           <div class="loading-card">
@@ -226,6 +226,7 @@
           <button type="button" id="craft-paste">Paste · 4</button>
           <button type="button" id="craft-trial">Rain trial · T</button>
           <button type="button" id="craft-rework">Retension · G</button>
+          <button type="button" id="order-deliver">Deliver order · Y</button>
           <button type="button" id="operate">Operate · F</button>
           <button type="button" id="light-attack">Light · J / Space</button>
           <button type="button" id="heavy-attack">Heavy · K</button>
@@ -298,7 +299,21 @@
         craftTrialCount: exported("tgd_system_demo_qa_craft_trial_count"),
         craftMistakeCount: exported("tgd_system_demo_qa_craft_mistake_count"),
         craftReworkCount: exported("tgd_system_demo_qa_craft_rework_count"),
-        craftCompleted: exported("tgd_system_demo_qa_craft_completed") !== 0
+        craftCompleted: exported("tgd_system_demo_qa_craft_completed") !== 0,
+        workshopFunds: exported("tgd_system_demo_qa_workshop_funds"),
+        workshopSpentFunds: exported("tgd_system_demo_qa_workshop_spent_funds"),
+        workshopStockFlexible: exported(
+          "tgd_system_demo_qa_workshop_stock_flexible"
+        ),
+        workshopStockSalvage: exported(
+          "tgd_system_demo_qa_workshop_stock_salvage"
+        ),
+        workshopQuality: exported("tgd_system_demo_qa_workshop_quality"),
+        workshopOccupied:
+          exported("tgd_system_demo_qa_workshop_occupied") !== 0,
+        orderFulfilled:
+          exported("tgd_system_demo_qa_order_fulfilled") !== 0,
+        shortcutOpen: exported("tgd_system_demo_qa_shortcut_open") !== 0
       });
 
       const dispatchKey = (code, key) => {
@@ -314,6 +329,8 @@
             `x ${state.playerX} / y ${state.playerY} / ` +
             `gate ${state.gateOpen ? "open" : "closed"} / ` +
             `craft ${state.craftStage}${state.craftCompleted ? " passed" : ""} / ` +
+            `funds ${state.workshopFunds} / order ${state.orderFulfilled ? "done" : "open"} / ` +
+            `shortcut ${state.shortcutOpen ? "open" : "closed"} / ` +
             `hp ${state.playerHealth} / hostiles ${state.activeHostileCount} / ` +
             `waves ${state.completedWaveCount}/2`;
         } catch {
@@ -402,6 +419,9 @@
       document.getElementById("craft-rework").addEventListener("click", () => {
         dispatchKey("KeyG", "g");
       });
+      document.getElementById("order-deliver").addEventListener("click", () => {
+        dispatchKey("KeyY", "y");
+      });
       document.getElementById("operate").addEventListener("click", () => {
         dispatchKey("KeyF", "f");
       });
@@ -441,6 +461,7 @@
         pressCraftPaste: () => dispatchKey("Digit4", "4"),
         pressCraftTrial: () => dispatchKey("KeyT", "t"),
         pressCraftRework: () => dispatchKey("KeyG", "g"),
+        pressDeliverOrder: () => dispatchKey("KeyY", "y"),
         pressOperate: () => dispatchKey("KeyF", "f"),
         pressLightAttack: () => dispatchKey("KeyJ", "j"),
         pressHeavyAttack: () => dispatchKey("KeyK", "k"),

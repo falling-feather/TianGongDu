@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 #define TGD_SANDBOX_COMPILER_SERVICE_ABI_MAJOR UINT16_C(1)
-#define TGD_SANDBOX_COMPILER_SERVICE_ABI_MINOR UINT16_C(3)
+#define TGD_SANDBOX_COMPILER_SERVICE_ABI_MINOR UINT16_C(4)
 #define TGD_SANDBOX_COMPILER_SERVICE_MAX_SERVICES UINT32_C(8)
 #define TGD_SANDBOX_COMPILER_SERVICE_MAX_REQUESTS UINT32_C(32)
 #define TGD_SANDBOX_COMPILER_SERVICE_MAX_STRING_REFS UINT32_C(4096)
@@ -195,6 +195,35 @@ typedef struct tgd_sandbox_service_craft_step {
     uint8_t reserved[3];
 } tgd_sandbox_service_craft_step;
 
+typedef struct tgd_sandbox_service_workshop {
+    tgd_sandbox_request_string_ref id;
+    tgd_sandbox_request_string_ref workstation_id;
+    int32_t initial_funds;
+    uint32_t reserved;
+} tgd_sandbox_service_workshop;
+
+typedef struct tgd_sandbox_service_workshop_material_stock {
+    tgd_sandbox_request_string_ref workshop_id;
+    tgd_sandbox_request_string_ref material_id;
+    int32_t unit_cost;
+    uint16_t initial_quantity;
+    uint16_t base_quality;
+    uint16_t rework_quality_gain;
+    uint16_t reserved;
+} tgd_sandbox_service_workshop_material_stock;
+
+typedef struct tgd_sandbox_service_workshop_order {
+    tgd_sandbox_request_string_ref id;
+    tgd_sandbox_request_string_ref workshop_id;
+    tgd_sandbox_request_string_ref process_id;
+    tgd_sandbox_request_string_ref consequence_target_id;
+    uint16_t required_quantity;
+    uint16_t minimum_quality;
+    int32_t reward_funds;
+    uint8_t consequence_kind;
+    uint8_t reserved[3];
+} tgd_sandbox_service_workshop_order;
+
 typedef struct tgd_sandbox_service_result_header {
     uint8_t complete;
     uint8_t outcome;
@@ -316,6 +345,9 @@ TGD_SANDBOX_DECLARE_APPEND(craft_workstation, tgd_sandbox_service_placement);
 TGD_SANDBOX_DECLARE_APPEND(craft_process, tgd_sandbox_service_craft_process);
 TGD_SANDBOX_DECLARE_APPEND(craft_material_choice, tgd_sandbox_service_craft_material_choice);
 TGD_SANDBOX_DECLARE_APPEND(craft_step, tgd_sandbox_service_craft_step);
+TGD_SANDBOX_DECLARE_APPEND(workshop, tgd_sandbox_service_workshop);
+TGD_SANDBOX_DECLARE_APPEND(workshop_material_stock, tgd_sandbox_service_workshop_material_stock);
+TGD_SANDBOX_DECLARE_APPEND(workshop_order, tgd_sandbox_service_workshop_order);
 #undef TGD_SANDBOX_DECLARE_APPEND
 int32_t tgd_sandbox_compile_request_submit(
     tgd_sandbox_service_handle service,

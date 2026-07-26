@@ -2,6 +2,7 @@ const ABI_VERSION_1_0 = 0x00010000;
 const ABI_VERSION_1_1 = 0x00010001;
 const ABI_VERSION_1_2 = 0x00010002;
 const ABI_VERSION_1_3 = 0x00010003;
+const ABI_VERSION_1_4 = 0x00010004;
 const MAX_CANONICAL_PACKAGE_BYTES = 4 * 1024 * 1024;
 const HEADER_BYTES = 120;
 const ARTIFACT_BYTES = 16;
@@ -85,7 +86,8 @@ export function decodeSandboxPackageServiceResult(source) {
   if (
     data.getUint8(0) !== 1 ||
     abiMajor !== 1 ||
-    (abiMinor !== 0 && abiMinor !== 1 && abiMinor !== 2 && abiMinor !== 3) ||
+    (abiMinor !== 0 && abiMinor !== 1 && abiMinor !== 2 &&
+      abiMinor !== 3 && abiMinor !== 4) ||
     bytes.byteLength < prefixBytes ||
     total !== bytes.byteLength ||
     diagnosticsOffset !== prefixBytes ||
@@ -130,8 +132,8 @@ export function decodeSandboxPackageServiceResult(source) {
     const section = data.getUint8(offset + 3);
     const field = data.getUint16(offset + 4, true);
     if ((flags & ~3) !== 0 || data.getUint32(offset + 44, true) !== 0 ||
-        code < 1 || code > 39 || (severity !== 1 && severity !== 2) ||
-        (section > 13 && (section < 17 || section > 21)) || field > 48) {
+        code < 1 || code > 44 || (severity !== 1 && severity !== 2) ||
+        (section > 13 && (section < 17 || section > 24)) || field > 59) {
       throw new SandboxPackageServiceTransportError(9, "invalid diagnostic flags");
     }
     const subjectOffset = data.getUint32(offset + 28, true);
@@ -261,9 +263,35 @@ const craftMaterialOutcomes = Object.freeze({
 const craftStepKinds = Object.freeze({
   operation: 1, trial: 2, rework: 3
 });
+const workshopOrderConsequenceKinds = Object.freeze({
+  operate_route_interaction: 1
+});
 
 function structuralError(path, expected) {
   throw new TypeError(path + " must be " + expected);
+}
+
+function requireAbiCapabilities(runtime, abiVersion) {
+  const requires = (minimum, names, label) => {
+    if (
+      abiVersion < minimum &&
+      names.some((name) => runtime[name].length !== 0)
+    ) {
+      throw new SandboxPackageServiceTransportError(
+        9,
+        label + " requires compiler service ABI " +
+          ((minimum >>> 16) & 0xffff) + "." + (minimum & 0xffff)
+      );
+    }
+  };
+  requires(ABI_VERSION_1_2, ["actorBindings"], "actor bindings");
+  requires(ABI_VERSION_1_3, [
+    "craftMaterials", "craftWorkstations", "craftProcesses",
+    "craftMaterialChoices", "craftSteps"
+  ], "craft definition");
+  requires(ABI_VERSION_1_4, [
+    "workshops", "workshopMaterialStocks", "workshopOrders"
+  ], "workshop definition");
 }
 
 function expectObject(value, path, expectedKeys) {
@@ -388,7 +416,8 @@ function validateStructuralInput(runtime, expectedIdentity) {
     "interactions", "mechanisms", "waves", "waveSpawns", "objectives",
     "interactionBindings", "mechanismBindings", "actorBindings",
     "craftMaterials", "craftWorkstations", "craftProcesses",
-    "craftMaterialChoices", "craftSteps"
+    "craftMaterialChoices", "craftSteps", "workshops",
+    "workshopMaterialStocks", "workshopOrders"
   ]);
   for (const name of ["packageId", "sandboxId", "completionObjectiveId"])
     expectString(root[name], "runtime." + name, strings);
@@ -529,6 +558,54 @@ function validateStructuralInput(runtime, expectedIdentity) {
       expectString(record[name], path + "." + name, strings);
     }
   });
+  expectArray(root.workshops, "runtime.workshops").forEach((value, index) => {
+    const path = "runtime.workshops[" + index + "]";
+    const record = expectObject(value, path, [
+      "id", "workstationId", "initialFunds"
+    ]);
+    expectString(record.id, path + ".id", strings);
+    expectString(record.workstationId, path + ".workstationId", strings);
+    expectInteger(record.initialFunds, 0, 2147483647, path + ".initialFunds");
+  });
+  expectArray(
+    root.workshopMaterialStocks,
+    "runtime.workshopMaterialStocks"
+  ).forEach((value, index) => {
+    const path = "runtime.workshopMaterialStocks[" + index + "]";
+    const record = expectObject(value, path, [
+      "workshopId", "materialId", "unitCost", "initialQuantity",
+      "baseQuality", "reworkQualityGain"
+    ]);
+    expectString(record.workshopId, path + ".workshopId", strings);
+    expectString(record.materialId, path + ".materialId", strings);
+    expectInteger(record.unitCost, 1, 2147483647, path + ".unitCost");
+    expectInteger(record.initialQuantity, 1, 65535, path + ".initialQuantity");
+    expectInteger(record.baseQuality, 1, 10000, path + ".baseQuality");
+    expectInteger(record.reworkQualityGain, 0, 10000,
+      path + ".reworkQualityGain");
+  });
+  expectArray(root.workshopOrders, "runtime.workshopOrders").forEach(
+    (value, index) => {
+      const path = "runtime.workshopOrders[" + index + "]";
+      const record = expectObject(value, path, [
+        "id", "workshopId", "processId", "requiredQuantity",
+        "minimumQuality", "rewardFunds", "consequenceKind",
+        "consequenceTargetId"
+      ]);
+      for (const name of [
+        "id", "workshopId", "processId", "consequenceKind",
+        "consequenceTargetId"
+      ]) {
+        expectString(record[name], path + "." + name, strings);
+      }
+      expectInteger(record.requiredQuantity, 1, 65535,
+        path + ".requiredQuantity");
+      expectInteger(record.minimumQuality, 1, 10000,
+        path + ".minimumQuality");
+      expectInteger(record.rewardFunds, 0, 2147483647,
+        path + ".rewardFunds");
+    }
+  );
   return strings;
 }
 
@@ -568,7 +645,8 @@ export class SandboxPackageServiceClient {
       abiVersion !== ABI_VERSION_1_0 &&
       abiVersion !== ABI_VERSION_1_1 &&
       abiVersion !== ABI_VERSION_1_2 &&
-      abiVersion !== ABI_VERSION_1_3
+      abiVersion !== ABI_VERSION_1_3 &&
+      abiVersion !== ABI_VERSION_1_4
     ) {
       throw new SandboxPackageServiceTransportError(9, "incompatible ABI");
     }
@@ -603,6 +681,7 @@ export class SandboxPackageServiceClient {
   publish(runtime, expectedIdentity = this.identity()) {
     if (this.destroyed) throw new SandboxPackageServiceTransportError(2, "destroyed service");
     const authoredStrings = validateStructuralInput(runtime, expectedIdentity);
+    requireAbiCapabilities(runtime, this.abiVersion);
     const module = this.module;
     const scratch = allocate(module, 128);
     let output = 0;
@@ -713,7 +792,7 @@ export class SandboxPackageServiceClient {
           record.setUint8(13, enumValue(actorDuties, value.duty));
         });
       }
-      if (this.abiVersion === ABI_VERSION_1_3) {
+      if (this.abiVersion >= ABI_VERSION_1_3) {
         for (const value of runtime.craftMaterials)
           invoke("tgd_sandbox_compile_request_append_craft_material", 4, (record) => {
             record.setUint32(0, text(value.id), true);
@@ -747,6 +826,44 @@ export class SandboxPackageServiceClient {
             record.setUint32(8, text(value.predecessorStepId), true);
             record.setUint32(12, text(value.actionId), true);
             record.setUint8(16, enumValue(craftStepKinds, value.kind));
+          });
+      }
+      if (this.abiVersion === ABI_VERSION_1_4) {
+        for (const value of runtime.workshops)
+          invoke("tgd_sandbox_compile_request_append_workshop", 16, (record) => {
+            record.setUint32(0, text(value.id), true);
+            record.setUint32(4, text(value.workstationId), true);
+            record.setInt32(8, value.initialFunds, true);
+          });
+        for (const value of runtime.workshopMaterialStocks)
+          invoke(
+            "tgd_sandbox_compile_request_append_workshop_material_stock",
+            20,
+            (record) => {
+              record.setUint32(0, text(value.workshopId), true);
+              record.setUint32(4, text(value.materialId), true);
+              record.setInt32(8, value.unitCost, true);
+              record.setUint16(12, value.initialQuantity, true);
+              record.setUint16(14, value.baseQuality, true);
+              record.setUint16(16, value.reworkQualityGain, true);
+            }
+          );
+        for (const value of runtime.workshopOrders)
+          invoke("tgd_sandbox_compile_request_append_workshop_order", 28, (record) => {
+            record.setUint32(0, text(value.id), true);
+            record.setUint32(4, text(value.workshopId), true);
+            record.setUint32(8, text(value.processId), true);
+            record.setUint32(12, text(value.consequenceTargetId), true);
+            record.setUint16(16, value.requiredQuantity, true);
+            record.setUint16(18, value.minimumQuality, true);
+            record.setInt32(20, value.rewardFunds, true);
+            record.setUint8(
+              24,
+              enumValue(
+                workshopOrderConsequenceKinds,
+                value.consequenceKind
+              )
+            );
           });
       }
       module.HEAPU8.fill(0, scratch, scratch + 4);

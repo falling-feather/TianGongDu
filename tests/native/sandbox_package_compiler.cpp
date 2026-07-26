@@ -18,7 +18,7 @@ using namespace tgd::contracts;
 using namespace tgd::content;
 
 static_assert(tgd::contracts::sandbox_authoring_schema_major == 1);
-static_assert(tgd::contracts::sandbox_authoring_schema_minor == 3);
+static_assert(tgd::contracts::sandbox_authoring_schema_minor == 4);
 static_assert(tgd::contracts::sandbox_authoring_schema_patch == 0);
 static_assert(static_cast<std::uint8_t>(SandboxPackageCompileStatus::succeeded) == 1);
 static_assert(static_cast<std::uint8_t>(SandboxPackageCompileStatus::producer_rejected) == 2);

@@ -26,7 +26,7 @@ using contracts::SandboxDiagnosticField;
 using contracts::SandboxPackageError;
 using contracts::SandboxPackSectionType;
 
-constexpr std::uint16_t sandbox_known_section_count = 21;
+constexpr std::uint16_t sandbox_known_section_count = 24;
 
 [[nodiscard]] bool byte_less(std::string_view left, std::string_view right) noexcept {
     return std::lexicographical_compare(
@@ -1349,12 +1349,374 @@ void sort_diagnostics(std::vector<SandboxDiagnostic>& diagnostics) {
     return diagnostics;
 }
 
+[[nodiscard]] std::vector<SandboxDiagnostic> validate_workshop_definition(
+    const contracts::SandboxDefinition& sandbox,
+    const contracts::CraftDefinition& craft,
+    const contracts::WorkshopDefinition& workshop
+) {
+    std::vector<SandboxDiagnostic> diagnostics;
+    const bool empty = workshop.workshops.empty() &&
+                       workshop.material_stocks.empty() &&
+                       workshop.orders.empty();
+    if (empty) {
+        return diagnostics;
+    }
+
+    const auto capacity = [&](std::size_t size,
+                              std::size_t maximum,
+                              SandboxDiagnosticDomain domain) {
+        if (size > maximum) {
+            add_diagnostic(
+                diagnostics,
+                SandboxDiagnosticCode::capacity_exceeded,
+                domain,
+                size,
+                SandboxDiagnosticField::none
+            );
+        }
+    };
+    capacity(
+        workshop.workshops.size(),
+        contracts::sandbox_workshop_capacity,
+        SandboxDiagnosticDomain::workshops
+    );
+    capacity(
+        workshop.material_stocks.size(),
+        contracts::sandbox_workshop_material_stock_capacity,
+        SandboxDiagnosticDomain::workshop_material_stocks
+    );
+    capacity(
+        workshop.orders.size(),
+        contracts::sandbox_workshop_order_capacity,
+        SandboxDiagnosticDomain::workshop_orders
+    );
+    if (workshop.workshops.empty()) {
+        add_diagnostic(
+            diagnostics,
+            SandboxDiagnosticCode::invalid_workshop,
+            SandboxDiagnosticDomain::workshops,
+            0,
+            SandboxDiagnosticField::id
+        );
+    }
+    if (workshop.material_stocks.empty()) {
+        add_diagnostic(
+            diagnostics,
+            SandboxDiagnosticCode::invalid_workshop_material_stock,
+            SandboxDiagnosticDomain::workshop_material_stocks,
+            0,
+            SandboxDiagnosticField::material_id
+        );
+    }
+    if (workshop.orders.empty()) {
+        add_diagnostic(
+            diagnostics,
+            SandboxDiagnosticCode::invalid_workshop_order,
+            SandboxDiagnosticDomain::workshop_orders,
+            0,
+            SandboxDiagnosticField::id
+        );
+    }
+
+    validate_unique_ids(
+        diagnostics,
+        workshop.workshops,
+        SandboxDiagnosticDomain::workshops
+    );
+    validate_unique_ids(
+        diagnostics,
+        workshop.orders,
+        SandboxDiagnosticDomain::workshop_orders
+    );
+
+    for (std::size_t index = 0; index < workshop.workshops.size(); ++index) {
+        const auto& value = workshop.workshops[index];
+        validate_required_id(
+            diagnostics,
+            value.id,
+            SandboxDiagnosticCode::invalid_workshop,
+            SandboxDiagnosticDomain::workshops,
+            index,
+            SandboxDiagnosticField::id
+        );
+        if (!valid_id(value.workstation_id)) {
+            add_diagnostic(
+                diagnostics,
+                SandboxDiagnosticCode::invalid_workshop,
+                SandboxDiagnosticDomain::workshops,
+                index,
+                SandboxDiagnosticField::workstation_id,
+                value.id.key,
+                value.workstation_id.key
+            );
+        } else if (find_id(craft.workstations, value.workstation_id) == nullptr) {
+            add_diagnostic(
+                diagnostics,
+                SandboxDiagnosticCode::missing_reference,
+                SandboxDiagnosticDomain::workshops,
+                index,
+                SandboxDiagnosticField::workstation_id,
+                value.id.key,
+                value.workstation_id.key
+            );
+        }
+        if (value.initial_funds < 0) {
+            add_diagnostic(
+                diagnostics,
+                SandboxDiagnosticCode::invalid_workshop,
+                SandboxDiagnosticDomain::workshops,
+                index,
+                SandboxDiagnosticField::initial_funds,
+                value.id.key
+            );
+        }
+    }
+
+    for (std::size_t index = 0; index < workshop.material_stocks.size(); ++index) {
+        const auto& value = workshop.material_stocks[index];
+        if (!valid_id(value.workshop_id) || !valid_id(value.material_id) ||
+            value.unit_cost <= 0 || value.initial_quantity == 0 ||
+            value.base_quality == 0 || value.base_quality > 10'000U ||
+            value.rework_quality_gain > 10'000U - value.base_quality) {
+            auto field = SandboxDiagnosticField::workshop_id;
+            if (valid_id(value.workshop_id) && !valid_id(value.material_id)) {
+                field = SandboxDiagnosticField::material_id;
+            } else if (valid_id(value.workshop_id) &&
+                       valid_id(value.material_id) && value.unit_cost <= 0) {
+                field = SandboxDiagnosticField::unit_cost;
+            } else if (valid_id(value.workshop_id) &&
+                       valid_id(value.material_id) && value.unit_cost > 0 &&
+                       value.initial_quantity == 0) {
+                field = SandboxDiagnosticField::initial_quantity;
+            } else if (valid_id(value.workshop_id) &&
+                       valid_id(value.material_id) && value.unit_cost > 0 &&
+                       value.initial_quantity != 0 &&
+                       (value.base_quality == 0 ||
+                        value.base_quality > 10'000U)) {
+                field = SandboxDiagnosticField::base_quality;
+            } else if (valid_id(value.workshop_id) &&
+                       valid_id(value.material_id)) {
+                field = SandboxDiagnosticField::rework_quality_gain;
+            }
+            add_diagnostic(
+                diagnostics,
+                SandboxDiagnosticCode::invalid_workshop_material_stock,
+                SandboxDiagnosticDomain::workshop_material_stocks,
+                index,
+                field,
+                value.workshop_id.key,
+                value.material_id.key
+            );
+        }
+        if (find_id(workshop.workshops, value.workshop_id) == nullptr) {
+            add_diagnostic(
+                diagnostics,
+                SandboxDiagnosticCode::missing_reference,
+                SandboxDiagnosticDomain::workshop_material_stocks,
+                index,
+                SandboxDiagnosticField::workshop_id,
+                value.workshop_id.key,
+                value.workshop_id.key
+            );
+        }
+        if (find_id(craft.materials, value.material_id) == nullptr) {
+            add_diagnostic(
+                diagnostics,
+                SandboxDiagnosticCode::missing_reference,
+                SandboxDiagnosticDomain::workshop_material_stocks,
+                index,
+                SandboxDiagnosticField::material_id,
+                value.workshop_id.key,
+                value.material_id.key
+            );
+        }
+        for (std::size_t prior = 0; prior < index; ++prior) {
+            if (workshop.material_stocks[prior].workshop_id == value.workshop_id &&
+                workshop.material_stocks[prior].material_id == value.material_id) {
+                add_diagnostic(
+                    diagnostics,
+                    SandboxDiagnosticCode::duplicate_id,
+                    SandboxDiagnosticDomain::workshop_material_stocks,
+                    index,
+                    SandboxDiagnosticField::material_id,
+                    value.workshop_id.key,
+                    value.material_id.key
+                );
+                break;
+            }
+        }
+    }
+
+    for (std::size_t index = 0; index < workshop.orders.size(); ++index) {
+        const auto& value = workshop.orders[index];
+        validate_required_id(
+            diagnostics,
+            value.id,
+            SandboxDiagnosticCode::invalid_workshop_order,
+            SandboxDiagnosticDomain::workshop_orders,
+            index,
+            SandboxDiagnosticField::id
+        );
+        const auto* owner = find_id(workshop.workshops, value.workshop_id);
+        const auto* process = find_id(craft.processes, value.process_id);
+        if (owner == nullptr) {
+            add_diagnostic(
+                diagnostics,
+                SandboxDiagnosticCode::missing_reference,
+                SandboxDiagnosticDomain::workshop_orders,
+                index,
+                SandboxDiagnosticField::workshop_id,
+                value.id.key,
+                value.workshop_id.key
+            );
+        }
+        if (process == nullptr) {
+            add_diagnostic(
+                diagnostics,
+                SandboxDiagnosticCode::missing_reference,
+                SandboxDiagnosticDomain::workshop_orders,
+                index,
+                SandboxDiagnosticField::process_id,
+                value.id.key,
+                value.process_id.key
+            );
+        } else if (owner != nullptr &&
+                   process->workstation_id != owner->workstation_id) {
+            add_diagnostic(
+                diagnostics,
+                SandboxDiagnosticCode::invalid_workshop_order,
+                SandboxDiagnosticDomain::workshop_orders,
+                index,
+                SandboxDiagnosticField::process_id,
+                value.id.key,
+                value.process_id.key
+            );
+        }
+        if (value.required_quantity == 0 || value.minimum_quality == 0 ||
+            value.minimum_quality > 10'000U || value.reward_funds < 0) {
+            const auto field =
+                value.required_quantity == 0
+                    ? SandboxDiagnosticField::required_quantity
+                    : (value.minimum_quality == 0 ||
+                               value.minimum_quality > 10'000U
+                           ? SandboxDiagnosticField::minimum_quality
+                           : SandboxDiagnosticField::reward_funds);
+            add_diagnostic(
+                diagnostics,
+                SandboxDiagnosticCode::invalid_workshop_order,
+                SandboxDiagnosticDomain::workshop_orders,
+                index,
+                field,
+                value.id.key
+            );
+        }
+        if (value.consequence_kind !=
+            contracts::WorkshopOrderConsequenceKind::operate_route_interaction) {
+            add_diagnostic(
+                diagnostics,
+                SandboxDiagnosticCode::invalid_workshop_order,
+                SandboxDiagnosticDomain::workshop_orders,
+                index,
+                SandboxDiagnosticField::consequence_kind,
+                value.id.key
+            );
+        }
+        if (!valid_id(value.consequence_target_id) ||
+            find_id(sandbox.interactions, value.consequence_target_id) == nullptr) {
+            add_diagnostic(
+                diagnostics,
+                valid_id(value.consequence_target_id)
+                    ? SandboxDiagnosticCode::missing_reference
+                    : SandboxDiagnosticCode::invalid_workshop_order,
+                SandboxDiagnosticDomain::workshop_orders,
+                index,
+                SandboxDiagnosticField::consequence_target_id,
+                value.id.key,
+                value.consequence_target_id.key
+            );
+        }
+
+        std::size_t viable_choice_count = 0;
+        bool distinct_tradeoff = false;
+        std::tuple<std::int32_t, std::uint16_t, bool> first_tradeoff{};
+        for (const auto& choice : craft.material_choices) {
+            if (choice.process_id != value.process_id) {
+                continue;
+            }
+            const auto stock = std::find_if(
+                workshop.material_stocks.begin(),
+                workshop.material_stocks.end(),
+                [&](const auto& candidate) {
+                    return candidate.workshop_id == value.workshop_id &&
+                           candidate.material_id == choice.material_id;
+                }
+            );
+            if (stock == workshop.material_stocks.end() || owner == nullptr ||
+                value.required_quantity == 0) {
+                continue;
+            }
+            const auto final_quality = static_cast<std::uint32_t>(
+                stock->base_quality
+            ) + (choice.outcome ==
+                         contracts::CraftMaterialOutcome::requires_rework
+                     ? stock->rework_quality_gain
+                     : 0U);
+            const auto total_cost =
+                static_cast<std::int64_t>(stock->unit_cost) *
+                value.required_quantity;
+            if (stock->initial_quantity < value.required_quantity ||
+                final_quality < value.minimum_quality ||
+                total_cost > owner->initial_funds) {
+                continue;
+            }
+            const auto tradeoff = std::tuple{
+                stock->unit_cost,
+                stock->base_quality,
+                choice.outcome ==
+                    contracts::CraftMaterialOutcome::requires_rework,
+            };
+            if (viable_choice_count == 0) {
+                first_tradeoff = tradeoff;
+            } else if (tradeoff != first_tradeoff) {
+                distinct_tradeoff = true;
+            }
+            ++viable_choice_count;
+        }
+        if (viable_choice_count == 0) {
+            add_diagnostic(
+                diagnostics,
+                SandboxDiagnosticCode::workshop_order_undeliverable,
+                SandboxDiagnosticDomain::workshop_orders,
+                index,
+                SandboxDiagnosticField::minimum_quality,
+                value.id.key,
+                value.process_id.key
+            );
+        }
+        if (viable_choice_count < 2 || !distinct_tradeoff) {
+            add_diagnostic(
+                diagnostics,
+                SandboxDiagnosticCode::workshop_tradeoff_missing,
+                SandboxDiagnosticDomain::workshop_orders,
+                index,
+                SandboxDiagnosticField::material_id,
+                value.id.key,
+                value.process_id.key
+            );
+        }
+    }
+
+    sort_diagnostics(diagnostics);
+    return diagnostics;
+}
+
 }  // namespace
 
 SandboxPackageValidation validate_sandbox_package(
     const contracts::SandboxDefinition& definition,
     const contracts::SandboxGameplayBindingDefinition& gameplay_binding,
-    const contracts::CraftDefinition& craft
+    const contracts::CraftDefinition& craft,
+    const contracts::WorkshopDefinition& workshop
 ) noexcept {
     SandboxPackageValidation result{};
     try {
@@ -1364,6 +1726,13 @@ SandboxPackageValidation validate_sandbox_package(
             result.diagnostics.end(),
             craft_diagnostics.begin(),
             craft_diagnostics.end()
+        );
+        auto workshop_diagnostics =
+            validate_workshop_definition(definition, craft, workshop);
+        result.diagnostics.insert(
+            result.diagnostics.end(),
+            workshop_diagnostics.begin(),
+            workshop_diagnostics.end()
         );
         sort_diagnostics(result.diagnostics);
         if (!result.diagnostics.empty()) {
@@ -1394,6 +1763,7 @@ struct SandboxPackageDocument::Storage final {
     contracts::SandboxDefinition definition{};
     contracts::SandboxGameplayBindingDefinition gameplay_binding{};
     contracts::CraftDefinition craft_definition{};
+    contracts::WorkshopDefinition workshop_definition{};
     std::vector<contracts::SandboxRegionDefinition> regions{};
     std::vector<contracts::SandboxAssetReferenceDefinition> assets{};
     std::vector<contracts::SandboxActorDefinition> actors{};
@@ -1412,6 +1782,10 @@ struct SandboxPackageDocument::Storage final {
     std::vector<contracts::CraftProcessDefinition> craft_processes{};
     std::vector<contracts::CraftMaterialChoiceDefinition> craft_material_choices{};
     std::vector<contracts::CraftStepDefinition> craft_steps{};
+    std::vector<contracts::WorkshopDefinitionRecord> workshops{};
+    std::vector<contracts::WorkshopMaterialStockDefinition>
+        workshop_material_stocks{};
+    std::vector<contracts::WorkshopOrderDefinition> workshop_orders{};
 
     void bind_views() noexcept {
         definition.regions = regions;
@@ -1432,6 +1806,9 @@ struct SandboxPackageDocument::Storage final {
         craft_definition.processes = craft_processes;
         craft_definition.material_choices = craft_material_choices;
         craft_definition.steps = craft_steps;
+        workshop_definition.workshops = workshops;
+        workshop_definition.material_stocks = workshop_material_stocks;
+        workshop_definition.orders = workshop_orders;
     }
 };
 
@@ -1484,7 +1861,8 @@ void collect_id(std::vector<std::string_view>& strings, ContentId id) {
 [[nodiscard]] std::vector<std::string_view> collect_strings(
     const contracts::SandboxDefinition& definition,
     const contracts::SandboxGameplayBindingDefinition& binding,
-    const contracts::CraftDefinition& craft
+    const contracts::CraftDefinition& craft,
+    const contracts::WorkshopDefinition& workshop
 ) {
     std::vector<std::string_view> strings;
     strings.reserve(
@@ -1500,7 +1878,10 @@ void collect_id(std::vector<std::string_view>& strings, ContentId id) {
         craft.workstations.size() * 3 +
         craft.processes.size() * 5 +
         craft.material_choices.size() * 2 +
-        craft.steps.size() * 4
+        craft.steps.size() * 4 +
+        workshop.workshops.size() * 2 +
+        workshop.material_stocks.size() * 2 +
+        workshop.orders.size() * 4
     );
     collect_id(strings, definition.package_id);
     collect_id(strings, definition.id);
@@ -1578,6 +1959,20 @@ void collect_id(std::vector<std::string_view>& strings, ContentId id) {
         collect_id(strings, value.predecessor_step_id);
         collect_id(strings, value.action_id);
     }
+    for (const auto& value : workshop.workshops) {
+        collect_id(strings, value.id);
+        collect_id(strings, value.workstation_id);
+    }
+    for (const auto& value : workshop.material_stocks) {
+        collect_id(strings, value.workshop_id);
+        collect_id(strings, value.material_id);
+    }
+    for (const auto& value : workshop.orders) {
+        collect_id(strings, value.id);
+        collect_id(strings, value.workshop_id);
+        collect_id(strings, value.process_id);
+        collect_id(strings, value.consequence_target_id);
+    }
     std::sort(strings.begin(), strings.end(), byte_less);
     strings.erase(std::unique(strings.begin(), strings.end()), strings.end());
     return strings;
@@ -1654,6 +2049,7 @@ template <typename Binding, typename IdGetter>
     const contracts::SandboxDefinition& definition,
     const contracts::SandboxGameplayBindingDefinition& binding,
     const contracts::CraftDefinition& craft,
+    const contracts::WorkshopDefinition& workshop,
     std::span<const std::string_view> strings
 ) {
     std::vector<EncodedSection> sections;
@@ -1924,6 +2320,80 @@ template <typename Binding, typename IdGetter>
         append_zeroes(craft_step_section.bytes, 15);
     }
     sections.push_back(std::move(craft_step_section));
+
+    const auto sorted_workshops = sorted_by_id(workshop.workshops);
+    EncodedSection workshop_section{
+        SandboxPackSectionType::workshops,
+        static_cast<std::uint32_t>(sorted_workshops.size()),
+        contracts::sandbox_pack_workshop_record_bytes
+    };
+    for (const auto& value : sorted_workshops) {
+        append_id(workshop_section.bytes, strings, value.id);
+        append_id(workshop_section.bytes, strings, value.workstation_id);
+        append_le(workshop_section.bytes, value.initial_funds);
+        append_zeroes(workshop_section.bytes, 4);
+    }
+    sections.push_back(std::move(workshop_section));
+
+    std::vector<contracts::WorkshopMaterialStockDefinition> material_stocks(
+        workshop.material_stocks.begin(),
+        workshop.material_stocks.end()
+    );
+    std::sort(
+        material_stocks.begin(),
+        material_stocks.end(),
+        [](const auto& left, const auto& right) {
+            return std::tuple{
+                       left.workshop_id.key,
+                       left.workshop_id.name,
+                       left.material_id.key,
+                       left.material_id.name,
+                   } <
+                   std::tuple{
+                       right.workshop_id.key,
+                       right.workshop_id.name,
+                       right.material_id.key,
+                       right.material_id.name,
+                   };
+        }
+    );
+    EncodedSection material_stock_section{
+        SandboxPackSectionType::workshop_material_stocks,
+        static_cast<std::uint32_t>(material_stocks.size()),
+        contracts::sandbox_pack_workshop_material_stock_record_bytes
+    };
+    for (const auto& value : material_stocks) {
+        append_id(material_stock_section.bytes, strings, value.workshop_id);
+        append_id(material_stock_section.bytes, strings, value.material_id);
+        append_le(material_stock_section.bytes, value.unit_cost);
+        append_le(material_stock_section.bytes, value.initial_quantity);
+        append_le(material_stock_section.bytes, value.base_quality);
+        append_le(material_stock_section.bytes, value.rework_quality_gain);
+        append_zeroes(material_stock_section.bytes, 14);
+    }
+    sections.push_back(std::move(material_stock_section));
+
+    const auto orders = sorted_by_id(workshop.orders);
+    EncodedSection order_section{
+        SandboxPackSectionType::workshop_orders,
+        static_cast<std::uint32_t>(orders.size()),
+        contracts::sandbox_pack_workshop_order_record_bytes
+    };
+    for (const auto& value : orders) {
+        append_id(order_section.bytes, strings, value.id);
+        append_id(order_section.bytes, strings, value.workshop_id);
+        append_id(order_section.bytes, strings, value.process_id);
+        append_id(order_section.bytes, strings, value.consequence_target_id);
+        append_le(order_section.bytes, value.required_quantity);
+        append_le(order_section.bytes, value.minimum_quality);
+        append_le(order_section.bytes, value.reward_funds);
+        append_le(
+            order_section.bytes,
+            static_cast<std::uint8_t>(value.consequence_kind)
+        );
+        append_zeroes(order_section.bytes, 7);
+    }
+    sections.push_back(std::move(order_section));
     return sections;
 }
 
@@ -1932,15 +2402,18 @@ template <typename Binding, typename IdGetter>
 EncodeSandboxPackageResult encode_sandbox_package(
     const contracts::SandboxDefinition& definition,
     const contracts::SandboxGameplayBindingDefinition& gameplay_binding,
-    const contracts::CraftDefinition& craft
+    const contracts::CraftDefinition& craft,
+    const contracts::WorkshopDefinition& workshop
 ) noexcept {
     EncodeSandboxPackageResult result{};
-    result.validation = validate_sandbox_package(definition, gameplay_binding, craft);
+    result.validation =
+        validate_sandbox_package(definition, gameplay_binding, craft, workshop);
     if (!result.validation.valid()) {
         return result;
     }
     try {
-        const auto strings = collect_strings(definition, gameplay_binding, craft);
+        const auto strings =
+            collect_strings(definition, gameplay_binding, craft, workshop);
         if (strings.size() > contracts::sandbox_pack_max_strings) {
             result.validation.error = SandboxPackageError::invalid_string_table;
             return result;
@@ -1953,7 +2426,8 @@ EncodeSandboxPackageResult encode_sandbox_package(
             result.validation.error = SandboxPackageError::invalid_string_table;
             return result;
         }
-        auto sections = encode_sections(definition, gameplay_binding, craft, strings);
+        auto sections =
+            encode_sections(definition, gameplay_binding, craft, workshop, strings);
         const auto directory_bytes = sections.size() * contracts::sandbox_pack_directory_entry_bytes;
         result.bytes.assign(contracts::sandbox_pack_header_bytes + directory_bytes, 0);
         for (auto& section : sections) {
@@ -2121,7 +2595,7 @@ struct DirectoryEntry final {
 [[nodiscard]] bool known_section(std::uint16_t type) noexcept {
     return type >= static_cast<std::uint16_t>(SandboxPackSectionType::strings) &&
            type <= static_cast<std::uint16_t>(
-                       SandboxPackSectionType::craft_steps
+                       SandboxPackSectionType::workshop_orders
                    );
 }
 
@@ -2148,6 +2622,9 @@ struct DirectoryEntry final {
         case SandboxPackSectionType::craft_processes: return contracts::sandbox_pack_craft_process_record_bytes;
         case SandboxPackSectionType::craft_material_choices: return contracts::sandbox_pack_craft_material_choice_record_bytes;
         case SandboxPackSectionType::craft_steps: return contracts::sandbox_pack_craft_step_record_bytes;
+        case SandboxPackSectionType::workshops: return contracts::sandbox_pack_workshop_record_bytes;
+        case SandboxPackSectionType::workshop_material_stocks: return contracts::sandbox_pack_workshop_material_stock_record_bytes;
+        case SandboxPackSectionType::workshop_orders: return contracts::sandbox_pack_workshop_order_record_bytes;
     }
     return 0;
 }
@@ -2175,6 +2652,9 @@ struct DirectoryEntry final {
         case SandboxPackSectionType::craft_processes: return contracts::sandbox_craft_process_capacity;
         case SandboxPackSectionType::craft_material_choices: return contracts::sandbox_craft_material_choice_capacity;
         case SandboxPackSectionType::craft_steps: return contracts::sandbox_craft_step_capacity;
+        case SandboxPackSectionType::workshops: return contracts::sandbox_workshop_capacity;
+        case SandboxPackSectionType::workshop_material_stocks: return contracts::sandbox_workshop_material_stock_capacity;
+        case SandboxPackSectionType::workshop_orders: return contracts::sandbox_workshop_order_capacity;
     }
     return 0;
 }
@@ -2449,6 +2929,11 @@ SandboxPackageDocument::gameplay_binding() const noexcept {
 
 const contracts::CraftDefinition& SandboxPackageDocument::craft_definition() const noexcept {
     return storage_->craft_definition;
+}
+
+const contracts::WorkshopDefinition&
+SandboxPackageDocument::workshop_definition() const noexcept {
+    return storage_->workshop_definition;
 }
 
 const contracts::Sha256Digest& SandboxPackageDocument::fingerprint() const noexcept {
@@ -2804,11 +3289,100 @@ DecodeSandboxPackageResult decode_sandbox_package(std::span<const std::uint8_t> 
                 fail(SandboxPackageError::invalid_section); return result;
             }
         }
+        storage->workshops.resize(entry(SandboxPackSectionType::workshops)->count);
+        {
+            auto reader = reader_for(SandboxPackSectionType::workshops);
+            for (auto& value : storage->workshops) {
+                if (!read_id(reader, storage->strings, value.id) ||
+                    !read_id(reader, storage->strings, value.workstation_id) ||
+                    !reader.read(value.initial_funds) ||
+                    !reader.read_zeroes(4)) {
+                    fail(SandboxPackageError::invalid_section); return result;
+                }
+            }
+            if (reader.remaining() != 0 ||
+                !records_are_ordered(std::span{storage->workshops})) {
+                fail(SandboxPackageError::invalid_section); return result;
+            }
+        }
+        storage->workshop_material_stocks.resize(
+            entry(SandboxPackSectionType::workshop_material_stocks)->count
+        );
+        {
+            auto reader =
+                reader_for(SandboxPackSectionType::workshop_material_stocks);
+            for (auto& value : storage->workshop_material_stocks) {
+                if (!read_id(reader, storage->strings, value.workshop_id) ||
+                    !read_id(reader, storage->strings, value.material_id) ||
+                    !reader.read(value.unit_cost) ||
+                    !reader.read(value.initial_quantity) ||
+                    !reader.read(value.base_quality) ||
+                    !reader.read(value.rework_quality_gain) ||
+                    !reader.read_zeroes(14)) {
+                    fail(SandboxPackageError::invalid_section); return result;
+                }
+            }
+            const auto less = [](const auto& left, const auto& right) {
+                return std::tuple{
+                           left.workshop_id.key,
+                           left.workshop_id.name,
+                           left.material_id.key,
+                           left.material_id.name,
+                       } <
+                       std::tuple{
+                           right.workshop_id.key,
+                           right.workshop_id.name,
+                           right.material_id.key,
+                           right.material_id.name,
+                       };
+            };
+            if (reader.remaining() != 0 ||
+                !std::is_sorted(
+                    storage->workshop_material_stocks.begin(),
+                    storage->workshop_material_stocks.end(),
+                    less
+                )) {
+                fail(SandboxPackageError::invalid_section); return result;
+            }
+        }
+        storage->workshop_orders.resize(
+            entry(SandboxPackSectionType::workshop_orders)->count
+        );
+        {
+            auto reader = reader_for(SandboxPackSectionType::workshop_orders);
+            for (auto& value : storage->workshop_orders) {
+                std::uint8_t consequence_kind = 0;
+                if (!read_id(reader, storage->strings, value.id) ||
+                    !read_id(reader, storage->strings, value.workshop_id) ||
+                    !read_id(reader, storage->strings, value.process_id) ||
+                    !read_id(
+                        reader,
+                        storage->strings,
+                        value.consequence_target_id
+                    ) ||
+                    !reader.read(value.required_quantity) ||
+                    !reader.read(value.minimum_quality) ||
+                    !reader.read(value.reward_funds) ||
+                    !reader.read(consequence_kind) ||
+                    !reader.read_zeroes(7)) {
+                    fail(SandboxPackageError::invalid_section); return result;
+                }
+                value.consequence_kind =
+                    static_cast<contracts::WorkshopOrderConsequenceKind>(
+                        consequence_kind
+                    );
+            }
+            if (reader.remaining() != 0 ||
+                !records_are_ordered(std::span{storage->workshop_orders})) {
+                fail(SandboxPackageError::invalid_section); return result;
+            }
+        }
         storage->bind_views();
         result.validation = validate_sandbox_package(
             storage->definition,
             storage->gameplay_binding,
-            storage->craft_definition
+            storage->craft_definition,
+            storage->workshop_definition
         );
         if (!result.validation.valid()) return result;
         result.document = std::unique_ptr<SandboxPackageDocument>(

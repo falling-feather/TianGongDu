@@ -192,3 +192,67 @@ test("Demo 0.8.4 keeps authored craft, deterministic rework, Workbench, and the 
     assert.match(browserRoute, new RegExp(token));
   }
 });
+
+test("Demo 0.8.5 owns finite workshop economy, order delivery, and an authored alternate route", async () => {
+  const [
+    rootCmake,
+    packContract,
+    packageSource,
+    workshopHeader,
+    workshopSource,
+    layerSource,
+    shell,
+    browserRoute,
+    workbench
+  ] = await Promise.all([
+    read("CMakeLists.txt"),
+    read("src/contracts/include/tgd/contracts/sandbox_pack.hpp"),
+    read("src/content-core/src/sandbox_package.cpp"),
+    read("src/gameplay/include/tgd/gameplay/workshop_session.hpp"),
+    read("src/gameplay/src/workshop_session.cpp"),
+    read("apps/system-demo-web/Source/SystemDemoLayer.cpp"),
+    read("apps/system-demo-web/shell.html"),
+    read("tests/browser/system-demo-web-host.mjs"),
+    read("apps/content-workbench/public/workbench.mjs")
+  ]);
+  const implementation =
+    `${rootCmake}\n${packContract}\n${packageSource}\n${workshopHeader}\n` +
+    `${workshopSource}\n${layerSource}\n${shell}\n${workbench}`;
+
+  for (const token of [
+    "workshop_session.cpp",
+    "WorkshopSession",
+    "workshop_material_stocks",
+    "workshop_orders",
+    "workshop_tradeoff_missing",
+    "workshop_order_undeliverable",
+    "unit_cost",
+    "initial_quantity",
+    "base_quality",
+    "minimum_quality",
+    "reward_funds",
+    "operate_route_interaction",
+    "deliverWorkshopOrder",
+    "Workshops",
+    "Workshop Orders",
+    "KeyY"
+  ]) {
+    assert.match(implementation, new RegExp(token));
+  }
+  for (const token of [
+    "workshopFunds",
+    "workshopSpentFunds",
+    "workshopStockFlexible",
+    "workshopStockSalvage",
+    "workshopQuality",
+    "workshopOccupied",
+    "orderFulfilled",
+    "shortcutOpen",
+    "duplicateDelivery",
+    "shortcutCrossed",
+    "playerHealth === 0",
+    "terminalCompleted"
+  ]) {
+    assert.match(browserRoute, new RegExp(token));
+  }
+});

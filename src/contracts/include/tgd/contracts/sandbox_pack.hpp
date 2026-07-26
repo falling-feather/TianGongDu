@@ -14,11 +14,11 @@ inline constexpr std::array<std::uint8_t, 8> sandbox_pack_magic{
     'T', 'G', 'D', 'S', 'B', 'X', 0, 0,
 };
 inline constexpr std::uint16_t sandbox_pack_format_major = 1;
-inline constexpr std::uint16_t sandbox_pack_format_minor = 3;
+inline constexpr std::uint16_t sandbox_pack_format_minor = 4;
 inline constexpr std::uint16_t sandbox_content_api_major = 1;
 inline constexpr std::uint16_t sandbox_content_api_minor = 0;
 inline constexpr std::uint16_t sandbox_authoring_schema_major = 1;
-inline constexpr std::uint16_t sandbox_authoring_schema_minor = 3;
+inline constexpr std::uint16_t sandbox_authoring_schema_minor = 4;
 inline constexpr std::uint16_t sandbox_authoring_schema_patch = 0;
 inline constexpr std::size_t sandbox_pack_header_bytes = 96;
 inline constexpr std::size_t sandbox_pack_directory_entry_bytes = 24;
@@ -55,6 +55,9 @@ inline constexpr std::size_t sandbox_craft_workstation_capacity = 8;
 inline constexpr std::size_t sandbox_craft_process_capacity = 8;
 inline constexpr std::size_t sandbox_craft_material_choice_capacity = 32;
 inline constexpr std::size_t sandbox_craft_step_capacity = 32;
+inline constexpr std::size_t sandbox_workshop_capacity = 8;
+inline constexpr std::size_t sandbox_workshop_material_stock_capacity = 32;
+inline constexpr std::size_t sandbox_workshop_order_capacity = 16;
 
 inline constexpr std::uint32_t sandbox_pack_section_optional = 1U;
 
@@ -81,6 +84,9 @@ enum class SandboxPackSectionType : std::uint16_t {
     craft_processes = 19,
     craft_material_choices = 20,
     craft_steps = 21,
+    workshops = 22,
+    workshop_material_stocks = 23,
+    workshop_orders = 24,
 };
 
 inline constexpr std::uint32_t sandbox_pack_metadata_record_bytes = 64;
@@ -103,6 +109,9 @@ inline constexpr std::uint32_t sandbox_pack_craft_workstation_record_bytes = 64;
 inline constexpr std::uint32_t sandbox_pack_craft_process_record_bytes = 64;
 inline constexpr std::uint32_t sandbox_pack_craft_material_choice_record_bytes = 32;
 inline constexpr std::uint32_t sandbox_pack_craft_step_record_bytes = 64;
+inline constexpr std::uint32_t sandbox_pack_workshop_record_bytes = 32;
+inline constexpr std::uint32_t sandbox_pack_workshop_material_stock_record_bytes = 48;
+inline constexpr std::uint32_t sandbox_pack_workshop_order_record_bytes = 64;
 
 enum class SandboxPackageError : std::uint8_t {
     none,
@@ -169,6 +178,11 @@ enum class SandboxDiagnosticCode : std::uint16_t {
     invalid_craft_material_choice = 37,
     invalid_craft_step = 38,
     craft_rework_path_missing = 39,
+    invalid_workshop = 40,
+    invalid_workshop_material_stock = 41,
+    invalid_workshop_order = 42,
+    workshop_tradeoff_missing = 43,
+    workshop_order_undeliverable = 44,
 };
 
 enum class SandboxDiagnosticSeverity : std::uint8_t {
@@ -199,6 +213,9 @@ enum class SandboxDiagnosticDomain : std::uint8_t {
     craft_processes = 19,
     craft_material_choices = 20,
     craft_steps = 21,
+    workshops = 22,
+    workshop_material_stocks = 23,
+    workshop_orders = 24,
     invalid = 255,
 };
 
@@ -254,6 +271,17 @@ enum class SandboxDiagnosticField : std::uint16_t {
     predecessor_step_id = 46,
     action_id = 47,
     craft_step_kind = 48,
+    workshop_id = 49,
+    initial_funds = 50,
+    initial_quantity = 51,
+    unit_cost = 52,
+    base_quality = 53,
+    rework_quality_gain = 54,
+    required_quantity = 55,
+    minimum_quality = 56,
+    reward_funds = 57,
+    consequence_kind = 58,
+    consequence_target_id = 59,
     invalid = 65'535,
 };
 
@@ -300,6 +328,11 @@ enum class SandboxDiagnosticField : std::uint16_t {
         case SandboxDiagnosticCode::invalid_craft_material_choice:
         case SandboxDiagnosticCode::invalid_craft_step:
         case SandboxDiagnosticCode::craft_rework_path_missing:
+        case SandboxDiagnosticCode::invalid_workshop:
+        case SandboxDiagnosticCode::invalid_workshop_material_stock:
+        case SandboxDiagnosticCode::invalid_workshop_order:
+        case SandboxDiagnosticCode::workshop_tradeoff_missing:
+        case SandboxDiagnosticCode::workshop_order_undeliverable:
             return SandboxDiagnosticSeverity::error;
     }
     return SandboxDiagnosticSeverity::invalid;

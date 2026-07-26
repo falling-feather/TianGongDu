@@ -5,6 +5,7 @@
 #include <tgd/contracts/sandbox_gameplay_binding.hpp>
 #include <tgd/contracts/sandbox_pack.hpp>
 #include <tgd/contracts/sha256.hpp>
+#include <tgd/contracts/workshop_definition.hpp>
 
 #include <cstdint>
 #include <memory>
@@ -29,7 +30,8 @@ struct SandboxPackageValidation final {
 [[nodiscard]] SandboxPackageValidation validate_sandbox_package(
     const contracts::SandboxDefinition& definition,
     const contracts::SandboxGameplayBindingDefinition& gameplay_binding,
-    const contracts::CraftDefinition& craft = {}
+    const contracts::CraftDefinition& craft = {},
+    const contracts::WorkshopDefinition& workshop = {}
 ) noexcept;
 
 struct EncodeSandboxPackageResult final {
@@ -41,7 +43,8 @@ struct EncodeSandboxPackageResult final {
 [[nodiscard]] EncodeSandboxPackageResult encode_sandbox_package(
     const contracts::SandboxDefinition& definition,
     const contracts::SandboxGameplayBindingDefinition& gameplay_binding,
-    const contracts::CraftDefinition& craft = {}
+    const contracts::CraftDefinition& craft = {},
+    const contracts::WorkshopDefinition& workshop = {}
 ) noexcept;
 
 struct DecodeSandboxPackageResult;
@@ -61,6 +64,8 @@ class SandboxPackageDocument final {
     [[nodiscard]] const contracts::SandboxGameplayBindingDefinition& gameplay_binding()
         const noexcept;
     [[nodiscard]] const contracts::CraftDefinition& craft_definition() const noexcept;
+    [[nodiscard]] const contracts::WorkshopDefinition& workshop_definition()
+        const noexcept;
     [[nodiscard]] const contracts::Sha256Digest& fingerprint() const noexcept;
 
   private:

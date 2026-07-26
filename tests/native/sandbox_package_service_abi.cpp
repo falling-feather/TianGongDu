@@ -41,6 +41,9 @@ static_assert(sizeof(tgd_sandbox_service_craft_material) == 4);
 static_assert(sizeof(tgd_sandbox_service_craft_process) == 20);
 static_assert(sizeof(tgd_sandbox_service_craft_material_choice) == 12);
 static_assert(sizeof(tgd_sandbox_service_craft_step) == 20);
+static_assert(sizeof(tgd_sandbox_service_workshop) == 16);
+static_assert(sizeof(tgd_sandbox_service_workshop_material_stock) == 20);
+static_assert(sizeof(tgd_sandbox_service_workshop_order) == 28);
 static_assert(sizeof(tgd_sandbox_service_result_header) == 120);
 static_assert(sizeof(tgd_sandbox_service_result_artifact) == 16);
 static_assert(sizeof(tgd_sandbox_service_diagnostic) == 48);
@@ -59,6 +62,8 @@ static_assert(TGD_SANDBOX_SERVICE_TRANSPORT_SUCCEEDED == 1);
 static_assert(TGD_SANDBOX_SERVICE_TRANSPORT_INVALID == 255);
 static_assert(TGD_SANDBOX_SERVICE_PUBLISHED == 1);
 static_assert(TGD_SANDBOX_SERVICE_PUBLISH_INVALID == 255);
+static_assert(TGD_SANDBOX_COMPILER_SERVICE_ABI_MAJOR == 1);
+static_assert(TGD_SANDBOX_COMPILER_SERVICE_ABI_MINOR == 4);
 static_assert(TGD_SANDBOX_COMPILER_SERVICE_MAX_STRING_REFS == 4096);
 static_assert(TGD_SANDBOX_COMPILER_SERVICE_MAX_CANONICAL_PACKAGE_BYTES ==
               sandbox_pack_max_bytes);
@@ -344,6 +349,46 @@ struct Builder final {
                        service, request, &craft_step) == 1,
                    "craft step append failed");
         }
+
+        const auto workshop = text("workshop.demo");
+        const tgd_sandbox_service_workshop workshop_record{
+            workshop, craft_workstation, 100, 0,
+        };
+        const tgd_sandbox_service_workshop_material_stock pass_stock{
+            workshop, craft_material_pass, 80, 1, 9'000, 0, 0,
+        };
+        const tgd_sandbox_service_workshop_material_stock rework_stock{
+            workshop, craft_material_rework, 30, 2, 6'500, 1'900, 0,
+        };
+        const tgd_sandbox_service_workshop_order order_record{
+            text("workshop.order.demo"), workshop, craft_process, interaction,
+            1, 8'000, 25,
+            static_cast<std::uint8_t>(
+                WorkshopOrderConsequenceKind::operate_route_interaction
+            ),
+            {0, 0, 0},
+        };
+        expect(
+            tgd_sandbox_compile_request_append_workshop(
+                service, request, &workshop_record
+            ) == 1,
+            "workshop append failed"
+        );
+        expect(
+            tgd_sandbox_compile_request_append_workshop_material_stock(
+                service, request, &pass_stock
+            ) == 1 &&
+                tgd_sandbox_compile_request_append_workshop_material_stock(
+                    service, request, &rework_stock
+                ) == 1,
+            "workshop material stock append failed"
+        );
+        expect(
+            tgd_sandbox_compile_request_append_workshop_order(
+                service, request, &order_record
+            ) == 1,
+            "workshop order append failed"
+        );
     }
 
     [[nodiscard]] Result submit(std::uint32_t capacity = TGD_SANDBOX_COMPILER_SERVICE_MAX_RESULT_BYTES) const {
@@ -361,10 +406,10 @@ struct Builder final {
         );
         expect(result.header.complete == 1 && result.header.total_bytes == written,
                "service returned an incomplete result");
-        expect(result.header.abi_major == 1 && result.header.abi_minor == 3 &&
+        expect(result.header.abi_major == 1 && result.header.abi_minor == 4 &&
                    result.header.diagnostics_offset ==
                        TGD_SANDBOX_COMPILER_SERVICE_RESULT_PREFIX_BYTES,
-               "service returned a non-1.2 result prefix");
+               "service returned a non-1.4 result prefix");
         expect(result.artifact.reserved[0] == 0 && result.artifact.reserved[1] == 0,
                "service returned non-zero artifact reserved bytes");
         expect(result.header.diagnostic_count * sizeof(tgd_sandbox_service_diagnostic) +
@@ -402,6 +447,15 @@ void check_publish_and_determinism() {
                decoded.document->craft_definition().processes.size() == 1 &&
                decoded.document->craft_definition().steps.size() == 4,
            "published package lost the craft definition");
+    expect(
+        decoded.document->workshop_definition().workshops.size() == 1 &&
+            decoded.document->workshop_definition().material_stocks.size() == 2 &&
+            decoded.document->workshop_definition().orders.size() == 1 &&
+            decoded.document->workshop_definition()
+                    .orders.front()
+                    .consequence_target_id.name == "sandbox.interaction",
+        "published package lost the workshop economy or route consequence"
+    );
     const auto generation_one = identity(service);
     expect(generation_one.generation == 1 &&
                std::equal(std::begin(generation_one.checksum), std::end(generation_one.checksum),
@@ -720,7 +774,7 @@ void check_invalid_utf8_diagnostic_output() {
 }  // namespace
 
 extern "C" std::int32_t tgd_sandbox_service_run_contract_probe() {
-    expect(tgd_sandbox_compiler_service_abi_version() == 0x0001'0003U,
+    expect(tgd_sandbox_compiler_service_abi_version() == 0x0001'0004U,
            "compiler service ABI version mismatch");
     check_publish_and_determinism();
     check_diagnostic_fidelity_and_preservation();

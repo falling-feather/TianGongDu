@@ -29,8 +29,9 @@ assert.equal(
 const buildDirectory = path.resolve(repositoryRoot, buildDirectoryArgument);
 const evidenceDirectory = path.resolve(
   repositoryRoot,
-  process.env.TGD_DEMO_082_EVIDENCE_DIRECTORY ??
-    "build/evidence/demo-082-workbench"
+  process.env.TGD_DEMO_085_EVIDENCE_DIRECTORY ??
+    process.env.TGD_DEMO_082_EVIDENCE_DIRECTORY ??
+    "build/evidence/demo-085-workbench"
 );
 const sourceDocument = path.resolve(
   repositoryRoot,
@@ -78,6 +79,41 @@ const craftPanels = [
     ]
   }
 ];
+const workshopPanels = [
+  {
+    kind: "workshops",
+    id: "workshop.jiangnan.umbrella_lane",
+    fields: [
+      "editorLabel",
+      "workstationId",
+      "initialFunds",
+      "stockMaterialId_0",
+      "stockUnitCost_0",
+      "stockInitialQuantity_0",
+      "stockBaseQuality_0",
+      "stockReworkQualityGain_0",
+      "stockMaterialId_1",
+      "stockUnitCost_1",
+      "stockInitialQuantity_1",
+      "stockBaseQuality_1",
+      "stockReworkQualityGain_1"
+    ]
+  },
+  {
+    kind: "workshopOrders",
+    id: "order.jiangnan.umbrella_roof_shortcut",
+    fields: [
+      "editorLabel",
+      "workshopId",
+      "processId",
+      "requiredQuantity",
+      "minimumQuality",
+      "rewardFunds",
+      "consequenceKind",
+      "consequenceTargetId"
+    ]
+  }
+];
 
 const requiredArtifacts = [
   "dist/web/tiangongdu-system-demo.html",
@@ -94,7 +130,7 @@ for (const relativePath of requiredArtifacts) {
 }
 
 const workspaceRoot = await mkdtemp(
-  path.join(tmpdir(), "tgd-demo-082-workbench-")
+  path.join(tmpdir(), "tgd-demo-085-workbench-")
 );
 const workspaceDocument = path.join(
   workspaceRoot,
@@ -216,13 +252,13 @@ try {
       "system-demo.sandbox.json"
   );
 
-  for (const panel of craftPanels) {
+  for (const panel of [...craftPanels, ...workshopPanels]) {
     await selectTreeObject(page, panel.kind, panel.id);
     for (const field of panel.fields) {
       assert.equal(
         await page.locator(`#inspector-form [name="${field}"]`).count(),
         1,
-        `${panel.kind} did not render ${field}`
+        `${panel.kind} did not render ${field}; pageErrors=${JSON.stringify(pageErrors)}`
       );
     }
     assert.equal(
@@ -239,7 +275,10 @@ try {
     );
   }
   await page.screenshot({
-    path: path.join(evidenceDirectory, "00-craft-update-only-panels.png"),
+    path: path.join(
+      evidenceDirectory,
+      "00-craft-workshop-update-only-panels.png"
+    ),
     fullPage: true
   });
 
@@ -366,6 +405,11 @@ try {
   assert.equal(launchedRuntime.packageByteCount, launchPublication.packageBytes);
   assert.equal(launchedRuntime.craftStage, 1);
   assert.equal(launchedRuntime.craftCompleted, false);
+  assert.equal(launchedRuntime.workshopFunds, 100);
+  assert.equal(launchedRuntime.workshopStockFlexible, 1);
+  assert.equal(launchedRuntime.workshopStockSalvage, 2);
+  assert.equal(launchedRuntime.orderFulfilled, false);
+  assert.equal(launchedRuntime.shortcutOpen, false);
   await page.screenshot({
     path: path.join(evidenceDirectory, "02-launch-live.png"),
     fullPage: true
@@ -458,6 +502,9 @@ try {
   );
   assert.equal(reloadedRuntime.ready, true);
   assert.equal(reloadedRuntime.packageByteCount, reloadPublication.packageBytes);
+  assert.equal(reloadedRuntime.workshopFunds, 100);
+  assert.equal(reloadedRuntime.orderFulfilled, false);
+  assert.equal(reloadedRuntime.shortcutOpen, false);
   await page.screenshot({
     path: path.join(evidenceDirectory, "04-reloaded-live.png"),
     fullPage: true
@@ -504,8 +551,8 @@ try {
   assert.deepEqual(requestErrors, [], "browser request errors were emitted");
 
   const evidence = {
-    taskId: "DEMO-082",
-    productVersion: "Demo 0.8.2",
+    taskId: "DEMO-085",
+    productVersion: "Demo 0.8.5",
     commit: execFileSync("git", ["rev-parse", "HEAD"], {
       cwd: repositoryRoot,
       encoding: "utf8"
@@ -517,7 +564,9 @@ try {
     },
     route: {
       url: running.url,
+      regressionTaskId: "DEMO-082",
       craftPanels: craftPanels.map(({ kind, id }) => ({ kind, id })),
+      workshopPanels: workshopPanels.map(({ kind, id }) => ({ kind, id })),
       createdActor: actorId,
       createdInteraction: interactionId,
       removedInteraction: sourceInteractionId,
@@ -554,7 +603,7 @@ try {
     pageErrors,
     requestErrors,
     screenshots: [
-      "00-craft-update-only-panels.png",
+      "00-craft-workshop-update-only-panels.png",
       "01-crud-diagnostic.png",
       "02-launch-live.png",
       "03-reload-keeps-live.png",
@@ -568,7 +617,7 @@ try {
     "utf8"
   );
   process.stdout.write(
-    `[demo-082] real Workbench route passed ${JSON.stringify({
+    `[demo-085] real Workbench route passed ${JSON.stringify({
       browser: evidence.browser,
       revisions: [4, 5, 6],
       publications: [
@@ -578,6 +627,7 @@ try {
       packageChanged:
         launchPublication.packageSha256 !== reloadPublication.packageSha256,
       craftPanels: craftPanels.length,
+      workshopPanels: workshopPanels.length,
       evidenceDirectory
     })}\n`
   );

@@ -33,7 +33,7 @@ function minimalResult() {
 
 function artifactResult(
   packageBytes = Uint8Array.of(0x54, 0x47, 0x44, 0x53),
-  abiMinor = 1
+  abiMinor = 4
 ) {
   const bytes = new Uint8Array(136 + packageBytes.length);
   bytes.set(minimalResult(), 0);
@@ -85,8 +85,14 @@ async function validRuntime() {
   return projectSandboxRuntimeDocument(normalizeSandboxAuthoringDocument(source));
 }
 
+function withoutCapabilities(runtime, names) {
+  const copy = structuredClone(runtime);
+  for (const name of names) copy[name] = [];
+  return copy;
+}
+
 function growingMock({ assetLimit = Infinity, failMallocAt = 0 } = {}) {
-  const memory = new WebAssembly.Memory({ initial: 48, maximum: 256 });
+  const memory = new WebAssembly.Memory({ initial: 48, maximum: 512 });
   let next = 1024;
   let stringRef = 0;
   let generation = 0;
@@ -115,7 +121,7 @@ function growingMock({ assetLimit = Infinity, failMallocAt = 0 } = {}) {
       return pointer;
     },
     _free(pointer) { counters.frees.push(pointer); },
-    _tgd_sandbox_compiler_service_abi_version() { return 0x00010001; },
+    _tgd_sandbox_compiler_service_abi_version() { return 0x00010004; },
     _tgd_sandbox_compiler_service_create(output) {
       memory.grow(1);
       module.HEAPU8 = new Uint8Array(memory.buffer);
@@ -161,7 +167,8 @@ function growingMock({ assetLimit = Infinity, failMallocAt = 0 } = {}) {
     "region", "asset", "actor", "ground_blocker", "safe_point", "interaction",
     "mechanism", "wave", "wave_spawn", "objective", "interaction_binding",
     "mechanism_binding", "actor_binding", "craft_material",
-    "craft_workstation", "craft_process", "craft_material_choice", "craft_step"
+    "craft_workstation", "craft_process", "craft_material_choice", "craft_step",
+    "workshop", "workshop_material_stock", "workshop_order"
   ];
   for (const name of appendNames) {
     module["_tgd_sandbox_compile_request_append_" + name] = () => {
@@ -195,11 +202,15 @@ test("client accepts ABI 1.0 without inventing a canonical artifact", async () =
     return 1;
   };
   const client = SandboxPackageServiceClient.create(module);
-  const result = client.publish(await validRuntime());
+  const result = client.publish(withoutCapabilities(await validRuntime(), [
+    "actorBindings", "craftMaterials", "craftWorkstations", "craftProcesses",
+    "craftMaterialChoices", "craftSteps", "workshops",
+    "workshopMaterialStocks", "workshopOrders"
+  ]));
   assert.equal(result.packageBytes, null);
   client.destroy();
 
-  for (const version of [0x00000001, 0x00010004, 0x00020000]) {
+  for (const version of [0x00000001, 0x00010005, 0x00020000]) {
     const rejected = growingMock();
     rejected._tgd_sandbox_compiler_service_abi_version = () => version;
     assert.throws(() => SandboxPackageServiceClient.create(rejected),
@@ -221,9 +232,11 @@ test("ABI 1.3 marshals the complete generic craft definition", async () => {
         true
       );
       return 1;
-    };
+  };
   const client = SandboxPackageServiceClient.create(module);
-  const result = client.publish(await validRuntime());
+  const result = client.publish(withoutCapabilities(await validRuntime(), [
+    "workshops", "workshopMaterialStocks", "workshopOrders"
+  ]));
   assert.deepEqual(result.packageBytes, Uint8Array.of(0x54, 0x47, 0x44, 0x53));
   assert.equal(module.counters.appendByName.actor_binding, 4);
   assert.equal(module.counters.appendByName.craft_material, 2);
@@ -231,10 +244,65 @@ test("ABI 1.3 marshals the complete generic craft definition", async () => {
   assert.equal(module.counters.appendByName.craft_process, 1);
   assert.equal(module.counters.appendByName.craft_material_choice, 2);
   assert.equal(module.counters.appendByName.craft_step, 4);
+  assert.equal(module.counters.appendByName.workshop, undefined);
   client.destroy();
 });
 
-test("ABI 1.1–1.3 decoder returns owning canonical package bytes and rejects bad coverage", () => {
+test("older ABIs fail closed instead of dropping newer authored sections", async () => {
+  const runtime = await validRuntime();
+  for (const [version, message] of [
+    [0x00010001, "actor bindings"],
+    [0x00010002, "craft definition"],
+    [0x00010003, "workshop definition"]
+  ]) {
+    const module = growingMock();
+    module._tgd_sandbox_compiler_service_abi_version = () => version;
+    const client = SandboxPackageServiceClient.create(module);
+    assert.throws(
+      () => client.publish(runtime),
+      (error) =>
+        error instanceof SandboxPackageServiceTransportError &&
+        error.status === 9 &&
+        error.message.includes(message)
+    );
+    assert.equal(module.counters.requestCreate, 0);
+    assert.equal(module.counters.append, 0);
+    assert.equal(module.counters.submit, 0);
+    client.destroy();
+  }
+});
+
+test("ABI 1.4 marshals workshop stocks, order, and route consequence", async () => {
+  const module = growingMock();
+  module._tgd_sandbox_compiler_service_abi_version = () => 0x00010004;
+  module._tgd_sandbox_compile_request_submit =
+    (_service, _request, output, _capacity, written) => {
+      module.counters.submit += 1;
+      const result = artifactResult(
+        Uint8Array.of(0x54, 0x47, 0x44, 0x53),
+        4
+      );
+      module.HEAPU8.set(result, output);
+      new DataView(module.HEAPU8.buffer).setUint32(
+        written,
+        result.length,
+        true
+      );
+      return 1;
+    };
+  const client = SandboxPackageServiceClient.create(module);
+  const result = client.publish(await validRuntime());
+  assert.deepEqual(
+    result.packageBytes,
+    Uint8Array.of(0x54, 0x47, 0x44, 0x53)
+  );
+  assert.equal(module.counters.appendByName.workshop, 1);
+  assert.equal(module.counters.appendByName.workshop_material_stock, 2);
+  assert.equal(module.counters.appendByName.workshop_order, 1);
+  client.destroy();
+});
+
+test("ABI 1.1–1.4 decoder returns owning canonical package bytes and rejects bad coverage", () => {
   const source = artifactResult(Uint8Array.of(1, 2, 3, 4));
   const decoded = decodeSandboxPackageServiceResult(source);
   assert.deepEqual(decoded.packageBytes, Uint8Array.of(1, 2, 3, 4));
@@ -344,7 +412,7 @@ test("result decoder rejects unknown enums and non-canonical ID coverage", () =>
     (data) => data.setUint8(1, 0),
     (data) => data.setUint8(2, 255),
     (data) => data.setUint8(3, 255),
-    (data) => data.setUint16(120, 40, true),
+    (data) => data.setUint16(120, 45, true),
     (data) => data.setUint8(122, 255),
     (data) => data.setUint8(123, 14),
     (data) => data.setUint16(124, 65535, true),

@@ -165,10 +165,10 @@ void check_round_trip() {
     expect(encoded.validation.valid(), "valid fixture failed validation");
     expect(!encoded.bytes.empty(), "valid fixture produced no bytes");
     constexpr Sha256Digest expected_hash{
-        0xd0, 0x88, 0x16, 0x6a, 0x9a, 0xc4, 0x81, 0x85,
-        0xb6, 0x0f, 0xd6, 0x9f, 0xa6, 0x70, 0xdc, 0xf4,
-        0x35, 0x23, 0x0e, 0x1d, 0x99, 0x24, 0xb9, 0x9f,
-        0xee, 0x55, 0x09, 0x9b, 0x22, 0xdd, 0x29, 0x43,
+        0x39, 0x13, 0x2a, 0x96, 0xf0, 0xd8, 0xed, 0x56,
+        0x2f, 0x88, 0xd4, 0x00, 0xc6, 0xde, 0x2f, 0x6f,
+        0x0f, 0xda, 0xf5, 0x29, 0x92, 0x34, 0xd5, 0xa3,
+        0x67, 0x21, 0xe3, 0xea, 0x78, 0x16, 0xed, 0x20,
     };
     if (encoded.fingerprint != expected_hash) {
         std::cerr << "canonical hash actual=";
@@ -179,8 +179,8 @@ void check_round_trip() {
         std::cerr << std::dec << '\n';
         fail("canonical hash changed");
     }
-    expect(read_le<std::uint16_t>(encoded.bytes, 10) == 3, "format minor mismatch");
-    expect(read_le<std::uint32_t>(encoded.bytes, 32) == 21, "section count mismatch");
+    expect(read_le<std::uint16_t>(encoded.bytes, 10) == 4, "format minor mismatch");
+    expect(read_le<std::uint32_t>(encoded.bytes, 32) == 24, "section count mismatch");
     expect(read_le<std::uint32_t>(encoded.bytes, directory_entry(14) + 8) == 1,
            "interaction binding section missing");
     expect(read_le<std::uint32_t>(encoded.bytes, directory_entry(15) + 12) == 32,
@@ -477,6 +477,8 @@ void check_craft_round_trip_and_validation() {
     constexpr auto step_paste = content_id("craft.step.paste");
     constexpr auto step_trial = content_id("craft.step.trial");
     constexpr auto step_rework = content_id("craft.step.rework");
+    constexpr auto workshop_id = content_id("workshop.demo");
+    constexpr auto order_id = content_id("workshop.order.demo");
     std::array<CraftMaterialDefinition, 2> materials{{
         {material_rework},
         {material_pass},
@@ -503,17 +505,32 @@ void check_craft_round_trip_and_validation() {
          CraftStepKind::operation},
     }};
     CraftDefinition craft{materials, workstations, processes, choices, steps};
+    std::array<WorkshopDefinitionRecord, 1> workshops{{
+        {workshop_id, craft_workstation_id, 100},
+    }};
+    std::array<WorkshopMaterialStockDefinition, 2> material_stocks{{
+        {workshop_id, material_rework, 30, 2, 6'500, 1'900},
+        {workshop_id, material_pass, 80, 1, 9'000, 0},
+    }};
+    std::array<WorkshopOrderDefinition, 1> orders{{
+        {order_id, workshop_id, craft_process_id, interaction_id, 1, 8'000, 25,
+         WorkshopOrderConsequenceKind::operate_route_interaction},
+    }};
+    WorkshopDefinition workshop{workshops, material_stocks, orders};
 
     const auto encoded =
-        encode_sandbox_package(fixture.definition, fixture.binding, craft);
-    expect(encoded.validation.valid(), "valid craft graph failed validation");
+        encode_sandbox_package(fixture.definition, fixture.binding, craft, workshop);
+    expect(encoded.validation.valid(), "valid craft/workshop graph failed validation");
     expect(
         read_le<std::uint32_t>(encoded.bytes, directory_entry(17) + 8) == 2 &&
             read_le<std::uint32_t>(encoded.bytes, directory_entry(18) + 8) == 1 &&
             read_le<std::uint32_t>(encoded.bytes, directory_entry(19) + 8) == 1 &&
             read_le<std::uint32_t>(encoded.bytes, directory_entry(20) + 8) == 2 &&
-            read_le<std::uint32_t>(encoded.bytes, directory_entry(21) + 8) == 4,
-        "craft section counts changed"
+            read_le<std::uint32_t>(encoded.bytes, directory_entry(21) + 8) == 4 &&
+            read_le<std::uint32_t>(encoded.bytes, directory_entry(22) + 8) == 1 &&
+            read_le<std::uint32_t>(encoded.bytes, directory_entry(23) + 8) == 2 &&
+            read_le<std::uint32_t>(encoded.bytes, directory_entry(24) + 8) == 1,
+        "craft/workshop section counts changed"
     );
     const auto decoded = decode_sandbox_package(encoded.bytes);
     expect(
@@ -533,10 +550,28 @@ void check_craft_round_trip_and_validation() {
         decoded_craft.processes.front().trial_step_id == step_trial,
         "decoded craft process lost trial identity"
     );
+    const auto& decoded_workshop = decoded.document->workshop_definition();
+    expect(
+        decoded_workshop.workshops.size() == 1 &&
+            decoded_workshop.material_stocks.size() == 2 &&
+            decoded_workshop.orders.size() == 1 &&
+            decoded_workshop.orders.front().consequence_target_id ==
+                interaction_id,
+        "decoded workshop view lost economy or route consequence records"
+    );
+    const auto reencoded = encode_sandbox_package(
+        decoded.document->definition(), decoded.document->gameplay_binding(),
+        decoded_craft, decoded_workshop
+    );
+    expect(
+        reencoded.validation.valid() && reencoded.bytes == encoded.bytes &&
+            reencoded.fingerprint == encoded.fingerprint,
+        "craft/workshop package round trip was not canonical"
+    );
 
     choices[1].outcome = CraftMaterialOutcome::requires_rework;
     const auto missing_pass =
-        encode_sandbox_package(fixture.definition, fixture.binding, craft);
+        encode_sandbox_package(fixture.definition, fixture.binding, craft, workshop);
     expect(
         missing_pass.validation.error ==
                 SandboxPackageError::semantic_validation_failed &&
@@ -546,12 +581,25 @@ void check_craft_round_trip_and_validation() {
     choices[1].outcome = CraftMaterialOutcome::passes_trial;
     steps[1].predecessor_step_id = {};
     const auto broken_order =
-        encode_sandbox_package(fixture.definition, fixture.binding, craft);
+        encode_sandbox_package(fixture.definition, fixture.binding, craft, workshop);
     expect(
         broken_order.validation.error ==
                 SandboxPackageError::semantic_validation_failed &&
             broken_order.bytes.empty(),
         "branched operation order was published"
+    );
+    steps[1].predecessor_step_id = step_align;
+    orders[0].minimum_quality = 9'500;
+    const auto undeliverable =
+        encode_sandbox_package(fixture.definition, fixture.binding, craft, workshop);
+    expect(
+        has_diagnostic(
+            undeliverable.validation,
+            SandboxDiagnosticCode::workshop_order_undeliverable,
+            SandboxDiagnosticField::minimum_quality
+        ) &&
+            undeliverable.bytes.empty(),
+        "order with no affordable qualifying material was published"
     );
 }
 
@@ -638,8 +686,8 @@ void check_corruption() {
     reseal(bytes);
     expect_decode_failure(bytes, SandboxPackageError::invalid_directory);
     bytes = encoded.bytes;
-    patch_le(bytes, directory_entry(21), std::uint16_t{22});
-    patch_le(bytes, directory_entry(21) + 4, sandbox_pack_section_optional);
+    patch_le(bytes, directory_entry(24), std::uint16_t{25});
+    patch_le(bytes, directory_entry(24) + 4, sandbox_pack_section_optional);
     reseal(bytes);
     expect_decode_failure(bytes, SandboxPackageError::missing_section);
     bytes = encoded.bytes;
@@ -662,19 +710,19 @@ void check_corruption() {
 
     bytes = encoded.bytes;
     constexpr std::size_t old_directory_end =
-        sandbox_pack_header_bytes + 21U * sandbox_pack_directory_entry_bytes;
+        sandbox_pack_header_bytes + 24U * sandbox_pack_directory_entry_bytes;
     bytes.insert(bytes.begin() + static_cast<std::ptrdiff_t>(old_directory_end),
                  sandbox_pack_directory_entry_bytes, 0);
-    for (std::uint16_t type = 1; type <= 21; ++type) {
+    for (std::uint16_t type = 1; type <= 24; ++type) {
         const auto offset_field = directory_entry(type) + 16;
         patch_le(bytes, offset_field, read_le<std::uint32_t>(bytes, offset_field) + 24U);
     }
     const auto optional = old_directory_end;
-    patch_le(bytes, optional, std::uint16_t{22});
+    patch_le(bytes, optional, std::uint16_t{25});
     patch_le(bytes, optional + 2, std::uint16_t{99});
     patch_le(bytes, optional + 4, sandbox_pack_section_optional);
     patch_le(bytes, optional + 16, static_cast<std::uint32_t>(bytes.size()));
-    patch_le(bytes, 32, std::uint32_t{22});
+    patch_le(bytes, 32, std::uint32_t{25});
     patch_le(bytes, 40, static_cast<std::uint32_t>(bytes.size()));
     reseal(bytes);
     auto optional_decoded = decode_sandbox_package(bytes);
@@ -688,10 +736,10 @@ void check_corruption() {
 }  // namespace
 
 int main() {
-    static_assert(sandbox_pack_format_major == 1 && sandbox_pack_format_minor == 3);
+    static_assert(sandbox_pack_format_major == 1 && sandbox_pack_format_minor == 4);
     static_assert(sandbox_content_api_major == 1 && sandbox_content_api_minor == 0);
     static_assert(sandbox_authoring_schema_major == 1);
-    static_assert(sandbox_authoring_schema_minor == 3);
+    static_assert(sandbox_authoring_schema_minor == 4);
     static_assert(sandbox_authoring_schema_patch == 0);
     static_assert(static_cast<std::uint16_t>(SandboxPackSectionType::interaction_gameplay_bindings) == 14);
     static_assert(static_cast<std::uint16_t>(SandboxPackSectionType::mechanism_gameplay_bindings) == 15);
@@ -701,6 +749,9 @@ int main() {
     static_assert(static_cast<std::uint16_t>(SandboxPackSectionType::craft_processes) == 19);
     static_assert(static_cast<std::uint16_t>(SandboxPackSectionType::craft_material_choices) == 20);
     static_assert(static_cast<std::uint16_t>(SandboxPackSectionType::craft_steps) == 21);
+    static_assert(static_cast<std::uint16_t>(SandboxPackSectionType::workshops) == 22);
+    static_assert(static_cast<std::uint16_t>(SandboxPackSectionType::workshop_material_stocks) == 23);
+    static_assert(static_cast<std::uint16_t>(SandboxPackSectionType::workshop_orders) == 24);
     static_assert(sandbox_pack_interaction_gameplay_binding_record_bytes == 32);
     static_assert(sandbox_pack_mechanism_gameplay_binding_record_bytes == 32);
     static_assert(sandbox_pack_actor_gameplay_binding_record_bytes == 40);

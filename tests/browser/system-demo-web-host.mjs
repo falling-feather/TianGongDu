@@ -16,7 +16,7 @@ const webRoot = resolve(buildDirectory, "dist/web");
 const evidenceDirectory = resolve(
   repositoryRoot,
   process.env.TGD_SYSTEM_DEMO_EVIDENCE_DIRECTORY ??
-    "build/evidence/demo-084-system-demo-web"
+    "build/evidence/demo-085-system-demo-web"
 );
 
 const requiredFiles = [
@@ -181,7 +181,11 @@ try {
   await page.locator("#canvas").click();
 
   const initial = await state(page);
-  assert.equal(initial.packageByteCount, 4128, "canonical package byte count drifted");
+  assert.equal(
+    initial.packageByteCount,
+    4_832,
+    "canonical workshop package byte count drifted"
+  );
   assert.equal(initial.assetCount, 12, "resolved Stable Asset count drifted");
   assert.equal(initial.playerX, 0, "authored player spawn X drifted");
   assert.equal(initial.playerY, -3250, "authored player spawn Y drifted");
@@ -201,6 +205,14 @@ try {
   assert.equal(initial.craftMistakeCount, 0);
   assert.equal(initial.craftReworkCount, 0);
   assert.equal(initial.craftCompleted, false);
+  assert.equal(initial.workshopFunds, 100);
+  assert.equal(initial.workshopSpentFunds, 0);
+  assert.equal(initial.workshopStockFlexible, 1);
+  assert.equal(initial.workshopStockSalvage, 2);
+  assert.equal(initial.workshopQuality, 0);
+  assert.equal(initial.workshopOccupied, false);
+  assert.equal(initial.orderFulfilled, false);
+  assert.equal(initial.shortcutOpen, false);
   await page.screenshot({
     path: resolve(evidenceDirectory, "01-initial-craft-bench-and-closed-gate.png"),
     fullPage: true
@@ -231,6 +243,12 @@ try {
   const wrongOrder = await state(page);
   assert.equal(wrongOrder.craftSelectedMaterial, 2);
   assert.equal(wrongOrder.craftStage, 2);
+  assert.equal(wrongOrder.workshopFunds, 70);
+  assert.equal(wrongOrder.workshopSpentFunds, 30);
+  assert.equal(wrongOrder.workshopStockFlexible, 1);
+  assert.equal(wrongOrder.workshopStockSalvage, 1);
+  assert.equal(wrongOrder.workshopQuality, 6500);
+  assert.equal(wrongOrder.workshopOccupied, true);
   assert.equal(
     wrongOrder.craftCompletedOperations,
     0,
@@ -263,6 +281,7 @@ try {
   const reworked = await state(page);
   assert.equal(reworked.craftStage, 3);
   assert.equal(reworked.craftReworkCount, 1);
+  assert.equal(reworked.workshopQuality, 8400);
   await page.keyboard.press("t");
   await page.waitForFunction(
     () => window.__tgdSystemDemo.getState().craftCompleted === true,
@@ -274,24 +293,74 @@ try {
   assert.equal(craftCompleted.craftTrialCount, 2);
   assert.equal(craftCompleted.craftMistakeCount, 1);
   assert.equal(craftCompleted.craftReworkCount, 1);
+  assert.equal(craftCompleted.workshopFunds, 70);
+  assert.equal(craftCompleted.workshopQuality, 8400);
+  assert.equal(craftCompleted.workshopOccupied, true);
+  assert.equal(craftCompleted.orderFulfilled, false);
+  assert.equal(craftCompleted.shortcutOpen, false);
   await page.screenshot({
     path: resolve(evidenceDirectory, "04-reworked-canopy-retrial-passed.png"),
     fullPage: true
   });
-  await page.keyboard.press("c");
+
+  await page.keyboard.press("y");
   await page.waitForFunction(
-    () => window.__tgdSystemDemo.getState().craftMode === false,
+    () => {
+      const current = window.__tgdSystemDemo.getState();
+      return current.orderFulfilled === true && current.shortcutOpen === true;
+    },
     undefined,
     { timeout: 5_000 }
   );
+  const orderDelivered = await state(page);
+  assert.equal(orderDelivered.craftMode, false);
+  assert.equal(orderDelivered.workshopFunds, 95);
+  assert.equal(orderDelivered.workshopSpentFunds, 30);
+  assert.equal(orderDelivered.workshopStockFlexible, 1);
+  assert.equal(orderDelivered.workshopStockSalvage, 1);
+  assert.equal(orderDelivered.workshopQuality, 8400);
+  assert.equal(orderDelivered.workshopOccupied, false);
+  assert.equal(orderDelivered.orderFulfilled, true);
+  assert.equal(orderDelivered.shortcutOpen, true);
+  await page.screenshot({
+    path: resolve(evidenceDirectory, "05-order-delivered-shortcut-open.png"),
+    fullPage: true
+  });
+
+  await page.keyboard.press("c");
+  await page.keyboard.press("y");
+  const duplicateDelivery = await state(page);
+  assert.equal(duplicateDelivery.workshopFunds, 95);
+  assert.equal(duplicateDelivery.workshopStockSalvage, 1);
+  assert.equal(duplicateDelivery.orderFulfilled, true);
+  assert.equal(duplicateDelivery.shortcutOpen, true);
+  await page.keyboard.press("c");
 
   await hold(page, "w", 1_450);
+  const shortcutCrossed = await state(page);
+  assert.equal(shortcutCrossed.gateOpen, false);
+  assert.equal(shortcutCrossed.shortcutOpen, true);
+  assert.ok(
+    shortcutCrossed.playerY > 1_100,
+    `player did not traverse the workshop shortcut: Y=${shortcutCrossed.playerY}`
+  );
+  await page.screenshot({
+    path: resolve(evidenceDirectory, "06-shortcut-traversed-main-gate-closed.png"),
+    fullPage: true
+  });
+
+  await hold(page, "s", 1_000);
+  await hold(page, "a", 760);
+  await hold(page, "w", 900);
   const blocked = await state(page);
   assert.equal(blocked.gateOpen, false);
-  assert.ok(blocked.blockedMoveCount > 0, "closed gate never blocked movement");
-  assert.ok(blocked.playerY <= 400, `player crossed closed gate at Y=${blocked.playerY}`);
+  assert.equal(blocked.shortcutOpen, true);
+  assert.ok(blocked.blockedMoveCount > 0, "closed main gate never blocked movement");
+  assert.ok(
+    blocked.playerY <= 400,
+    `player crossed the still-closed main gate at Y=${blocked.playerY}`
+  );
 
-  await hold(page, "a", 760);
   await page.keyboard.press("f");
   await page.waitForFunction(
     () => window.__tgdSystemDemo.getState().gateOpen === true,
@@ -314,7 +383,7 @@ try {
   assert.equal(repeated.activeHostileCount, 2, "repeat operate duplicated wave spawns");
   assert.equal(repeated.defeatedHostileCount, 0);
   await page.screenshot({
-    path: resolve(evidenceDirectory, "05-wave-one-active-repeat-safe.png"),
+    path: resolve(evidenceDirectory, "07-wave-one-active-repeat-safe.png"),
     fullPage: true
   });
 
@@ -332,7 +401,7 @@ try {
   assert.equal(defeated.terminalCompleted, false);
   assert.equal(defeated.activeHostileCount > 0, true);
   await page.screenshot({
-    path: resolve(evidenceDirectory, "06-player-defeated.png"),
+    path: resolve(evidenceDirectory, "08-player-defeated.png"),
     fullPage: true
   });
 
@@ -361,8 +430,16 @@ try {
   assert.equal(retried.craftMistakeCount, 0);
   assert.equal(retried.craftReworkCount, 0);
   assert.equal(retried.craftCompleted, false);
+  assert.equal(retried.workshopFunds, 100);
+  assert.equal(retried.workshopSpentFunds, 0);
+  assert.equal(retried.workshopStockFlexible, 1);
+  assert.equal(retried.workshopStockSalvage, 2);
+  assert.equal(retried.workshopQuality, 0);
+  assert.equal(retried.workshopOccupied, false);
+  assert.equal(retried.orderFulfilled, false);
+  assert.equal(retried.shortcutOpen, false);
   await page.screenshot({
-    path: resolve(evidenceDirectory, "07-death-retry-restored-all-systems.png"),
+    path: resolve(evidenceDirectory, "09-death-retry-restored-all-systems.png"),
     fullPage: true
   });
 
@@ -382,7 +459,7 @@ try {
   assert.ok(terminal.acceptedAttackCount > 0);
   assert.ok(terminal.playerY > 1100, `player did not cross opened gate: Y=${terminal.playerY}`);
   await page.screenshot({
-    path: resolve(evidenceDirectory, "08-two-waves-terminal-complete.png"),
+    path: resolve(evidenceDirectory, "10-two-waves-terminal-complete.png"),
     fullPage: true
   });
 
@@ -398,6 +475,9 @@ try {
   assert.equal(terminalRetried.completedWaveCount, 0);
   assert.equal(terminalRetried.completedObjectiveCount, 0);
   assert.equal(terminalRetried.terminalCompleted, false);
+  assert.equal(terminalRetried.workshopFunds, 100);
+  assert.equal(terminalRetried.orderFulfilled, false);
+  assert.equal(terminalRetried.shortcutOpen, false);
 
   await page.waitForTimeout(500);
   const shellPageErrors = await page.evaluate(
@@ -409,8 +489,8 @@ try {
   assert.deepEqual(requestErrors, [], "browser request errors were emitted");
 
   routeEvidence = {
-    taskId: "DEMO-084",
-    productVersion: "Demo 0.8.4",
+    taskId: "DEMO-085",
+    productVersion: "Demo 0.8.5",
     commit: execFileSync("git", ["rev-parse", "HEAD"], {
       cwd: repositoryRoot,
       encoding: "utf8"
@@ -428,6 +508,9 @@ try {
     reworkRequired,
     reworked,
     craftCompleted,
+    orderDelivered,
+    duplicateDelivery,
+    shortcutCrossed,
     blocked,
     opened,
     repeated,
@@ -443,10 +526,12 @@ try {
       "02-craft-need-and-material-choice.png",
       "03-rain-trial-rework-required.png",
       "04-reworked-canopy-retrial-passed.png",
-      "05-wave-one-active-repeat-safe.png",
-      "06-player-defeated.png",
-      "07-death-retry-restored-all-systems.png",
-      "08-two-waves-terminal-complete.png"
+      "05-order-delivered-shortcut-open.png",
+      "06-shortcut-traversed-main-gate-closed.png",
+      "07-wave-one-active-repeat-safe.png",
+      "08-player-defeated.png",
+      "09-death-retry-restored-all-systems.png",
+      "10-two-waves-terminal-complete.png"
     ]
   };
   await writeFile(
@@ -455,7 +540,7 @@ try {
     "utf8"
   );
   process.stdout.write(
-    `[demo-084] real Web craft + combat route passed ${JSON.stringify({
+    `[demo-085] real Web workshop + alternate route + combat passed ${JSON.stringify({
       browser: routeEvidence.browser,
       craft: {
         wrongOrderPreservedOperations:
@@ -464,6 +549,18 @@ try {
         mistakes: craftCompleted.craftMistakeCount,
         reworks: craftCompleted.craftReworkCount,
         completed: craftCompleted.craftCompleted
+      },
+      workshop: {
+        funds: orderDelivered.workshopFunds,
+        spent: orderDelivered.workshopSpentFunds,
+        remainingStocks: [
+          orderDelivered.workshopStockFlexible,
+          orderDelivered.workshopStockSalvage
+        ],
+        quality: orderDelivered.workshopQuality,
+        orderFulfilled: orderDelivered.orderFulfilled,
+        shortcutOpen: orderDelivered.shortcutOpen,
+        shortcutCrossedY: shortcutCrossed.playerY
       },
       blockedMoveCount: blocked.blockedMoveCount,
       repeatedTriggerCount: repeated.repeatedTriggerCount,

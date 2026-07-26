@@ -169,7 +169,7 @@ bool SystemDemoLayer::init() {
   active_layer = this;
   createBackdrop();
 
-  auto *title = makeLabel("TIANGONGDU / SYSTEM DEMO 0.8.4", 24.0F,
+  auto *title = makeLabel("TIANGONGDU / SYSTEM DEMO 0.8.5", 24.0F,
                           ax::Color4B(239, 219, 173, 255));
   auto *badge =
       makeLabel("INTERNAL BLOCKOUT", 13.0F, ax::Color4B(114, 224, 200, 255));
@@ -202,7 +202,8 @@ bool SystemDemoLayer::init() {
   createKeyboardInput();
   refreshPresentation();
   ready_ = true;
-  message_ = "READY / TUNE THE CANOPY, OPEN THE GATE, CLEAR TWO WAVES";
+  message_ =
+      "READY / FULFIL THE ORDER, OPEN A ROUTE, CLEAR TWO WAVES";
   scheduleUpdate();
   return true;
 }
@@ -300,11 +301,11 @@ bool SystemDemoLayer::qaCraftInRange() const noexcept {
 }
 
 std::uint32_t SystemDemoLayer::qaCraftStage() const noexcept {
-  return static_cast<std::uint32_t>(craft_session_.snapshot().stage);
+  return static_cast<std::uint32_t>(workshop_session_.snapshot().craft.stage);
 }
 
 std::uint32_t SystemDemoLayer::qaCraftSelectedMaterial() const noexcept {
-  const auto selected = craft_session_.snapshot().selected_material;
+  const auto selected = workshop_session_.snapshot().craft.selected_material;
   if (selected == craft_material_keys_[0]) {
     return 1U;
   }
@@ -316,26 +317,59 @@ std::uint32_t SystemDemoLayer::qaCraftSelectedMaterial() const noexcept {
 
 std::uint32_t
 SystemDemoLayer::qaCraftCompletedOperationCount() const noexcept {
-  return craft_session_.snapshot().completed_operation_count;
+  return workshop_session_.snapshot().craft.completed_operation_count;
 }
 
 std::uint32_t SystemDemoLayer::qaCraftTrialCount() const noexcept {
-  return craft_session_.snapshot().trial_count;
+  return workshop_session_.snapshot().craft.trial_count;
 }
 
 std::uint32_t SystemDemoLayer::qaCraftMistakeCount() const noexcept {
-  return craft_session_.snapshot().mistake_count;
+  return workshop_session_.snapshot().craft.mistake_count;
 }
 
 std::uint32_t SystemDemoLayer::qaCraftReworkCount() const noexcept {
-  return craft_session_.snapshot().rework_count;
+  return workshop_session_.snapshot().craft.rework_count;
 }
 
 bool SystemDemoLayer::qaCraftCompleted() const noexcept {
-  return craft_session_.snapshot().completed;
+  return workshop_session_.snapshot().craft.completed;
+}
+
+std::int32_t SystemDemoLayer::qaWorkshopFunds() const noexcept {
+  return workshop_session_.snapshot().funds;
+}
+
+std::int32_t SystemDemoLayer::qaWorkshopSpentFunds() const noexcept {
+  return workshop_session_.snapshot().spent_funds;
+}
+
+std::uint32_t SystemDemoLayer::qaWorkshopStock(
+    const std::size_t index) const noexcept {
+  return index < craft_material_keys_.size()
+             ? workshop_session_.stock_remaining(craft_material_keys_[index])
+             : 0U;
+}
+
+std::uint32_t SystemDemoLayer::qaWorkshopQuality() const noexcept {
+  return workshop_session_.snapshot().item_quality;
+}
+
+bool SystemDemoLayer::qaWorkshopOccupied() const noexcept {
+  return workshop_session_.snapshot().workstation_occupied;
+}
+
+bool SystemDemoLayer::qaOrderFulfilled() const noexcept {
+  return workshop_session_.snapshot().order_fulfilled;
+}
+
+bool SystemDemoLayer::qaShortcutOpen() const noexcept {
+  return shortcut_open_;
 }
 
 void SystemDemoLayer::qaOperate() noexcept { submitOperate(); }
+
+void SystemDemoLayer::qaDeliverOrder() noexcept { deliverWorkshopOrder(); }
 
 void SystemDemoLayer::qaAttackLight() noexcept {
   submitAttack(tgd::gameplay::SandboxEncounterAttack::light);
@@ -438,35 +472,59 @@ bool SystemDemoLayer::loadRuntimeAndAssets() noexcept {
       live_document->definition().waves.empty() ||
       live_document->definition().wave_spawns.empty() ||
       live_document->definition().objectives.empty() ||
-      live_document->definition().interactions.empty() ||
-      live_document->definition().ground_blockers.empty() ||
-      live_document->gameplay_binding().interaction_bindings.empty() ||
-      live_document->gameplay_binding().mechanism_bindings.empty() ||
+      live_document->definition().interactions.size() != 2U ||
+      live_document->definition().ground_blockers.size() != 2U ||
+      live_document->gameplay_binding().interaction_bindings.size() != 2U ||
+      live_document->gameplay_binding().mechanism_bindings.size() != 2U ||
       live_document->gameplay_binding().actor_bindings.empty() ||
       live_document->craft_definition().materials.size() != 2U ||
       live_document->craft_definition().workstations.empty() ||
       live_document->craft_definition().processes.size() != 1U ||
       live_document->craft_definition().material_choices.size() != 2U ||
-      live_document->craft_definition().steps.size() != 4U) {
+      live_document->craft_definition().steps.size() != 4U ||
+      live_document->workshop_definition().workshops.size() != 1U ||
+      live_document->workshop_definition().material_stocks.size() != 2U ||
+      live_document->workshop_definition().orders.size() != 1U) {
     message_ = "BOOT FAILED / PUBLISHED SYSTEM DEMO SHAPE DRIFTED";
     return false;
   }
 
   const auto &live_definition = live_document->definition();
   const auto &gameplay_binding = live_document->gameplay_binding();
-  const auto &interaction_binding =
-      gameplay_binding.interaction_bindings.front();
+  const auto primary_objective = std::find_if(
+      live_definition.objectives.begin(), live_definition.objectives.end(),
+      [](const auto &candidate) {
+        return candidate.predecessor_objective_id.key == 0 &&
+               candidate.completion.kind ==
+                   tgd::contracts::SandboxObjectiveCompletionKind::
+                       mechanism_activated;
+      });
+  if (primary_objective == live_definition.objectives.end()) {
+    message_ = "BOOT FAILED / PRIMARY GATE OBJECTIVE DID NOT RESOLVE";
+    return false;
+  }
+  const auto interaction_binding =
+      std::find_if(gameplay_binding.interaction_bindings.begin(),
+                   gameplay_binding.interaction_bindings.end(),
+                   [&primary_objective](const auto &candidate) {
+                     return candidate.target_mechanism_id.key ==
+                            primary_objective->completion.target_id.key;
+                   });
+  if (interaction_binding == gameplay_binding.interaction_bindings.end()) {
+    message_ = "BOOT FAILED / PRIMARY GATE INTERACTION DID NOT RESOLVE";
+    return false;
+  }
   const auto interaction = std::find_if(
       live_definition.interactions.begin(), live_definition.interactions.end(),
       [&interaction_binding](const auto &candidate) {
-        return candidate.id.key == interaction_binding.interaction_id.key;
+        return candidate.id.key == interaction_binding->interaction_id.key;
       });
   const auto mechanism_binding =
       std::find_if(gameplay_binding.mechanism_bindings.begin(),
                    gameplay_binding.mechanism_bindings.end(),
                    [&interaction_binding](const auto &candidate) {
                      return candidate.mechanism_id.key ==
-                            interaction_binding.target_mechanism_id.key;
+                            interaction_binding->target_mechanism_id.key;
                    });
   if (interaction == live_definition.interactions.end() ||
       mechanism_binding == gameplay_binding.mechanism_bindings.end()) {
@@ -488,9 +546,9 @@ bool SystemDemoLayer::loadRuntimeAndAssets() noexcept {
   gate_blocker_index_ = static_cast<std::size_t>(
       blocker - live_definition.ground_blockers.begin());
   interaction_key_ = interaction->id.key;
-  target_mechanism_key_ = interaction_binding.target_mechanism_id.key;
+  target_mechanism_key_ = interaction_binding->target_mechanism_id.key;
   interaction_pose_ = interaction->pose;
-  interaction_range_mm_ = interaction_binding.range_mm;
+  interaction_range_mm_ = interaction_binding->range_mm;
   asset_count_ = static_cast<std::uint32_t>(live_assets->size());
   const auto runtime_snapshot = coordinator_.snapshot();
   if (encounter_.initialize(live_definition, gameplay_binding, player_actor,
@@ -556,17 +614,59 @@ bool SystemDemoLayer::loadRuntimeAndAssets() noexcept {
     return false;
   }
 
-  if (craft_session_.initialize(craft, craft_process.id.key) !=
-      tgd::gameplay::CraftSessionBuildError::none) {
-    message_ = "BOOT FAILED / AUTHORED CRAFT SESSION DID NOT INITIALIZE";
+  const auto &workshop = live_document->workshop_definition();
+  const auto &workshop_record = workshop.workshops.front();
+  const auto &order = workshop.orders.front();
+  const auto shortcut_interaction = std::find_if(
+      gameplay_binding.interaction_bindings.begin(),
+      gameplay_binding.interaction_bindings.end(),
+      [&order](const auto &candidate) {
+        return candidate.interaction_id.key == order.consequence_target_id.key;
+      });
+  if (shortcut_interaction == gameplay_binding.interaction_bindings.end()) {
+    message_ = "BOOT FAILED / WORKSHOP ROUTE INTERACTION DID NOT RESOLVE";
     return false;
   }
+  const auto shortcut_mechanism = std::find_if(
+      gameplay_binding.mechanism_bindings.begin(),
+      gameplay_binding.mechanism_bindings.end(),
+      [&shortcut_interaction](const auto &candidate) {
+        return candidate.mechanism_id.key ==
+               shortcut_interaction->target_mechanism_id.key;
+      });
+  if (shortcut_mechanism == gameplay_binding.mechanism_bindings.end()) {
+    message_ = "BOOT FAILED / WORKSHOP ROUTE MECHANISM DID NOT RESOLVE";
+    return false;
+  }
+  const auto shortcut_blocker = std::find_if(
+      live_definition.ground_blockers.begin(),
+      live_definition.ground_blockers.end(),
+      [&shortcut_mechanism](const auto &candidate) {
+        return candidate.id.key ==
+               shortcut_mechanism->target_ground_blocker_id.key;
+      });
+  if (shortcut_blocker == live_definition.ground_blockers.end() ||
+      shortcut_blocker == blocker) {
+    message_ = "BOOT FAILED / WORKSHOP ROUTE BLOCKER DID NOT RESOLVE";
+    return false;
+  }
+  if (workshop_session_.initialize(craft, workshop, workshop_record.id.key,
+                                   order.id.key) !=
+      tgd::gameplay::WorkshopSessionBuildError::none) {
+    message_ = "BOOT FAILED / AUTHORED WORKSHOP SESSION DID NOT INITIALIZE";
+    return false;
+  }
+  shortcut_interaction_key_ = shortcut_interaction->interaction_id.key;
+  shortcut_mechanism_key_ = shortcut_interaction->target_mechanism_id.key;
+  shortcut_blocker_index_ = static_cast<std::size_t>(
+      shortcut_blocker - live_definition.ground_blockers.begin());
   craft_material_keys_[0] = pass_material->material_id.key;
   craft_material_keys_[1] = rework_material->material_id.key;
   craft_workstation_asset_key_ = workstation->asset_id.key;
   craft_workstation_asset_id_ = workstation->asset_id.name;
   craft_workstation_pose_ = workstation->pose;
   gate_open_ = currentGateOpen();
+  shortcut_open_ = currentShortcutOpen();
   return true;
 }
 
@@ -672,6 +772,8 @@ void SystemDemoLayer::createWorldPresentation() {
     world_layer_->addChild(blocker_node, depthOrder(position.y) + 4);
     if (index == gate_blocker_index_) {
       gate_node_ = blocker_node;
+    } else if (index == shortcut_blocker_index_) {
+      shortcut_node_ = blocker_node;
     } else {
       blocker_node->setOpacity(190);
     }
@@ -838,7 +940,7 @@ void SystemDemoLayer::createRegistryPanel() {
 
 void SystemDemoLayer::createHud() {
   auto *controls = makeLabel(
-      "MOVE  WASD/ARROWS   GATE  F   ATTACK  J/K   CRAFT  C · 1/2 · 3/4 · T · G   RETRY  R",
+      "MOVE WASD/ARROWS  GATE F  ATTACK J/K  WORKSHOP C  1/2  3/4  T  G  DELIVER Y  RETRY R",
       11.0F, ax::Color4B(224, 228, 199, 255));
   if (controls != nullptr) {
     controls->setPosition({316.0F, 634.0F});
@@ -927,6 +1029,10 @@ void SystemDemoLayer::createCraftPanel() {
       makeLabel("", 15.0F, ax::Color4B(222, 226, 205, 255));
   craft_hint_label_ =
       makeLabel("", 13.0F, ax::Color4B(239, 174, 112, 255));
+  workshop_status_label_ =
+      makeLabel("", 12.0F, ax::Color4B(159, 205, 185, 255));
+  order_status_label_ =
+      makeLabel("", 12.0F, ax::Color4B(231, 196, 128, 255));
 
   if (title != nullptr) {
     title->setPosition({385.0F, 550.0F});
@@ -945,14 +1051,22 @@ void SystemDemoLayer::createCraftPanel() {
     craft_panel_->addChild(craft_stage_label_, 2);
   }
   if (craft_material_label_ != nullptr) {
-    craft_material_label_->setPosition({385.0F, 432.0F});
+    craft_material_label_->setPosition({385.0F, 415.0F});
     craft_panel_->addChild(craft_material_label_, 2);
   }
+  if (workshop_status_label_ != nullptr) {
+    workshop_status_label_->setPosition({385.0F, 445.0F});
+    craft_panel_->addChild(workshop_status_label_, 2);
+  }
+  if (order_status_label_ != nullptr) {
+    order_status_label_->setPosition({790.0F, 445.0F});
+    craft_panel_->addChild(order_status_label_, 2);
+  }
   if (craft_steps_label_ != nullptr) {
-    craft_steps_label_->setDimensions(760.0F, 210.0F);
+    craft_steps_label_->setDimensions(760.0F, 190.0F);
     craft_steps_label_->setAlignment(ax::TextHAlignment::LEFT,
                                      ax::TextVAlignment::TOP);
-    craft_steps_label_->setPosition({385.0F, 377.0F});
+    craft_steps_label_->setPosition({385.0F, 375.0F});
     craft_panel_->addChild(craft_steps_label_, 2);
   }
   if (craft_hint_label_ != nullptr) {
@@ -995,6 +1109,10 @@ void SystemDemoLayer::createKeyboardInput() {
     }
     if (key == ax::EventKeyboard::KeyCode::KEY_G) {
       performCraftRework();
+      return;
+    }
+    if (key == ax::EventKeyboard::KeyCode::KEY_Y) {
+      deliverWorkshopOrder();
       return;
     }
     if (key == ax::EventKeyboard::KeyCode::KEY_F) {
@@ -1167,9 +1285,9 @@ void SystemDemoLayer::submitAttack(
 void SystemDemoLayer::toggleCraftMode() noexcept {
   if (craft_mode_) {
     craft_mode_ = false;
-    message_ = craft_session_.snapshot().completed
-                   ? "WORKSTATION CLOSED / TUNED CANOPY STATE PRESERVED"
-                   : "WORKSTATION CLOSED / CRAFT STATE PRESERVED";
+    message_ = workshop_session_.snapshot().order_fulfilled
+                   ? "WORKSHOP CLOSED / ORDER AND ROUTE STATE PRESERVED"
+                   : "WORKSHOP CLOSED / INVENTORY AND CRAFT STATE PRESERVED";
     refreshPresentation();
     return;
   }
@@ -1186,9 +1304,9 @@ void SystemDemoLayer::toggleCraftMode() noexcept {
   }
   directions_.fill(false);
   craft_mode_ = true;
-  message_ = craft_session_.snapshot().completed
-                 ? "WORKSTATION OPEN / COMPLETED CANOPY REVIEW"
-                 : "WORKSTATION OPEN / READ THE NEED, THEN CHOOSE MATERIAL";
+  message_ = workshop_session_.snapshot().order_fulfilled
+                 ? "WORKSHOP OPEN / ORDER FULFILLED / SHORTCUT RELEASED"
+                 : "WORKSHOP OPEN / REVIEW STOCK, COST, QUALITY, AND ORDER";
   refreshPresentation();
 }
 
@@ -1200,8 +1318,8 @@ void SystemDemoLayer::selectCraftMaterial(
     return;
   }
   const auto selected =
-      craft_session_.select_material(craft_material_keys_[choice_index]);
-  using Disposition = tgd::gameplay::CraftActionDisposition;
+      workshop_session_.select_material(craft_material_keys_[choice_index]);
+  using Disposition = tgd::gameplay::WorkshopActionDisposition;
   switch (selected.disposition) {
   case Disposition::applied:
     message_ =
@@ -1214,6 +1332,10 @@ void SystemDemoLayer::selectCraftMaterial(
     break;
   case Disposition::unknown_target:
   case Disposition::wrong_order:
+  case Disposition::insufficient_stock:
+  case Disposition::insufficient_funds:
+  case Disposition::quality_too_low:
+  case Disposition::already_fulfilled:
   case Disposition::invalid_state:
   case Disposition::invalid:
     message_ = "MATERIAL REJECTED / CRAFT STATE PRESERVED";
@@ -1229,9 +1351,9 @@ void SystemDemoLayer::performCraftOperation(
     refreshPresentation();
     return;
   }
-  const auto performed =
-      craft_session_.perform_operation(craft_operation_keys_[operation_index]);
-  using Disposition = tgd::gameplay::CraftActionDisposition;
+  const auto performed = workshop_session_.perform_operation(
+      craft_operation_keys_[operation_index]);
+  using Disposition = tgd::gameplay::WorkshopActionDisposition;
   switch (performed.disposition) {
   case Disposition::applied:
     message_ = operation_index == 0U
@@ -1247,6 +1369,10 @@ void SystemDemoLayer::performCraftOperation(
     message_ = "OPERATION REJECTED / FOLLOW THE CURRENT CRAFT STAGE";
     break;
   case Disposition::unknown_target:
+  case Disposition::insufficient_stock:
+  case Disposition::insufficient_funds:
+  case Disposition::quality_too_low:
+  case Disposition::already_fulfilled:
   case Disposition::invalid_state:
   case Disposition::invalid:
     message_ = "OPERATION REJECTED / CRAFT STATE PRESERVED";
@@ -1261,11 +1387,12 @@ void SystemDemoLayer::runCraftTrial() noexcept {
     refreshPresentation();
     return;
   }
-  const auto trial = craft_session_.run_trial();
-  using Disposition = tgd::gameplay::CraftActionDisposition;
+  const auto trial = workshop_session_.run_trial();
+  using Disposition = tgd::gameplay::WorkshopActionDisposition;
   if (trial.disposition == Disposition::applied) {
     message_ =
-        trial.snapshot.stage == tgd::gameplay::CraftSessionStage::rework_required
+        trial.snapshot.craft.stage ==
+                tgd::gameplay::CraftSessionStage::rework_required
             ? "RAIN TRIAL FAILED / CANOPY LEAKS / G TO RETENSION"
             : "RAIN TRIAL PASSED / TUNED CANOPY OUTPUT READY";
   } else if (trial.disposition == Disposition::wrong_stage) {
@@ -1282,8 +1409,8 @@ void SystemDemoLayer::performCraftRework() noexcept {
     refreshPresentation();
     return;
   }
-  const auto reworked = craft_session_.perform_rework();
-  using Disposition = tgd::gameplay::CraftActionDisposition;
+  const auto reworked = workshop_session_.perform_rework();
+  using Disposition = tgd::gameplay::WorkshopActionDisposition;
   if (reworked.disposition == Disposition::applied) {
     message_ = "REWORK APPLIED / CANOPY RETENSIONED / T TO TEST AGAIN";
   } else if (reworked.disposition == Disposition::wrong_stage) {
@@ -1291,6 +1418,73 @@ void SystemDemoLayer::performCraftRework() noexcept {
   } else {
     message_ = "REWORK REJECTED / CRAFT STATE PRESERVED";
   }
+  refreshPresentation();
+}
+
+void SystemDemoLayer::deliverWorkshopOrder() noexcept {
+  if (!craft_mode_) {
+    message_ = "DELIVERY REJECTED / C TO ENTER THE WORKSHOP";
+    refreshPresentation();
+    return;
+  }
+
+  auto workshop_candidate = workshop_session_;
+  const auto delivered = workshop_candidate.deliver_order();
+  using Disposition = tgd::gameplay::WorkshopActionDisposition;
+  if (delivered.disposition != Disposition::applied) {
+    switch (delivered.disposition) {
+    case Disposition::wrong_stage:
+      message_ = "DELIVERY REJECTED / COMPLETE AND TEST THE CANOPY FIRST";
+      break;
+    case Disposition::quality_too_low:
+      message_ = "DELIVERY REJECTED / QUALITY BELOW ORDER MINIMUM";
+      break;
+    case Disposition::already_fulfilled:
+      message_ = "DELIVERY REPEATED / ORDER REWARD CANNOT DUPLICATE";
+      break;
+    case Disposition::unknown_target:
+    case Disposition::wrong_order:
+    case Disposition::insufficient_stock:
+    case Disposition::insufficient_funds:
+    case Disposition::invalid_state:
+    case Disposition::invalid:
+      message_ = "DELIVERY REJECTED / WORKSHOP STATE PRESERVED";
+      break;
+    case Disposition::applied:
+      break;
+    }
+    refreshPresentation();
+    return;
+  }
+
+  auto encounter_candidate = encounter_;
+  const auto triggered =
+      encounter_candidate.notify_mechanism_activated(shortcut_mechanism_key_);
+  if (triggered !=
+      tgd::gameplay::SandboxEncounterEventDisposition::applied) {
+    message_ = "DELIVERY REJECTED / ROUTE PREFLIGHT PRESERVED ALL STATES";
+    refreshPresentation();
+    return;
+  }
+  const auto before = coordinator_.snapshot();
+  const auto operated = coordinator_.submit_operate({
+      before.runtime_generation,
+      before.session.last_command_sequence + 1U,
+      before.session.player_actor,
+      shortcut_interaction_key_,
+  });
+  if (operated.disposition != SandboxRuntimeCommandDisposition::applied) {
+    message_ = "DELIVERY REJECTED / ROUTE COMMIT PRESERVED THE READY ITEM";
+    refreshPresentation();
+    return;
+  }
+
+  workshop_session_ = std::move(workshop_candidate);
+  encounter_ = std::move(encounter_candidate);
+  craft_mode_ = false;
+  directions_.fill(false);
+  message_ =
+      "ORDER DELIVERED / ROOF SHORTCUT OPEN / FUNDS AND QUALITY COMMITTED";
   refreshPresentation();
 }
 
@@ -1303,14 +1497,15 @@ void SystemDemoLayer::retryLocal() noexcept {
   if (retried.disposition == SandboxRuntimeCommandDisposition::applied) {
     const auto restarted =
         encounter_.restart(retried.snapshot.session.player_pose);
-    const auto craft_restarted = craft_session_.restart();
+    const auto craft_restarted = workshop_session_.restart();
     if (restarted == tgd::gameplay::SandboxEncounterBuildError::none &&
-        craft_restarted == tgd::gameplay::CraftSessionBuildError::none) {
+        craft_restarted == tgd::gameplay::WorkshopSessionBuildError::none) {
       ++retry_count_;
       directions_.fill(false);
       fixed_step_accumulator_ = 0.0F;
       craft_mode_ = false;
-      message_ = "LOCAL RETRY / CRAFT, GATE, WAVES, OBJECTIVES RESTORED";
+      message_ =
+          "LOCAL RETRY / INVENTORY, ORDER, ROUTES, WAVES, OBJECTIVES RESTORED";
     } else {
       message_ = "LOCAL RETRY / GAMEPLAY RESTART REJECTED";
     }
@@ -1326,7 +1521,8 @@ void SystemDemoLayer::refreshPresentation() noexcept {
     return;
   }
   const auto encounter_snapshot = encounter_.snapshot();
-  const auto craft_snapshot = craft_session_.snapshot();
+  const auto workshop_snapshot = workshop_session_.snapshot();
+  const auto craft_snapshot = workshop_snapshot.craft;
   if (player_node_ != nullptr && world_layer_ != nullptr) {
     const auto position = project(snapshot.session.player_pose);
     player_node_->setPosition(position);
@@ -1388,16 +1584,22 @@ void SystemDemoLayer::refreshPresentation() noexcept {
   }
 
   gate_open_ = currentGateOpen();
+  shortcut_open_ = currentShortcutOpen();
   if (gate_node_ != nullptr) {
     gate_node_->setOpacity(gate_open_ ? 42 : 255);
   }
+  if (shortcut_node_ != nullptr) {
+    shortcut_node_->setOpacity(shortcut_open_ ? 42 : 255);
+  }
   if (gate_status_label_ != nullptr) {
-    gate_status_label_->setString(gate_open_
-                                      ? "GATE / OPEN / BLOCKER DISABLED"
-                                      : "GATE / CLOSED / BLOCKER ENABLED");
+    gate_status_label_->setString(
+        std::string{"ROUTES / GATE "} + (gate_open_ ? "OPEN" : "CLOSED") +
+        " / ROOF " + (shortcut_open_ ? "OPEN" : "CLOSED"));
     gate_status_label_->setTextColor(gate_open_
                                          ? ax::Color4B(112, 224, 190, 255)
-                                         : ax::Color4B(239, 169, 100, 255));
+                                         : (shortcut_open_
+                                                ? ax::Color4B(240, 205, 126, 255)
+                                                : ax::Color4B(239, 169, 100, 255)));
   }
   if (player_status_label_ != nullptr) {
     player_status_label_->setString(
@@ -1432,20 +1634,23 @@ void SystemDemoLayer::refreshPresentation() noexcept {
   }
   if (craft_workstation_node_ != nullptr) {
     craft_workstation_node_->setOpacity(
-        craft_snapshot.completed ? 255 : (playerInCraftRange() ? 255 : 190));
+        workshop_snapshot.order_fulfilled
+            ? 255
+            : (playerInCraftRange() ? 255 : 190));
     craft_workstation_node_->setColor(
-        craft_snapshot.completed ? ax::Color3B(239, 201, 115)
-                                 : ax::Color3B(102, 226, 194));
+        workshop_snapshot.order_fulfilled ? ax::Color3B(239, 201, 115)
+                                          : ax::Color3B(102, 226, 194));
   }
   if (craft_workstation_status_label_ != nullptr) {
     craft_workstation_status_label_->setString(
-        craft_snapshot.completed
-            ? "UMBRELLA WORKSTATION / TRIAL PASSED"
+        workshop_snapshot.order_fulfilled
+            ? "UMBRELLA WORKSHOP / ORDER DELIVERED"
             : (playerInCraftRange() ? "UMBRELLA WORKSTATION / C TO USE"
                                     : "UMBRELLA WORKSTATION"));
     craft_workstation_status_label_->setTextColor(
-        craft_snapshot.completed ? ax::Color4B(240, 205, 126, 255)
-                                 : ax::Color4B(123, 231, 204, 255));
+        workshop_snapshot.order_fulfilled
+            ? ax::Color4B(240, 205, 126, 255)
+            : ax::Color4B(123, 231, 204, 255));
   }
   if (craft_panel_ != nullptr) {
     craft_panel_->setVisible(craft_mode_);
@@ -1479,6 +1684,30 @@ void SystemDemoLayer::refreshPresentation() noexcept {
       craft_material_label_->setString("MATERIAL / NONE SELECTED");
     }
   }
+  if (workshop_status_label_ != nullptr) {
+    workshop_status_label_->setString(
+        "FUNDS " + std::to_string(workshop_snapshot.funds) +
+        " / SPENT " + std::to_string(workshop_snapshot.spent_funds) +
+        " / STOCK 1:" +
+        std::to_string(
+            workshop_session_.stock_remaining(craft_material_keys_[0])) +
+        " 2:" +
+        std::to_string(
+            workshop_session_.stock_remaining(craft_material_keys_[1])) +
+        " / QUALITY " + std::to_string(workshop_snapshot.item_quality));
+  }
+  if (order_status_label_ != nullptr) {
+    order_status_label_->setString(
+        std::string{"ORDER "} +
+        (workshop_snapshot.order_fulfilled ? "FULFILLED" : "OPEN") +
+        " / MIN Q " + std::to_string(workshop_snapshot.minimum_quality) +
+        " / STATION " +
+        (workshop_snapshot.workstation_occupied ? "OCCUPIED" : "FREE"));
+    order_status_label_->setTextColor(
+        workshop_snapshot.order_fulfilled
+            ? ax::Color4B(112, 224, 190, 255)
+            : ax::Color4B(231, 196, 128, 255));
+  }
   if (craft_steps_label_ != nullptr) {
     const auto material_done = craft_snapshot.selected_material != 0;
     const auto first_done = craft_snapshot.completed_operation_count >= 1U;
@@ -1502,7 +1731,12 @@ void SystemDemoLayer::refreshPresentation() noexcept {
              : (craft_snapshot.completed && craft_snapshot.rework_count == 0U
                     ? "[ N/A] "
                     : "[    ] ")) +
-        "T      REPEAT THE RAIN TRIAL AFTER REWORK");
+        "T      REPEAT THE RAIN TRIAL AFTER REWORK\n" +
+        (workshop_snapshot.order_fulfilled
+             ? std::string{"[DONE] "}
+             : (craft_snapshot.completed ? std::string{"[NEXT] "}
+                                         : std::string{"[    ] "})) +
+        "Y      DELIVER ORDER AND OPEN ROOF SHORTCUT");
   }
   if (craft_hint_label_ != nullptr) {
     using Stage = tgd::gameplay::CraftSessionStage;
@@ -1530,7 +1764,9 @@ void SystemDemoLayer::refreshPresentation() noexcept {
       break;
     case Stage::completed:
       craft_hint_label_->setString(
-          "OUTPUT READY: TUNED CANOPY.  Trial and rework counts remain visible; C returns to the scene.");
+          workshop_snapshot.order_fulfilled
+              ? "ORDER FULFILLED: the route interaction opened the roof shortcut exactly once."
+              : "OUTPUT READY: press Y to deliver. Quality and minimum order threshold are authoritative.");
       break;
     case Stage::invalid:
       craft_hint_label_->setString("CRAFT SESSION INVALID");
@@ -1551,10 +1787,13 @@ void SystemDemoLayer::refreshPresentation() noexcept {
           "J OR SPACE / LIGHT    K / HEAVY    CLEAR THE ACTIVE WAVE");
     } else if (gate_open_) {
       prompt_label_->setString("GATE OPEN / AUTHORED WAVE TRANSITION");
+    } else if (shortcut_open_) {
+      prompt_label_->setString(
+          "ROOF SHORTCUT OPEN / THE ORDER CHANGED THE TRAVERSAL ROUTE");
     } else if (playerInCraftRange()) {
       prompt_label_->setString(
-          craft_snapshot.completed
-              ? "C / REVIEW THE PASSED CANOPY AT THE WORKSTATION"
+          workshop_snapshot.order_fulfilled
+              ? "C / REVIEW THE FULFILLED WORKSHOP ORDER"
               : "C / USE THE UMBRELLA WORKSTATION");
     } else if (playerInOperateRange()) {
       prompt_label_->setString("F / OPERATE THE GATE CONSOLE");
@@ -1727,6 +1966,11 @@ bool SystemDemoLayer::currentGateOpen() const noexcept {
   return blocker.has_value() && !blocker->enabled;
 }
 
+bool SystemDemoLayer::currentShortcutOpen() const noexcept {
+  const auto blocker = coordinator_.collision_at(shortcut_blocker_index_);
+  return blocker.has_value() && !blocker->enabled;
+}
+
 ax::Scene *createSystemDemoScene() {
   auto *scene = ax::Scene::create();
   auto *layer = SystemDemoLayer::create();
@@ -1879,10 +2123,62 @@ TGD_SYSTEM_DEMO_KEEPALIVE int tgd_system_demo_qa_craft_completed() {
   return layer != nullptr && layer->qaCraftCompleted() ? 1 : 0;
 }
 
+TGD_SYSTEM_DEMO_KEEPALIVE std::int32_t
+tgd_system_demo_qa_workshop_funds() {
+  const auto *layer = SystemDemoLayer::active();
+  return layer != nullptr ? layer->qaWorkshopFunds() : 0;
+}
+
+TGD_SYSTEM_DEMO_KEEPALIVE std::int32_t
+tgd_system_demo_qa_workshop_spent_funds() {
+  const auto *layer = SystemDemoLayer::active();
+  return layer != nullptr ? layer->qaWorkshopSpentFunds() : 0;
+}
+
+TGD_SYSTEM_DEMO_KEEPALIVE std::uint32_t
+tgd_system_demo_qa_workshop_stock_flexible() {
+  const auto *layer = SystemDemoLayer::active();
+  return layer != nullptr ? layer->qaWorkshopStock(0U) : 0U;
+}
+
+TGD_SYSTEM_DEMO_KEEPALIVE std::uint32_t
+tgd_system_demo_qa_workshop_stock_salvage() {
+  const auto *layer = SystemDemoLayer::active();
+  return layer != nullptr ? layer->qaWorkshopStock(1U) : 0U;
+}
+
+TGD_SYSTEM_DEMO_KEEPALIVE std::uint32_t
+tgd_system_demo_qa_workshop_quality() {
+  const auto *layer = SystemDemoLayer::active();
+  return layer != nullptr ? layer->qaWorkshopQuality() : 0U;
+}
+
+TGD_SYSTEM_DEMO_KEEPALIVE int tgd_system_demo_qa_workshop_occupied() {
+  const auto *layer = SystemDemoLayer::active();
+  return layer != nullptr && layer->qaWorkshopOccupied() ? 1 : 0;
+}
+
+TGD_SYSTEM_DEMO_KEEPALIVE int tgd_system_demo_qa_order_fulfilled() {
+  const auto *layer = SystemDemoLayer::active();
+  return layer != nullptr && layer->qaOrderFulfilled() ? 1 : 0;
+}
+
+TGD_SYSTEM_DEMO_KEEPALIVE int tgd_system_demo_qa_shortcut_open() {
+  const auto *layer = SystemDemoLayer::active();
+  return layer != nullptr && layer->qaShortcutOpen() ? 1 : 0;
+}
+
 TGD_SYSTEM_DEMO_KEEPALIVE void tgd_system_demo_qa_operate() {
   auto *layer = SystemDemoLayer::active();
   if (layer != nullptr) {
     layer->qaOperate();
+  }
+}
+
+TGD_SYSTEM_DEMO_KEEPALIVE void tgd_system_demo_qa_deliver_order() {
+  auto *layer = SystemDemoLayer::active();
+  if (layer != nullptr) {
+    layer->qaDeliverOrder();
   }
 }
 

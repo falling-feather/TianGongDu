@@ -1,96 +1,69 @@
 # 天工渡 / TianGongDu
 
-《天工渡》是一款以“九州百工”为舞台、面向长期更新的横版动作角色扮演游戏。玩家作为年轻的“执灯渡人”，在市井、工事与祟局之间探索、交往、战斗并让失序重新归位。
+《天工渡》是一款浏览器首发、复用同一 C++ 核心扩展到 Windows 等平台的 2.5D 斜向全景动作与工艺经营角色扮演游戏。玩家作为年轻的“执灯渡人”，在东方工艺社会中学习技艺、经营工坊、探索、交往和战斗，让失序的器物、工序、责任与关系重新归位。
 
-主分支采用 **浏览器首发、C++ 核心、多端复用** 的技术路线：C++20 游戏核心由 Emscripten 编译为 WebAssembly，Axmol 2.11.x LTS 负责 2D 渲染、输入、音频与跨平台宿主；网页以 Canvas 承载游戏画面，以 DOM 承载 HUD、菜单和可访问性。Windows/Android/iOS 复用同一核心，按里程碑逐端验证，而不是维护互不兼容的多套游戏。
+长期产品仍由三条同等重要的主线组成：亲手体验经过研究审阅的非遗技艺，经营工坊与地区生产网络，以及在探索和战斗中处理失序并让地区归位。《天工渡》不是纯战斗游戏，也不是把传统技艺包装成图鉴、一键合成或等待计时的轻量经营游戏。
 
-当前工作区是 **2.2 开发对接版设计基础**，不冒充已经完成的正式 WASM 游戏。F1 的硬门是先做出“雨夜试伞”网页纵切：约 27 分钟到归位结算，30 分钟覆盖返回、保存、刷新与离线重开；验证 Axmol 当前仍标记为 Preview 的 WebAssembly 路径后再扩大生产。
+## 当前状态
 
-## 当前成果
+项目处于 **Development Freeze / 设计定型前暂停**。稳定产品版本是 `Demo 0.8.5`；本轮不继续制作内容、玩法或资产，也不把隔离分支中的战斗候选提前计入稳定版本。暂停的直接原因不是工程无法运行，而是原型与技术验证已经走在产品定义之前：核心循环、世界架构和长期技术取舍需要先由产品决策者与主开发重新定型，再决定哪些原型保留、重做或退出关键路径。
 
-- 固定 00–09 共 10 份顶层文档，以及隶属于 01 的 10–19 开发者二级手册。
-- 设计 1.0 的 3 个地区、18 个大型子地区、14 个 Boss、24 个核心 NPC、2 套战斗系统和 2 条武器体系。
-- 建立可机器校验的 1.0 内容目录、9 类模板注册表（含独立精英机制战）和 C++ Web 技术基线。
-- 确立 C++ Contracts / Runtime / Gameplay / Presentation / Platform 分层，玩法状态不归渲染树或 JavaScript 所有。
-- 设计 IndexedDB 本地存档、Service Worker/CDN 内容缓存，以及可选的跨设备云同步协议。
-- 旧版 Web 原型完整保存在 [`codex/archive-legacy-web-v1`](https://github.com/falling-feather/TianGongDu/tree/codex/archive-legacy-web-v1)，含 V1.1.0 可玩闭环和 52 项自动化测试。
+| 项目 | 当前结论 |
+| --- | --- |
+| 稳定集成内容 | `Demo 0.8.5` 已形成真实 Web 技术闭环：移动、有限库存购买、工位占用、伞作两步操作、雨试/返工、品质/成本选择、订单交付、路线后果、机关、两波/两目标战斗、死亡重试与 terminal |
+| 编辑器 | Workbench 可 CRUD 六类场地对象，编辑 Actor Gameplay binding，并 update-only 修改已有 Wave/Objective、Craft、Workshop 与 Order；可保存、导出、Launch 和 Safe Reload 同一 Web Host |
+| 未完成内容 | 完整战斗手感与精英、沈砚/骆青禾/阿棠三名 NPC、完整聚合恢复、Windows 可见 Host、三浏览器候选、正式表现与非实现者 20–30 分钟试玩 |
+| 隔离在制品 | `codex/demo/086-combat-feel` 的 `d94d97f8fc27feb186ae1535a49006d535bbff68` 仅是未集成检查点，不是 `Demo 0.8.6` |
+| 当前开发动作 | 全部产品写入暂停；只保留历史、回归门、分支和恢复入口，不在后台继续开发 |
 
-## 从哪里开始
+旧规划曾按既定 `0.8.x` 范围估算工程底座约 66%–71%、玩家可见系统 Demo 约 60%–65%。这两个数字现在只作为 2026-08-26 的原型快照，不再代表完整游戏完成度；在游戏设计、世界架构和技术栈重新定型前，不再给出新的总项目百分比。
 
-1. 项目负责人先读 [`docs/00-项目总纲.md`](docs/00-项目总纲.md) 与 [`docs/02-版本规划与验收.md`](docs/02-版本规划与验收.md)。
-2. 开发者从 [`docs/01-开发者文档.md`](docs/01-开发者文档.md) 进入 10–19 二级手册。
-3. 技术路线以 [`docs/01-developer/10-技术架构与依赖规则.md`](docs/01-developer/10-技术架构与依赖规则.md) 和 [`content/design/technical-baseline.json`](content/design/technical-baseline.json) 为准。
-4. 内容/叙事/关卡团队依次读 [`docs/04-游戏设计总纲.md`](docs/04-游戏设计总纲.md)、[`docs/05-世界与叙事圣经.md`](docs/05-世界与叙事圣经.md)、[`docs/06-内容生产规范.md`](docs/06-内容生产规范.md)、[`docs/07-1.0地区与内容蓝图.md`](docs/07-1.0地区与内容蓝图.md) 与 [`docs/08-UI-UX与可访问性.md`](docs/08-UI-UX与可访问性.md)。
+## 已证明的原型能力
 
-按开发、美术、叙事、关卡、UI、音频、QA/发布分别交接时，直接使用 00 §1.1 的团队阅读路线；开发能力编号见 01 §15，当前 F1 可复制派工卡见 02 §4.3–4.4。05 是世界/叙事文档，技术栈入口是 01 与 10–19。
+当前仓库已经证明“同一作者源与同一 Gameplay 真相可以穿过编辑器、内容包、Web Host 和自动回归”，也证明工艺、经营、路线与战斗能够在一个小场景中发生因果关系。唯一作者源是 [`content/design/system-demo.sandbox.json`](content/design/system-demo.sandbox.json)，稳定内容包格式为 1.4；Workbench、C++ compiler/provider、Gameplay Session 和 `apps/system-demo-web` 共同消费这条链。
 
-开发组开工前先统一四个结论：
+这些成果的定位是可复用技术与交互原型，不是已经定型的正式游戏设计。F1 的 7 Beat、两路线、四阶段 Boss、双结算、Profile 和固定回放继续作为历史回归基线；系统型 Demo 0.8.1–0.8.5 的详细完成事实、证据与边界已迁入 [`docs/03-发布历史.md`](docs/03-发布历史.md)，不再在规划文档中保留大段完成任务卡。
 
-- **F1 不是缩小版 1.0**：它只验证一条端到端生产与运行链，原型存档使用独立命名空间，不直接迁入正式档。
-- **C++ GameCore 是玩法真相**：Axmol、DOM、JavaScript、IndexedDB 和云服务都通过契约观察或提交意图，不能各自保存第二份战斗/任务规则。
-- **M1 才是首个五小时地区成品**：F1 未通过兼容、存档、加载、性能和工具门之前，不批量生产最终资产。
-- **云同步是可选增强**：访客、离线和本地存档先成立；账号、Pthreads、Windows 与移动端都按证据逐门开放。
+## 下一阶段
 
-开发对接的角色所有权、开工清单和 DoR/DoD 见 [`docs/01-开发者文档.md`](docs/01-开发者文档.md)；F1 唯一纵切、30/60/90 天成果门和风险台账见 [`docs/02-版本规划与验收.md`](docs/02-版本规划与验收.md)。
+下一阶段不是直接续做 `Demo 0.8.6`，而是依次完成三类定型讨论：先明确玩家体验、核心循环、失败与成长以及三条主线怎样在 20–30 分钟和长期产品中相互驱动；再明确世界的历史层级、地区结构、工艺与“归位”的关系以及正史边界；最后复核浏览器首发、C++/Axmol、Web/Windows 同核、内容包、编辑器、存档与未来服务边界是否仍是最合适的技术组合。三项决定形成后，再重排 `Demo 0.8.x`，不会默认沿旧序号继续堆功能。
 
-## 当前成熟度
+当前暂停快照、分支状态、待决任务和恢复顺序以 [`docs/02-版本规划与验收.md`](docs/02-版本规划与验收.md) 为唯一权威入口。
 
-| 领域 | 状态 | 已有 | 仍没有 |
-| --- | --- | --- | --- |
-| 产品/世界/1.0 范围 | Scope Approved | 三地区、战斗/武器、14 Boss、24 NPC、内容预算 | 全量任务/POI 实例和最终平衡 |
-| 技术架构 | Accepted Baseline | C++/WASM/Axmol 分层、存档/同步/部署合同 | 已锁工具链和可编译 CMake 工程 |
-| 可玩纵切 | Scope Approved | F1“雨夜试伞”唯一流程与验收 | 新主线 WASM 纵切代码/资产 |
-| 内容工具 | Scope Approved | 9 类模板注册表与工作台范围 | 可用 Workbench/ContentCore/baker |
-| 本地存档/云同步 | Accepted Baseline | IndexedDB 主路径、Operation/冲突模型 | 实际 DB migration、API、DDL、OIDC |
-| 发布运维 | Accepted Baseline | 渠道、缓存、回滚、证据与灾备门 | CI/CD、正式 origin/CDN/监控 |
+## 文档入口
 
-`Scope Approved` 或 `Accepted Baseline` 都不等于 `Implemented`。状态词统一定义在 [`docs/09-术语与索引.md`](docs/09-术语与索引.md)。
+| 入口 | 权威职责 |
+| --- | --- |
+| [`docs/00-项目总纲.md`](docs/00-项目总纲.md) | 产品承诺、长期支柱、宏观边界与文档导航 |
+| [`docs/01-开发者文档.md`](docs/01-开发者文档.md) | 当前稳定实现、目录、接口、运行、测试与维护限制 |
+| [`docs/02-版本规划与验收.md`](docs/02-版本规划与验收.md) | 当前暂停快照、未完成任务、分支租约、未来定型议程与恢复门 |
+| [`docs/03-发布历史.md`](docs/03-发布历史.md) | 已发生提交、Demo 0.8.0–0.8.5 阶段结果、证据与历史边界 |
+| [`docs/04-游戏设计总纲.md`](docs/04-游戏设计总纲.md) | 现有游戏设计基准；下一阶段需要重新审阅并定型 |
+| [`docs/05-世界与叙事圣经.md`](docs/05-世界与叙事圣经.md) | 现有世界、正史、语言和研究边界；下一阶段需要重新审阅并定型 |
+| [`docs/06-内容生产规范.md`](docs/06-内容生产规范.md) | NPC、敌人、任务、地区、武器与对话的生产模板 |
+| [`docs/07-1.0地区与内容蓝图.md`](docs/07-1.0地区与内容蓝图.md) | 江南、龙泉、徽州及角色/Boss 的现有内容蓝图 |
+| [`docs/09-术语与索引.md`](docs/09-术语与索引.md) | 术语、机器入口、研究登记与待决问题 |
 
-## 目标仓库布局
+`docs/` 是唯一正式文档根。`docs/handovers/` 只保存历史交接材料；恢复时必须回到 00、01、02 和 Git 事实，不从旧对话或旧 handover 推断当前状态。
+
+## 稳定基线验证
+
+2026-08-26 的收束复核重新通过了稳定 `Demo 0.8.5` 的根 Node `75/75`、Workbench `64 pass + 2 expected environment skips`、设计/架构/Web ABI/工具链门、MSVC Debug 全量构建与 CTest `32/32`、Web Release 构建，以及真实 Edge `151.0.4129.101` 的完整经营—路线—战斗路线。它证明当前稳定节点可恢复，但不替代 Chrome/Firefox、Windows 可见窗口、非实现者试玩或正式发布验收。
+
+常用自动入口如下；完整环境、命令、期望结果和故障处理见 [`docs/01-developer/16-测试CI与发布门禁.md`](docs/01-developer/16-测试CI与发布门禁.md)。
 
 ```text
-apps/
-  web-shell/             HTML/DOM、PWA、Service Worker、JS↔WASM 桥
-  native-shell/          Windows/Android/iOS 平台入口与商店适配
-  content-workbench/     面向设计者的网页内容编辑器
-src/
-  contracts/             稳定 ID、命令、事件、存档与同步契约
-  runtime/               时钟、实体、世界、内容包、存档与流式
-  gameplay/              战斗、AI、任务、关系、工艺
-  presentation-axmol/    Axmol 场景、动画、音频和输入适配
-  platform/              Web/Native 文件、网络、账号与生命周期适配
-content/                 Schema、模板、源内容和版本化目录
-assets_src/              DCC 源资产，Git LFS 管理
-assets_runtime/          图集、音频、字体和可发布内容包
-server/sync-service/     C++20/Drogon 云存档同步服务
-tools/                   内容编译、构建、发布与迁移工具
-tests/                   原生、WASM、浏览器、同步与内容测试
-docs/                    00–09；01-developer/ 下为 10–19 与 ADR
-```
-
-## 设计校验
-
-当前 Foundation 校验无需第三方依赖，只需 Node.js 20 或更高版本：
-
-```bash
 npm test
 npm run validate:design
+npm run lint:architecture
+npm run check:web-abi
+npm run test:system-demo-web
+npm run test:system-demo-workbench
 ```
-
-它会检查文档层级/元信息/链接、稳定 ID、21 章与分钟、18 支线与 24 NPC 参与关系、25 敌人家族、F1 纵切引用、9 类模板、Action/Context/默认输入映射、14 组开发对接合同，以及 C++20、Axmol、Emscripten、WebGL2、DOM UI、IndexedDB 主路径和云同步基线。
-
-当前脚本执行项目语义守卫并解析 Schema；完整 JSON Schema Draft 2020-12 validator、pack/save/API 机器合同与负向 fixture 属于 G1/G3 工具交付，限制见 [`docs/01-developer/16-测试CI与发布门禁.md`](docs/01-developer/16-测试CI与发布门禁.md)。
 
 ## 技术基线
 
-- 游戏核心：C++20，固定 60 Hz 模拟，渲染器无权修改持久玩法状态。
-- 2D 宿主：Axmol 2.11.4 / 2.11.x LTS；WebAssembly 支持必须先通过 F1 硬门。
-- 网页编译：Emscripten SDK，G1 宿主门结束前锁定精确版本；输出 wasm32 + JavaScript loader。
-- 网页渲染：WebGL2；首发提供必选单线程构建，多线程构建仅在 COOP/COEP 条件满足时渐进启用。
-- 网页外壳：Canvas 游戏画面 + DOM HUD/菜单 + PWA/Service Worker。
-- 本地存档：Profile 只经直接异步桥事务写入 IndexedDB；IDBFS 仅兼容非 Profile 文件，不构成第二份真相；浏览器存储不是唯一备份。
-- 云同步：可选、访客可玩、本地优先；修订快照 + 幂等操作日志，C++20/Drogon + PostgreSQL 作为参考实现。
-- 多端：Web 桌面浏览器为 1.0 必选；Windows 原生在网页纵切后进入 Beta，移动端分别通过触控和平台审核门。
-- 内容交付：带哈希的 `.tgdpack`，HTTPS/CDN 分发，Service Worker 与 HTTP Cache 分层缓存。
-
-技术版本不是永久信仰。Axmol Web 路径、线程、内存、加载和移动端适配必须用真实构建验证；失败时替换 Platform/Presentation 宿主，不推翻 C++ Gameplay 与内容契约。
+- C++20 Gameplay/Runtime 是玩法真相，固定 60 Hz 模拟、量化快照和命令回放继续作为确定性边界。
+- Axmol 2.11.x LTS 承担 2D/2.5D 与平台宿主，Web 由 Emscripten 编译为 wasm32；这套选择将在技术定型阶段复核，但在新 ADR 前不得静默替换。
+- Canvas 承载游戏画面，DOM 只承担文本密集 UI、菜单和辅助功能；Presentation、JavaScript、编辑器和存储层不得保存第二份战斗、任务、经营或奖励真相。
+- Windows 与 Web 的长期目标仍是消费同一内容包、同一 Gameplay 规则和同一稳定 ID；Stable ID、Schema、包版本、迁移、失败保持和回滚必须可自动验证。

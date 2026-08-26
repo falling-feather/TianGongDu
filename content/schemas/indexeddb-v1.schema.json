@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tiangongdu.invalid/schemas/indexeddb-v1.schema.json",
+  "title": "TianGongDu IndexedDB v1 contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "schemaVersion", "database", "stores"],
+  "properties": {
+    "$schema": { "const": "../schemas/indexeddb-v1.schema.json" },
+    "schemaVersion": { "const": "1.0.0" },
+    "database": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "channel"],
+      "properties": {
+        "name": { "const": "tiangongdu.prototype_f1.internal.profile" },
+        "version": { "const": 1 },
+        "channel": { "const": "prototype_f1" }
+      }
+    },
+    "stores": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": { "$ref": "#/$defs/store" }
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$"
+    },
+    "keyPath": {
+      "oneOf": [
+        { "$ref": "#/$defs/identifier" },
+        {
+          "type": "array",
+          "minItems": 2,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/identifier" }
+        }
+      ]
+    },
+    "index": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "keyPath", "unique"],
+      "properties": {
+        "name": { "$ref": "#/$defs/identifier" },
+        "keyPath": { "$ref": "#/$defs/keyPath" },
+        "unique": { "type": "boolean" }
+      }
+    },
+    "store": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["recordKind", "name", "keyPath", "indexes"],
+      "properties": {
+        "recordKind": { "type": "integer", "minimum": 1, "maximum": 6 },
+        "name": { "$ref": "#/$defs/identifier" },
+        "keyPath": { "$ref": "#/$defs/keyPath" },
+        "indexes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/index" }
+        }
+      }
+    }
+  }
+}

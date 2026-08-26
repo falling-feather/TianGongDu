@@ -10,7 +10,7 @@
     "schemaVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
     "templates": {
       "type": "array",
-      "minItems": 8,
+      "minItems": 10,
       "items": {
         "type": "object",
         "additionalProperties": false,

@@ -1,0 +1,169 @@
+{
+  "schemaVersion": "system-sandbox-blockout-metadata-1.0",
+  "taskId": "ART-002",
+  "authoringBase": "99a4093c51b99bc8067e10364f591011efe328ab",
+  "authoritativeRoot": "27fb87c8af74b48e0bfb8f4ef6da2f8e96d6560e",
+  "stableAssetId": "asset.system_demo.enemy.flanker",
+  "sandboxAssetKind": "actor",
+  "displayName": "系统 Demo 侧袭职责敌人灰盒",
+  "owner": "ART",
+  "package": "system_demo.presentation.blockouts",
+  "status": "Blockout",
+  "integrationStatus": "not-integrated",
+  "fallbackIdentity": {
+    "id": "fallback.system_demo.enemy.flanker",
+    "exportName": "enemy-flanker",
+    "artifactPath": "fallbacks/enemy-flanker.svg",
+    "independentPerStableAsset": true,
+    "sha256": "593be21c27a5fdca5616e37b61e9d3d971adc6847587e45159836f1668fd3eb1",
+    "bytes": 1522
+  },
+  "source": {
+    "mode": "new-source",
+    "file": "assets/enemy-flanker/source.svg",
+    "kind": "deterministic-project-svg",
+    "generationMethod": "project-local deterministic vector generation with no external image input",
+    "externalInputs": [],
+    "aiAssisted": true,
+    "sha256": "8f30b89ea930235fe86fb9df857dc505122ba1b79c84c838fc80fba23507e506",
+    "bytes": 3636
+  },
+  "import": {
+    "status": "planned",
+    "artifact": "not-produced",
+    "validation": "not-validated",
+    "unit": "millimeter",
+    "axes": {
+      "right": "+x",
+      "forward": "+y",
+      "up": "+height"
+    },
+    "facingConvention": "visual forward is +y; authored facing is consumed from the external sandbox definition",
+    "canonicalRoot": "root_visual",
+    "anchors": [
+      {
+        "name": "projected_foot_center",
+        "localMm": {
+          "x": 0,
+          "y": 0,
+          "height": 0
+        },
+        "role": "visual ground projection; never a gameplay origin"
+      },
+      {
+        "name": "body_root_h700",
+        "localMm": {
+          "x": 0,
+          "y": 0,
+          "height": 700
+        },
+        "role": "high visual body root"
+      },
+      {
+        "name": "side_contact_visual",
+        "localMm": {
+          "x": 680,
+          "y": 420,
+          "height": 940
+        },
+        "role": "presentation-only side contact marker"
+      },
+      {
+        "name": "hurt_center_visual",
+        "localMm": {
+          "x": 0,
+          "y": 0,
+          "height": 1180
+        },
+        "role": "presentation-only feedback center"
+      }
+    ],
+    "visualBoundsMm": {
+      "width": 1880,
+      "depth": 700,
+      "height": 1940,
+      "bodyHeight": 1240,
+      "bodyRootHeight": 700
+    },
+    "nominalPresentationExtentMm": null,
+    "trimPolicy": "preserve root_visual, every named anchor, silhouette breaks, and fallback export identity"
+  },
+  "license": {
+    "status": "review-recorded-not-release-cleared",
+    "rightsHolder": "TianGongDu project",
+    "externalAssetLicenses": [],
+    "aiGenerationDisclosure": "Codex-assisted deterministic SVG using project-owned visual grammar; no external image input",
+    "permittedUse": "internal system Demo evaluation and production planning",
+    "releaseGate": "rights-holder sign-off, similarity review, runtime artifact report, and package policy confirmation"
+  },
+  "runtime": {
+    "status": "planned",
+    "artifact": "not-produced",
+    "validation": "not-validated",
+    "integrationStatus": "not-integrated",
+    "authorityBoundary": "Presentation-only output; all gameplay state and spatial truth remain external",
+    "stableAssetIdChangesByPlatform": false,
+    "platformVariants": {
+      "web": {
+        "variantState": "not-built",
+        "integrationState": "not-integrated",
+        "carrierPlan": "small opaque or alpha-clip presentation artifact behind a future resolver"
+      },
+      "windows": {
+        "variantState": "not-built",
+        "integrationState": "not-integrated",
+        "carrierPlan": "small opaque or alpha-clip presentation artifact behind a future resolver"
+      }
+    },
+    "fallbackWhenMissing": "fallback.system_demo.enemy.flanker"
+  },
+  "preview": {
+    "status": "planned",
+    "runtimeCapture": "not-produced",
+    "validation": "not-validated",
+    "artifactType": "review-board-only",
+    "reviewBoards": [
+      "previews/readability-1280x720.svg",
+      "previews/readability-1920x1080.svg",
+      "previews/readability-1230x692.svg"
+    ],
+    "actorThumbnailHeightPx": 128,
+    "requiredChecks": [
+      "grayscale silhouette",
+      "anchor marker",
+      "non-color distinction",
+      "no platform integration claim"
+    ]
+  },
+  "budget": {
+    "runtimeTargetsAreEstimates": true,
+    "measuredSourceBytes": 3636,
+    "measuredFallbackBytes": 1522,
+    "commitItemLimitBytes": 32768,
+    "packageCommitLimitBytes": 1500000,
+    "targetTransportKiB": 620,
+    "targetGpuTextureMiB": 4,
+    "targetDrawCalls": 2,
+    "peakTransparentCoveragePercent": 4
+  },
+  "states": [
+    "neutral",
+    "side-windup",
+    "recovery"
+  ],
+  "accessibility": {
+    "colorOnly": false,
+    "audioOnly": false,
+    "shapeToken": "asymmetric-high-zigzag-shadow",
+    "nonColorChannels": [
+      "high wide zigzag",
+      "single long asymmetric wing",
+      "ground projection tightens before lateral motion"
+    ]
+  },
+  "dependencies": [
+    "external actor pose",
+    "external hostile role assignment",
+    "future presentation resolver"
+  ]
+}

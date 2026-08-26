@@ -1,0 +1,1922 @@
+{
+  "schemaVersion": "system-sandbox-runtime-import-1.0",
+  "taskId": "ART-003",
+  "artSourceCommit": "b3dfd9e20f6651fc60abc22ef417878b5a9d70da",
+  "rootIntegrationCommit": "24eb25df1b67ea210e09473e319dff6cd99580c1",
+  "authoritativeRoot": "cb7d5ac347e6581d187db1bfb2ff05e8997b97fd",
+  "package": "system_demo.presentation.blockouts",
+  "status": "Blockout",
+  "integrationStatus": "not-integrated",
+  "previewReady": false,
+  "releaseAllowed": false,
+  "allowedChannel": "internal-preview",
+  "license": "review-recorded-not-release-cleared",
+  "runtimeBuildStatus": "not-produced",
+  "platformPreviewStatus": {
+    "windows": "not-validated",
+    "web": "not-validated"
+  },
+  "sourcePackageRoot": "assets_src/system-sandbox-blockouts",
+  "generatedArtifactRoot": "build/generated-assets/system-demo-blockouts",
+  "generatedArtifactsTrackedByGit": false,
+  "lookupContract": {
+    "key": [
+      "stableAssetId",
+      "sandboxAssetKind"
+    ],
+    "verifyStableContentKey": true,
+    "pathInferenceAllowed": false,
+    "unknownId": "fail-closed",
+    "wrongKind": "fail-closed",
+    "missingArtifact": "fail-closed",
+    "partialTableExposure": false,
+    "standardFallback": "same-entry-explicit-low-only"
+  },
+  "generatorIdentity": {
+    "generatorVersion": "1.0.0",
+    "generatorSourceSha256": "bddc379d6097299a287a3beb9ded557b74cc25441bc3f508ec418cfc9221c44f",
+    "nodeVersion": "20.18.0",
+    "playwrightVersion": "1.61.1",
+    "pngjsVersion": "7.0.0",
+    "browserName": "chromium",
+    "browserRevision": "1223",
+    "browserVersion": "148.0.7778.96",
+    "browserExecutableSha256": "290fa7018fda22c52ada5eddb0113baf3ebc41fd0fde6085eddb19793606c635",
+    "deviceScaleFactor": 1,
+    "rasterFlags": [
+      "--disable-gpu",
+      "--disable-lcd-text",
+      "--disable-font-subpixel-positioning",
+      "--force-color-profile=srgb",
+      "--hide-scrollbars"
+    ],
+    "canonicalPng": "pngjs-rgba8-deflate9-filter4-srgb-intent0"
+  },
+  "limits": {
+    "entries": 12,
+    "artifacts": 24,
+    "maximumUtf8StringBytes": 256,
+    "standardTransferBytes": 524288,
+    "lowTransferBytes": 262144,
+    "manifestBytes": 65536,
+    "standardDecodedBytes": 3145728,
+    "lowDecodedBytes": 786432
+  },
+  "measured": {
+    "entries": 12,
+    "artifacts": 24,
+    "standardTransferBytes": 111179,
+    "lowTransferBytes": 53361,
+    "standardDecodedBytes": 3145728,
+    "lowDecodedBytes": 786432
+  },
+  "entries": [
+    {
+      "stableAssetId": "asset.system_demo.player",
+      "stableContentKeyHex": "a1262e90a3b8d20b",
+      "sandboxAssetKind": "player",
+      "slug": "player",
+      "owner": "ART",
+      "package": "system_demo.presentation.blockouts",
+      "status": "Blockout",
+      "integrationStatus": "not-integrated",
+      "previewReady": false,
+      "releaseAllowed": false,
+      "allowedChannel": "internal-preview",
+      "license": "review-recorded-not-release-cleared",
+      "runtimeBuildStatus": "not-produced",
+      "platformPreviewStatus": {
+        "windows": "not-validated",
+        "web": "not-validated"
+      },
+      "sourceMode": "project-grammar-reuse",
+      "reuseLineage": "project-owned upright lantern-bearer grammar; simplified anew for this package",
+      "source": {
+        "path": "fallbacks/player.svg",
+        "sha256": "0788b596a5a03d3ebaa071af74070ac60d577c647ee27c3b369eece2fcce0471",
+        "bytes": 1473,
+        "groupSelector": "g[data-stable-asset-id=\"asset.system_demo.player\"]",
+        "groupSha256": "ab194a35dda9675bbfa81fed1cd18f013086ad352e4bce7d6c78179f83230a42"
+      },
+      "rootAnchorUv": {
+        "x": 0.5,
+        "y": 0.125
+      },
+      "axes": {
+        "right": "+x",
+        "forward": "+y",
+        "up": "+height"
+      },
+      "unit": "millimeter",
+      "facingConvention": "visual forward is +y; authored facing is consumed from the external sandbox definition",
+      "visualBoundsMm": {
+        "width": 1115,
+        "depth": 650,
+        "height": 1800
+      },
+      "nominalPresentationExtentMm": null,
+      "anchors": [
+        {
+          "name": "foot_center",
+          "localMm": {
+            "x": 0,
+            "y": 0,
+            "height": 0
+          },
+          "role": "canonical visual foot point"
+        },
+        {
+          "name": "weapon_contact_visual",
+          "localMm": {
+            "x": 420,
+            "y": 220,
+            "height": 980
+          },
+          "role": "presentation-only contact marker"
+        },
+        {
+          "name": "hurt_center_visual",
+          "localMm": {
+            "x": 0,
+            "y": 0,
+            "height": 980
+          },
+          "role": "presentation-only feedback center"
+        }
+      ],
+      "artifacts": {
+        "standard": {
+          "artifactId": "artifact.system_demo.player.standard",
+          "path": "standard/player.png",
+          "format": "PNG",
+          "pixelFormat": "RGBA8",
+          "colorSpace": "sRGB",
+          "alphaMode": "straight-source-premultiply-on-upload",
+          "filter": "linear",
+          "wrap": "clamp",
+          "mipmaps": false,
+          "width": 256,
+          "height": 256,
+          "rootAnchorPx": {
+            "x": 128,
+            "y": 32
+          },
+          "sha256": "446aadcb55d6fd091507a77e18e86a64927ece08c7b4935c07a9063f44908d92",
+          "fileBytes": 9619,
+          "decodedBytes": 262144,
+          "transparentPixels": 53266,
+          "visiblePixels": 12270,
+          "grayscaleSilhouetteSha256": "72f2dbaffd680f1960c79ce6d2b7c6d3e17074239685fb016e73f3effffe4b3b"
+        },
+        "low": {
+          "artifactId": "artifact.system_demo.player.low",
+          "path": "low/player.png",
+          "format": "PNG",
+          "pixelFormat": "RGBA8",
+          "colorSpace": "sRGB",
+          "alphaMode": "straight-source-premultiply-on-upload",
+          "filter": "linear",
+          "wrap": "clamp",
+          "mipmaps": false,
+          "width": 128,
+          "height": 128,
+          "rootAnchorPx": {
+            "x": 64,
+            "y": 16
+          },
+          "sha256": "ed9050660f91e80cb6a7c8efd003a490589deba80c7c59e7cf016f2a8d8cf4a7",
+          "fileBytes": 4568,
+          "decodedBytes": 65536,
+          "transparentPixels": 13240,
+          "visiblePixels": 3144,
+          "grayscaleSilhouetteSha256": "1d25db125f836f2ccb9a20c7314fade5cd3ab109a101c3932a88746c112dd11c"
+        }
+      },
+      "platformQuality": {
+        "windows": {
+          "standard": "artifact.system_demo.player.standard",
+          "low": "artifact.system_demo.player.low"
+        },
+        "web": {
+          "standard": "artifact.system_demo.player.standard",
+          "low": "artifact.system_demo.player.low"
+        }
+      },
+      "accessibility": {
+        "colorOnly": false,
+        "audioOnly": false,
+        "shapeToken": "upright-lantern-diagonal",
+        "nonColorChannels": [
+          "upright narrow trapezoid",
+          "lamp-pin dot",
+          "long folded-umbrella diagonal"
+        ]
+      },
+      "budget": {
+        "standardMaxFileBytes": 49152,
+        "lowMaxFileBytes": 24576,
+        "targetTransportKiB": 850,
+        "targetGpuTextureMiB": 4.5,
+        "targetDrawCalls": 1,
+        "peakTransparentCoveragePercent": 5,
+        "peakLayerCount": 1
+      },
+      "dependencies": [
+        "external player pose",
+        "external stance snapshot",
+        "future presentation resolver"
+      ]
+    },
+    {
+      "stableAssetId": "asset.system_demo.enemy.pressure",
+      "stableContentKeyHex": "81641c415502e1cb",
+      "sandboxAssetKind": "actor",
+      "slug": "enemy-pressure",
+      "owner": "ART",
+      "package": "system_demo.presentation.blockouts",
+      "status": "Blockout",
+      "integrationStatus": "not-integrated",
+      "previewReady": false,
+      "releaseAllowed": false,
+      "allowedChannel": "internal-preview",
+      "license": "review-recorded-not-release-cleared",
+      "runtimeBuildStatus": "not-produced",
+      "platformPreviewStatus": {
+        "windows": "not-validated",
+        "web": "not-validated"
+      },
+      "sourceMode": "project-grammar-reuse",
+      "reuseLineage": "project-owned broken-canopy pressure grammar; simplified anew for this package",
+      "source": {
+        "path": "fallbacks/enemy-pressure.svg",
+        "sha256": "2b17a19d8637ed43b2ebd9c56488387d3a6f4ff176a39ecc0132d60e5b6024de",
+        "bytes": 1439,
+        "groupSelector": "g[data-stable-asset-id=\"asset.system_demo.enemy.pressure\"]",
+        "groupSha256": "96dfc5c3a26202b46e8d919b7692ca086faa34f151737c093ebf7bce57f95905"
+      },
+      "rootAnchorUv": {
+        "x": 0.5,
+        "y": 0.125
+      },
+      "axes": {
+        "right": "+x",
+        "forward": "+y",
+        "up": "+height"
+      },
+      "unit": "millimeter",
+      "facingConvention": "visual forward is +y; authored facing is consumed from the external sandbox definition",
+      "visualBoundsMm": {
+        "width": 1480,
+        "depth": 900,
+        "height": 1620
+      },
+      "nominalPresentationExtentMm": null,
+      "anchors": [
+        {
+          "name": "rib_hub_ground_center",
+          "localMm": {
+            "x": 0,
+            "y": 0,
+            "height": 0
+          },
+          "role": "canonical visual foot point"
+        },
+        {
+          "name": "forward_contact_visual",
+          "localMm": {
+            "x": 0,
+            "y": 620,
+            "height": 620
+          },
+          "role": "presentation-only forward contact marker"
+        },
+        {
+          "name": "hurt_center_visual",
+          "localMm": {
+            "x": 0,
+            "y": 0,
+            "height": 760
+          },
+          "role": "presentation-only feedback center"
+        }
+      ],
+      "artifacts": {
+        "standard": {
+          "artifactId": "artifact.system_demo.enemy-pressure.standard",
+          "path": "standard/enemy-pressure.png",
+          "format": "PNG",
+          "pixelFormat": "RGBA8",
+          "colorSpace": "sRGB",
+          "alphaMode": "straight-source-premultiply-on-upload",
+          "filter": "linear",
+          "wrap": "clamp",
+          "mipmaps": false,
+          "width": 256,
+          "height": 256,
+          "rootAnchorPx": {
+            "x": 128,
+            "y": 32
+          },
+          "sha256": "daee56fb1ec20751619233f60851b049a281c83b74ebdba42f64dfaf48955c8d",
+          "fileBytes": 12148,
+          "decodedBytes": 262144,
+          "transparentPixels": 51130,
+          "visiblePixels": 14406,
+          "grayscaleSilhouetteSha256": "d75de9ed5265e52f5b8b0fce96446a9fef591c5ca8219c82c7437bb9c321474d"
+        },
+        "low": {
+          "artifactId": "artifact.system_demo.enemy-pressure.low",
+          "path": "low/enemy-pressure.png",
+          "format": "PNG",
+          "pixelFormat": "RGBA8",
+          "colorSpace": "sRGB",
+          "alphaMode": "straight-source-premultiply-on-upload",
+          "filter": "linear",
+          "wrap": "clamp",
+          "mipmaps": false,
+          "width": 128,
+          "height": 128,
+          "rootAnchorPx": {
+            "x": 64,
+            "y": 16
+          },
+          "sha256": "973fe98d406c096fab7b67033133da16d3598d3a6b40dcff6311d820cdb86b69",
+          "fileBytes": 5981,
+          "decodedBytes": 65536,
+          "transparentPixels": 12670,
+          "visiblePixels": 3714,
+          "grayscaleSilhouetteSha256": "188d657afad36d10a19137157213f017156eec148f9944ecc4ff12bb064c00e5"
+        }
+      },
+      "platformQuality": {
+        "windows": {
+          "standard": "artifact.system_demo.enemy-pressure.standard",
+          "low": "artifact.system_demo.enemy-pressure.low"
+        },
+        "web": {
+          "standard": "artifact.system_demo.enemy-pressure.standard",
+          "low": "artifact.system_demo.enemy-pressure.low"
+        }
+      },
+      "accessibility": {
+        "colorOnly": false,
+        "audioOnly": false,
+        "shapeToken": "broken-triangle-radial-ribs",
+        "nonColorChannels": [
+          "low broken triangle",
+          "radial rib feet",
+          "inward canopy compression"
+        ]
+      },
+      "budget": {
+        "standardMaxFileBytes": 49152,
+        "lowMaxFileBytes": 24576,
+        "targetTransportKiB": 620,
+        "targetGpuTextureMiB": 3.2,
+        "targetDrawCalls": 1,
+        "peakTransparentCoveragePercent": 4,
+        "peakLayerCount": 1
+      },
+      "dependencies": [
+        "external actor pose",
+        "external hostile role assignment",
+        "future presentation resolver"
+      ]
+    },
+    {
+      "stableAssetId": "asset.system_demo.enemy.flanker",
+      "stableContentKeyHex": "b83f76d5b7bd3ee5",
+      "sandboxAssetKind": "actor",
+      "slug": "enemy-flanker",
+      "owner": "ART",
+      "package": "system_demo.presentation.blockouts",
+      "status": "Blockout",
+      "integrationStatus": "not-integrated",
+      "previewReady": false,
+      "releaseAllowed": false,
+      "allowedChannel": "internal-preview",
+      "license": "review-recorded-not-release-cleared",
+      "runtimeBuildStatus": "not-produced",
+      "platformPreviewStatus": {
+        "windows": "not-validated",
+        "web": "not-validated"
+      },
+      "sourceMode": "new-source",
+      "reuseLineage": null,
+      "source": {
+        "path": "fallbacks/enemy-flanker.svg",
+        "sha256": "593be21c27a5fdca5616e37b61e9d3d971adc6847587e45159836f1668fd3eb1",
+        "bytes": 1522,
+        "groupSelector": "g[data-stable-asset-id=\"asset.system_demo.enemy.flanker\"]",
+        "groupSha256": "4dd28f17187dc5188dc7cc0d59084dce932e1fec7c66631d3504c3b45c99ed5d"
+      },
+      "rootAnchorUv": {
+        "x": 0.5,
+        "y": 0.125
+      },
+      "axes": {
+        "right": "+x",
+        "forward": "+y",
+        "up": "+height"
+      },
+      "unit": "millimeter",
+      "facingConvention": "visual forward is +y; authored facing is consumed from the external sandbox definition",
+      "visualBoundsMm": {
+        "width": 1880,
+        "depth": 700,
+        "height": 1940,
+        "bodyHeight": 1240,
+        "bodyRootHeight": 700
+      },
+      "nominalPresentationExtentMm": null,
+      "anchors": [
+        {
+          "name": "projected_foot_center",
+          "localMm": {
+            "x": 0,
+            "y": 0,
+            "height": 0
+          },
+          "role": "visual ground projection; never a gameplay origin"
+        },
+        {
+          "name": "body_root_h700",
+          "localMm": {
+            "x": 0,
+            "y": 0,
+            "height": 700
+          },
+          "role": "high visual body root"
+        },
+        {
+          "name": "side_contact_visual",
+          "localMm": {
+            "x": 680,
+            "y": 420,
+            "height": 940
+          },
+          "role": "presentation-only side contact marker"
+        },
+        {
+          "name": "hurt_center_visual",
+          "localMm": {
+            "x": 0,
+            "y": 0,
+            "height": 1180
+          },
+          "role": "presentation-only feedback center"
+        }
+      ],
+      "artifacts": {
+        "standard": {
+          "artifactId": "artifact.system_demo.enemy-flanker.standard",
+          "path": "standard/enemy-flanker.png",
+          "format": "PNG",
+          "pixelFormat": "RGBA8",
+          "colorSpace": "sRGB",
+          "alphaMode": "straight-source-premultiply-on-upload",
+          "filter": "linear",
+          "wrap": "clamp",
+          "mipmaps": false,
+          "width": 256,
+          "height": 256,
+          "rootAnchorPx": {
+            "x": 128,
+            "y": 32
+          },
+          "sha256": "a5013c63c87c3cc21ebce51c12315f115b5379dc14e087bb0c902b6127ae8bfd",
+          "fileBytes": 13519,
+          "decodedBytes": 262144,
+          "transparentPixels": 52237,
+          "visiblePixels": 13299,
+          "grayscaleSilhouetteSha256": "22daecd0a23800cd8126e75e798074736831c2f0cadb3b2489e1d1baa466a221"
+        },
+        "low": {
+          "artifactId": "artifact.system_demo.enemy-flanker.low",
+          "path": "low/enemy-flanker.png",
+          "format": "PNG",
+          "pixelFormat": "RGBA8",
+          "colorSpace": "sRGB",
+          "alphaMode": "straight-source-premultiply-on-upload",
+          "filter": "linear",
+          "wrap": "clamp",
+          "mipmaps": false,
+          "width": 128,
+          "height": 128,
+          "rootAnchorPx": {
+            "x": 64,
+            "y": 16
+          },
+          "sha256": "d11e658356874e1b5ae9e878e3a6d9310baa6e103c3f7bb6768850582547607a",
+          "fileBytes": 6385,
+          "decodedBytes": 65536,
+          "transparentPixels": 12915,
+          "visiblePixels": 3469,
+          "grayscaleSilhouetteSha256": "8e02ba569709c5e368747f454e017eb6691b9d372587186a79a89d2ea6aa61bb"
+        }
+      },
+      "platformQuality": {
+        "windows": {
+          "standard": "artifact.system_demo.enemy-flanker.standard",
+          "low": "artifact.system_demo.enemy-flanker.low"
+        },
+        "web": {
+          "standard": "artifact.system_demo.enemy-flanker.standard",
+          "low": "artifact.system_demo.enemy-flanker.low"
+        }
+      },
+      "accessibility": {
+        "colorOnly": false,
+        "audioOnly": false,
+        "shapeToken": "asymmetric-high-zigzag-shadow",
+        "nonColorChannels": [
+          "high wide zigzag",
+          "single long asymmetric wing",
+          "ground projection tightens before lateral motion"
+        ]
+      },
+      "budget": {
+        "standardMaxFileBytes": 49152,
+        "lowMaxFileBytes": 24576,
+        "targetTransportKiB": 620,
+        "targetGpuTextureMiB": 4,
+        "targetDrawCalls": 2,
+        "peakTransparentCoveragePercent": 4,
+        "peakLayerCount": 1
+      },
+      "dependencies": [
+        "external actor pose",
+        "external hostile role assignment",
+        "future presentation resolver"
+      ]
+    },
+    {
+      "stableAssetId": "asset.system_demo.enemy.elite",
+      "stableContentKeyHex": "d2ee5f5a5c84810b",
+      "sandboxAssetKind": "actor",
+      "slug": "enemy-elite",
+      "owner": "ART",
+      "package": "system_demo.presentation.blockouts",
+      "status": "Blockout",
+      "integrationStatus": "not-integrated",
+      "previewReady": false,
+      "releaseAllowed": false,
+      "allowedChannel": "internal-preview",
+      "license": "review-recorded-not-release-cleared",
+      "runtimeBuildStatus": "not-produced",
+      "platformPreviewStatus": {
+        "windows": "not-validated",
+        "web": "not-validated"
+      },
+      "sourceMode": "new-source",
+      "reuseLineage": null,
+      "source": {
+        "path": "fallbacks/enemy-elite.svg",
+        "sha256": "b15d25ee3a4d07d99e2f8c1bb0cb531b85fb573850149cecc97208fbd4cdef7a",
+        "bytes": 1697,
+        "groupSelector": "g[data-stable-asset-id=\"asset.system_demo.enemy.elite\"]",
+        "groupSha256": "8ed60daacca376e42f15cfdaf0a283fa15c22c54f356ad9555d7a841839cf5d7"
+      },
+      "rootAnchorUv": {
+        "x": 0.5,
+        "y": 0.125
+      },
+      "axes": {
+        "right": "+x",
+        "forward": "+y",
+        "up": "+height"
+      },
+      "unit": "millimeter",
+      "facingConvention": "visual forward is +y; authored facing is consumed from the external sandbox definition",
+      "visualBoundsMm": {
+        "width": 2100,
+        "depth": 1100,
+        "height": 2520
+      },
+      "nominalPresentationExtentMm": null,
+      "anchors": [
+        {
+          "name": "foot_center",
+          "localMm": {
+            "x": 0,
+            "y": 0,
+            "height": 0
+          },
+          "role": "canonical visual foot point"
+        },
+        {
+          "name": "counterweight_core",
+          "localMm": {
+            "x": 0,
+            "y": 0,
+            "height": 1320
+          },
+          "role": "central presentation core"
+        },
+        {
+          "name": "left_contact_visual",
+          "localMm": {
+            "x": -720,
+            "y": 280,
+            "height": 1220
+          },
+          "role": "presentation-only left contact marker"
+        },
+        {
+          "name": "right_contact_visual",
+          "localMm": {
+            "x": 720,
+            "y": 280,
+            "height": 1220
+          },
+          "role": "presentation-only right contact marker"
+        },
+        {
+          "name": "ground_warning_visual",
+          "localMm": {
+            "x": 0,
+            "y": 520,
+            "height": 0
+          },
+          "role": "presentation-only ground warning origin"
+        }
+      ],
+      "artifacts": {
+        "standard": {
+          "artifactId": "artifact.system_demo.enemy-elite.standard",
+          "path": "standard/enemy-elite.png",
+          "format": "PNG",
+          "pixelFormat": "RGBA8",
+          "colorSpace": "sRGB",
+          "alphaMode": "straight-source-premultiply-on-upload",
+          "filter": "linear",
+          "wrap": "clamp",
+          "mipmaps": false,
+          "width": 256,
+          "height": 256,
+          "rootAnchorPx": {
+            "x": 128,
+            "y": 32
+          },
+          "sha256": "b6236066682ce088d4e9303c98946784bbf09c577741b2526823c1868fb9dac5",
+          "fileBytes": 10732,
+          "decodedBytes": 262144,
+          "transparentPixels": 46023,
+          "visiblePixels": 19513,
+          "grayscaleSilhouetteSha256": "4e7f150fffcfb97f0f3643bb32ec66de4f573080030dcc0f5aaa1b2a5c74f0f1"
+        },
+        "low": {
+          "artifactId": "artifact.system_demo.enemy-elite.low",
+          "path": "low/enemy-elite.png",
+          "format": "PNG",
+          "pixelFormat": "RGBA8",
+          "colorSpace": "sRGB",
+          "alphaMode": "straight-source-premultiply-on-upload",
+          "filter": "linear",
+          "wrap": "clamp",
+          "mipmaps": false,
+          "width": 128,
+          "height": 128,
+          "rootAnchorPx": {
+            "x": 64,
+            "y": 16
+          },
+          "sha256": "f01037fb4ba675643201c9379ac329eb0ff59bdf3ec071e4a982bbbc13c5414f",
+          "fileBytes": 5321,
+          "decodedBytes": 65536,
+          "transparentPixels": 11370,
+          "visiblePixels": 5014,
+          "grayscaleSilhouetteSha256": "f5e69c2bda1ecb9b508d14b0c42cda2590db42aadec0a253efe85295b9db75db"
+        }
+      },
+      "platformQuality": {
+        "windows": {
+          "standard": "artifact.system_demo.enemy-elite.standard",
+          "low": "artifact.system_demo.enemy-elite.low"
+        },
+        "web": {
+          "standard": "artifact.system_demo.enemy-elite.standard",
+          "low": "artifact.system_demo.enemy-elite.low"
+        }
+      },
+      "accessibility": {
+        "colorOnly": false,
+        "audioOnly": false,
+        "shapeToken": "split-canopy-counterweight-triad",
+        "nonColorChannels": [
+          "split canopy crown",
+          "vertical counterweight column",
+          "three hanging weights and slower cadence"
+        ]
+      },
+      "budget": {
+        "standardMaxFileBytes": 49152,
+        "lowMaxFileBytes": 24576,
+        "targetTransportKiB": 900,
+        "targetGpuTextureMiB": 6,
+        "targetDrawCalls": 3,
+        "peakTransparentCoveragePercent": 5,
+        "peakLayerCount": 1
+      },
+      "dependencies": [
+        "external actor pose",
+        "external elite assignment",
+        "future presentation resolver"
+      ]
+    },
+    {
+      "stableAssetId": "asset.system_demo.obstacle.tension_gate",
+      "stableContentKeyHex": "4e518d380b07a4c3",
+      "sandboxAssetKind": "obstacle",
+      "slug": "obstacle-tension-gate",
+      "owner": "ART",
+      "package": "system_demo.presentation.blockouts",
+      "status": "Blockout",
+      "integrationStatus": "not-integrated",
+      "previewReady": false,
+      "releaseAllowed": false,
+      "allowedChannel": "internal-preview",
+      "license": "review-recorded-not-release-cleared",
+      "runtimeBuildStatus": "not-produced",
+      "platformPreviewStatus": {
+        "windows": "not-validated",
+        "web": "not-validated"
+      },
+      "sourceMode": "new-source",
+      "reuseLineage": null,
+      "source": {
+        "path": "fallbacks/obstacle-tension-gate.svg",
+        "sha256": "26eeee178390b6fde7e196eaf6248c278c50cd419aab051a31e45501b199f859",
+        "bytes": 1439,
+        "groupSelector": "g[data-stable-asset-id=\"asset.system_demo.obstacle.tension_gate\"]",
+        "groupSha256": "43e97985a39a7eb54efc6e849de283570b582665a1f08d4b6c2f98ac153c377f"
+      },
+      "rootAnchorUv": {
+        "x": 0.5,
+        "y": 0.125
+      },
+      "axes": {
+        "right": "+x",
+        "forward": "+y",
+        "up": "+height"
+      },
+      "unit": "millimeter",
+      "facingConvention": "visual forward is +y; authored facing is consumed from the external sandbox definition",
+      "visualBoundsMm": {
+        "width": 600,
+        "depth": 1000,
+        "height": 2500
+      },
+      "nominalPresentationExtentMm": null,
+      "anchors": [
+        {
+          "name": "base_center",
+          "localMm": {
+            "x": 0,
+            "y": 0,
+            "height": 0
+          },
+          "role": "visual base center only"
+        }
+      ],
+      "artifacts": {
+        "standard": {
+          "artifactId": "artifact.system_demo.obstacle-tension-gate.standard",
+          "path": "standard/obstacle-tension-gate.png",
+          "format": "PNG",
+          "pixelFormat": "RGBA8",
+          "colorSpace": "sRGB",
+          "alphaMode": "straight-source-premultiply-on-upload",
+          "filter": "linear",
+          "wrap": "clamp",
+          "mipmaps": false,
+          "width": 256,
+          "height": 256,
+          "rootAnchorPx": {
+            "x": 128,
+            "y": 32
+          },
+          "sha256": "9c3755e776e00e2e56500cb28d2ccc2e044019a0cfe4956328454f403e6cbcf0",
+          "fileBytes": 6043,
+          "decodedBytes": 262144,
+          "transparentPixels": 48678,
+          "visiblePixels": 16858,
+          "grayscaleSilhouetteSha256": "f2fbbd1e10f283b0f0c75091bdec496778235e1bb942225fe0b0de843bb815da"
+        },
+        "low": {
+          "artifactId": "artifact.system_demo.obstacle-tension-gate.low",
+          "path": "low/obstacle-tension-gate.png",
+          "format": "PNG",
+          "pixelFormat": "RGBA8",
+          "colorSpace": "sRGB",
+          "alphaMode": "straight-source-premultiply-on-upload",
+          "filter": "linear",
+          "wrap": "clamp",
+          "mipmaps": false,
+          "width": 128,
+          "height": 128,
+          "rootAnchorPx": {
+            "x": 64,
+            "y": 16
+          },
+          "sha256": "5d7c024303e31f236d700319983924f10afd530bdfcb5f59a55d17fb13270632",
+          "fileBytes": 2994,
+          "decodedBytes": 65536,
+          "transparentPixels": 12154,
+          "visiblePixels": 4230,
+          "grayscaleSilhouetteSha256": "424621b696f5a0a250b2dcbb51ed33cfc3b94a9ffeb89479fab67bfec9d3a139"
+        }
+      },
+      "platformQuality": {
+        "windows": {
+          "standard": "artifact.system_demo.obstacle-tension-gate.standard",
+          "low": "artifact.system_demo.obstacle-tension-gate.low"
+        },
+        "web": {
+          "standard": "artifact.system_demo.obstacle-tension-gate.standard",
+          "low": "artifact.system_demo.obstacle-tension-gate.low"
+        }
+      },
+      "accessibility": {
+        "colorOnly": false,
+        "audioOnly": false,
+        "shapeToken": "solid-threshold-cross-brace",
+        "nonColorChannels": [
+          "solid threshold rectangle",
+          "cross-braced tension frame",
+          "no pulse or operation glyph"
+        ]
+      },
+      "budget": {
+        "standardMaxFileBytes": 49152,
+        "lowMaxFileBytes": 24576,
+        "targetTransportKiB": 180,
+        "targetGpuTextureMiB": 1.5,
+        "targetDrawCalls": 2,
+        "peakTransparentCoveragePercent": 0,
+        "peakLayerCount": 1
+      },
+      "dependencies": [
+        "external ground blocker bounds",
+        "future presentation resolver"
+      ]
+    },
+    {
+      "stableAssetId": "asset.system_demo.interaction.console",
+      "stableContentKeyHex": "5436e1254697dd8d",
+      "sandboxAssetKind": "interaction",
+      "slug": "interaction-console",
+      "owner": "ART",
+      "package": "system_demo.presentation.blockouts",
+      "status": "Blockout",
+      "integrationStatus": "not-integrated",
+      "previewReady": false,
+      "releaseAllowed": false,
+      "allowedChannel": "internal-preview",
+      "license": "review-recorded-not-release-cleared",
+      "runtimeBuildStatus": "not-produced",
+      "platformPreviewStatus": {
+        "windows": "not-validated",
+        "web": "not-validated"
+      },
+      "sourceMode": "project-grammar-reuse",
+      "reuseLineage": "project-owned clipped inspection and operation grammar; simplified anew for this package",
+      "source": {
+        "path": "fallbacks/interaction-console.svg",
+        "sha256": "69f7ba0e0655d098c142aa67bc5dd4a86a34bd8b785d5b81185c64eda6eb1c1e",
+        "bytes": 1429,
+        "groupSelector": "g[data-stable-asset-id=\"asset.system_demo.interaction.console\"]",
+        "groupSha256": "fc9533a64da764dd5f0f2c817636a62f63966588ead73067299c414b4fce2dab"
+      },
+      "rootAnchorUv": {
+        "x": 0.5,
+        "y": 0.125
+      },
+      "axes": {
+        "right": "+x",
+        "forward": "+y",
+        "up": "+height"
+      },
+      "unit": "millimeter",
+      "facingConvention": "visual forward is +y; authored facing is consumed from the external sandbox definition",
+      "visualBoundsMm": {
+        "width": 900,
+        "depth": 650,
+        "height": 1250
+      },
+      "nominalPresentationExtentMm": null,
+      "anchors": [
+        {
+          "name": "base_center",
+          "localMm": {
+            "x": 0,
+            "y": 0,
+            "height": 0
+          },
+          "role": "visual base center"
+        },
+        {
+          "name": "select_visual",
+          "localMm": {
+            "x": 0,
+            "y": 120,
+            "height": 820
+          },
+          "role": "presentation-only selection focus"
+        },
+        {
+          "name": "operate_visual",
+          "localMm": {
+            "x": 180,
+            "y": 180,
+            "height": 720
+          },
+          "role": "presentation-only operation marker"
+        }
+      ],
+      "artifacts": {
+        "standard": {
+          "artifactId": "artifact.system_demo.interaction-console.standard",
+          "path": "standard/interaction-console.png",
+          "format": "PNG",
+          "pixelFormat": "RGBA8",
+          "colorSpace": "sRGB",
+          "alphaMode": "straight-source-premultiply-on-upload",
+          "filter": "linear",
+          "wrap": "clamp",
+          "mipmaps": false,
+          "width": 256,
+          "height": 256,
+          "rootAnchorPx": {
+            "x": 128,
+            "y": 32
+          },
+          "sha256": "1b78dc6cd9bac9ed7bd80658d7cef66697af19322fd9632fc1277e57e4b281c5",
+          "fileBytes": 3848,
+          "decodedBytes": 262144,
+          "transparentPixels": 46473,
+          "visiblePixels": 19063,
+          "grayscaleSilhouetteSha256": "f1aa8575d7adc75801449dfe876eca6024bd84814fdfc639365c59b9e6df65c3"
+        },
+        "low": {
+          "artifactId": "artifact.system_demo.interaction-console.low",
+          "path": "low/interaction-console.png",
+          "format": "PNG",
+          "pixelFormat": "RGBA8",
+          "colorSpace": "sRGB",
+          "alphaMode": "straight-source-premultiply-on-upload",
+          "filter": "linear",
+          "wrap": "clamp",
+          "mipmaps": false,
+          "width": 128,
+          "height": 128,
+          "rootAnchorPx": {
+            "x": 64,
+            "y": 16
+          },
+          "sha256": "2e468a8494ab7d10aabccbb5ddc38c0de547ff92d4fd2bc53248614449d79fed",
+          "fileBytes": 1861,
+          "decodedBytes": 65536,
+          "transparentPixels": 11608,
+          "visiblePixels": 4776,
+          "grayscaleSilhouetteSha256": "2dd2ab6e3ab633da955f53870d1ddb49ac4efb4b2ab5914c45d1d55df7f8fd06"
+        }
+      },
+      "platformQuality": {
+        "windows": {
+          "standard": "artifact.system_demo.interaction-console.standard",
+          "low": "artifact.system_demo.interaction-console.low"
+        },
+        "web": {
+          "standard": "artifact.system_demo.interaction-console.standard",
+          "low": "artifact.system_demo.interaction-console.low"
+        }
+      },
+      "accessibility": {
+        "colorOnly": false,
+        "audioOnly": false,
+        "shapeToken": "clipped-console-hand-slot",
+        "nonColorChannels": [
+          "clipped-corner console",
+          "recessed hand slot",
+          "short lever changes position"
+        ]
+      },
+      "budget": {
+        "standardMaxFileBytes": 49152,
+        "lowMaxFileBytes": 24576,
+        "targetTransportKiB": 140,
+        "targetGpuTextureMiB": 1,
+        "targetDrawCalls": 2,
+        "peakTransparentCoveragePercent": 1,
+        "peakLayerCount": 1
+      },
+      "dependencies": [
+        "external interaction pose",
+        "external interaction state",
+        "future presentation resolver"
+      ]
+    },
+    {
+      "stableAssetId": "asset.system_demo.mechanism.gate",
+      "stableContentKeyHex": "04794f8a769a9204",
+      "sandboxAssetKind": "mechanism",
+      "slug": "mechanism-gate",
+      "owner": "ART",
+      "package": "system_demo.presentation.blockouts",
+      "status": "Blockout",
+      "integrationStatus": "not-integrated",
+      "previewReady": false,
+      "releaseAllowed": false,
+      "allowedChannel": "internal-preview",
+      "license": "review-recorded-not-release-cleared",
+      "runtimeBuildStatus": "not-produced",
+      "platformPreviewStatus": {
+        "windows": "not-validated",
+        "web": "not-validated"
+      },
+      "sourceMode": "project-grammar-reuse",
+      "reuseLineage": "project-owned counterweight and tension-link grammar; simplified anew for this package",
+      "source": {
+        "path": "fallbacks/mechanism-gate.svg",
+        "sha256": "bb4ea42ee85089032de9f6151424450796d803fd75a734ee75787e0cff5bffc0",
+        "bytes": 1547,
+        "groupSelector": "g[data-stable-asset-id=\"asset.system_demo.mechanism.gate\"]",
+        "groupSha256": "b693bad06eed5acdf870af58861ff4789cb714af8816a381b8dbf222ffe9f422"
+      },
+      "rootAnchorUv": {
+        "x": 0.5,
+        "y": 0.125
+      },
+      "axes": {
+        "right": "+x",
+        "forward": "+y",
+        "up": "+height"
+      },
+      "unit": "millimeter",
+      "facingConvention": "visual forward is +y; authored facing is consumed from the external sandbox definition",
+      "visualBoundsMm": {
+        "width": 1200,
+        "depth": 800,
+        "height": 2300
+      },
+      "nominalPresentationExtentMm": null,
+      "anchors": [
+        {
+          "name": "base_center",
+          "localMm": {
+            "x": 0,
+            "y": 0,
+            "height": 0
+          },
+          "role": "visual base center"
+        },
+        {
+          "name": "link_visual",
+          "localMm": {
+            "x": -280,
+            "y": 0,
+            "height": 1180
+          },
+          "role": "presentation-only linkage marker"
+        },
+        {
+          "name": "weight_visual",
+          "localMm": {
+            "x": 360,
+            "y": 0,
+            "height": 620
+          },
+          "role": "presentation-only counterweight marker"
+        }
+      ],
+      "artifacts": {
+        "standard": {
+          "artifactId": "artifact.system_demo.mechanism-gate.standard",
+          "path": "standard/mechanism-gate.png",
+          "format": "PNG",
+          "pixelFormat": "RGBA8",
+          "colorSpace": "sRGB",
+          "alphaMode": "straight-source-premultiply-on-upload",
+          "filter": "linear",
+          "wrap": "clamp",
+          "mipmaps": false,
+          "width": 256,
+          "height": 256,
+          "rootAnchorPx": {
+            "x": 128,
+            "y": 32
+          },
+          "sha256": "a9c45a058c4511968a3e3ccee1681f6fa1d03cb07d5e115b9e8990eaaa7087c9",
+          "fileBytes": 5551,
+          "decodedBytes": 262144,
+          "transparentPixels": 53710,
+          "visiblePixels": 11826,
+          "grayscaleSilhouetteSha256": "b92f43a98f61abc4e7b0519227f8a9224dbf47829e9ff544b1ff0331988e3474"
+        },
+        "low": {
+          "artifactId": "artifact.system_demo.mechanism-gate.low",
+          "path": "low/mechanism-gate.png",
+          "format": "PNG",
+          "pixelFormat": "RGBA8",
+          "colorSpace": "sRGB",
+          "alphaMode": "straight-source-premultiply-on-upload",
+          "filter": "linear",
+          "wrap": "clamp",
+          "mipmaps": false,
+          "width": 128,
+          "height": 128,
+          "rootAnchorPx": {
+            "x": 64,
+            "y": 16
+          },
+          "sha256": "90204ab25b19b209bb9793716768893ae7b4709696a78edcbbbbb47946a01dc4",
+          "fileBytes": 2671,
+          "decodedBytes": 65536,
+          "transparentPixels": 13309,
+          "visiblePixels": 3075,
+          "grayscaleSilhouetteSha256": "eca6da052022d0ee6a132ab40cbfd5809c173a47f2d8856c61ce6edae96bb404"
+        }
+      },
+      "platformQuality": {
+        "windows": {
+          "standard": "artifact.system_demo.mechanism-gate.standard",
+          "low": "artifact.system_demo.mechanism-gate.low"
+        },
+        "web": {
+          "standard": "artifact.system_demo.mechanism-gate.standard",
+          "low": "artifact.system_demo.mechanism-gate.low"
+        }
+      },
+      "accessibility": {
+        "colorOnly": false,
+        "audioOnly": false,
+        "shapeToken": "offset-gate-link-counterweight",
+        "nonColorChannels": [
+          "offset gate post",
+          "visible diagonal linkage",
+          "counterweight changes height"
+        ]
+      },
+      "budget": {
+        "standardMaxFileBytes": 49152,
+        "lowMaxFileBytes": 24576,
+        "targetTransportKiB": 160,
+        "targetGpuTextureMiB": 1.25,
+        "targetDrawCalls": 2,
+        "peakTransparentCoveragePercent": 1,
+        "peakLayerCount": 1
+      },
+      "dependencies": [
+        "external mechanism pose",
+        "external mechanism state",
+        "future presentation resolver"
+      ]
+    },
+    {
+      "stableAssetId": "asset.system_demo.safe_point.lamp_shelter",
+      "stableContentKeyHex": "421753fb30cc48c8",
+      "sandboxAssetKind": "safe_point",
+      "slug": "safe-point-lamp-shelter",
+      "owner": "ART",
+      "package": "system_demo.presentation.blockouts",
+      "status": "Blockout",
+      "integrationStatus": "not-integrated",
+      "previewReady": false,
+      "releaseAllowed": false,
+      "allowedChannel": "internal-preview",
+      "license": "review-recorded-not-release-cleared",
+      "runtimeBuildStatus": "not-produced",
+      "platformPreviewStatus": {
+        "windows": "not-validated",
+        "web": "not-validated"
+      },
+      "sourceMode": "new-source",
+      "reuseLineage": null,
+      "source": {
+        "path": "fallbacks/safe-point-lamp-shelter.svg",
+        "sha256": "135272bd27b0fb8690bc4e2f74a15b8e7dff8e93ec919b6ed1d52fc4d344c5e4",
+        "bytes": 1588,
+        "groupSelector": "g[data-stable-asset-id=\"asset.system_demo.safe_point.lamp_shelter\"]",
+        "groupSha256": "f11850c730af4b700f63d8a5906a869f2dfee70027f2d3bf2df4ee5693f23770"
+      },
+      "rootAnchorUv": {
+        "x": 0.5,
+        "y": 0.125
+      },
+      "axes": {
+        "right": "+x",
+        "forward": "+y",
+        "up": "+height"
+      },
+      "unit": "millimeter",
+      "facingConvention": "visual forward is +y; authored facing is consumed from the external sandbox definition",
+      "visualBoundsMm": {
+        "width": 1400,
+        "depth": 1400,
+        "height": 1900,
+        "groundRingDiameter": 1200
+      },
+      "nominalPresentationExtentMm": null,
+      "anchors": [
+        {
+          "name": "base_center",
+          "localMm": {
+            "x": 0,
+            "y": 0,
+            "height": 0
+          },
+          "role": "visual base center"
+        },
+        {
+          "name": "lamp_core",
+          "localMm": {
+            "x": 0,
+            "y": 0,
+            "height": 1450
+          },
+          "role": "presentation-only lamp marker"
+        },
+        {
+          "name": "return_facing_visual",
+          "localMm": {
+            "x": 0,
+            "y": 520,
+            "height": 0
+          },
+          "role": "visual facing hint; not a spawn writer"
+        }
+      ],
+      "artifacts": {
+        "standard": {
+          "artifactId": "artifact.system_demo.safe-point-lamp-shelter.standard",
+          "path": "standard/safe-point-lamp-shelter.png",
+          "format": "PNG",
+          "pixelFormat": "RGBA8",
+          "colorSpace": "sRGB",
+          "alphaMode": "straight-source-premultiply-on-upload",
+          "filter": "linear",
+          "wrap": "clamp",
+          "mipmaps": false,
+          "width": 256,
+          "height": 256,
+          "rootAnchorPx": {
+            "x": 128,
+            "y": 32
+          },
+          "sha256": "8a736b9b25f3d9559508922bd15361ac1cebc396e7f1ce26ea83d528a0ea6747",
+          "fileBytes": 13320,
+          "decodedBytes": 262144,
+          "transparentPixels": 56853,
+          "visiblePixels": 8683,
+          "grayscaleSilhouetteSha256": "69099dc70b3a24f71178ac86829cc65bee444fb32813ba5b88c87a7e6ddcfc52"
+        },
+        "low": {
+          "artifactId": "artifact.system_demo.safe-point-lamp-shelter.low",
+          "path": "low/safe-point-lamp-shelter.png",
+          "format": "PNG",
+          "pixelFormat": "RGBA8",
+          "colorSpace": "sRGB",
+          "alphaMode": "straight-source-premultiply-on-upload",
+          "filter": "linear",
+          "wrap": "clamp",
+          "mipmaps": false,
+          "width": 128,
+          "height": 128,
+          "rootAnchorPx": {
+            "x": 64,
+            "y": 16
+          },
+          "sha256": "e9848278c3c60f7347e16878eb2895a612b27799c1f1bfd5afa73b45a4f53941",
+          "fileBytes": 6263,
+          "decodedBytes": 65536,
+          "transparentPixels": 13977,
+          "visiblePixels": 2407,
+          "grayscaleSilhouetteSha256": "9abd7d9cbd50901ba0b84aa4d01633dbaf3d76f379a326db5ba3e552cafc5674"
+        }
+      },
+      "platformQuality": {
+        "windows": {
+          "standard": "artifact.system_demo.safe-point-lamp-shelter.standard",
+          "low": "artifact.system_demo.safe-point-lamp-shelter.low"
+        },
+        "web": {
+          "standard": "artifact.system_demo.safe-point-lamp-shelter.standard",
+          "low": "artifact.system_demo.safe-point-lamp-shelter.low"
+        }
+      },
+      "accessibility": {
+        "colorOnly": false,
+        "audioOnly": false,
+        "shapeToken": "closed-double-ring-tripod-lamp",
+        "nonColorChannels": [
+          "closed double ground ring",
+          "three-rib shelter",
+          "single upward lamp core"
+        ]
+      },
+      "budget": {
+        "standardMaxFileBytes": 49152,
+        "lowMaxFileBytes": 24576,
+        "targetTransportKiB": 180,
+        "targetGpuTextureMiB": 1.5,
+        "targetDrawCalls": 2,
+        "peakTransparentCoveragePercent": 2,
+        "peakLayerCount": 1
+      },
+      "dependencies": [
+        "external safe point pose",
+        "external current-safe-point snapshot",
+        "future presentation resolver"
+      ]
+    },
+    {
+      "stableAssetId": "asset.system_demo.skill.eavesguard.telegraph",
+      "stableContentKeyHex": "48cc0e9283cf65c4",
+      "sandboxAssetKind": "effect",
+      "slug": "skill-eavesguard-telegraph",
+      "owner": "ART",
+      "package": "system_demo.presentation.blockouts",
+      "status": "Blockout",
+      "integrationStatus": "not-integrated",
+      "previewReady": false,
+      "releaseAllowed": false,
+      "allowedChannel": "internal-preview",
+      "license": "review-recorded-not-release-cleared",
+      "runtimeBuildStatus": "not-produced",
+      "platformPreviewStatus": {
+        "windows": "not-validated",
+        "web": "not-validated"
+      },
+      "sourceMode": "new-source",
+      "reuseLineage": null,
+      "source": {
+        "path": "fallbacks/skill-eavesguard-telegraph.svg",
+        "sha256": "6324bd3e5aa4d8b2a82b4fb38a6182040d5db8468049adf435008827cb2b0adf",
+        "bytes": 1371,
+        "groupSelector": "g[data-stable-asset-id=\"asset.system_demo.skill.eavesguard.telegraph\"]",
+        "groupSha256": "ae5747a12639ba7ed1c1f1501f6296493a9b44535d2984acdb20448fb535b469"
+      },
+      "rootAnchorUv": {
+        "x": 0.5,
+        "y": 0.125
+      },
+      "axes": {
+        "right": "+x",
+        "forward": "+y",
+        "up": "+height"
+      },
+      "unit": "millimeter",
+      "facingConvention": "visual forward is +y; authored facing is consumed from the external sandbox definition",
+      "visualBoundsMm": null,
+      "nominalPresentationExtentMm": {
+        "forward": 1200,
+        "lateral": 900,
+        "height": 0
+      },
+      "anchors": [
+        {
+          "name": "source_foot_visual",
+          "localMm": {
+            "x": 0,
+            "y": 0,
+            "height": 0
+          },
+          "role": "presentation source point"
+        },
+        {
+          "name": "forward_axis_visual",
+          "localMm": {
+            "x": 0,
+            "y": 600,
+            "height": 0
+          },
+          "role": "presentation direction marker"
+        }
+      ],
+      "artifacts": {
+        "standard": {
+          "artifactId": "artifact.system_demo.skill-eavesguard-telegraph.standard",
+          "path": "standard/skill-eavesguard-telegraph.png",
+          "format": "PNG",
+          "pixelFormat": "RGBA8",
+          "colorSpace": "sRGB",
+          "alphaMode": "straight-source-premultiply-on-upload",
+          "filter": "linear",
+          "wrap": "clamp",
+          "mipmaps": false,
+          "width": 256,
+          "height": 256,
+          "rootAnchorPx": {
+            "x": 128,
+            "y": 32
+          },
+          "sha256": "4e760ec09b18402763f52ed54e574d08e22953d4c3bbf6f4c8fef03d244a23f5",
+          "fileBytes": 12610,
+          "decodedBytes": 262144,
+          "transparentPixels": 55027,
+          "visiblePixels": 10509,
+          "grayscaleSilhouetteSha256": "7d2eea389198846cb8751ea4deb0914059a5b11beef98c030f9918c0d35eac8e"
+        },
+        "low": {
+          "artifactId": "artifact.system_demo.skill-eavesguard-telegraph.low",
+          "path": "low/skill-eavesguard-telegraph.png",
+          "format": "PNG",
+          "pixelFormat": "RGBA8",
+          "colorSpace": "sRGB",
+          "alphaMode": "straight-source-premultiply-on-upload",
+          "filter": "linear",
+          "wrap": "clamp",
+          "mipmaps": false,
+          "width": 128,
+          "height": 128,
+          "rootAnchorPx": {
+            "x": 64,
+            "y": 16
+          },
+          "sha256": "fb90c682a055eac2e3bfdf8ca6d7747f953c4e2c974e5ebfc9338c864a79e7ce",
+          "fileBytes": 5908,
+          "decodedBytes": 65536,
+          "transparentPixels": 13690,
+          "visiblePixels": 2694,
+          "grayscaleSilhouetteSha256": "f6cede68ab2f4753c3b6138e5804e6995dec8d2da6b90e5e25604d8117157ceb"
+        }
+      },
+      "platformQuality": {
+        "windows": {
+          "standard": "artifact.system_demo.skill-eavesguard-telegraph.standard",
+          "low": "artifact.system_demo.skill-eavesguard-telegraph.low"
+        },
+        "web": {
+          "standard": "artifact.system_demo.skill-eavesguard-telegraph.standard",
+          "low": "artifact.system_demo.skill-eavesguard-telegraph.low"
+        }
+      },
+      "accessibility": {
+        "colorOnly": false,
+        "audioOnly": false,
+        "shapeToken": "solid-wedge-inward-ribs",
+        "nonColorChannels": [
+          "solid brace wedge",
+          "three inward ribs",
+          "edge compression increases over time"
+        ]
+      },
+      "budget": {
+        "standardMaxFileBytes": 49152,
+        "lowMaxFileBytes": 24576,
+        "targetTransportKiB": 220,
+        "targetGpuTextureMiB": 2.665,
+        "targetDrawCalls": 2,
+        "peakTransparentCoveragePercent": 8,
+        "peakLayerCount": 2
+      },
+      "dependencies": [
+        "external ability geometry",
+        "external ability phase",
+        "future presentation resolver"
+      ]
+    },
+    {
+      "stableAssetId": "asset.system_demo.skill.eavesguard.hit",
+      "stableContentKeyHex": "63f7f948d3cb7c65",
+      "sandboxAssetKind": "effect",
+      "slug": "skill-eavesguard-hit",
+      "owner": "ART",
+      "package": "system_demo.presentation.blockouts",
+      "status": "Blockout",
+      "integrationStatus": "not-integrated",
+      "previewReady": false,
+      "releaseAllowed": false,
+      "allowedChannel": "internal-preview",
+      "license": "review-recorded-not-release-cleared",
+      "runtimeBuildStatus": "not-produced",
+      "platformPreviewStatus": {
+        "windows": "not-validated",
+        "web": "not-validated"
+      },
+      "sourceMode": "new-source",
+      "reuseLineage": null,
+      "source": {
+        "path": "fallbacks/skill-eavesguard-hit.svg",
+        "sha256": "11f484cd68fabda9c4cea648487fa0dddf49174e33516cd7efbe358b6cd21484",
+        "bytes": 1439,
+        "groupSelector": "g[data-stable-asset-id=\"asset.system_demo.skill.eavesguard.hit\"]",
+        "groupSha256": "0903139258fba46473f8076849abb11e706c36a5f25bfcdc57e5fbc3387cd0f0"
+      },
+      "rootAnchorUv": {
+        "x": 0.5,
+        "y": 0.125
+      },
+      "axes": {
+        "right": "+x",
+        "forward": "+y",
+        "up": "+height"
+      },
+      "unit": "millimeter",
+      "facingConvention": "visual forward is +y; authored facing is consumed from the external sandbox definition",
+      "visualBoundsMm": null,
+      "nominalPresentationExtentMm": {
+        "width": 800,
+        "depth": 500,
+        "height": 1100
+      },
+      "anchors": [
+        {
+          "name": "contact_visual",
+          "localMm": {
+            "x": 0,
+            "y": 0,
+            "height": 520
+          },
+          "role": "external contact projection"
+        },
+        {
+          "name": "target_center_visual",
+          "localMm": {
+            "x": 0,
+            "y": 0,
+            "height": 720
+          },
+          "role": "presentation-only target center"
+        }
+      ],
+      "artifacts": {
+        "standard": {
+          "artifactId": "artifact.system_demo.skill-eavesguard-hit.standard",
+          "path": "standard/skill-eavesguard-hit.png",
+          "format": "PNG",
+          "pixelFormat": "RGBA8",
+          "colorSpace": "sRGB",
+          "alphaMode": "straight-source-premultiply-on-upload",
+          "filter": "linear",
+          "wrap": "clamp",
+          "mipmaps": false,
+          "width": 256,
+          "height": 256,
+          "rootAnchorPx": {
+            "x": 128,
+            "y": 32
+          },
+          "sha256": "fcf808687c0cef9cee1a803d16db84095e10b9c53eb017a9facf843e767a1c17",
+          "fileBytes": 2269,
+          "decodedBytes": 262144,
+          "transparentPixels": 56076,
+          "visiblePixels": 9460,
+          "grayscaleSilhouetteSha256": "7c758c3f6dec759c4d0bbc2f5ca649d3dea90cd9f0862fe503f5dc75d3b6a58f"
+        },
+        "low": {
+          "artifactId": "artifact.system_demo.skill-eavesguard-hit.low",
+          "path": "low/skill-eavesguard-hit.png",
+          "format": "PNG",
+          "pixelFormat": "RGBA8",
+          "colorSpace": "sRGB",
+          "alphaMode": "straight-source-premultiply-on-upload",
+          "filter": "linear",
+          "wrap": "clamp",
+          "mipmaps": false,
+          "width": 128,
+          "height": 128,
+          "rootAnchorPx": {
+            "x": 64,
+            "y": 16
+          },
+          "sha256": "3ada864bbfde391d5747201d39d0aae1f36f52444a0ca4c7aed3401e72f5efe8",
+          "fileBytes": 1217,
+          "decodedBytes": 65536,
+          "transparentPixels": 13970,
+          "visiblePixels": 2414,
+          "grayscaleSilhouetteSha256": "2db029997310db8e1fac94e9374bc995b2c9e8263efe72e4dfe25e77e16a92a5"
+        }
+      },
+      "platformQuality": {
+        "windows": {
+          "standard": "artifact.system_demo.skill-eavesguard-hit.standard",
+          "low": "artifact.system_demo.skill-eavesguard-hit.low"
+        },
+        "web": {
+          "standard": "artifact.system_demo.skill-eavesguard-hit.standard",
+          "low": "artifact.system_demo.skill-eavesguard-hit.low"
+        }
+      },
+      "accessibility": {
+        "colorOnly": false,
+        "audioOnly": false,
+        "shapeToken": "stacked-compression-bars",
+        "nonColorChannels": [
+          "stacked compression bars",
+          "single forward rebound",
+          "rectangular impact notch"
+        ]
+      },
+      "budget": {
+        "standardMaxFileBytes": 49152,
+        "lowMaxFileBytes": 24576,
+        "targetTransportKiB": 200,
+        "targetGpuTextureMiB": 2.665,
+        "targetDrawCalls": 2,
+        "peakTransparentCoveragePercent": 6,
+        "peakLayerCount": 2
+      },
+      "dependencies": [
+        "external contact result",
+        "external target pose",
+        "future presentation resolver"
+      ]
+    },
+    {
+      "stableAssetId": "asset.system_demo.skill.flower_turn.telegraph",
+      "stableContentKeyHex": "c3fe0030aad462f8",
+      "sandboxAssetKind": "effect",
+      "slug": "skill-flower-turn-telegraph",
+      "owner": "ART",
+      "package": "system_demo.presentation.blockouts",
+      "status": "Blockout",
+      "integrationStatus": "not-integrated",
+      "previewReady": false,
+      "releaseAllowed": false,
+      "allowedChannel": "internal-preview",
+      "license": "review-recorded-not-release-cleared",
+      "runtimeBuildStatus": "not-produced",
+      "platformPreviewStatus": {
+        "windows": "not-validated",
+        "web": "not-validated"
+      },
+      "sourceMode": "new-source",
+      "reuseLineage": null,
+      "source": {
+        "path": "fallbacks/skill-flower-turn-telegraph.svg",
+        "sha256": "9ab8caa4d6534a6e7aa2d741a5559a940a852ff687f2ec854307cc8e88b63802",
+        "bytes": 1458,
+        "groupSelector": "g[data-stable-asset-id=\"asset.system_demo.skill.flower_turn.telegraph\"]",
+        "groupSha256": "6412c778491100217d8d12f3143708f44d54649220e862ace2488575d6882349"
+      },
+      "rootAnchorUv": {
+        "x": 0.5,
+        "y": 0.125
+      },
+      "axes": {
+        "right": "+x",
+        "forward": "+y",
+        "up": "+height"
+      },
+      "unit": "millimeter",
+      "facingConvention": "visual forward is +y; authored facing is consumed from the external sandbox definition",
+      "visualBoundsMm": null,
+      "nominalPresentationExtentMm": {
+        "sweep": 1800,
+        "lateral": 1800,
+        "height": 0
+      },
+      "anchors": [
+        {
+          "name": "source_foot_visual",
+          "localMm": {
+            "x": 0,
+            "y": 0,
+            "height": 0
+          },
+          "role": "presentation source point"
+        },
+        {
+          "name": "sweep_axis_visual",
+          "localMm": {
+            "x": 720,
+            "y": 320,
+            "height": 0
+          },
+          "role": "presentation sweep marker"
+        }
+      ],
+      "artifacts": {
+        "standard": {
+          "artifactId": "artifact.system_demo.skill-flower-turn-telegraph.standard",
+          "path": "standard/skill-flower-turn-telegraph.png",
+          "format": "PNG",
+          "pixelFormat": "RGBA8",
+          "colorSpace": "sRGB",
+          "alphaMode": "straight-source-premultiply-on-upload",
+          "filter": "linear",
+          "wrap": "clamp",
+          "mipmaps": false,
+          "width": 256,
+          "height": 256,
+          "rootAnchorPx": {
+            "x": 128,
+            "y": 32
+          },
+          "sha256": "e7ac01e1b3004fba26704b25f4233a4b998709eb11d81e97ee767915836de8bf",
+          "fileBytes": 8732,
+          "decodedBytes": 262144,
+          "transparentPixels": 61953,
+          "visiblePixels": 3583,
+          "grayscaleSilhouetteSha256": "6b11975b923cb2df43727258ddd0ba46371cbebeb660729a8662fca258b5f410"
+        },
+        "low": {
+          "artifactId": "artifact.system_demo.skill-flower-turn-telegraph.low",
+          "path": "low/skill-flower-turn-telegraph.png",
+          "format": "PNG",
+          "pixelFormat": "RGBA8",
+          "colorSpace": "sRGB",
+          "alphaMode": "straight-source-premultiply-on-upload",
+          "filter": "linear",
+          "wrap": "clamp",
+          "mipmaps": false,
+          "width": 128,
+          "height": 128,
+          "rootAnchorPx": {
+            "x": 64,
+            "y": 16
+          },
+          "sha256": "fa07767794c0712dd79dc181bd4c66b6f340a3f1129c0b76f20c051f64324a02",
+          "fileBytes": 4171,
+          "decodedBytes": 65536,
+          "transparentPixels": 15354,
+          "visiblePixels": 1030,
+          "grayscaleSilhouetteSha256": "acc3d0c38bca2f4157be548cd381e7b69c4733bb6e9c1067f3c552f4c1d7a6c8"
+        }
+      },
+      "platformQuality": {
+        "windows": {
+          "standard": "artifact.system_demo.skill-flower-turn-telegraph.standard",
+          "low": "artifact.system_demo.skill-flower-turn-telegraph.low"
+        },
+        "web": {
+          "standard": "artifact.system_demo.skill-flower-turn-telegraph.standard",
+          "low": "artifact.system_demo.skill-flower-turn-telegraph.low"
+        }
+      },
+      "accessibility": {
+        "colorOnly": false,
+        "audioOnly": false,
+        "shapeToken": "broken-double-arc-diagonal",
+        "nonColorChannels": [
+          "broken double arc",
+          "diagonal crossing gap",
+          "lateral sweep motion"
+        ]
+      },
+      "budget": {
+        "standardMaxFileBytes": 49152,
+        "lowMaxFileBytes": 24576,
+        "targetTransportKiB": 220,
+        "targetGpuTextureMiB": 2.665,
+        "targetDrawCalls": 2,
+        "peakTransparentCoveragePercent": 8,
+        "peakLayerCount": 2
+      },
+      "dependencies": [
+        "external ability geometry",
+        "external ability phase",
+        "future presentation resolver"
+      ]
+    },
+    {
+      "stableAssetId": "asset.system_demo.skill.flower_turn.hit",
+      "stableContentKeyHex": "4065e83312c64fe9",
+      "sandboxAssetKind": "effect",
+      "slug": "skill-flower-turn-hit",
+      "owner": "ART",
+      "package": "system_demo.presentation.blockouts",
+      "status": "Blockout",
+      "integrationStatus": "not-integrated",
+      "previewReady": false,
+      "releaseAllowed": false,
+      "allowedChannel": "internal-preview",
+      "license": "review-recorded-not-release-cleared",
+      "runtimeBuildStatus": "not-produced",
+      "platformPreviewStatus": {
+        "windows": "not-validated",
+        "web": "not-validated"
+      },
+      "sourceMode": "new-source",
+      "reuseLineage": null,
+      "source": {
+        "path": "fallbacks/skill-flower-turn-hit.svg",
+        "sha256": "03f66bbaaadcf70054b6f522f1877163aa2f8240c52d50dd927831752739fc86",
+        "bytes": 1417,
+        "groupSelector": "g[data-stable-asset-id=\"asset.system_demo.skill.flower_turn.hit\"]",
+        "groupSha256": "062cd8b01e4890017bb73017630b4c391a781b80da616613fa24401b9382d2ce"
+      },
+      "rootAnchorUv": {
+        "x": 0.5,
+        "y": 0.125
+      },
+      "axes": {
+        "right": "+x",
+        "forward": "+y",
+        "up": "+height"
+      },
+      "unit": "millimeter",
+      "facingConvention": "visual forward is +y; authored facing is consumed from the external sandbox definition",
+      "visualBoundsMm": null,
+      "nominalPresentationExtentMm": {
+        "width": 1200,
+        "depth": 700,
+        "height": 1200
+      },
+      "anchors": [
+        {
+          "name": "contact_visual",
+          "localMm": {
+            "x": 0,
+            "y": 0,
+            "height": 560
+          },
+          "role": "external contact projection"
+        },
+        {
+          "name": "target_center_visual",
+          "localMm": {
+            "x": 0,
+            "y": 0,
+            "height": 760
+          },
+          "role": "presentation-only target center"
+        }
+      ],
+      "artifacts": {
+        "standard": {
+          "artifactId": "artifact.system_demo.skill-flower-turn-hit.standard",
+          "path": "standard/skill-flower-turn-hit.png",
+          "format": "PNG",
+          "pixelFormat": "RGBA8",
+          "colorSpace": "sRGB",
+          "alphaMode": "straight-source-premultiply-on-upload",
+          "filter": "linear",
+          "wrap": "clamp",
+          "mipmaps": false,
+          "width": 256,
+          "height": 256,
+          "rootAnchorPx": {
+            "x": 128,
+            "y": 32
+          },
+          "sha256": "8b895b70d26154a42c2283fb42db79af61f85af31510c0451e7c1d4ea88e7e85",
+          "fileBytes": 12788,
+          "decodedBytes": 262144,
+          "transparentPixels": 52247,
+          "visiblePixels": 13289,
+          "grayscaleSilhouetteSha256": "ef82a632c3eb9973c97da672234377a97c9b23a9defb0b2ca7a875fe4c9621b2"
+        },
+        "low": {
+          "artifactId": "artifact.system_demo.skill-flower-turn-hit.low",
+          "path": "low/skill-flower-turn-hit.png",
+          "format": "PNG",
+          "pixelFormat": "RGBA8",
+          "colorSpace": "sRGB",
+          "alphaMode": "straight-source-premultiply-on-upload",
+          "filter": "linear",
+          "wrap": "clamp",
+          "mipmaps": false,
+          "width": 128,
+          "height": 128,
+          "rootAnchorPx": {
+            "x": 64,
+            "y": 16
+          },
+          "sha256": "f041ea21f68543f361f569a776ff5c54687ce2f4f7908ba9a8d76a823c6a07b6",
+          "fileBytes": 6021,
+          "decodedBytes": 65536,
+          "transparentPixels": 12954,
+          "visiblePixels": 3430,
+          "grayscaleSilhouetteSha256": "6cf5c93e628587837395df2022725a7690433d8e92648f20ca88e3c8111b7e61"
+        }
+      },
+      "platformQuality": {
+        "windows": {
+          "standard": "artifact.system_demo.skill-flower-turn-hit.standard",
+          "low": "artifact.system_demo.skill-flower-turn-hit.low"
+        },
+        "web": {
+          "standard": "artifact.system_demo.skill-flower-turn-hit.standard",
+          "low": "artifact.system_demo.skill-flower-turn-hit.low"
+        }
+      },
+      "accessibility": {
+        "colorOnly": false,
+        "audioOnly": false,
+        "shapeToken": "crossed-shear-cuts",
+        "nonColorChannels": [
+          "crossed diagonal cuts",
+          "opposed lateral shear",
+          "open center diamond"
+        ]
+      },
+      "budget": {
+        "standardMaxFileBytes": 49152,
+        "lowMaxFileBytes": 24576,
+        "targetTransportKiB": 200,
+        "targetGpuTextureMiB": 2.665,
+        "targetDrawCalls": 2,
+        "peakTransparentCoveragePercent": 6,
+        "peakLayerCount": 2
+      },
+      "dependencies": [
+        "external contact result",
+        "external target pose",
+        "future presentation resolver"
+      ]
+    }
+  ]
+}

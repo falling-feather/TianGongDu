@@ -1,0 +1,658 @@
+{
+  "format": "tgd.sandbox.authoring",
+  "schemaVersion": "1.4.0",
+  "runtime": {
+    "packageId": "system-demo.package",
+    "sandboxId": "system-demo.sandbox",
+    "bounds": {
+      "minX": -2500,
+      "maxX": 2500,
+      "minY": -4000,
+      "maxY": 10000,
+      "minHeight": -500,
+      "maxHeight": 3000,
+      "minFloorLayer": 0,
+      "maxFloorLayer": 0
+    },
+    "completionObjectiveId": "objective.system_demo.terminal",
+    "player": {
+      "id": "player.system_demo.start",
+      "regionId": "region.system_demo.arena",
+      "assetId": "asset.system_demo.player",
+      "initialSafePointId": "safe_point.system_demo.initial",
+      "pose": {
+        "x": 0,
+        "y": -3250,
+        "height": 0,
+        "floorLayer": 0
+      },
+      "facingMillidegrees": 0
+    },
+    "regions": [
+      {
+        "id": "region.system_demo.arena",
+        "bounds": {
+          "minX": -2500,
+          "maxX": 2500,
+          "minY": -4000,
+          "maxY": 10000,
+          "minHeight": -500,
+          "maxHeight": 3000,
+          "minFloorLayer": 0,
+          "maxFloorLayer": 0
+        }
+      }
+    ],
+    "assets": [
+      {
+        "id": "asset.system_demo.enemy.elite",
+        "kind": "actor"
+      },
+      {
+        "id": "asset.system_demo.enemy.flanker",
+        "kind": "actor"
+      },
+      {
+        "id": "asset.system_demo.enemy.pressure",
+        "kind": "actor"
+      },
+      {
+        "id": "asset.system_demo.interaction.console",
+        "kind": "interaction"
+      },
+      {
+        "id": "asset.system_demo.mechanism.gate",
+        "kind": "mechanism"
+      },
+      {
+        "id": "asset.system_demo.obstacle.tension_gate",
+        "kind": "obstacle"
+      },
+      {
+        "id": "asset.system_demo.player",
+        "kind": "player"
+      },
+      {
+        "id": "asset.system_demo.safe_point.lamp_shelter",
+        "kind": "safe_point"
+      },
+      {
+        "id": "asset.system_demo.skill.eavesguard.hit",
+        "kind": "effect"
+      },
+      {
+        "id": "asset.system_demo.skill.eavesguard.telegraph",
+        "kind": "effect"
+      },
+      {
+        "id": "asset.system_demo.skill.flower_turn.hit",
+        "kind": "effect"
+      },
+      {
+        "id": "asset.system_demo.skill.flower_turn.telegraph",
+        "kind": "effect"
+      }
+    ],
+    "actors": [
+      {
+        "id": "actor.system_demo.entry.slot_a",
+        "regionId": "region.system_demo.arena",
+        "assetId": "asset.system_demo.enemy.pressure",
+        "pose": {
+          "x": -1000,
+          "y": 3000,
+          "height": 0,
+          "floorLayer": 0
+        },
+        "facingMillidegrees": 180000
+      },
+      {
+        "id": "actor.system_demo.entry.slot_b",
+        "regionId": "region.system_demo.arena",
+        "assetId": "asset.system_demo.enemy.flanker",
+        "pose": {
+          "x": 1000,
+          "y": 3500,
+          "height": 0,
+          "floorLayer": 0
+        },
+        "facingMillidegrees": 180000
+      },
+      {
+        "id": "actor.system_demo.followup.slot_a",
+        "regionId": "region.system_demo.arena",
+        "assetId": "asset.system_demo.enemy.pressure",
+        "pose": {
+          "x": -1000,
+          "y": 7000,
+          "height": 0,
+          "floorLayer": 0
+        },
+        "facingMillidegrees": 180000
+      },
+      {
+        "id": "actor.system_demo.followup.slot_b",
+        "regionId": "region.system_demo.arena",
+        "assetId": "asset.system_demo.enemy.elite",
+        "pose": {
+          "x": 1000,
+          "y": 7500,
+          "height": 0,
+          "floorLayer": 0
+        },
+        "facingMillidegrees": 180000
+      }
+    ],
+    "groundBlockers": [
+      {
+        "id": "blocker.system_demo.gate",
+        "regionId": "region.system_demo.arena",
+        "assetId": "asset.system_demo.obstacle.tension_gate",
+        "minX": -2500,
+        "maxX": 0,
+        "minY": 500,
+        "maxY": 1000,
+        "minHeight": 0,
+        "maxHeight": 2500,
+        "floorLayer": 0
+      },
+      {
+        "id": "blocker.system_demo.roof_shortcut",
+        "regionId": "region.system_demo.arena",
+        "assetId": "asset.system_demo.obstacle.tension_gate",
+        "minX": 0,
+        "maxX": 2500,
+        "minY": 500,
+        "maxY": 1000,
+        "minHeight": 0,
+        "maxHeight": 2500,
+        "floorLayer": 0
+      }
+    ],
+    "safePoints": [
+      {
+        "id": "safe_point.system_demo.initial",
+        "regionId": "region.system_demo.arena",
+        "assetId": "asset.system_demo.safe_point.lamp_shelter",
+        "pose": {
+          "x": -1250,
+          "y": -3000,
+          "height": 0,
+          "floorLayer": 0
+        },
+        "facingMillidegrees": 0
+      }
+    ],
+    "interactions": [
+      {
+        "id": "interaction.system_demo.console",
+        "regionId": "region.system_demo.arena",
+        "assetId": "asset.system_demo.interaction.console",
+        "pose": {
+          "x": -1500,
+          "y": -500,
+          "height": 900,
+          "floorLayer": 0
+        },
+        "facingMillidegrees": 90000
+      },
+      {
+        "id": "interaction.system_demo.workshop_shortcut",
+        "regionId": "region.system_demo.arena",
+        "assetId": "asset.system_demo.interaction.console",
+        "pose": {
+          "x": 1500,
+          "y": -2800,
+          "height": 0,
+          "floorLayer": 0
+        },
+        "facingMillidegrees": 270000
+      }
+    ],
+    "mechanisms": [
+      {
+        "id": "mechanism.system_demo.gate",
+        "regionId": "region.system_demo.arena",
+        "assetId": "asset.system_demo.mechanism.gate",
+        "pose": {
+          "x": 1500,
+          "y": -500,
+          "height": 0,
+          "floorLayer": 0
+        },
+        "facingMillidegrees": 270000
+      },
+      {
+        "id": "mechanism.system_demo.roof_shortcut",
+        "regionId": "region.system_demo.arena",
+        "assetId": "asset.system_demo.mechanism.gate",
+        "pose": {
+          "x": 1700,
+          "y": 750,
+          "height": 0,
+          "floorLayer": 0
+        },
+        "facingMillidegrees": 270000
+      }
+    ],
+    "waves": [
+      {
+        "id": "wave.system_demo.entry",
+        "regionId": "region.system_demo.arena",
+        "predecessorWaveId": "",
+        "trigger": {
+          "kind": "objective_completed",
+          "targetId": "objective.system_demo.open_gate"
+        }
+      },
+      {
+        "id": "wave.system_demo.followup",
+        "regionId": "region.system_demo.arena",
+        "predecessorWaveId": "wave.system_demo.entry",
+        "trigger": {
+          "kind": "wave_completed",
+          "targetId": "wave.system_demo.entry"
+        }
+      }
+    ],
+    "waveSpawns": [
+      {
+        "waveId": "wave.system_demo.entry",
+        "actorId": "actor.system_demo.entry.slot_a",
+        "delayTicks": 0,
+        "spawnOrder": 0
+      },
+      {
+        "waveId": "wave.system_demo.entry",
+        "actorId": "actor.system_demo.entry.slot_b",
+        "delayTicks": 0,
+        "spawnOrder": 1
+      },
+      {
+        "waveId": "wave.system_demo.followup",
+        "actorId": "actor.system_demo.followup.slot_a",
+        "delayTicks": 0,
+        "spawnOrder": 0
+      },
+      {
+        "waveId": "wave.system_demo.followup",
+        "actorId": "actor.system_demo.followup.slot_b",
+        "delayTicks": 0,
+        "spawnOrder": 1
+      }
+    ],
+    "objectives": [
+      {
+        "id": "objective.system_demo.open_gate",
+        "regionId": "region.system_demo.arena",
+        "predecessorObjectiveId": "",
+        "completion": {
+          "kind": "mechanism_activated",
+          "targetId": "mechanism.system_demo.gate"
+        }
+      },
+      {
+        "id": "objective.system_demo.terminal",
+        "regionId": "region.system_demo.arena",
+        "predecessorObjectiveId": "objective.system_demo.open_gate",
+        "completion": {
+          "kind": "wave_completed",
+          "targetId": "wave.system_demo.followup"
+        }
+      }
+    ],
+    "interactionBindings": [
+      {
+        "interactionId": "interaction.system_demo.console",
+        "operation": "operate",
+        "rangeMm": 1200,
+        "targetMechanismId": "mechanism.system_demo.gate"
+      },
+      {
+        "interactionId": "interaction.system_demo.workshop_shortcut",
+        "operation": "operate",
+        "rangeMm": 1200,
+        "targetMechanismId": "mechanism.system_demo.roof_shortcut"
+      }
+    ],
+    "mechanismBindings": [
+      {
+        "mechanismId": "mechanism.system_demo.gate",
+        "activation": "one_shot_activate",
+        "targetGroundBlockerId": "blocker.system_demo.gate"
+      },
+      {
+        "mechanismId": "mechanism.system_demo.roof_shortcut",
+        "activation": "one_shot_activate",
+        "targetGroundBlockerId": "blocker.system_demo.roof_shortcut"
+      }
+    ],
+    "actorBindings": [
+      {
+        "actorId": "actor.system_demo.entry.slot_a",
+        "profileId": "jn_enemy_leaking_umbrella_doll",
+        "faction": "hostile",
+        "duty": "pressure",
+        "maxHealth": 54
+      },
+      {
+        "actorId": "actor.system_demo.entry.slot_b",
+        "profileId": "jn_enemy_towline_water_hand",
+        "faction": "hostile",
+        "duty": "flanker",
+        "maxHealth": 42
+      },
+      {
+        "actorId": "actor.system_demo.followup.slot_a",
+        "profileId": "jn_enemy_leaking_umbrella_doll",
+        "faction": "hostile",
+        "duty": "pressure",
+        "maxHealth": 62
+      },
+      {
+        "actorId": "actor.system_demo.followup.slot_b",
+        "profileId": "jn_enemy_towline_water_hand",
+        "faction": "hostile",
+        "duty": "flanker",
+        "maxHealth": 78
+      }
+    ],
+    "craftMaterials": [
+      {
+        "id": "material.jiangnan.umbrella.flexible_bark_paper_patch"
+      },
+      {
+        "id": "material.jiangnan.umbrella.stiff_salvage_paper_patch"
+      }
+    ],
+    "craftWorkstations": [
+      {
+        "id": "workstation.jiangnan.umbrella_tuning",
+        "regionId": "region.system_demo.arena",
+        "assetId": "asset.system_demo.interaction.console",
+        "pose": {
+          "x": 1500,
+          "y": -2800,
+          "height": 0,
+          "floorLayer": 0
+        },
+        "facingMillidegrees": 270000
+      }
+    ],
+    "craftProcesses": [
+      {
+        "id": "craft_process.jiangnan.umbrella_canopy_tuning",
+        "workstationId": "workstation.jiangnan.umbrella_tuning",
+        "needId": "need.jiangnan.umbrella.canopy_tension",
+        "outputItemId": "item.jiangnan.umbrella.tuned_canopy",
+        "trialStepId": "craft_step.jiangnan.umbrella.rain_trial"
+      }
+    ],
+    "craftMaterialChoices": [
+      {
+        "processId": "craft_process.jiangnan.umbrella_canopy_tuning",
+        "materialId": "material.jiangnan.umbrella.flexible_bark_paper_patch",
+        "outcome": "passes_trial"
+      },
+      {
+        "processId": "craft_process.jiangnan.umbrella_canopy_tuning",
+        "materialId": "material.jiangnan.umbrella.stiff_salvage_paper_patch",
+        "outcome": "requires_rework"
+      }
+    ],
+    "craftSteps": [
+      {
+        "id": "craft_step.jiangnan.umbrella.align_rib",
+        "processId": "craft_process.jiangnan.umbrella_canopy_tuning",
+        "predecessorStepId": "",
+        "actionId": "craft_action.umbrella.align_rib",
+        "kind": "operation"
+      },
+      {
+        "id": "craft_step.jiangnan.umbrella.paste_patch",
+        "processId": "craft_process.jiangnan.umbrella_canopy_tuning",
+        "predecessorStepId": "craft_step.jiangnan.umbrella.align_rib",
+        "actionId": "craft_action.umbrella.paste_patch",
+        "kind": "operation"
+      },
+      {
+        "id": "craft_step.jiangnan.umbrella.rain_trial",
+        "processId": "craft_process.jiangnan.umbrella_canopy_tuning",
+        "predecessorStepId": "craft_step.jiangnan.umbrella.paste_patch",
+        "actionId": "craft_action.umbrella.rain_trial",
+        "kind": "trial"
+      },
+      {
+        "id": "craft_step.jiangnan.umbrella.retension",
+        "processId": "craft_process.jiangnan.umbrella_canopy_tuning",
+        "predecessorStepId": "craft_step.jiangnan.umbrella.rain_trial",
+        "actionId": "craft_action.umbrella.retension",
+        "kind": "rework"
+      }
+    ],
+    "workshops": [
+      {
+        "id": "workshop.jiangnan.umbrella_lane",
+        "workstationId": "workstation.jiangnan.umbrella_tuning",
+        "initialFunds": 100
+      }
+    ],
+    "workshopMaterialStocks": [
+      {
+        "workshopId": "workshop.jiangnan.umbrella_lane",
+        "materialId": "material.jiangnan.umbrella.flexible_bark_paper_patch",
+        "unitCost": 80,
+        "initialQuantity": 1,
+        "baseQuality": 9000,
+        "reworkQualityGain": 0
+      },
+      {
+        "workshopId": "workshop.jiangnan.umbrella_lane",
+        "materialId": "material.jiangnan.umbrella.stiff_salvage_paper_patch",
+        "unitCost": 30,
+        "initialQuantity": 2,
+        "baseQuality": 6500,
+        "reworkQualityGain": 1900
+      }
+    ],
+    "workshopOrders": [
+      {
+        "id": "order.jiangnan.umbrella_roof_shortcut",
+        "workshopId": "workshop.jiangnan.umbrella_lane",
+        "processId": "craft_process.jiangnan.umbrella_canopy_tuning",
+        "requiredQuantity": 1,
+        "minimumQuality": 8000,
+        "rewardFunds": 25,
+        "consequenceKind": "operate_route_interaction",
+        "consequenceTargetId": "interaction.system_demo.workshop_shortcut"
+      }
+    ]
+  },
+  "editor": {
+    "version": 1,
+    "items": [
+      {
+        "id": "player.system_demo.start",
+        "label": "Player Start",
+        "ordinal": 0,
+        "canvasX": 80,
+        "canvasY": 40
+      },
+      {
+        "id": "safe_point.system_demo.initial",
+        "label": "Initial Safe Point",
+        "ordinal": 1,
+        "canvasX": 80,
+        "canvasY": 160
+      },
+      {
+        "id": "interaction.system_demo.console",
+        "label": "Gate Console",
+        "ordinal": 2,
+        "canvasX": 240,
+        "canvasY": 40
+      },
+      {
+        "id": "mechanism.system_demo.gate",
+        "label": "Gate Mechanism",
+        "ordinal": 3,
+        "canvasX": 400,
+        "canvasY": 40
+      },
+      {
+        "id": "blocker.system_demo.gate",
+        "label": "Tension Gate Blocker",
+        "ordinal": 4,
+        "canvasX": 560,
+        "canvasY": 40
+      },
+      {
+        "id": "actor.system_demo.entry.slot_a",
+        "label": "Entry Slot A",
+        "ordinal": 5,
+        "canvasX": 720,
+        "canvasY": 0
+      },
+      {
+        "id": "actor.system_demo.entry.slot_b",
+        "label": "Entry Slot B",
+        "ordinal": 6,
+        "canvasX": 720,
+        "canvasY": 80
+      },
+      {
+        "id": "wave.system_demo.entry",
+        "label": "Entry Wave",
+        "ordinal": 7,
+        "canvasX": 880,
+        "canvasY": 40
+      },
+      {
+        "id": "actor.system_demo.followup.slot_a",
+        "label": "Follow-up Slot A",
+        "ordinal": 8,
+        "canvasX": 1040,
+        "canvasY": 0
+      },
+      {
+        "id": "actor.system_demo.followup.slot_b",
+        "label": "Follow-up Slot B",
+        "ordinal": 9,
+        "canvasX": 1040,
+        "canvasY": 80
+      },
+      {
+        "id": "wave.system_demo.followup",
+        "label": "Follow-up Wave",
+        "ordinal": 10,
+        "canvasX": 1200,
+        "canvasY": 40
+      },
+      {
+        "id": "objective.system_demo.open_gate",
+        "label": "Open Gate Objective",
+        "ordinal": 11,
+        "canvasX": 720,
+        "canvasY": 200
+      },
+      {
+        "id": "objective.system_demo.terminal",
+        "label": "Terminal Objective",
+        "ordinal": 12,
+        "canvasX": 1360,
+        "canvasY": 200
+      },
+      {
+        "id": "workstation.jiangnan.umbrella_tuning",
+        "label": "Umbrella Tuning Workstation",
+        "ordinal": 13,
+        "canvasX": 240,
+        "canvasY": 320
+      },
+      {
+        "id": "craft_process.jiangnan.umbrella_canopy_tuning",
+        "label": "Canopy Tension Need",
+        "ordinal": 14,
+        "canvasX": 400,
+        "canvasY": 320
+      },
+      {
+        "id": "material.jiangnan.umbrella.flexible_bark_paper_patch",
+        "label": "Flexible Paper Patch",
+        "ordinal": 15,
+        "canvasX": 560,
+        "canvasY": 280
+      },
+      {
+        "id": "material.jiangnan.umbrella.stiff_salvage_paper_patch",
+        "label": "Stiff Salvage Patch",
+        "ordinal": 16,
+        "canvasX": 560,
+        "canvasY": 360
+      },
+      {
+        "id": "craft_step.jiangnan.umbrella.align_rib",
+        "label": "Align Loose Rib",
+        "ordinal": 17,
+        "canvasX": 720,
+        "canvasY": 320
+      },
+      {
+        "id": "craft_step.jiangnan.umbrella.paste_patch",
+        "label": "Paste Canopy Patch",
+        "ordinal": 18,
+        "canvasX": 880,
+        "canvasY": 320
+      },
+      {
+        "id": "craft_step.jiangnan.umbrella.rain_trial",
+        "label": "Rain Trial",
+        "ordinal": 19,
+        "canvasX": 1040,
+        "canvasY": 320
+      },
+      {
+        "id": "craft_step.jiangnan.umbrella.retension",
+        "label": "Retension Rework",
+        "ordinal": 20,
+        "canvasX": 1200,
+        "canvasY": 320
+      },
+      {
+        "id": "workshop.jiangnan.umbrella_lane",
+        "label": "Umbrella Lane Workshop",
+        "ordinal": 21,
+        "canvasX": 400,
+        "canvasY": 440
+      },
+      {
+        "id": "order.jiangnan.umbrella_roof_shortcut",
+        "label": "Roof Shortcut Order",
+        "ordinal": 22,
+        "canvasX": 720,
+        "canvasY": 440
+      },
+      {
+        "id": "blocker.system_demo.roof_shortcut",
+        "label": "Roof Shortcut Blocker",
+        "ordinal": 23,
+        "canvasX": 1040,
+        "canvasY": 440
+      },
+      {
+        "id": "interaction.system_demo.workshop_shortcut",
+        "label": "Workshop Delivery Route",
+        "ordinal": 24,
+        "canvasX": 880,
+        "canvasY": 440
+      },
+      {
+        "id": "mechanism.system_demo.roof_shortcut",
+        "label": "Roof Shortcut Mechanism",
+        "ordinal": 25,
+        "canvasX": 1200,
+        "canvasY": 440
+      }
+    ]
+  }
+}

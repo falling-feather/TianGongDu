@@ -4,12 +4,26 @@
   "title": "TianGongDu Technical Baseline",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "decisionVersion", "productTarget", "gameCore", "runtimeHost", "toolchainLock", "browserVariants", "webShell", "platformTargets", "cloudSync", "contentDelivery"],
+  "required": ["schemaVersion", "decisionVersion", "productTarget", "experiencePresentation", "gameCore", "runtimeHost", "toolchainLock", "browserVariants", "webShell", "platformTargets", "cloudSync", "contentDelivery"],
   "properties": {
     "$schema": { "type": "string" },
     "schemaVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
     "decisionVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
     "productTarget": { "const": "browser-first-cross-platform-action-rpg" },
+    "experiencePresentation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["viewModel", "primaryGuidance", "secondaryReadabilityReference", "gameplaySpace", "groundPlaneDepthMovement", "cameraControl", "referenceUseBoundary"],
+      "properties": {
+        "viewModel": { "const": "2.5d-oblique-panoramic" },
+        "primaryGuidance": { "const": "douzhanshen" },
+        "secondaryReadabilityReference": { "const": "warm-snow" },
+        "gameplaySpace": { "const": "ground-plane-xy-plus-elevation-and-floor-layer" },
+        "groundPlaneDepthMovement": { "const": true },
+        "cameraControl": { "const": "fixed-or-authored-limited-no-free-orbit" },
+        "referenceUseBoundary": { "const": "high-level-design-language-only" }
+      }
+    },
     "gameCore": {
       "type": "object",
       "additionalProperties": false,

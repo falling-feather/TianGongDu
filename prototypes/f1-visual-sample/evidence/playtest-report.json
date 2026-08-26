@@ -1,0 +1,98 @@
+{
+  "status": "passed",
+  "browserVersion": "150.0.7871.101",
+  "states": {
+    "initial": {
+      "round": "playing",
+      "lastAction": "进入伞巷",
+      "playerHealth": "100",
+      "enemyHealth": "100",
+      "posture": "58",
+      "stance": "eaves",
+      "playerX": "410",
+      "playerY": "594",
+      "enemyX": "875",
+      "enemyY": "578",
+      "enemyTelegraphing": "false"
+    },
+    "afterMovement": {
+      "round": "playing",
+      "lastAction": "斜向移动",
+      "playerHealth": "100",
+      "enemyHealth": "100",
+      "posture": "58",
+      "stance": "eaves",
+      "playerX": "991",
+      "playerY": "594",
+      "enemyX": "875",
+      "enemyY": "578",
+      "enemyTelegraphing": "false"
+    },
+    "telegraph": {
+      "round": "playing",
+      "lastAction": "敌人蓄力",
+      "playerHealth": "100",
+      "enemyHealth": "100",
+      "posture": "58",
+      "stance": "eaves",
+      "playerX": "991",
+      "playerY": "594",
+      "enemyX": "875",
+      "enemyY": "578",
+      "enemyTelegraphing": "true"
+    },
+    "afterDodgeInput": {
+      "round": "playing",
+      "lastAction": "闪避无敌",
+      "playerHealth": "100",
+      "enemyHealth": "100",
+      "posture": "58",
+      "stance": "eaves",
+      "playerX": "991",
+      "playerY": "594",
+      "enemyX": "875",
+      "enemyY": "578",
+      "enemyTelegraphing": "true"
+    },
+    "afterDodge": {
+      "round": "playing",
+      "lastAction": "闪避成功",
+      "playerHealth": "100",
+      "enemyHealth": "100",
+      "posture": "58",
+      "stance": "eaves",
+      "playerX": "991",
+      "playerY": "594",
+      "enemyX": "875",
+      "enemyY": "578",
+      "enemyTelegraphing": "false"
+    },
+    "victory": {
+      "round": "victory",
+      "lastAction": "镇守已破",
+      "playerHealth": "100",
+      "enemyHealth": "0",
+      "posture": "38",
+      "stance": "flower",
+      "playerX": "962",
+      "playerY": "594",
+      "enemyX": "875",
+      "enemyY": "578",
+      "enemyTelegraphing": "false"
+    }
+  },
+  "screenshots": [
+    "evidence/01-start-screen.png",
+    "evidence/02-active-combat.png",
+    "evidence/03-dodge-success.png",
+    "evidence/04-victory.png"
+  ],
+  "consoleProblems": [],
+  "pageErrors": [],
+  "responsive": {
+    "viewportWidth": 760,
+    "documentWidth": 760,
+    "frameWidth": 760,
+    "startVisible": true
+  }
+}

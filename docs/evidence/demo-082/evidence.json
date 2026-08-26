@@ -1,0 +1,85 @@
+{
+  "taskId": "DEMO-082",
+  "productVersion": "Demo 0.8.2",
+  "commit": "a6496c0eeeb5c704509e77b8b0e162bbbde52bc1",
+  "browser": {
+    "requested": "edge",
+    "used": "edge",
+    "version": "150.0.4078.99"
+  },
+  "route": {
+    "url": "http://127.0.0.1:51047/",
+    "createdActor": "actor.system_demo.entry.demo082",
+    "createdInteraction": "interaction.system_demo.console.demo082",
+    "removedInteraction": "interaction.system_demo.console",
+    "savedRevision": 4
+  },
+  "canvasMoves": {
+    "first": [
+      -650,
+      -550
+    ],
+    "reload": [
+      -550,
+      -450
+    ]
+  },
+  "launch": {
+    "publication": {
+      "token": "mHwhkStEKAdE6HoOq7BRPHpV0b0yskFE",
+      "generation": 1,
+      "revision": 4,
+      "packageSha256": "sha256:8c1f35d8c9030cb9bb7cc22eba5f7ca4314b9a60882fdebcdce95d5b7a50e87b",
+      "packageBytes": 2848,
+      "url": "/preview/tiangongdu-system-demo.html?workbenchPreview=mHwhkStEKAdE6HoOq7BRPHpV0b0yskFE&generation=1"
+    },
+    "runtime": {
+      "ready": true,
+      "playerX": 0,
+      "playerY": -3250,
+      "gateOpen": false,
+      "retryCount": 0,
+      "blockedMoveCount": 0,
+      "packageByteCount": 2848,
+      "assetCount": 12
+    }
+  },
+  "reload": {
+    "publication": {
+      "token": "YyKXUZwkJYFdsUV0evfg4hD9EHtjpTW5",
+      "generation": 2,
+      "revision": 5,
+      "packageSha256": "sha256:c0acc3cf4b96801b4228489f96446951a2fe36aae7433edc483c5ca6eac6f936",
+      "packageBytes": 2848,
+      "url": "/preview/tiangongdu-system-demo.html?workbenchPreview=YyKXUZwkJYFdsUV0evfg4hD9EHtjpTW5&generation=2"
+    },
+    "runtime": {
+      "ready": true,
+      "playerX": 0,
+      "playerY": -3250,
+      "gateOpen": false,
+      "retryCount": 0,
+      "blockedMoveCount": 0,
+      "packageByteCount": 2848,
+      "assetCount": 12
+    },
+    "oldFrameStayedVisibleUntilReady": true
+  },
+  "invalidDraft": {
+    "revision": 6,
+    "rejectedInteraction": "interaction.system_demo.console.demo082.invalid",
+    "diagnosticCount": 1,
+    "keptPublicationGeneration": 2,
+    "keptLiveFrame": true
+  },
+  "consoleErrors": [],
+  "pageErrors": [],
+  "requestErrors": [],
+  "screenshots": [
+    "01-crud-diagnostic.png",
+    "02-launch-live.png",
+    "03-reload-keeps-live.png",
+    "04-reloaded-live.png",
+    "05-invalid-keeps-live.png"
+  ]
+}

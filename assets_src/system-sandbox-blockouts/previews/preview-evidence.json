@@ -1,0 +1,55 @@
+{
+  "schemaVersion": "system-sandbox-blockout-preview-evidence-1.0",
+  "taskId": "ART-002",
+  "status": "Blockout",
+  "integrationStatus": "not-integrated",
+  "runtimeCapture": "not-produced",
+  "platformValidation": "not-validated",
+  "actualHumanEvidence": false,
+  "actorThumbnailCheck": {
+    "heightPx": 128,
+    "grayscale": true,
+    "path": "previews/actor-thumbnails-128.svg",
+    "sha256": "5058a896ce1b6c0db1de825983fb6bed98bc366c5caf33194dab316a6639a34a",
+    "bytes": 3777,
+    "stableAssetIds": [
+      "asset.system_demo.player",
+      "asset.system_demo.enemy.pressure",
+      "asset.system_demo.enemy.flanker",
+      "asset.system_demo.enemy.elite"
+    ]
+  },
+  "viewports": [
+    {
+      "id": "1280x720",
+      "width": 1280,
+      "height": 720,
+      "path": "previews/readability-1280x720.svg",
+      "sha256": "5498fdd0385f54885400cf20475e2004a63000424735bfcee80124ea61a5783d",
+      "bytes": 11350
+    },
+    {
+      "id": "1920x1080",
+      "width": 1920,
+      "height": 1080,
+      "path": "previews/readability-1920x1080.svg",
+      "sha256": "28c7b40b04297cfcd1af93500e309a8c1aefa4107c629ba6b97aae92e20fae2c",
+      "bytes": 11449
+    },
+    {
+      "id": "1230x692",
+      "width": 1230,
+      "height": 692,
+      "path": "previews/readability-1230x692.svg",
+      "sha256": "a09a9b3239d477865e218c01b77a95d2a3225b6c90facc3aa03f82932ac3ba71",
+      "bytes": 11810
+    }
+  ],
+  "checks": [
+    "twelve distinct shape tokens",
+    "twelve stable-ID-specific fallback artifacts",
+    "anchors visible",
+    "grayscale and low-motion semantics remain readable",
+    "review boards are not Web or Windows runtime captures"
+  ]
+}

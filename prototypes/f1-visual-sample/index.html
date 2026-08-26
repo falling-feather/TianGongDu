@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#071018" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E" />
+    <title>天工渡 · 一次性玩法样例</title>
+  </head>
+  <body>
+    <main class="demo-shell">
+      <section class="game-frame" aria-label="天工渡斜向战斗玩法样例">
+        <div id="game" aria-hidden="true"></div>
+        <div class="weather" aria-hidden="true"></div>
+
+        <div class="hud" data-testid="hud">
+          <section class="player-status" aria-label="玩家状态">
+            <div class="seal">伞</div>
+            <div class="player-bars">
+              <div class="name-line"><strong>沈砚</strong><span id="stance-label">檐卫势</span></div>
+              <div class="bar health"><i id="player-health-bar"></i></div>
+              <div class="bar posture"><i id="posture-bar"></i></div>
+            </div>
+          </section>
+
+          <section class="boss-status" id="boss-status" aria-label="敌人状态">
+            <div class="boss-title">伞巷镇守 · 雨魇</div>
+            <div class="bar boss"><i id="enemy-health-bar"></i></div>
+          </section>
+
+          <div class="objective" id="objective">目标：击破伞巷镇守</div>
+          <div class="combat-callout" id="combat-callout" aria-live="polite"></div>
+
+          <nav class="actions" aria-label="战斗操作">
+            <button type="button" data-action="light"><kbd>J</kbd><span>轻击</span></button>
+            <button type="button" data-action="heavy"><kbd>K</kbd><span>重击</span></button>
+            <button type="button" data-action="dodge"><kbd>空格</kbd><span>闪避</span></button>
+            <button type="button" data-action="stance"><kbd>Q</kbd><span>换势</span></button>
+          </nav>
+
+          <div class="movement-hint"><kbd>W A S D</kbd><span>斜向移动</span><b>R 重开</b></div>
+        </div>
+
+        <section class="modal start-modal" id="start-modal" data-testid="start-modal">
+          <div>
+            <h1>进入伞巷</h1>
+            <p>这不是正式 F1，只验证斜向移动、轻重击、闪避和敌人蓄力是否成立。</p>
+            <button type="button" id="start-button">开始演示</button>
+          </div>
+        </section>
+
+        <section class="modal result-modal" id="result-modal" hidden>
+          <div>
+            <h2 id="result-title">镇守已破</h2>
+            <p id="result-copy">最小战斗循环已完成。</p>
+            <button type="button" id="restart-button">重新演示</button>
+          </div>
+        </section>
+      </section>
+
+      <aside class="demo-note">
+        <strong>一次性玩法证明</strong>
+        <span>真实实现：移动、碰撞边界、攻击判定、伤害、闪避无敌、敌人蓄力、胜负。</span>
+        <span>简化处理：单张角色立绘做动作形变，预渲染环境，程序绘制水花、刀光和警示圈。</span>
+      </aside>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

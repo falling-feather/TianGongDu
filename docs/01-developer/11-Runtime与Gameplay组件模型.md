@@ -2,7 +2,7 @@
 
 > 上级文档：[`../01-开发者文档.md`](../01-开发者文档.md)
 > 状态：Accepted Baseline
-> 最后更新：2026-07-10
+> 最后更新：2026-07-15
 > 维护者角色：C++ 核心负责人；Gameplay、AI、存档与表现 Owner 会签
 
 ## 1. 混合组件模型
@@ -153,7 +153,9 @@ Trigger → Cost → TargetQuery → Movement → HitWindow
 - Runtime `ICollisionWorld` 查询经量化并稳定排序；Axmol 物理不进入权威命中，独立碰撞库若使用也只是 Runtime 私有实现。
 - 命中键 `(attacker, abilityInstance, hitIndex, target)` 防重复。
 - 精确格挡是规则窗口、方向和标签交集，不由动画回调判定。
-- AI Director 发放进攻令牌，控制横版群战可读性。
+- `DeterministicEncounterDirector` 的 legacy 路径继续按 `max_simultaneous_attackers` 发放进攻令牌：正在执行非零 `active_ability` 的敌人先占用令牌，剩余候选按玩家距离、再按 Stable Actor Key 排序；Definition 的令牌数不得超过 authored 敌人数。当前 F1 内容仍走此路径并配置为 1。
+- 显式职责/租约模式见第 28 节：只有完整 Actor→有限职责绑定与 `attack_token_lease_ticks` 同时存在才启用。令牌池、租约与轮转游标全部归 Encounter Director，敌方 Actor 不能自增令牌；Active Ability 与尚未到期的租约共同占用池，休眠或击败会归还租约。
+- Native 用例已证明 legacy 双令牌补位，以及职责模式中压迫者/侧击者双令牌、击败后骚扰者补位、租约期间不超发和 60/30 FPS 固定步分组一致性。视野扇区、遮挡、正式职责数值、空中/远程/控制组合窗口、F1 内容接线与压力调平仍是第 21/28 节规划目标，不得写成现有内容成果。
 - Web 后台/掉帧不会改变攻击速度和资源恢复。
 
 ## 12. 工灯定印
@@ -237,13 +239,13 @@ Idle → Pending → Committing → Idle
 
 | 域 | 典型状态 | 规则 |
 | --- | --- | --- |
-| Locomotion | Grounded/Airborne/Falling/Climbing/ForcedMove | 决定重力、地面、跳跃、下穿和规则位移 |
+| Locomotion | Grounded/Airborne/Falling/Climbing/ForcedMove | 决定地面平面移动、独立高度、纵跃/落差、层连接和规则位移 |
 | Action | Free/Startup/Active/Recovery/Guard/Evade/Hitstun/Downed | 决定成本提交、命中窗、取消和受击 |
 | Interaction | None/WorldInteract/Dialogue/Craft/MajorChoice | 决定输入上下文、暂停/减速和任务命令 |
 
 优先级不是“最后写入者获胜”：Session 强制状态/Defeat > Hit/Downed > 已提交动作不可取消段 > 明确取消窗 > 自由输入。每个能力数据声明可从哪些 Action 状态进入、在哪些 Tick 可取消到哪些标签；Presentation 动画状态只能跟随。
 
-跳跃包括 `jump_pressed` 缓冲、离地宽限、起跳 commit、可变高度保持和落地恢复；闪身是独立 Action，不能共享同一物理键语义。攀附只发生在烘焙锚点，避免任意墙面导致动画/碰撞组合爆炸。
+纵跃包括 `jump_pressed` 缓冲、离地宽限、起跳 commit、可变高度保持和落地恢复；它改变独立高度而不把屏幕方向当成世界纵深。闪身是地面平面上的独立 Action，不能共享同一物理键语义。跨越/攀附只发生在烘焙锚点，避免任意墙面导致动画、遮挡和碰撞组合爆炸。
 
 ## 20. 世界状态分层与持久事务
 
@@ -264,7 +266,7 @@ AI 分为感知、意图、导航/移动、能力选择和群组协调。高威�
 
 - 感知事实有来源、可见时间和置信标签，不让 Blackboard 直接读取玩家私有任务状态。
 - Utility/状态机输出 `IntentId + reason tags + validUntilTick`，调试器能说明为何选招/放弃。
-- 群战导演控制同时进攻 token，F1 正式段最多 2 个高威胁者；空中/远程/控制角色不能在无窗口时同时爆发。
+- 群战导演控制同时进攻 token，Runtime 已证明最多两个并发槽位的确定性占用/补位；F1 正式段目标仍为最多 2 个高威胁者，但当前内容值为 1，空中/远程/控制职责和“无窗口不同时爆发”规则尚未接线。
 - Leash、失去目标、导航失败、Cell 卸载、玩家进入对话和地区归位都有明确退场状态。
 - NPC 日程使用分钟/时段级模拟，不每 Tick 跑完整 AI；离屏 NPC 只更新抽象日程和持久事件。
 - 30 游戏日长模拟检查任务入口、日程锚点、替代交互和关系事件不死锁。
@@ -283,3 +285,227 @@ IGameSession::platform_completion(Completion)
 ```
 
 Snapshot 的 previous/current 双缓冲是 F1 基线，Presentation 用 accumulator alpha 插值位置/视觉量；权威 UI/阶段/资源显示 current，不插值。一次性表现事件带单调 sequence，Presentation ack 后释放；掉帧可以延后但不能重复播放关键音效/演出。View/context 重建时丢弃过期纯表现事件，从 current Snapshot 重建；持久结算事件由 UI 模型和事务状态恢复，不依赖一次性粒子事件。
+
+## 23. 命令回放契约
+
+F1 命令回放使用版本化、显式小端的 `CommandReplay` 二进制格式。回放只记录内容指纹、`GameSessionConfig`、最终 Tick、期望校验和及已映射到世界坐标的权威命令；物理键位、浏览器帧时间、Axmol 对象、屏幕坐标和 Presentation 状态不得进入格式。相同回放必须在 Web/Native 以及 30/60/144 Hz 渲染节奏下抵达同一量化 `x/y/height/floorLayer` 和校验和。
+
+解码器先进入受限 DTO，再构造可执行回放；未知 major、超出当前能力的 minor、截断、尾随字节、越界 Tick、非法方向、未排序或重复排序键、单 Tick 命令溢出、总命令/Tick 上限超限以及校验和不符均须失败关闭。回放版本变化若改变已有字节语义或权威结果，必须新增迁移/兼容决策，不能静默重解释历史数据。
+
+## 24. 合格玩法时长审计
+
+`DeterministicPlaytimeAudit` 与 60 Hz Session 同步推进，但不以经过的全部墙钟或模拟 Tick 冒充玩法时长。F1 内容合同固定 180 Tick 活动宽限：移动、纵跃、已被战斗解析器接受的玩家事件和已提交任务进度只负责续期；宽限耗尽后的运行 Tick 进入 `idle_ticks`。当前 Beat 的合格/闲置时间先留在尝试区，安全推进下一 Beat 才提交；`SafePointRetryCommand` 会把当前尝试全部重分类到 `failure_retry_ticks`，不会删掉诊断证据，也不会让失败刷时进入合格总数。
+
+总合格 Tick 达到 60 分钟仍不足以过门；每个 Beat 必须分别达到 `target_minutes`，防止在单段绕圈后快速跳过薄弱内容。只有任务已经归位、合格总数达标且 7 个 Beat 预算全部达标时，`playable_target_met` 才为真。`PlaytimeAuditSnapshot` 是 Presentation、浏览器 QA 与未来盲测导出器的只读边界，包含合格、闲置、失败重试、当前 Beat 和逐 Beat 达标数及确定性校验和；任何 HUD、JavaScript 或测试工具都不得回写这些计数。
+
+该审计器只能拒绝已知伪时长，不能自动判断移动绕圈、原样敌群、文本质量或探索是否真正非重复。正式 1H 验收仍需真人首玩记录、主持规则、路线/事件 trace 和观察结论；正式盲测记录导出器及其证据包格式目前保持 Missing，不得因 HUD 显示 `1H PENDING/PASS` 而冒充已完成内容密度验收。
+
+## 25. 战斗动作驱动的任务目标
+
+`QuestCombatTriggerDefinition` 把任务目标与稳定的战斗语义连接起来，而不是读取按键或动画帧。F1 当前支持 `player_ability_started`、`player_stance_changed`、`player_hit_guarded` 和 `player_hit_evaded`；Ability 触发器必须提供 `required_ability`，所有触发器都必须提供非空、无重复且不自指的 `prerequisite_objectives`。运行时只在目标处于 Active、姿态/Ability 匹配且全部前置目标已完成时提交进度，错序信号保持无副作用。
+
+当前 F1 schema `1.3.0` 允许战斗触发器同时携带成对的 `required_selection_objective_id` / `required_selection_id`。选择门只能引用先前已发生的 `choose` Objective；同一任务 Objective 可以有多个变体，但不能把无条件与有条件触发器混用，所有变体必须引用同一选择 Objective、option 不重复并完整覆盖 authored options。生成器负责拒绝未来选择与覆盖不全；C++ Resolver 还会拒绝半门、重复 option 和不兼容的同目标定义，并在解析信号时只读取 `IQuestRuntime::selected_option`。Web、Axmol 与输入适配器不得复制“选择→动作”的映射。
+
+沈砚训练保留 5 项触发：檐守重击起手、檐守格挡反制、切换翻花式、翻花轻击起手和翻花闪避反制。返程再增加两个互斥 Definition，共同指向 `f1_objective_demonstrate_rib_calibration`：已选春肋只接受 `stance_eavesguard` + `ability_eavesguard_heavy`，已选冬肋只接受 `stance_flower_turn` + `ability_flower_light`，因此当前总数为 7 项。Web Shell 只把已经由战斗解析器接受的 `CombatEvent` 映射成 `QuestCombatSignal`；物理键、Presentation 特效和敌人偶然命中不能直接完成任务。每次被接受的任务战斗信号后都要重新核对内容化敌群结果，和敌人击败后的核对使用同一 Gameplay Definition；这样即使全部敌人先被清空，随后完成调校动作仍可解锁并收敛 `all_hostiles_defeated`，不会因事件顺序形成软锁。新增 Ability/Stance/防御触发种类可复用这一合同；第 27 节的通用条件求值器已建立最小 Bootstrap，但这些触发 Definition 尚未迁移，等待/失败替代节点和编辑器预览仍为 Missing/Reserved，不能继续向解析器加入 F1 专属分支。
+
+## 26. Beat 边界的敌群激活
+
+F1 的敌对 Actor Definition 全部以 `initially_active=false` 烘焙；`QuestEncounterActivationDefinition` 通过可空 `trigger_objective_id` 为训练、伞巷两轮、调校回程入口/增援和 Boss 指定稳定 Actor Key 组，并必须声明 `EncounterActivationMode`。`replace` 可用于 Beat 入场或同 Beat Objective 完成后的完整切组：恢复玩家、恢复点名敌人并使未点名敌人退出当前组；`reinforce` 必须由同 Beat Objective 触发，只恢复点名的休眠、未击败敌人，保留玩家和既有 Active 敌人的资源、位姿与战斗状态。每个 Actor 都必须有按序对应的 `EncounterActorPlacementDefinition`，包含本次 Home Pose 与 0–14 Formation Slot；缺项、错 Actor、重复/冲突/越界槽位、Active/Defeated 增援目标或返程安全点 aggro 范围外落点均失败关闭。
+
+自 schema `1.2.0` 起，敌群激活可使用成对的 `required_selection_objective_id` / `required_selection_id`。条件激活只能引用已经发生的 `choose` 交互；同一 Beat/触发 Objective 的所有变体必须使用同一选择 Objective、Stable Option 不重复并完整覆盖所有 authored options。`VerticalSliceSession::encounter_activation` 返回 `EncounterActivationMatch`：`boundary_defined=false` 表示没有该边界，存在边界但尚未提交选择时 `activation=nullptr`，唯一匹配时返回 Definition 指针，多个匹配则置 `ambiguous=true`。半配置、未来选择、重复 option、无条件/有条件混合或覆盖不全在初始化前失败关闭。Gameplay 只读取 `IQuestRuntime::selected_option`；Web、Axmol 与浏览器 QA 不得复制选择到激活的映射规则。当前纵切整体 schema 已因第 25 节的战斗动作选择门升至 `1.3.0`，不改变本节既有激活语义。
+
+内容激活使用独立 `EncounterActivationCommand`，以同一 Tick 和全局单调边界序列分别请求 `IEncounterDirector::activate_group` 与 `ICombatResolver::activate_group`；Director 更新归位点/接敌槽并只重置受影响的攻击 Runtime，Combat 按模式恢复/隔离 Actor。`SafePointRetryCommand` 及 `SafePointRetryReason::player_defeated` 只用于真正倒地的玩家，不再承载任务推进。失败重试先恢复当前 Beat 的入场 `replace`，再按 Beat/触发 Objective 对已完成边界去重，交由上述 Gameplay 匹配器重放唯一已选变体，因此返程 `reinforce` 不会丢失或把春冬两个 Definition 都重放。`CombatActorSnapshot` 以独立 `defeated` 位表达生命归零：`active=false && defeated=false` 是休眠/未选中，只有 `defeated=true && health=0` 才可计入击败任务；Active+Defeated、Defeated+非零生命均失败关闭。训练构件继续使用独立 Archetype，避免练习对手进入正式伞偶/纸鹭族群计数。
+
+两个 `activate_group` 接口都接受 placement span，并在写入任何 Runtime 前校验整批 Actor、模式、槽位与 sequence。`tests/native/combat_resolver.cpp` 和 `tests/native/encounter_director.cpp` 现用同一类边界分别证明：两名休眠 Actor 可在一个 `reinforce` 命令中一起提交；若批内较后的 Actor 已 Active，较早 Actor、校验和与单调 sequence 均不改变；合法重试仍可复用该 sequence，而已提交 sequence 的回放无第二次变更。该原子性只属于单个 Resolver/Director。`F1GrayboxLayer::activateEncounterForBeat` 当前仍先调用 Director、再调用 Combat，没有共同的 prepare/commit、补偿或快照回滚；若前者成功而后者因待处理 Combat 命令/位姿等运行条件失败，两个子系统仍可能分叉，因此禁止把这组 Native 证明描述成跨组件事务。
+
+Stage Advance 和 Objective Complete 都可能由场景交互或 `CombatEvent` 产生。Web Shell 只能先记录待激活 Beat/Objective，再在交互解析后或战斗事件发布完成后的 Tick 安全点应用，禁止在 `ICombatEventSink::publish` 回调栈中重入修改 Combat Resolver。沈砚训练用两种单体教学方位、伞巷用 1/5 对向夹击与纵深纸鹭槽、返程用 0/3/6 三角入口组，并在 Slot 5 根据春肋选择追加地面伞偶、根据冬肋选择追加高位纸鹭，共同证明同一内容边界可驱动完整替换、单 Actor 叠加增援和先前选择的可见后果。当前已实现的是 8 项固定 Definition 与“3→4”Bootstrap，以及 Combat/Director 各自的多 Actor 批量增援 Native 边界；F1 JSON 尚未编排一个真正的多 Actor `reinforce` Definition，也没有 Web/浏览器证据或跨组件原子协调。通用条件程序的 C++ 最小合同/求值器已按第 27 节 Bootstrap，职责/令牌租约合同已按第 28 节 Bootstrap；但多个 Objective 会合、职责 Schema/生成器/F1 Definition、Director 令牌状态的快照/回放协议、动态队形、刷出/退场演出、导航避障和 Workbench 条件/编队/时间线仍为 Missing/Reserved。
+
+## 27. 通用任务复合条件最小合同
+
+`QuestConditionProgramDefinition` 用稳定 `ContentId` 命名一段有界后缀布尔程序；当前指令仅允许 `objective_completed`、`selection_equals`、`all`、`any` 和 `negate`。`DeterministicQuestConditionEvaluator::initialize` 在进入 Session 前一次性校验条件库：1–64 个程序、每程序 1–64 条指令、求值栈最多 16 项、`all`/`any` 的 fan-in 为 2–8，并拒绝不稳定/重复条件 ID、未知 Objective、未由 `choose` 交互声明的 option、操作数不足、悬空结果、非法 payload 和未知 opcode。任一错误都失败关闭，不生成部分可用的条件库。
+
+条件状态的唯一 Owner 仍是 `IQuestRuntime`。求值器只调用 `objective_state` 与 `selected_option`，使用固定栈、无分配、无状态写入；未初始化和未知条件返回显式错误，Objective 未完成或选择不匹配只得到 `false`。Presentation、Web Shell、浏览器 QA 与内容工具不得复制求值逻辑或保存第二份条件结果。
+
+形成精确提交 `37f5dd6` 的同一源码由 Native 用例证明两个 Objective 与一个选择的 AND 会合、路线 OR、NOT、嵌套 AND/OR 和替代分支，并覆盖未知引用、空程序、栈上/下溢、fan-in 超限与重复 ID；提交前工作树的 MSVC/Clang Release、目标 CTest 和 Emscripten Web Single Release 均通过。该状态仅为 **Bootstrap Implemented**：`VerticalSliceDefinition` 尚未拥有条件程序 span，JSON Schema/生成器/生成头和现有 Interaction/Combat/Encounter 消费者也尚未接线。旧的 `prerequisite_objectives` 与成对选择门在一次性迁移完成前仍是权威真相；后续迁移必须同时删除被替代字段和专用匹配分支，禁止长期保留两套条件真相。
+
+## 28. 敌人职责与进攻令牌租约最小合同
+
+`EncounterTacticalDuty` 是有限枚举，只包含 `pressure`、`flanker`、`harrier`、`controller`；`EncounterActorDutyDefinition` 以 Stable Actor Key 绑定职责，不接受字符串、Archetype、Objective 或 Boss 名称特判。新模式采用显式迁移：`EncounterDirectorDefinition.actor_duties` 与 `attack_token_lease_ticks` 必须同时为空或同时有效。两者都为空时保留第 11 节的 legacy 距离仲裁与既有校验和；启用时必须恰好覆盖每一名 hostile，Actor 不得重复或指向玩家，职责枚举必须已知，租约必须为 1–600 Tick，令牌池仍不得超过 hostile 数量。半配置、缺绑定、重复 Actor、未知职责、超长租约全部失败关闭。
+
+职责模式的状态 Owner 只有 `DeterministicEncounterDirector`。每个 hostile Runtime 保存职责、租约截止 Tick 与上次获授 Tick，Director 保存有限职责轮转游标；一次获授覆盖当前 Tick 至 `tick + leaseTicks - 1`。非零 Active Ability 或未到期租约各占一个池槽，同一 Actor 不会重复计数；休眠、击败或租约到期会在成功提交下一 Tick 时归还池槽。仲裁从游标职责开始循环寻找候选，优先让不同职责获得槽位；同职责内按“最久未获授、距玩家距离、Stable Actor Key”排序。所有选择先完成快照/Ability 校验，再一起写入租约、攻击计数、冷却和游标；Active+Defeated 快照失败关闭且不消费 Tick。失败重试与 `replace` 重置全部租约/游标，`reinforce` 只重置点名 Actor；职责、租约、上次获授 Tick和游标均进入 Director checksum。
+
+`tests/native/encounter_director.cpp` 证明：双令牌首 Tick 稳定授予压迫者与侧击者；压迫者被击败后立即归还槽位，由等待的骚扰者补位；两项存活租约期间不生成第三条攻击命令；把同一 60 Tick 流按 60 FPS 的 1 Tick/帧或 30 FPS 的 2 Tick/帧调用，并反转输入快照顺序，命令 Tick/Actor/sequence 与最终 checksum 完全一致。MSVC Release 与锁定 Clang 19 Release 完整 CTest 均为 16/16，Emscripten/Axmol Web Single Release 重编通过。
+
+该状态是 **Bootstrap Implemented / Not Authored In F1**。当前 `f1-vertical-slice.json` 仍只有 `maxSimultaneousAttackers: 1`，没有职责/租约字段；JSON Schema、生成器、生成头迁移、F1 双令牌内容、空中/远程/控制行为参数、压力调平、Web/浏览器路线，以及可恢复 Director 租约的跨 Combat/Quest/Profile 快照与回放协议都尚未完成。内容组不得复制单人激活或按敌人名称写分支来冒充本合同。
+
+## 29. Definition 驱动的任务 UI 投影边界
+
+`QuestUiCueDefinition` 以稳定 cue、Beat、source mask 和 Objective 域声明只读任务投影；空 Objective span 表示该 Beat 内的 wildcard。初始化会拒绝空/未知 ID、未知 source bit、重复或跨 Beat Objective、同 Beat/source 下 wildcard 与显式域重叠，以及多个 cue 覆盖同一域；每个 cue 的显式 Objective 与 result selector 各自最多 8 项。`QuestUiResultSelectorDefinition` 只授权 Definition 明确声明的跨 Objective 结果组合，并可为“动作已接受但世界反馈仍为负向”提供 `negative` polarity override；普通 polarity 仍由 secondary（适用时）或 primary 结果状态推导，不能把 `accepted trigger + rejected outcome` 压成一个总状态。
+
+合格时长证据不从 UI fixture、Objective ID 或 `accepted/rejected` 单独推断。每个 cue 必须声明 1–16 条 `QuestUiAttemptEvidenceRuleDefinition`，以 `source + focus Objective + primary result ID/status/reason + secondary result ID/status/reason` 组成无 wildcard 的精确键，并派生唯一 `QuestUiAttemptTimeClassification`。空结果必须精确写成 `not_applicable + empty ID + none`，不是“匹配任意结果”；同键即使输出不同 classification 也属于歧义定义。每个 cue 的所有 source bit 都必须至少被一条规则覆盖，interaction/trigger/outcome 还会按类型、Beat 和既有跨 Objective selector/直接 authored progression 反查。未知枚举/结果、重复键、source/classification 白名单错配或非法 sentinel 在 producer 初始化时失败关闭。
+
+`DeterministicQuestUiProjectionProducer` 只读取当前 `IQuestRuntime`、移动安全点、Combat Actor 快照和已验证的低频结果信号，输出固定容量 `QuestUiProjectionSnapshot`。`QuestUiProjectionSignal` 只携带 source、focus Objective 和双结果槽，没有 attempt classification 覆盖入口；producer 在结果语义验证后查找 Definition 精确规则，缺规则返回 `missing_attempt_evidence`，派生 classification 会进入整体 checksum。`DeterministicQuestRuntime` 的 stage 语义会把当前 Beat 内所有未完成 Objective 报告为 Active；producer 接受这些同 Beat 事实并存，但每条投影只有一个由 `signal.objective` 指定的只读焦点，不会选择、拥有或压扁其余 Objective。`pending_objective` 只在该焦点 Active 时等于焦点；焦点 Completed/Locked 时为 0，不能按 author order 猜测“下一个目标”。choice/recovery 要求焦点 Active 且 pending 与焦点一致；跨 Objective selector 继续要求结果 Owner 已完成、焦点 Active 并满足直接 authored progression。快照还包含单调 projection sequence、Quest 权威 checksum、cue/Beat/Objective、安全点、已提交选择、已完成 Objective、排序后的 Active/Defeated hostile、两个各自拥有 ID/Objective/status/reason 的结果槽、稳定 attempt-time classification 与整体 checksum。Actor 身份由 Definition 决定：player key 只能携带 player faction，Encounter/Boss 授权的 hostile key 只能携带 hostile faction，未知、重叠或阵营伪装都失败关闭。attempt-time classification 按 source 使用固定白名单，choice 不可映射为 combat proof、combat feedback 不可映射为 craft decision；`ignored_repeat` 唯一合法 reason 是 `selection_already_committed`。任何其他 Beat 出现 Active、未知/重复/非法 Actor、未知或错类型 interaction/trigger/outcome、跨 Beat 引用、选择/完成事实不一致、缺少精确 evidence rule 或任一容量溢出时均失败关闭，且不会替换上一份有效快照或消费 sequence。
+
+choice 面板的 options 只按 Definition 中当前 Active `choose` Objective 的 authored interaction 顺序完整派生，最多 8 项，重复 selection 或缺失 interaction 在初始化前失败关闭。`QuestUiSelectionIntent` 必须精确引用 projection sequence/checksum、Objective、interaction 与 selection；提交前重新核对当前 Quest 仍属于同一 Definition/Beat、Quest checksum 未变化、Objective 仍 Active、selection 尚未提交，并确认 interaction/selection 对仍是该投影的完整 authored option。UI Action 因而只表达意图，不拥有 Objective、Combat、选择或奖励真相。
+
+通用 Native 目录以 16 个彼此独立的权威语义快照样本覆盖互斥选择、accepted-positive、accepted-negative override、rejected、trigger-only、`trigger accepted + outcome rejected`、檐守/翻花各自成对的恢复 offer/resume 和两套 choice options，并逐项断言 Definition 派生的 attempt classification；同一 combat result IDs 的 accepted/accepted 变体还证明 polarity 可变而分类规则仍按完整 status 精确选择。负例覆盖重复精确键、未知结果/枚举、source/class 不兼容、非空 `not_applicable` sentinel、缺规则且上一 snapshot/sequence/checksum 不变；编译期断言保证调用信号不存在 UI override 字段。另直接启动真实 `DeterministicQuestRuntime`，证明当前 Beat 多个 stage-active Objective 并存时 choice projection/intent 可用，并用独立快照覆盖 objective/combat 多 Active、跨 Beat Active、locked choice focus、stale intent、定义歧义、结果引用、Actor 身份/阵营、cue Objective/selector/rule 的 8/8/16 上限及 choice/selected/Actor/retained 的 8/16/16/64 容量和失败不变性。
+
+该状态是 **Implemented / 1.6 Content Authored**。为兼容旧 C++ 聚合，`VerticalSliceDefinition.quest_ui_cues` 与 cue 尾随 `attempt_evidence_rules` 都有空 span 默认值；pre-1.5 Definition 留空时旧消费者继续编译，而主动初始化投影 producer 会失败关闭。当前根 schema/generated 已为 1.6.0，八个 cue、16 条规则与两路线 checksum 已接入；Stage② 已按第 30 节接通 Platform/Web envelope、正式 Presentation renderer、Action 与 Native fallback，Stage③ 再按第 33 节从权威 Quest/Combat/Recovery 事实组装原 14 类 raw signal 与两个 paired recovery 变体。fixture、prototype flow/autoAdvance、计时分类或 F1 Objective ID 均不能成为运行时派生源。
+
+## 30. 任务 UI Platform、Action 与 Presentation 边界
+
+Web ABI 1.2 在既有 Profile/存储消息之上增加三类同版本信封：JS→C++ 的 `quest_ui_selection_intent`、C++→JS 的 `quest_ui_event` 与 `quest_ui_close_ack`。投影保留 producer sequence/checksum，信封头另有同 session generation 内严格递增的 wire `messageSequence`；二者不能互相替代。`WebPlatformBridge` 只接受固定容量、尾部归零且枚举/结果/选项/Actor/retained Objective 形态合法的投影，并单独保存当前 choice 的 generation + projection sequence + checksum。错误 generation、错误 sequence/checksum、非 choice 身份、旧确认均失败关闭且不替换 pending 消息；相同确认幂等，新权威投影优先并抑制旧 choice close。JS bridge 再按 wire sequence 拒绝重复或乱序消息，renderer 还会核对同一面板身份与 `close.messageSequence > panel.messageSequence`。
+
+DOM renderer 是 Presentation consumer，不是 Quest Runtime。它从稳定 cue、focus Objective、source 与 raw result 槽选择玩家文案；允许在 Presentation 目录登记 Stable F1 ID，但不得从 attempt-time classification、CSS、按钮或 fixture 推断路线、进度或结果。classification 可以保留在 decoded bridge QA 对象，却不得进入 renderer model、copy、Action 或 close。choice options 必须逐项保持 projection authored 顺序；按钮 Promise resolve 只进入“等待权威确认”，不本地隐藏或推进，等待期间保持原焦点并使用 `aria-busy`/`aria-disabled` 阻止重复提交，技术异常只进入 lifecycle/QA。只有更高 wire sequence 的权威 replace/close 才改变 DOM，关闭后焦点回到可聚焦 Canvas，重复 close 不再次恢复焦点。
+
+应用层 `has_authored_cue(beat, objective, source)` 是只读能力查询，不产生投影、不消费 sequence，也不验证选择本身。只有当前 Objective 被 `choice_available` cue 覆盖时，`F1GrayboxLayer` 才强制进入 projection → choice state → `validate_choice_intent` → `complete_objective`；投射失败保持失败关闭。未被 cue 覆盖的 legacy `choose` Objective 继续在具体世界交互上提交 interaction 自带的 authored selection，既不默认第一个选项，也不由 UI 保存第二份选择真相。无 Web consumer 时，同一 App 层 choice state 显示按投影顺序排列的 `1..N` 英文调试标签，数字键构造完全相同的 intent；越界键无副作用，成功后退出输入门控。标签只属于 `apps/web-shell` Presentation fallback，不得扩散到 Gameplay/Definition，也不是 P01–P05 正式玩家候选。
+
+当前根 F1 schema/generated 已为 1.6.0，八个 cue / 16 条 evidence rule 与两路线 checksum 已接入。抵达、系泊、训练道三个真实 choice 会激活本节的 Platform/Action/renderer 或 Native fallback；后五 Beat 未投射选择继续走显式世界交互。第 33 节已把其余 11 类 Interaction/Combat/Recovery raw signal 与两个 paired recovery 变体接到同一 producer/Platform/renderer 通道；10 个 Stable Asset ID resolver、训练安全点 Encounter+Session+Combat 完整快照/原子重建、正式 recovery Action、无开发界面玩家构建、200%/辅助完整矩阵及真人盲测仍未完成。
+
+## 31. 交互尝试只读判定边界
+
+`DeterministicQuestInteractionResolver::resolve` 继续只返回 Objective Active、选择门吻合、前置完成且在范围内的可用交互，既有 span 初始化和“距离平方 → StableContentKey”排序不变。新增 `resolve_attempt` 是纯加法诊断查询：调用方必须用完整 `VerticalSliceDefinition` 初始化 resolver，使其能核对 Quest ID、当前 Beat 与 Objective 归属；旧 span 初始化仍可使用 `resolve`，但不能调用 attempt 路径。
+
+attempt 先按与 `resolve` 相同的 Cell、floor、选择门、半径和候选排序查找 `eligible`，任何可用候选都优先于不可用候选。仅在没有可用候选时，当前 Beat 的 Active Objective 可因前置未完成返回 `prerequisite_incomplete`；当前 Beat 已完成的 `choose` Objective 只有在 `IQuestRuntime::selected_option` 仍指向同一 Objective 的作者化 option 时才可返回 `selection_already_committed`，即使玩家触碰的是该 Objective 的另一项作者化交互。已完成 inspect/operate/talk、未来或过去 Beat、required-selection 不符、越层、越距、未知 Quest/Beat 都不会冒充这两类结果。
+
+该查询为 `const`，只读取 `IQuestRuntime::snapshot/objective_state/selected_option`，不完成 Objective、不消费 Quest command sequence、不改 tick、选择或 checksum。Native 正负用例使用实际 1.6 Definition 覆盖正常候选、未读码鸣铃、已提交线索的另一选项、读码后鸣铃、1 mm 越距、未来 Beat、路线不符、完成非 choose、可用候选压过同位不可用候选、重复查询与 Definition/Quest 上下文错配。第 33 节的 App emitter 已按通用 disposition 映射 raw result status/reason：每次世界 F 只查询一次，拒绝/重复不提交命令，eligible 只有在 Quest command accepted 后才发布。resolver 仍不得出现 F1 ID，查询本身仍不能推进 Quest。
+
+## 32. 战斗目标尝试只读判定边界
+
+`DeterministicQuestCombatOutcomeAttemptResolver` 是现有 trigger 与 outcome resolver 之间的纯加法观察层。它必须用完整 `VerticalSliceDefinition` 初始化，并复用 `DeterministicQuestCombatTriggerResolver` / `DeterministicQuestCombatOutcomeResolver` 的 Definition 校验；此外还检查 Beat ID、Objective 唯一归属，以及 trigger 的 Objective、选择门、前置和 outcome Objective 都能在同一 Definition 中唯一反查。初始化失败不保存 Definition 指针，调用方可修正后重试；成功后再次初始化返回 `invalid_lifecycle`。
+
+`evaluate_attempt` 的输入是已经由 trigger resolver 接受的 `QuestCombatTriggerResult`、产生该信号的原始 `CombatEvent`、只读 `CombatActorSnapshot` span 与当前 `IQuestRuntime`。它先反查 trigger ID/Objective，再按通用事件语义核对身份：`player_ability_started` 要求玩家 source 与精确 Ability，`player_stance_changed` 要求玩家 source、零 target 与精确 Stance，`player_hit_guarded` / `player_hit_evaded` 要求 Definition 已作者化的 hostile source 和玩家 target。随后核对 Quest ID、Beat index/ID、stage count、trigger 属于当前 Beat且其 Objective 已完成。缺失、拒绝、错 ID、错事件类型、错 source/Ability 或未完成 trigger 都返回显式错误，不能伪造成 accepted history。
+
+候选只从 trigger Objective 在当前 Beat author order 的下一项产生；该 Objective 必须恰好绑定一个当前 Active `hostile_archetype_defeated` outcome。不存在下一项、下一项没有 outcome、kind 为 `all_hostiles_defeated` 或 Objective 已非 Active 时返回 `no_candidate`。这一步先于 Actor snapshot 校验，因此檐守反制后下一项仍是动作 Objective时，即使事件 target 是玩家且未传 hostile snapshots，也只能得到 `no_candidate`，不会误报 `invalid_actor_snapshot`；禁止按 trigger/outcome 名称越过中间 Objective 猜测候选。
+
+只有候选存在时才读取 event target。target 必须非零，在 Encounter activation 或 Boss phase 中已作者化，且在输入 span 中恰好出现一次；其 faction 必须为 hostile，当前 Active、未击败、生命为正且 Archetype 非零。与 outcome Archetype 相同返回 `target_matches_pending`，不同返回 `wrong_target`；未知、未授权、重复、非 hostile、休眠、击败或零生命 target 均失败关闭。两种 disposition 都不会完成 Outcome，也不会修改 Actor、Quest command sequence/checksum、选择、奖励或 accepted trigger 结果。只有 `DeterministicQuestCombatOutcomeResolver::resolve` 可在真实击败快照上报告条件满足，调用方随后仍须提交显式 Quest command。
+
+Native 用例以实际 1.6 Definition 的独立训练状态覆盖檐守无候选、翻花重击命中训练架的 wrong target、命中证明靶但仍 pending，以及重复结果完全一致；负例覆盖 trigger/result/event 身份、target 形态、Definition/Quest context 与失败初始化。第 33 节的 App emitter 已把 `wrong_target` 通用映射为 secondary outcome `rejected/wrong_target`，与 accepted primary trigger 共同交给第 29 节 producer；`target_matches_pending` 不产生失败投影，resolver 内没有 F1 ID、fixture 序号或计时分类分支。
+
+## 33. 首两拍权威任务反馈 App 接线
+
+`apps/web-shell` 的 `F1QuestUiSignalEmitter` 是 App 边界组装器，不是第二套 Quest Runtime。它只接受已经由 Definition/Runtime 验证的 `QuestInteractionResult`、`QuestCombatTriggerResult`、`QuestCombatOutcomeAttemptResult`、`QuestEvent` 与只读 Quest snapshot，输出 raw `QuestUiProjectionSignal`；类本身不提交命令、不读取 cue/evidence rule、Presentation copy、fixture 或 attempt-time classification，也不含 F1 Objective/interaction/trigger/outcome ID 分支。所有信号仍必须经过第 29 节 producer 才能获得 cue、polarity、classification、Actor、sequence 与 checksum。
+
+世界交互按一次调用边界使用完整 Definition `resolve_attempt`。`eligible` 复用原完成路径，只有 `complete_objective` 真实 accepted 后才映射 accepted；`prerequisite_incomplete` 与 `selection_already_committed` 分别映射 rejected/prerequisite_incomplete 和 ignored_repeat/selection_already_committed，且不提交 Quest command。已投射 choice 在精确 intent 验证和完成后，用作者化 interaction 作为 result owner，并只在 author order 紧邻 Objective 当前 Active 时把投影 focus 迁移过去；未投射 legacy choose 仍走具体世界交互，不默认首项。
+
+`objective_state` 只从真实 `QuestEvent::objective_completed` 的同 Beat author-order 紧邻 Active Objective 产生；App 再以 `has_authored_cue` 做能力过滤，不扫描 cue/evidence rule 反推玩法阶段。Combat trigger 完成后，outcome attempt 必须在原始 `CombatEvent` target 尚未被 Encounter replace 的 Actor snapshot 上立即求值；raw signal 随后进入容量 8 的固定队列，只有 `applyPendingEncounterActivation` 成功后才 flush。`no_candidate` 发布 trigger accepted + secondary N/A，`wrong_target` 发布 accepted primary + rejected secondary，`target_matches_pending` 不发布失败；投射失败不回滚已经 accepted 的 Quest，也不追加第二条命令。
+
+恢复焦点按当前 Beat author order 找首个未完成 Active frontier。`recovery_offer` 只在玩家击败事件已成为 Combat 真相后请求；App 只从该倒地后的 `CombatActorSnapshot` 暂存非零权威 stance。Session retry、Encounter restore、Combat restore 和移动安全点全部成功后，若 Combat 初始 stance 与暂存值不同，App 只排入既有 `switch_stance` 命令，不直接写 Actor；`F1QuestUiRecoveryResumeGate` 此时必须观察实际 retry Tick 之后的匹配 `stance_changed`。若初始 stance 已匹配则不要求该事件；两种路径都必须等后续 Session/Encounter/Combat 同步 Tick，并重新读取 Active/non-defeated/matching-stance 玩家 snapshot。只有 Quest/Beat/frontier、completed_total、selection_count 和 checksum 均未漂移时，才可投射 `recovery_resume`。倒地 Tick 只是 retry Tick 的下界，不能要求玩家立刻重试。
+
+当前 1.6 内容已为檐守和翻花两个精确 frontier 各作者化 offer/resume；cue 能力过滤只决定真实 focus 能否投射，绝不能反过来挑 Objective。此 gate 是 App freshness 边界，CombatResolver 仍独占 stance 真相，QuestRuntime 仍独占进度/选择/checksum。任一恢复子步骤或身份核对失败都不发 resume，但既有三个组件之间还没有 prepare/commit/rollback；因此失败后的部分组件回滚、跨组件 defeated history、离开返回、刷新恢复和完整 Encounter+Session+Combat 安全点快照仍为 Open。正式 recovery DOM Action、offer 首焦 retry、leave 可达也尚未由本节的 Canvas `R` 路径关闭。
+
+Native actual-Definition 用例以彼此独立的 Quest 快照覆盖线索重复、交叉系缆/快速结、鸣铃错序/接受、两训练阶段、檐守 trigger-only、翻花 accepted+wrong-target 双槽及两个 frontier 的 paired recovery，并断言 read-only disposition、重复 wrong-target、投射失败均无额外推进。额外 gate/Combat 正负例覆盖：实际 retry Tick 晚于倒地 Tick、早于倒地的非法 retry、重复 mark、三组件 Tick 任一不一致、非法/未生效 stance、需要切换却缺少后续 stance event、Quest/Objective 漂移，以及无需切姿态的檐守恢复不要求 event、也不会被翻花逻辑污染。浏览器高水痕/迎风路线在檐守 frontier、循钟声/背风路线在翻花 frontier 各走一次真实倒地→Canvas R→三组件重试→fresh resume，并在安全点正常移动回训练线标后看到敌人重新攻击；两者的 source/focus/classification、wire/projection sequence、Quest completed/selection/checksum 与 7 Beat 结算均受断言，fresh resume 后的重复 R 还必须在权威审计 Tick 推进后保持 retry count、消息与 Quest 身份不变。报告位于 `.tmp/f1-recovery-02-precommit-canopy/report.json` 与 `.tmp/f1-recovery-02-precommit-drain/report.json`；它们是 dirty-worktree pre-commit Chrome 候选，不是 exact-commit、远端三浏览器或真人时长证据。
+
+## 34. 数据化主动技能最小切片
+
+Action Registry 已有的 `weapon_skill` 是输入入口，但 Platform/Presentation 只提交稳定 Action sample，不提交 Ability ID、键码或技能归属。`DeterministicCombatActionIntentMapper` 接受 Gameplay 附加的 Actor 与 target context，把非重复 press edge 和单调 Platform sequence 映射为 `CombatSkillSlot::primary`；首切片只消费 primary，secondary/utility/special 仅冻结枚举与容量。未知 Action、release/repeat、空身份和重放 sequence 都不会替换上一份有效映射状态。`CombatCommand` 只携带 slot，不能携带调用方选择的 Ability。
+
+`CombatActorConfig` 以尾随默认字段保存固定容量 16 的 authored `skill_loadout` 与 count，对应最多 4 stance × 4 slot。空 loadout 保持 legacy 聚合初始化；有效项必须绑定 Actor 自己的 stance、合法且唯一的 `(stance, slot)`、存在的 `weapon_skill` Ability 和一致的 `required_stance`，同一 Actor 不能重复 Ability，count 之后必须全零。Resolver 只规范化私有配置副本，不改调用者输入；不同 Actor 可以共享同一 Definition，但拥有独立 cooldown。
+
+状态 Owner 只有 `DeterministicCombatResolver`。玩家与敌人沿同一路径，在命令执行 Tick 使用 Actor 当前 Combat-owned stance + slot 查找 owned Ability，再校验 target faction/active、stamina、active timeline 与 absolute ready Tick；未装备 slot、其他 Actor 的 Ability、资源或状态失败只产生 `command_ignored`，不回退全局 Ability 查找，也不扣资源、写 cooldown 或造成伤害。sequence 非零只约束 `weapon_skill`，legacy command 不在本切片收紧。
+
+`query_skill_cooldown` 返回结构化 `CombatSkillQueryError + ability + ready_tick`，明确区分 unknown actor、invalid slot、slot unbound、ability not owned 与合法 `ready_tick == 0`。运行时只为有效 binding 保存 ready Tick；有 binding 时 checksum 按稳定 Actor、规范化 binding、被引用 Definition 与对应 ready Tick进入独立 hash 域，全部 loadout 为空时不增加任何 legacy checksum 字节。
+
+Actor 倒地取消正在进行的技能但保留已经提交的 cooldown。retry 会恢复全部 Actor，并从当前边界 Tick 重建全部 authored initial cooldown；Encounter `replace` 会恢复玩家与全部 hostile，再按 placement 激活点名 hostile、隔离未点名 hostile，因此这些 Actor 的瞬时技能状态和 cooldown 都随完整 Encounter 边界重建；`reinforce` 只恢复 placement 点名的 Actor，玩家和其他 Actor 的 runtime/cooldown 必须保持不变。`opposing_actor` 继续进入既有命中/格挡/闪避/硬直管线；`self_actor` 与 `no_target` 当前只允许零直接伤害的受控时间线。
+
+`tests/native/combat_skill.cpp` 覆盖 Action→primary slot、同 stance 玩家/敌人归属隔离、共享 Definition 的 Actor-local cooldown、切 stance 后同 slot 解析变化、结构化查询、未装备与错误配置失败不变性、loadout/Definition 顺序归一、空 loadout legacy checksum、倒地保留，以及 retry 全量重建、replace 完整 Encounter 重建、reinforce placement-only 重建的明确对照；旧 `combat_resolver`、`encounter_director` 与固定内容回放继续作为兼容门。该状态是 **Bootstrap Implemented / Not Authored In System Demo**：被动效果、增减益/持续效果、取消窗、连段、升级替换、AI 选槽、存档序列化、HUD、正式 Sandbox Definition/pack、平台玩家接线与手感验收仍为 Open。
+
+## 35. Sandbox 原子互动会话 Bootstrap
+
+`SandboxSession` 从已经通过 package-core 前置校验的 `SandboxDefinition`、独立 `SandboxGameplayBindingDefinition` 与 GAME-owned `SandboxPlayerRuntimeBinding` 初始化。player binding 显式携带 `player_content_id + actor_key`；两者属于不同身份域，Session 校验 Content ID 精确引用 core player 且 Actor key 非零，绝不把 `ContentId` 数值隐式转换为 `StableActorKey`。该 bootstrap 输入尚未进入 `.tgdsbx` wire，core actor placements 也没有物化为 Runtime Actor。
+
+初始化只检查本会话直接消费的容量、player/initial-safe-point 引用与 owned invariant，并复用唯一的 `validate_sandbox_gameplay_binding`；不复制或冒充完整 package-core validator。Session 把 player spawn、retry safe-point、interaction pose/range、typed mechanism/blocker index 和初态复制到按 Stable key 排序的固定容量数组，只保留 key 与整数，不保存 span、`ContentId.name`、Definition 指针或输入地址。首次生成从 player spawn pose 开始；retry 使用 `player.initial_safe_point_id` 精确解析的 `SandboxSafePointDefinition.pose + facing`，两者不得混同。
+
+operate 的拒绝顺序固定为 invalid/uninitialized → stale generation → stale committed sequence → actor mismatch → unknown interaction → invalid typed/state → floor mismatch → invalid authored range → x/y distance → fresh-sequence repeat → first completion。同层距离只使用地面 x/y，range 闭区间为 500–3000 mm，height 不参与。首次成功以私有候选一次性提交 interaction=`completed`、mechanism=`activated`、blocker=`disabled_non_solid`，随后按值返回连续 sequence 的 `interaction_completed → mechanism_activated` 两事件；只有该路径更新 last-valid command sequence/tick、event sequence 与 checksum。已提交 sequence 的重放是 `stale_sequence`，新 sequence 对完成链才是 `repeated_chain`；repeat 与所有拒绝不修改任何 live 字段。
+
+checksum 使用独立域和逐字段小端哈希，覆盖 generation、显式 player content/actor mapping、spawn/retry/current pose 与 facing、规范化 typed graph、三组件状态、last-valid command/tick 和跨 generation 单调 event sequence；不哈希内存布局、padding、name/address、输入排列或拒绝命令。retry 先按 generation/sequence/invariant 准备完整候选，成功后 generation+1、player 回 authored initial safe point、三组件回规范初态并清零 generation-local command/tick，event sequence 不复用；overflow、stale 或 invalid state 均保留旧 snapshot/checksum，且没有测试专用故障后门。
+
+`tests/native/sandbox_session.cpp` 直接覆盖输入生命周期与乱序规范化、player binding 全负例、spawn/retry safe-point 区分、500/3000 边界、+1 mm/错层/height、首次原子事件、fresh repeat/committed replay、拒绝优先级、多链隔离、retry/new generation/event 单调、generation helper overflow、失败不漂移与双 Session 确定性。当前能力仍是 **Bootstrap Implemented / Not Wire-backed / Not Preview-ready**：本切片没有 player movement pose 同步入口，operate 仅消费 Session 当前 pose（初始化时为 player spawn，retry 后为 authored initial safe point）；player movement 接线、actor runtime binding、Objective/Wave/Encounter/Combat 聚合 retry、Platform、Profile、奖励与编辑器均为 Open。
+
+## 36. Sandbox Package 到 Session Integration Bootstrap
+
+独立物理层 `tgd_sandbox_integration` 同步组合 `tgd_content_core + tgd_gameplay`，不改变纯 Gameplay 的依赖方向，也不拥有新的玩法真相。`build_sandbox_session_blueprint` 只在调用期间借用 validated `SandboxPackageDocument`，把 standalone Session 所需的 player、safe point、interaction、mechanism、ground blocker 与 typed binding 复制到按 Stable key 排序的固定容量 move-only blueprint。每个所需 `ContentId` 都保存 Stable key 与最长 96 bytes 的 owned UTF-8 name；仅在同步 initialize 栈上创建指向 blueprint 自有 bytes 的临时 view，不保存 candidate、document、canonical bytes、span、`string_view`、指针或输入地址，也不从 Content ID 推导 Actor key。
+
+`initialize_sandbox_session_from_blueprint` 继续调用既有 `SandboxSession::initialize` 和唯一 gameplay-binding validator。Adapter 先构造私有候选 Session，只有完整成功后才一次替换 destination；builder、player binding 或 initialize 失败都保留旧 generation、command/event sequence、snapshot 与 checksum。Package compiler/decoder/validator 仍是 package-wide ID、图与引用规则的唯一 Owner，adapter 只防御自身容量、owned ID view 和 move 生命周期。
+
+当前状态是 **Adapter Bootstrap Implemented / Not Preview-ready**。本笔没有 provider、hot reload、last-valid package 管理或 player movement pose 同步入口；operate 仍只消费 standalone Session 当前 pose。Actor Runtime、dynamic collision、Objective/Wave/Encounter/Combat 聚合 retry、Platform、Presentation、Preview、资产与内容实例接入均为 Open，standalone retry 也不是完整安全点恢复事务。
+
+## 37. Sandbox Host Runtime Candidate Bootstrap
+
+`SandboxRuntimeCoordinator` 消费按值拥有的 canonical `.tgdsbx` bytes 与 DEV publication identity。它先调用唯一 package decoder 并核对 fingerprint，再在不可见的 aggregate 中依次准备 owned document、`SandboxSessionBlueprint`/私有 `SandboxSession`、按 region 分组的初始 `StaticCollisionWorld`，以及复制完整 UTF-8 ID bytes/key/kind 的资产集合。candidate、document、blueprint、JS/WASM view、span、`string_view`、provider token 与外部地址都不会跨 publish 留存；最后发布点仅是 `unique_ptr` aggregate 的 noexcept swap，之后不再校验、分配、回调或发布 gameplay event。
+
+package generation/checksum、Host runtime generation 与 standalone Session generation/checksum 是三个独立身份域。更旧 package generation 失败关闭；同 generation 异 checksum 是冲突；合法 same-checksum republish 返回 `unchanged`，并完整保留旧 aggregate、旧 package generation 和 Session 状态，不镜像 provider 的新 generation。changed package 只有在 Session、Collision 和 Asset Set 全部准备成功后才让 Host runtime generation 前进；任一 decode/fingerprint/player binding/candidate 失败都保留旧 document、Session、collision、asset set、identity、snapshot 与 checksum。
+
+碰撞候选只复制 authored 初始 solid blocker，按 blocker Stable key 分配稳定 shape ID，并按 region 建静态 world；不接动态 mechanism blocker 状态或 player movement。资产候选只拥有 ID bytes/key/kind，不解析路径、加载模型/纹理或宣称 ART 已集成。Native 与 Web 的共同 probe 只读取由可信 JS/WASM compiler/provider 从唯一 `content/design/system-demo.sandbox.json` 生成的 ignored 临时 canonical package；准备门锁定 source SHA-256 `67a1be5216edc7cebfbe7a2433a8daa5425fb6ded15ee632b741302b0b57221d`、package SHA-256 `89a7c36ff185867fabb0aab79cb68f4f428a4a62179dadfb8d229eedee8d7ff6` 与 provider checksum `c84aedeefc1e77b881906e2ed51d0e9d9beaf9be3375e428f0a9eda5ac09cef8`，不提交第二份 artifact 或测试 JSON parser。
+
+当前状态是 **Host Candidate Consumed by Demo 0.8.1 Internal Web Blockout / Not release Preview-ready**。唯一内容实例中的 player spawn 与 initial safe point 都在 console authored range 外，这是合法的“先移动再 operate”布局；0.8.1 Host 从作者 spawn 实际移动到 console，不把测试专用 proof point `(-1500,-1500,0,floor0)` 写回 JSON。真实 Web 路线已覆盖 movement、dynamic collision、resolver/renderer 与 local retry；Objective/Wave/Encounter/Combat 执行、Actor gameplay binding、聚合死亡恢复、整包重载、Windows 与三浏览器 Preview 仍 Open。
+
+## GAME-003 Web consumer stack budget（Bootstrap）
+
+当前 Emscripten 实际探针为既有 fixed-capacity standalone adapter 构造预留 128 KiB 固定栈：SandboxSessionBlueprint 为 40096 bytes，builder callee 局部对象与 caller BuildResult 的同时存活峰值已客观超过默认 64 KiB。Host coordinator 已移除 `take_blueprint()` 形成的第二份 40096-byte blueprint，直接借用同一 BuildResult 内的只读 blueprint 完成私有 Session prepare；128 KiB 仅覆盖剩余 accepted adapter 构造峰值，不代表正式 Preview host 的最终 Web 栈预算。正式 Preview consumer、player movement、Objective/Wave/Encounter/Combat 聚合与完整恢复仍为 Open。
+
+## 38. Sandbox Thin Runtime Bootstrap
+
+`SandboxSession::snapshot().player_pose` 是当前玩家位置的唯一 Gameplay 真相；Coordinator 不缓存第二份 pose，只拥有 active aggregate、runtime generation、authoritative tick 与 movement command sequence。player max move delta、collision radius 与 collision height 的唯一类型和校验归 Gameplay `SandboxPlayerMovementConfig`；Integration 的 `SandboxThinRuntimePlayerConfig` 仅是兼容 alias。配置随 live candidate 自有保存并进入 snapshot/checksum，不从资产名、Stable ID、JSON 或 Presentation 推断；零、负数、无法容纳于 authored player/safe-point region 的极值在 publish 前失败关闭。
+
+Session 公开的 typed relative movement intent 只有 actor、floor 与 x/y delta，不含 absolute pose。Session 从自身 current pose 出发，使用 Coordinator 选择的 authored player region `StaticCollisionWorld` 同时执行 config、整数溢出、region bounds、footprint 与 swept blocker 校验，并只在成功时提交私有 pose candidate；Coordinator 不计算或传入 absolute target，只映射结果并推进 authoritative tick / movement sequence。Gameplay 不 forward-declare、friend 或依赖 Integration。`SandboxSession::initialize` 与 Coordinator same-checksum fast path 共用 Gameplay `validate_sandbox_player_runtime_binding`：缺失、malformed、wrong-content 或 zero-actor binding 都按 Session prepare failure 失败关闭；合法 binding 的 nonzero actor 或 movement config 与 live identity 不同时才是 identity conflict。0.8.1 Host 已把 Axmol keyboard held state 在固定 60 Hz 边界转换为该 relative intent；正式 Action Registry/Context/blur 仲裁仍为 Open。
+
+dynamic blocker 不保存 `gateOpen`。Coordinator 逐项以 exact ground-blocker Stable key 查询 Session `ground_blocker_state`，把 `enabled_solid` / `disabled_nonblocking` 投影到对应 collision shape。`operate` 只读取 Session authoritative pose；首次完成沿用既有 `interaction_completed → mechanism_activated` 事件顺序并同步关闭 blocker solid。测试 proof point 仍只属于测试推导，不进入 production 状态或分支。repeat 与所有拒绝不推进 tick、sequence、event 或 checksum。
+
+movement、operate 与 standalone retry 都先构造完整私有 mutable candidate，校验 Session/collision exact-key 投影和逐字段 checksum 后，以 no-fail `unique_ptr` swap 发布。任一失败保留旧 live aggregate 地址、identity、snapshot 与 checksum。standalone retry 只重建本地 Session 三组件、authored safe-point pose 与 dynamic collision，并开启新的 runtime/session generation；它不代表 Objective/Wave/Encounter/Combat 或死亡恢复聚合事务。
+
+当前状态是 **Thin Runtime Integrated in Demo 0.8.1 Internal Web Blockout / Not release Preview-ready**。`SystemDemoLayer` 只提交 movement/operate/retry command 并只读 snapshot/collision，门开视觉来自 `ground_blocker_state`，没有第二份 `gateOpen` 玩法真相。Actor duty/AI/profile/loadout/skill、Objective/Wave/Encounter/Combat、聚合 retry、正式 Platform 输入、Windows 与发布 Preview 均为 Open。
+
+## 39. Sandbox 两波目标战斗会话
+
+`SandboxEncounterSession` 是 `DEMO-083` 的固定容量 Gameplay Owner。它借用已验证且在 Host aggregate 生命周期内稳定的 `SandboxDefinition` 与 `SandboxGameplayBindingDefinition`，把 Actor Gameplay binding 映射为现有 `DeterministicCombatResolver` 的 Actor 配置和 `DeterministicEncounterDirector` 的职责配置；Presentation、Workbench 和资源名都不拥有 faction、duty、profile 或生命值。初始化要求非空 Wave/Spawn/Objective 图、非零 player actor、容量不越界，并再次调用唯一 `validate_sandbox_gameplay_binding`；失败不产生可运行的局部会话。
+
+当前会话执行已发布的单 predecessor Wave/Objective 图：机关首次激活可完成 Objective，Objective 或前置 Wave 可激活下一 Wave，`delay_ticks` 到期后按 authored Actor placement 刷出，全部点名 Actor 倒地才完成该 Wave，metadata 指定的 Objective 完成才进入 terminal。首次机关事件先在整份会话候选上完成图推进和刷怪准备，再整体替换 live 状态；刷怪准备失败时，机关事件、Objective、Wave、Combat、Director、sequence 和 checksum 均保留触发前状态。重复机关事件只增加可观察的 repeat 计数，不重复刷怪。
+
+玩家轻/重击与敌方计划都进入既有 Combat Resolver；会话只提供 `light/heavy` 两种最小输入、最近合法 hostile 目标选择和固定 60 Hz 单 Tick 推进，不在 Axmol 节点或 JavaScript 中扣血。`SandboxEncounterSnapshot` 是 Host/QA 的只读边界，包含 player health/defeated、active wave、active/defeated hostile 数、completed wave/objective 数、terminal、accepted attack/repeated trigger 计数和组合 checksum。距离排序使用对完整 `int32` 坐标域安全的无符号平方与饱和加法，不允许有符号溢出影响目标选择。
+
+`restart()` 从当前 authored safe-point pose 重建 Combat、Director、Wave、Spawn、Objective、机关触发记录和输入计数；Web Host 的 `R` 同时调用既有 thin runtime retry 与 encounter restart，因此当前页面可从玩家倒地或 terminal 返回关闭门、零波次、零目标和满生命初态。该操作仍是 **单 Host 内的局部整组重建**：没有离开/返回持久化、跨 package version 迁移、工艺/工坊状态、Profile 或 provider+Session+Collision+Assets 的通用 prepare/commit 协调；这些继续由 `DEMO-088` 收口。
+
+`tests/native/sandbox_encounter_session.cpp` 覆盖两次固定输入 checksum、两波四 Actor 完成、重复触发幂等、玩家倒地、局部重建，以及刷怪准备失败时触发前状态完全保持。`tests/browser/system-demo-web-host.mjs` 再从真实 Edge 覆盖关门阻挡、开门首波、重复操作、自然倒地、死亡重试、两波 terminal 和 terminal 后重试。当前状态是 **Demo 0.8.3 Implemented Internal Web Combat Loop / Not combat-feel candidate**：正式 Action 映射、防守/闪避/架势/技能、精英差异、8–12 分钟真人节奏、Windows 与三浏览器放行仍为 Open。
+
+## 40. Sandbox 工艺会话
+
+`CraftDefinition` 是 Demo 0.8.4 发布的通用、不可变、non-owning Definition view。它只表达材料、场景工位、工艺、材料选择结果和工序，不含“江南”“纸伞”或具体关卡 ID 分支。工位引用 package-core 的 region/asset/GroundPose；工艺引用 need、output、trial step；每项材料选择只把该材料映射为 `passes_trial` 或 `requires_rework`；步骤种类只有 `operation / trial / rework`。唯一 package validator 负责 ID、容量、引用、线性有序操作、唯一 trial/rework 和可恢复路径，Gameplay 不复制 wire 或作者诊断。
+
+`CraftSession` 是固定容量、确定性的 Gameplay Owner。初始化时借用在 Host aggregate 生命周期内稳定的 `CraftDefinition`，选择一个稳定 process key，并把该工艺的有序 operation key 复制到本地固定数组。有效工艺至少含两项线性 operation、恰一 trial、恰一以 trial 为 predecessor 的 rework，以及至少两种材料选择且同时覆盖直接通过和需返工结果；失败初始化不建立可运行状态。Session 不保存作者显示文案、DOM 节点、资产名、平台时间或随机数。
+
+权威阶段固定为：
+
+```text
+awaiting_material
+→ performing_operations
+→ trial_ready
+→ completed
+                ↘ rework_required → trial_ready → completed
+```
+
+`select_material` 只能在等待选材时执行；`perform_operation` 只能提交当前 expected step。未知材料、错误阶段和错序分别返回结构化 disposition，且 snapshot/checksum 完全不漂移。`run_trial` 只在操作全部完成时执行：直接通过材料完成会话；需返工材料的第一次试用增加 `trial_count + mistake_count` 并进入 `rework_required`。`perform_rework` 只在该阶段增加 `rework_count` 并返回 `trial_ready`，下一次试用才完成。`restart()` 从同一 Definition 重建等待选材初态，不保留材料、步骤、试用、失误或返工计数。
+
+`CraftSessionSnapshot` 是 Host/QA 的只读边界，包含 process/need/material/expected step/output、阶段、操作进度、trial/mistake/rework 计数、完成标志和逐字段小端稳定 checksum。当前 Host 只在玩家进入作者化工位范围后把键盘操作映射到上述命令；Axmol/JavaScript 负责输入和表现，不计算结果。Web 的 `R` 依次重建 craft、thin runtime 和 encounter，因此当前页面能恢复三者初态，但仍只是单 Host 局部整组重建，不是跨 package generation、Profile、离开返回和双端的通用事务。
+
+`tests/native/craft_session.cpp` 覆盖两种材料、正确顺序、错序零漂移、首次试用失败、返工复试、错误阶段、未知目标、restart 与双 Session checksum 一致；真实 Edge 路线再覆盖工位距离、玩家可读步骤和既有战斗回归。当前状态是 **Demo 0.8.4 Craft Primitive Consumed by Demo 0.8.5 Workshop Loop**：`CraftSession` 仍只拥有工艺步骤状态；库存、资金、工位、品质和订单由第 41 节的组合会话持有，不回填 Craft 或 Presentation。持久化、非实现者试玩、Windows 和三浏览器仍由后续版本关闭。
+
+## 41. Sandbox 工坊经营会话
+
+`WorkshopDefinition` 是 Demo 0.8.5 发布的通用、不可变、non-owning Definition view，由 `workshops / material_stocks / orders` 三组记录组成。Workshop 只引用一个已发布 Craft workstation 并给出非负初始资金；每项 stock 以 workshop + material 复合身份给出正成本、有限数量、`1–10000` 基础品质与不溢出 `10000` 的返工增益；Order 引用同一 workshop 的 Craft process，给出需求量、最低品质、非负奖励，以及一个显式 `operate_route_interaction` 后果引用。Definition 不含“江南”“纸伞”、DOM 控件、平台时间、资源文件名或运行中余额。
+
+唯一 package validator 要求 workshop/workstation、order/process/workshop、stock/material 和后果 interaction 的 typed 引用全部存在且 domain 相符；同一 workshop/material 不得重复。每个订单至少要有两条库存充足、资金可负担、最终品质达标且成本/品质/是否返工至少一项不同的材料路线；完全不可交付或没有真实取舍分别产生 `workshop_order_undeliverable / workshop_tradeoff_missing` 诊断。UI 不复制这些语义规则。
+
+`WorkshopSession` 是固定容量、确定性的 Gameplay Owner，并组合一个私有 `CraftSession`。初始化借用同一 owning package 生命周期内稳定的 Craft/Workshop Definition，以精确 workshop/order key 建立有限库存、资金、空闲工位和未完成订单；重复 initialize 或失败构建保留既有有效状态。所有公开动作先复制完整候选，只有成功才整体替换：
+
+- `select_material` 先检查材料、库存和资金，再让 Craft 接受同一材料；成功时一次扣减库存/资金、增加累计支出、设置基础品质并占用工位。
+- `perform_operation / run_trial` 只转发到私有 Craft 权威阶段；错序、错误阶段和未知目标不改变经营或 Craft checksum。
+- `perform_rework` 只有 Craft 接受后才把该 stock 的品质增益饱和加到当前成品，并返回可复试阶段。
+- `deliver_order` 只接受已完成、仍占用工位且品质达标的 output；按需求量推进交付，完成时只发一次奖励、释放工位并暴露 authored route interaction key。重复交付返回 `already_fulfilled`，不重复资金或后果。
+- `restart` 从同一 Definition 重建初始资金、库存、工位、品质、订单和 Craft 状态；不依赖墙钟、随机数或表现动画。
+
+`WorkshopSessionSnapshot` 包含 workshop/workstation/order/process、选材/output/route key、资金/累计支出、品质/阈值、交付量、工位/output/fulfilled 状态、嵌套 Craft snapshot 和逐字段小端 checksum；stock 数量通过稳定 material key 查询。Axmol/JavaScript 只读这些值，不保存第二份经营状态。
+
+Demo 0.8.5 Host 的交付不是直接设置 `shortcutOpen`。它先在 Workshop 与 Encounter 私有候选中验证订单和 mechanism 事件，再向既有 `SandboxRuntimeCoordinator` 提交 authored shortcut interaction；只有 typed interaction → mechanism → ground blocker 链成功后才无失败地提交两个 Gameplay 候选。唯一作者包把原横向 blocker 分成左侧主门和右侧屋顶捷径：交付只关闭右侧 blocker，玩家可实际穿过右路，而左侧主门仍保持 solid，之后仍须按原 operate 路线开启并触发战斗。
+
+`tests/native/workshop_session.cpp` 覆盖两种成本/品质路线、有限库存、资金不足、工位占用、错序零漂移、雨试失败、返工品质、订单阈值、一次性奖励/后果、重复 initialize、restart 与双 Session checksum；package round-trip 另证明 Craft + Workshop bytes/hash 规范重编码不变。真实 Edge 路线覆盖资金 `100→70→95`、库存 `2→1`、品质 `6500→8400`、重复交付幂等、右侧捷径穿越、左侧主门阻挡、死亡恢复和既有两波 terminal。当前状态是 **Demo 0.8.5 Implemented Internal Web Workshop Loop / Not aggregate economy persistence**：多订单/多并行工位、复杂市场、地区持久化、离开返回、Profile、Windows、三浏览器和非实现者试玩仍为 Open。

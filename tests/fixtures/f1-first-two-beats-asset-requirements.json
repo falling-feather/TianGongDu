@@ -1,0 +1,377 @@
+{
+  "contractVersion": "1.0.0",
+  "source": {
+    "taskId": "F1-GAME-01-CONTENT-A",
+    "sliceId": "f1_rainy_umbrella_trial",
+    "authoritative": false,
+    "authoritativeDefinition": "content/design/f1-vertical-slice.json",
+    "artBaselineCommit": "ba4f255",
+    "purpose": "Content-owned Stable Asset ID, anchor, state, and runtime-binding requirements. Asset files and resolver paths remain owned by Art/Presentation integration."
+  },
+  "requirements": [
+    {
+      "stableAssetId": "asset_f1_rain_travel_writ",
+      "displayName": "雨渡护牒",
+      "category": "prop",
+      "presentationOnly": true,
+      "authorityOwner": "quest_definition",
+      "collisionOwner": "content_definition",
+      "footpoints": [],
+      "anchors": ["anchor_read", "anchor_seal"],
+      "states": ["dry-reference", "rain-stained", "inspected"],
+      "formVariants": [],
+      "bindings": [
+        {
+          "kind": "interaction",
+          "interactionId": "f1_interaction_travel_writ",
+          "objectiveId": "f1_objective_inspect_travel_writ"
+        }
+      ],
+      "greyboxFallback": {
+        "distinctPerFunction": true,
+        "stateLabelsRequired": true,
+        "label": "护牒 / 可查阅"
+      },
+      "accessibility": {
+        "shapeDistinct": true,
+        "textOrSymbolFallback": true,
+        "audioOnly": false
+      }
+    },
+    {
+      "stableAssetId": "asset_f1_rain_high_water_tags",
+      "displayName": "高水痕与修补水签",
+      "category": "marker",
+      "presentationOnly": true,
+      "authorityOwner": "quest_definition",
+      "collisionOwner": "content_definition",
+      "footpoints": [],
+      "anchors": ["anchor_read", "anchor_patch"],
+      "states": ["unread", "highlighted", "read"],
+      "formVariants": [],
+      "bindings": [
+        {
+          "kind": "interaction",
+          "interactionId": "f1_interaction_arrival_clue_high_water_tags",
+          "objectiveId": "f1_objective_choose_arrival_clue"
+        },
+        {
+          "kind": "interaction",
+          "interactionId": "f1_interaction_read_high_water_repairs",
+          "objectiveId": "f1_objective_read_ferry_condition"
+        }
+      ],
+      "greyboxFallback": {
+        "distinctPerFunction": true,
+        "stateLabelsRequired": true,
+        "label": "高侧水签 / 可观察"
+      },
+      "accessibility": {
+        "shapeDistinct": true,
+        "textOrSymbolFallback": true,
+        "audioOnly": false
+      }
+    },
+    {
+      "stableAssetId": "asset_f1_rain_drowned_manifest",
+      "displayName": "溺水货单",
+      "category": "prop",
+      "presentationOnly": true,
+      "authorityOwner": "quest_definition",
+      "collisionOwner": "content_definition",
+      "footpoints": [],
+      "anchors": ["anchor_pickup", "anchor_read"],
+      "states": ["submerged", "raised", "read"],
+      "formVariants": [],
+      "bindings": [
+        {
+          "kind": "interaction",
+          "interactionId": "f1_interaction_arrival_clue_drowned_manifest",
+          "objectiveId": "f1_objective_choose_arrival_clue"
+        },
+        {
+          "kind": "interaction",
+          "interactionId": "f1_interaction_read_manifest_waterline",
+          "objectiveId": "f1_objective_read_ferry_condition"
+        }
+      ],
+      "greyboxFallback": {
+        "distinctPerFunction": true,
+        "stateLabelsRequired": true,
+        "label": "低侧货单 / 可观察"
+      },
+      "accessibility": {
+        "shapeDistinct": true,
+        "textOrSymbolFallback": true,
+        "audioOnly": false
+      }
+    },
+    {
+      "stableAssetId": "asset_f1_rain_mooring_rig",
+      "displayName": "雨渡系缆装置",
+      "category": "device",
+      "presentationOnly": true,
+      "authorityOwner": "quest_definition",
+      "collisionOwner": "content_definition",
+      "footpoints": ["foot_deck"],
+      "anchors": ["anchor_low", "anchor_high", "anchor_rope_load"],
+      "states": [
+        "unsecured",
+        "cross-belay-stable",
+        "quick-hitch-overloaded",
+        "quick-hitch-corrected"
+      ],
+      "formVariants": [],
+      "bindings": [
+        {
+          "kind": "interaction",
+          "interactionId": "f1_interaction_choose_cross_belay",
+          "objectiveId": "f1_objective_choose_mooring_method"
+        },
+        {
+          "kind": "interaction",
+          "interactionId": "f1_interaction_choose_quick_hitch",
+          "objectiveId": "f1_objective_choose_mooring_method"
+        },
+        {
+          "kind": "interaction",
+          "interactionId": "f1_interaction_lock_cross_belay",
+          "objectiveId": "f1_objective_secure_ferry_mooring"
+        },
+        {
+          "kind": "interaction",
+          "interactionId": "f1_interaction_correct_overloaded_quick_hitch",
+          "objectiveId": "f1_objective_secure_ferry_mooring"
+        }
+      ],
+      "greyboxFallback": {
+        "distinctPerFunction": true,
+        "stateLabelsRequired": true,
+        "label": "高低锚系缆 / 显示负载"
+      },
+      "accessibility": {
+        "shapeDistinct": true,
+        "textOrSymbolFallback": true,
+        "audioOnly": false
+      }
+    },
+    {
+      "stableAssetId": "asset_f1_rain_bilge_counterweight",
+      "displayName": "舱侧排水配重",
+      "category": "device",
+      "presentationOnly": true,
+      "authorityOwner": "quest_definition",
+      "collisionOwner": "content_definition",
+      "footpoints": ["foot_lower-deck"],
+      "anchors": ["anchor_handle", "anchor_weight"],
+      "states": ["jammed", "inspected", "released"],
+      "formVariants": [],
+      "bindings": [
+        {
+          "kind": "interaction",
+          "interactionId": "f1_interaction_inspect_bilge_counterweight",
+          "objectiveId": "f1_objective_inspect_bilge_counterweight"
+        },
+        {
+          "kind": "interaction",
+          "interactionId": "f1_interaction_release_ferry_bilge",
+          "objectiveId": "f1_objective_release_ferry_bilge"
+        }
+      ],
+      "greyboxFallback": {
+        "distinctPerFunction": true,
+        "stateLabelsRequired": true,
+        "label": "排水配重 / 卡住或释放"
+      },
+      "accessibility": {
+        "shapeDistinct": true,
+        "textOrSymbolFallback": true,
+        "audioOnly": false
+      }
+    },
+    {
+      "stableAssetId": "asset_f1_rain_wayfinding_lantern",
+      "displayName": "引路工灯",
+      "category": "device",
+      "presentationOnly": true,
+      "authorityOwner": "quest_definition",
+      "collisionOwner": "content_definition",
+      "footpoints": ["foot_deck"],
+      "anchors": ["anchor_crank", "anchor_light"],
+      "states": ["lowered", "raising", "raised-lit"],
+      "formVariants": [],
+      "bindings": [
+        {
+          "kind": "interaction",
+          "interactionId": "f1_interaction_raise_wayfinding_lantern",
+          "objectiveId": "f1_objective_raise_wayfinding_lantern"
+        }
+      ],
+      "greyboxFallback": {
+        "distinctPerFunction": true,
+        "stateLabelsRequired": true,
+        "label": "引路灯 / 升起后点亮"
+      },
+      "accessibility": {
+        "shapeDistinct": true,
+        "textOrSymbolFallback": true,
+        "audioOnly": false
+      }
+    },
+    {
+      "stableAssetId": "asset_f1_rain_workshop_bell",
+      "displayName": "作坊门钟",
+      "category": "device",
+      "presentationOnly": true,
+      "authorityOwner": "quest_definition",
+      "collisionOwner": "content_definition",
+      "footpoints": ["foot_gate"],
+      "anchors": ["anchor_code", "anchor_striker"],
+      "states": ["idle", "wrong-pattern", "answered"],
+      "formVariants": [],
+      "bindings": [
+        {
+          "kind": "interaction",
+          "interactionId": "f1_interaction_read_workshop_bell_code",
+          "objectiveId": "f1_objective_read_workshop_bell_code"
+        },
+        {
+          "kind": "interaction",
+          "interactionId": "f1_interaction_sound_workshop_bell",
+          "objectiveId": "f1_objective_sound_workshop_bell"
+        }
+      ],
+      "greyboxFallback": {
+        "distinctPerFunction": true,
+        "stateLabelsRequired": true,
+        "label": "门钟 / 钟码与回应"
+      },
+      "accessibility": {
+        "shapeDistinct": true,
+        "textOrSymbolFallback": true,
+        "audioOnly": false
+      }
+    },
+    {
+      "stableAssetId": "asset_f1_training_safety_rig",
+      "displayName": "双架势安全训练架",
+      "category": "actor",
+      "presentationOnly": true,
+      "authorityOwner": "gameplay_combat",
+      "collisionOwner": "gameplay_combat",
+      "footpoints": ["foot_center"],
+      "anchors": ["anchor_attack_origin", "anchor_guard_contact", "anchor_evade_line"],
+      "states": ["dormant", "telegraph", "attack", "recovery", "stopped"],
+      "formVariants": ["eavesguard-ground", "flower-turn-high"],
+      "bindings": [
+        {
+          "kind": "actor",
+          "actorKey": 104,
+          "archetypeId": "f1_training_umbrella_rig",
+          "formVariant": "eavesguard-ground"
+        },
+        {
+          "kind": "actor",
+          "actorKey": 108,
+          "archetypeId": "f1_training_flower_turn_rig",
+          "formVariant": "flower-turn-high"
+        }
+      ],
+      "greyboxFallback": {
+        "distinctPerFunction": true,
+        "stateLabelsRequired": true,
+        "label": "地面伞架 / 高位穿线架"
+      },
+      "accessibility": {
+        "shapeDistinct": true,
+        "textOrSymbolFallback": true,
+        "audioOnly": false
+      }
+    },
+    {
+      "stableAssetId": "asset_f1_training_proof_target",
+      "displayName": "双架势证明靶",
+      "category": "actor",
+      "presentationOnly": true,
+      "authorityOwner": "gameplay_combat",
+      "collisionOwner": "gameplay_combat",
+      "footpoints": ["foot_target"],
+      "anchors": ["anchor_hit", "anchor_break"],
+      "states": ["dormant", "active", "damaged", "broken"],
+      "formVariants": ["eavesguard-ground-target", "flower-turn-high-target"],
+      "bindings": [
+        {
+          "kind": "actor",
+          "actorKey": 107,
+          "archetypeId": "f1_training_eavesguard_target",
+          "formVariant": "eavesguard-ground-target"
+        },
+        {
+          "kind": "actor",
+          "actorKey": 109,
+          "archetypeId": "f1_training_flower_turn_target",
+          "formVariant": "flower-turn-high-target"
+        }
+      ],
+      "greyboxFallback": {
+        "distinctPerFunction": true,
+        "stateLabelsRequired": true,
+        "label": "地面承压靶 / 高位穿位靶"
+      },
+      "accessibility": {
+        "shapeDistinct": true,
+        "textOrSymbolFallback": true,
+        "audioOnly": false
+      }
+    },
+    {
+      "stableAssetId": "asset_f1_training_lane_markers",
+      "displayName": "迎风、背风与翻花越线标记",
+      "category": "marker",
+      "presentationOnly": true,
+      "authorityOwner": "quest_definition",
+      "collisionOwner": "content_definition",
+      "footpoints": [],
+      "anchors": ["anchor_windward", "anchor_leeward", "anchor_flower-cross"],
+      "states": ["inactive", "selected", "current", "complete"],
+      "formVariants": [],
+      "bindings": [
+        {
+          "kind": "interaction",
+          "interactionId": "f1_interaction_choose_training_windward_lane",
+          "objectiveId": "f1_objective_choose_training_lane"
+        },
+        {
+          "kind": "interaction",
+          "interactionId": "f1_interaction_choose_training_leeward_lane",
+          "objectiveId": "f1_objective_choose_training_lane"
+        },
+        {
+          "kind": "interaction",
+          "interactionId": "f1_interaction_take_windward_eavesguard_mark",
+          "objectiveId": "f1_objective_take_eavesguard_mark"
+        },
+        {
+          "kind": "interaction",
+          "interactionId": "f1_interaction_take_leeward_eavesguard_mark",
+          "objectiveId": "f1_objective_take_eavesguard_mark"
+        },
+        {
+          "kind": "interaction",
+          "interactionId": "f1_interaction_cross_flower_turn_line",
+          "objectiveId": "f1_objective_cross_flower_turn_line"
+        }
+      ],
+      "greyboxFallback": {
+        "distinctPerFunction": true,
+        "stateLabelsRequired": true,
+        "label": "迎风楔 / 背风弧 / 翻花斜线"
+      },
+      "accessibility": {
+        "shapeDistinct": true,
+        "textOrSymbolFallback": true,
+        "audioOnly": false
+      }
+    }
+  ]
+}

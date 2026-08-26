@@ -1,0 +1,31 @@
+{
+  "contractVersion": "1.0.0",
+  "evidenceClass": "human_observation",
+  "evidenceState": "pending",
+  "taskId": "F1-GAME-01-CONTENT-A",
+  "sliceId": "f1_rainy_umbrella_trial",
+  "authoritativeDefinition": "content/design/f1-vertical-slice.json",
+  "definitionSha256": null,
+  "capturedAtUtc": null,
+  "observerId": null,
+  "build": null,
+  "acceptance": {
+    "requiredParticipants": 5,
+    "minimumMedianQualifiedMs": 900000,
+    "maximumMedianQualifiedMs": 1020000,
+    "maximumNoveltyGapMs": 90000,
+    "allCompleteWithoutOralGuidance": true,
+    "excludeNonQualifyingTime": true,
+    "excludedReasons": [
+      "loading",
+      "pause_or_settings",
+      "idle",
+      "failure_retry",
+      "repeat_grind",
+      "long_empty_traversal",
+      "forced_slowdown",
+      "waiting"
+    ]
+  },
+  "participants": []
+}

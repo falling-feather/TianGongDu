@@ -40,14 +40,16 @@ const requiredTemplates = [
   "template_quest_chain",
   "template_dialogue",
   "template_weapon_family",
-  "template_subregion"
+  "template_subregion",
+  "template_craft_process"
 ];
 
 const activeArchitectureDecisions = [
   "ADR-0005-Cpp网页首发与Axmol宿主.md",
   "ADR-0006-Cpp分层核心与Wasm平台边界.md",
   "ADR-0007-浏览器内容包与存档同步契约.md",
-  "ADR-0008-本地优先与多端云同步.md"
+  "ADR-0008-本地优先与多端云同步.md",
+  "ADR-0009-斗战神优先的2.5D斜向全景.md"
 ];
 
 const supersededArchitectureDecisions = [
@@ -72,16 +74,16 @@ const architectureSkeleton = [
 ];
 
 const handoffContractMarkers = [
-  ["docs/00-项目总纲.md", ["团队交付入口", "第一轮必读顺序", "任务卡必须同时写明"]],
-  ["docs/01-开发者文档.md", ["团队拓扑与模块所有权", "Definition of Ready", "首个 Bootstrap 迭代", "工程能力工作包索引", "DEV-CAP-04"]],
-  ["docs/02-版本规划与验收.md", ["f1_rainy_umbrella_trial", "当前可交接成熟度", "0–30 / 31–60 / 61–90", "标准证据包", "F1 跨团队派工表", "F1-DEV-04", "任务卡复制模板"]],
-  ["docs/04-游戏设计总纲.md", ["玩家本体、推进与装备边界", "F1 战斗手感种子", "命名遭遇等级"]],
+  ["docs/00-项目总纲.md", ["体验指导优先级", "《斗战神》是整体体验的第一指导", "团队交付入口", "第一轮必读顺序", "任务卡必须同时写明", "产品不以战斗作为压倒其他系统的唯一核心", "技艺与经营重心"]],
+  ["docs/01-开发者文档.md", ["当前实现事实", "当前未完成模块", "必须遵守的开发准则", "工艺与经营", "工艺不是表现小游戏", "工作项 DoR 与 DoD", "二级开发手册"]],
+  ["docs/02-版本规划与验收.md", ["Demo 0.8.x", "精简后的协作模型", "Demo 阶段与时间估算", "模块完成度与后续工作", "小版本任务卡", "任务资源与模板索引", "系统型 Demo 放行条件", "必须保留的回归基线", "代码、分支与历史简化计划", "DEMO-081", "DEMO-084", "DEMO-087", "DEMO-089"]],
+  ["docs/04-游戏设计总纲.md", ["2.5D 斜向全景空间与相机", "玩家本体、推进与装备边界", "F1 战斗手感种子", "命名遭遇等级"]],
   ["docs/05-世界与叙事圣经.md", ["玩家角色正史边界", "技术年代感与幻想边界", "天工院介入程序"]],
   ["docs/06-内容生产规范.md", ["内容 Definition of Ready", "template_elite_encounter", "F1 金标准实例"]],
   ["docs/07-1.0地区与内容蓝图.md", ["Boss 制作展开", "核心 NPC 内在驱动", "生产成本与容量校准"]],
-  ["docs/08-UI-UX与可访问性.md", ["跳跃/攀附", "DOM、Canvas 与状态所有权矩阵", "保存与同步用语"]],
-  ["docs/09-术语与索引.md", ["待决问题登记", "文档与实现状态词", "文档维护门"]],
-  ["docs/01-developer/10-技术架构与依赖规则.md", ["横版权威坐标与碰撞", "JS↔WASM ABI v0.1", "G1 工具锁清单"]],
+  ["docs/08-UI-UX与可访问性.md", ["地面八向移动", "纵跃/跨越", "DOM、Canvas 与状态所有权矩阵", "保存与同步用语"]],
+  ["docs/09-术语与索引.md", ["2.5D 斜向全景", "体验指导优先级", "非遗技艺经营", "地区身份合同", "待决问题登记", "文档与实现状态词", "文档维护门"]],
+  ["docs/01-developer/10-技术架构与依赖规则.md", ["斜向全景权威坐标与碰撞", "JS↔WASM ABI v1.1", "G1 工具锁清单"]],
   ["docs/01-developer/12-内容存档与版本契约.md", ["Web 持久化唯一主路径", "Snapshot/Operation v1 Envelope", "七条版本线"]],
   ["docs/01-developer/15-服务端热更新与模组边界.md", ["普通单机进度与官方权益", "Sync API v1 错误包络", "PostgreSQL v1 不变量"]],
   ["docs/01-developer/16-测试CI与发布门禁.md", ["标准证据包", "机器 Schema 验证成熟度", "门禁例外"]],
@@ -180,8 +182,8 @@ async function validateHandoffDocumentation(root, errors) {
 
   const planning = await readFile(join(root, "docs", "02-版本规划与验收.md"), "utf8");
   pushIf(errors, planning.includes("当前处于 **F0.1"), "F0.1 已完成，02 不得继续把它写成当前阶段。");
-  pushIf(errors, !planning.includes("### 4.1 F1 硬门") || !planning.includes("### 4.2 F1 条件/决策 Spike"), "F1 必须区分硬门与条件/决策 Spike。");
-  pushIf(errors, !planning.includes("不是无条件上线承诺"), "30/60/90 必须声明团队容量前提与非无条件工期。");
+  pushIf(errors, !planning.includes("是规划窗口，不是固定交付承诺"), "系统型 Demo 估算必须声明为规划窗口而非固定交付承诺。");
+  pushIf(errors, !planning.includes("当前不维持“合同组、包体组、平台组、内容组、UI 组、QA 组”长期同时在线"), "02 必须明确精简后的按任务协作模式。");
 
   const developerGuide = await readFile(join(root, "docs", "01-开发者文档.md"), "utf8");
   pushIf(errors, developerGuide.includes("共同 Owner"), "01 不得使用共同 Owner；必须有单一最终 A。");
@@ -193,10 +195,7 @@ async function validateHandoffDocumentation(root, errors) {
       pushIf(errors, !owner || /\s[+/]\s|共同\s*Owner|、.*负责人/.test(owner), `${label} 必须恰有一个最终 Owner：${line}`);
     }
   };
-  assertSingleOwnerRows(planning, "| R-", 3, "风险项");
-  assertSingleOwnerRows(planning, "| 0–30", 2, "G1");
-  assertSingleOwnerRows(planning, "| 31–60", 2, "G2");
-  assertSingleOwnerRows(planning, "| 61–90", 2, "G3");
+  assertSingleOwnerRows(planning, "| R-SD-", 3, "系统型 Demo 风险项");
   const indexSource = await readFile(join(root, "docs", "09-术语与索引.md"), "utf8");
   assertSingleOwnerRows(indexSource, "| OQ-", 4, "待决问题");
 
@@ -245,10 +244,12 @@ export async function validateProject(projectRoot = defaultRoot) {
   const technicalSchemaPath = join(root, "content", "schemas", "technical-baseline.schema.json");
   const actionRegistryPath = join(root, "content", "design", "action-registry.json");
   const actionSchemaPath = join(root, "content", "schemas", "action-registry.schema.json");
+  const systemDemoPath = join(root, "content", "design", "system-demo.sandbox.json");
   const catalog = JSON.parse(await readFile(catalogPath, "utf8"));
   const templateRegistry = JSON.parse(await readFile(templateRegistryPath, "utf8"));
   const technicalBaseline = JSON.parse(await readFile(technicalBaselinePath, "utf8"));
   const actionRegistry = JSON.parse(await readFile(actionRegistryPath, "utf8"));
+  const systemDemo = JSON.parse(await readFile(systemDemoPath, "utf8"));
   JSON.parse(await readFile(schemaPath, "utf8"));
   JSON.parse(await readFile(templateSchemaPath, "utf8"));
   JSON.parse(await readFile(technicalSchemaPath, "utf8"));
@@ -272,12 +273,28 @@ export async function validateProject(projectRoot = defaultRoot) {
     pushIf(errors, !templateIds.includes(templateId), `缺少基础内容模板：${templateId}`);
   }
   for (const template of templateRegistry.templates) {
+    if (template.id === "template_craft_process") {
+      const requiredCraftModules = ["need", "materials", "workstation", "orderedSteps", "trial", "recoverableRework"];
+      const requiredCraftValidators = ["material_choices", "step_reachability", "trial_reachability", "recoverable_failure", "no_free_loop"];
+      for (const moduleId of requiredCraftModules) {
+        pushIf(errors, !template.requiredModules.includes(moduleId), `template_craft_process 缺少必需模块：${moduleId}`);
+      }
+      for (const validatorId of requiredCraftValidators) {
+        pushIf(errors, !template.validators.includes(validatorId), `template_craft_process 缺少机器校验：${validatorId}`);
+      }
+    }
     pushIf(errors, template.requiredModules.length < 3, `${template.id} 的必需模块少于 3 个。`);
     pushIf(errors, template.generatedArtifacts.length < 3, `${template.id} 的生成产物少于 3 个。`);
     pushIf(errors, template.validators.length < 3, `${template.id} 的验证规则少于 3 个。`);
   }
 
   pushIf(errors, technicalBaseline.productTarget !== "browser-first-cross-platform-action-rpg", "技术基线必须以浏览器首发、多端复用为目标。");
+  pushIf(errors, technicalBaseline.experiencePresentation?.viewModel !== "2.5d-oblique-panoramic", "正式视角必须为 2.5D 斜向全景。");
+  pushIf(errors, technicalBaseline.experiencePresentation?.primaryGuidance !== "douzhanshen", "整体体验必须以《斗战神》为第一指导。");
+  pushIf(errors, technicalBaseline.experiencePresentation?.secondaryReadabilityReference !== "warm-snow", "《暖雪》只能作为俯斜战斗可读性的第二参考。");
+  pushIf(errors, technicalBaseline.experiencePresentation?.gameplaySpace !== "ground-plane-xy-plus-elevation-and-floor-layer" || technicalBaseline.experiencePresentation?.groundPlaneDepthMovement !== true, "Gameplay 必须使用可纵深走位的地面平面加独立高度/层。");
+  pushIf(errors, technicalBaseline.experiencePresentation?.cameraControl !== "fixed-or-authored-limited-no-free-orbit", "镜头必须固定或由作者受控，不提供自由旋转基线。");
+  pushIf(errors, technicalBaseline.experiencePresentation?.referenceUseBoundary !== "high-level-design-language-only", "参考作品只能用于高层设计语言。");
   pushIf(errors, technicalBaseline.gameCore.language !== "C++20", "游戏核心必须使用 C++20。");
   pushIf(errors, technicalBaseline.gameCore.simulationHz !== 60, "游戏核心必须维持 60 Hz 固定模拟。");
   pushIf(errors, technicalBaseline.runtimeHost.engine !== "Axmol", "运行时宿主必须为 Axmol 基线。");
@@ -409,6 +426,29 @@ export async function validateProject(projectRoot = defaultRoot) {
   const chapterIds = new Set(catalog.mainChapters.map((chapter) => chapter.id));
   const questChainIds = new Set(catalog.questChains.map((quest) => quest.id));
   const enemyFamilyIds = new Set(catalog.enemyFamilies.map((enemy) => enemy.id));
+  const systemDemoActorIds = new Set(
+    systemDemo.runtime.actors.map((actor) => actor.id)
+  );
+  const systemDemoBindingActorIds = systemDemo.runtime.actorBindings.map(
+    (binding) => binding.actorId
+  );
+  pushIf(
+    errors,
+    countDuplicates(systemDemoBindingActorIds).length > 0,
+    "系统 Demo 敌人 Gameplay binding 不得重复 Actor ID。"
+  );
+  for (const binding of systemDemo.runtime.actorBindings) {
+    pushIf(
+      errors,
+      !systemDemoActorIds.has(binding.actorId),
+      `系统 Demo 敌人 Gameplay binding 引用了不存在的 Actor：${binding.actorId}`
+    );
+    pushIf(
+      errors,
+      !enemyFamilyIds.has(binding.profileId),
+      `系统 Demo 敌人 profileId 未登记在 v1-content-catalog.json：${binding.profileId}`
+    );
+  }
   const subregions = catalog.regions.flatMap((region) => region.subregions);
   const allIds = [
     ...catalog.combatSystems.map((entry) => entry.id),
@@ -503,7 +543,7 @@ export async function validateProject(projectRoot = defaultRoot) {
   const f1 = catalog.f1VerticalSlice;
   pushIf(errors, f1.channel !== "prototype_f1" || f1.profileNamespace !== "prototype_f1", "F1 纵切必须使用独立 prototype_f1 渠道与 Profile 命名空间。");
   pushIf(errors, f1.startFixtureId !== "fixture_f1_rainy_umbrella_start", "F1 必须使用唯一受控起始夹具。");
-  pushIf(errors, f1.playableTargetMinutes !== 27 || f1.endToEndTestBudgetMinutes !== 30, "F1 必须区分 27 分钟可玩目标与 30 分钟端到端测试预算。");
+  pushIf(errors, f1.playableTargetMinutes !== 60 || f1.endToEndTestBudgetMinutes !== 70, "F1 必须区分不少于 60 分钟的可玩目标与 70 分钟端到端测试预算。");
   pushIf(errors, !chapterIds.has(f1.chapterId), `F1 引用了不存在的章节：${f1.chapterId}`);
   pushIf(errors, !bossIds.has(f1.bossId), `F1 引用了不存在的 Boss：${f1.bossId}`);
   for (const id of f1.subregionIds) pushIf(errors, !subregions.some((entry) => entry.id === id), `F1 引用了不存在的子地区：${id}`);
@@ -556,6 +596,8 @@ export async function validateProject(projectRoot = defaultRoot) {
       templates: templateRegistry.templates.length,
       coreLanguage: technicalBaseline.gameCore.language,
       engine: technicalBaseline.runtimeHost.engine,
+      viewModel: technicalBaseline.experiencePresentation.viewModel,
+      primaryGuidance: technicalBaseline.experiencePresentation.primaryGuidance,
       toolchainLockStatus: technicalBaseline.toolchainLock.status,
       webTarget: technicalBaseline.runtimeHost.wasmTarget,
       cloudSync: technicalBaseline.cloudSync.optional,

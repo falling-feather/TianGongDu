@@ -1,0 +1,161 @@
+{
+  "schemaVersion": "system-sandbox-blockout-metadata-1.0",
+  "taskId": "ART-002",
+  "authoringBase": "99a4093c51b99bc8067e10364f591011efe328ab",
+  "authoritativeRoot": "27fb87c8af74b48e0bfb8f4ef6da2f8e96d6560e",
+  "stableAssetId": "asset.system_demo.mechanism.gate",
+  "sandboxAssetKind": "mechanism",
+  "displayName": "系统 Demo 独立闸门机关灰盒",
+  "owner": "ART",
+  "package": "system_demo.presentation.blockouts",
+  "status": "Blockout",
+  "integrationStatus": "not-integrated",
+  "fallbackIdentity": {
+    "id": "fallback.system_demo.mechanism.gate",
+    "exportName": "mechanism-gate",
+    "artifactPath": "fallbacks/mechanism-gate.svg",
+    "independentPerStableAsset": true,
+    "sha256": "bb4ea42ee85089032de9f6151424450796d803fd75a734ee75787e0cff5bffc0",
+    "bytes": 1547
+  },
+  "source": {
+    "mode": "project-grammar-reuse",
+    "file": null,
+    "kind": "self-contained-new-fallback-from-project-grammar",
+    "generationMethod": "project-owned counterweight and tension-link grammar; simplified anew for this package",
+    "externalInputs": [],
+    "aiAssisted": true,
+    "lineage": {
+      "assetCommit": "f95454c9fa51bdaf593dc354ac21a6ed770ee31c",
+      "bindingTree": "e02ff077c0d1d57923064a2273fc9a049ec475eb",
+      "ledgerCommit": "99a4093c51b99bc8067e10364f591011efe328ab"
+    }
+  },
+  "import": {
+    "status": "planned",
+    "artifact": "not-produced",
+    "validation": "not-validated",
+    "unit": "millimeter",
+    "axes": {
+      "right": "+x",
+      "forward": "+y",
+      "up": "+height"
+    },
+    "facingConvention": "visual forward is +y; authored facing is consumed from the external sandbox definition",
+    "canonicalRoot": "root_visual",
+    "anchors": [
+      {
+        "name": "base_center",
+        "localMm": {
+          "x": 0,
+          "y": 0,
+          "height": 0
+        },
+        "role": "visual base center"
+      },
+      {
+        "name": "link_visual",
+        "localMm": {
+          "x": -280,
+          "y": 0,
+          "height": 1180
+        },
+        "role": "presentation-only linkage marker"
+      },
+      {
+        "name": "weight_visual",
+        "localMm": {
+          "x": 360,
+          "y": 0,
+          "height": 620
+        },
+        "role": "presentation-only counterweight marker"
+      }
+    ],
+    "visualBoundsMm": {
+      "width": 1200,
+      "depth": 800,
+      "height": 2300
+    },
+    "nominalPresentationExtentMm": null,
+    "trimPolicy": "preserve root_visual, every named anchor, silhouette breaks, and fallback export identity"
+  },
+  "license": {
+    "status": "review-recorded-not-release-cleared",
+    "rightsHolder": "TianGongDu project",
+    "externalAssetLicenses": [],
+    "aiGenerationDisclosure": "Codex-assisted deterministic SVG using project-owned visual grammar; no external image input",
+    "permittedUse": "internal system Demo evaluation and production planning",
+    "releaseGate": "rights-holder sign-off, similarity review, runtime artifact report, and package policy confirmation"
+  },
+  "runtime": {
+    "status": "planned",
+    "artifact": "not-produced",
+    "validation": "not-validated",
+    "integrationStatus": "not-integrated",
+    "authorityBoundary": "Presentation-only output; all gameplay state and spatial truth remain external",
+    "stableAssetIdChangesByPlatform": false,
+    "platformVariants": {
+      "web": {
+        "variantState": "not-built",
+        "integrationState": "not-integrated",
+        "carrierPlan": "small opaque or alpha-clip presentation artifact behind a future resolver"
+      },
+      "windows": {
+        "variantState": "not-built",
+        "integrationState": "not-integrated",
+        "carrierPlan": "small opaque or alpha-clip presentation artifact behind a future resolver"
+      }
+    },
+    "fallbackWhenMissing": "fallback.system_demo.mechanism.gate"
+  },
+  "preview": {
+    "status": "planned",
+    "runtimeCapture": "not-produced",
+    "validation": "not-validated",
+    "artifactType": "review-board-only",
+    "reviewBoards": [
+      "previews/readability-1280x720.svg",
+      "previews/readability-1920x1080.svg",
+      "previews/readability-1230x692.svg"
+    ],
+    "actorThumbnailHeightPx": null,
+    "requiredChecks": [
+      "grayscale silhouette",
+      "anchor marker",
+      "non-color distinction",
+      "no platform integration claim"
+    ]
+  },
+  "budget": {
+    "runtimeTargetsAreEstimates": true,
+    "measuredSourceBytes": 0,
+    "measuredFallbackBytes": 1547,
+    "commitItemLimitBytes": 32768,
+    "packageCommitLimitBytes": 1500000,
+    "targetTransportKiB": 160,
+    "targetGpuTextureMiB": 1.25,
+    "targetDrawCalls": 2,
+    "peakTransparentCoveragePercent": 1
+  },
+  "states": [
+    "idle",
+    "moving-visual",
+    "settled-visual"
+  ],
+  "accessibility": {
+    "colorOnly": false,
+    "audioOnly": false,
+    "shapeToken": "offset-gate-link-counterweight",
+    "nonColorChannels": [
+      "offset gate post",
+      "visible diagonal linkage",
+      "counterweight changes height"
+    ]
+  },
+  "dependencies": [
+    "external mechanism pose",
+    "external mechanism state",
+    "future presentation resolver"
+  ]
+}

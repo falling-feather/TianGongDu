@@ -1,0 +1,158 @@
+{
+  "schemaVersion": "system-sandbox-blockout-metadata-1.0",
+  "taskId": "ART-002",
+  "authoringBase": "99a4093c51b99bc8067e10364f591011efe328ab",
+  "authoritativeRoot": "27fb87c8af74b48e0bfb8f4ef6da2f8e96d6560e",
+  "stableAssetId": "asset.system_demo.safe_point.lamp_shelter",
+  "sandboxAssetKind": "safe_point",
+  "displayName": "系统 Demo 独立灯棚安全点灰盒",
+  "owner": "ART",
+  "package": "system_demo.presentation.blockouts",
+  "status": "Blockout",
+  "integrationStatus": "not-integrated",
+  "fallbackIdentity": {
+    "id": "fallback.system_demo.safe_point.lamp_shelter",
+    "exportName": "safe-point-lamp-shelter",
+    "artifactPath": "fallbacks/safe-point-lamp-shelter.svg",
+    "independentPerStableAsset": true,
+    "sha256": "135272bd27b0fb8690bc4e2f74a15b8e7dff8e93ec919b6ed1d52fc4d344c5e4",
+    "bytes": 1588
+  },
+  "source": {
+    "mode": "new-source",
+    "file": "assets/safe-point-lamp-shelter/source.svg",
+    "kind": "deterministic-project-svg",
+    "generationMethod": "project-local deterministic vector generation with no external image input",
+    "externalInputs": [],
+    "aiAssisted": true,
+    "sha256": "668d37fbb8245089eed8d044377d0e69a3360dc39c5bb3f06d097634a6d83ae8",
+    "bytes": 3762
+  },
+  "import": {
+    "status": "planned",
+    "artifact": "not-produced",
+    "validation": "not-validated",
+    "unit": "millimeter",
+    "axes": {
+      "right": "+x",
+      "forward": "+y",
+      "up": "+height"
+    },
+    "facingConvention": "visual forward is +y; authored facing is consumed from the external sandbox definition",
+    "canonicalRoot": "root_visual",
+    "anchors": [
+      {
+        "name": "base_center",
+        "localMm": {
+          "x": 0,
+          "y": 0,
+          "height": 0
+        },
+        "role": "visual base center"
+      },
+      {
+        "name": "lamp_core",
+        "localMm": {
+          "x": 0,
+          "y": 0,
+          "height": 1450
+        },
+        "role": "presentation-only lamp marker"
+      },
+      {
+        "name": "return_facing_visual",
+        "localMm": {
+          "x": 0,
+          "y": 520,
+          "height": 0
+        },
+        "role": "visual facing hint; not a spawn writer"
+      }
+    ],
+    "visualBoundsMm": {
+      "width": 1400,
+      "depth": 1400,
+      "height": 1900,
+      "groundRingDiameter": 1200
+    },
+    "nominalPresentationExtentMm": null,
+    "trimPolicy": "preserve root_visual, every named anchor, silhouette breaks, and fallback export identity"
+  },
+  "license": {
+    "status": "review-recorded-not-release-cleared",
+    "rightsHolder": "TianGongDu project",
+    "externalAssetLicenses": [],
+    "aiGenerationDisclosure": "Codex-assisted deterministic SVG using project-owned visual grammar; no external image input",
+    "permittedUse": "internal system Demo evaluation and production planning",
+    "releaseGate": "rights-holder sign-off, similarity review, runtime artifact report, and package policy confirmation"
+  },
+  "runtime": {
+    "status": "planned",
+    "artifact": "not-produced",
+    "validation": "not-validated",
+    "integrationStatus": "not-integrated",
+    "authorityBoundary": "Presentation-only output; all gameplay state and spatial truth remain external",
+    "stableAssetIdChangesByPlatform": false,
+    "platformVariants": {
+      "web": {
+        "variantState": "not-built",
+        "integrationState": "not-integrated",
+        "carrierPlan": "small opaque or alpha-clip presentation artifact behind a future resolver"
+      },
+      "windows": {
+        "variantState": "not-built",
+        "integrationState": "not-integrated",
+        "carrierPlan": "small opaque or alpha-clip presentation artifact behind a future resolver"
+      }
+    },
+    "fallbackWhenMissing": "fallback.system_demo.safe_point.lamp_shelter"
+  },
+  "preview": {
+    "status": "planned",
+    "runtimeCapture": "not-produced",
+    "validation": "not-validated",
+    "artifactType": "review-board-only",
+    "reviewBoards": [
+      "previews/readability-1280x720.svg",
+      "previews/readability-1920x1080.svg",
+      "previews/readability-1230x692.svg"
+    ],
+    "actorThumbnailHeightPx": null,
+    "requiredChecks": [
+      "grayscale silhouette",
+      "anchor marker",
+      "non-color distinction",
+      "no platform integration claim"
+    ]
+  },
+  "budget": {
+    "runtimeTargetsAreEstimates": true,
+    "measuredSourceBytes": 3762,
+    "measuredFallbackBytes": 1588,
+    "commitItemLimitBytes": 32768,
+    "packageCommitLimitBytes": 1500000,
+    "targetTransportKiB": 180,
+    "targetGpuTextureMiB": 1.5,
+    "targetDrawCalls": 2,
+    "peakTransparentCoveragePercent": 2
+  },
+  "states": [
+    "available",
+    "current-visual"
+  ],
+  "accessibility": {
+    "colorOnly": false,
+    "audioOnly": false,
+    "shapeToken": "closed-double-ring-tripod-lamp",
+    "nonColorChannels": [
+      "closed double ground ring",
+      "three-rib shelter",
+      "single upward lamp core"
+    ]
+  },
+  "dependencies": [
+    "external safe point pose",
+    "external current-safe-point snapshot",
+    "future presentation resolver"
+  ]
+}

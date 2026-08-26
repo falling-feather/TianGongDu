@@ -1,0 +1,753 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#081118" />
+    <link rel="icon" href="data:," />
+    <title>天工渡 · F1 Web Host</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: ui-sans-serif, system-ui, "Microsoft YaHei", sans-serif;
+        background: #081118;
+        color: #e7e0cf;
+        --quest-panel: rgba(7, 19, 24, 0.94);
+        --quest-edge: rgba(208, 157, 85, 0.64);
+        --quest-accent: #d09d55;
+        --quest-text: #f0e6d0;
+        --quest-muted: #aab9b7;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background:
+          radial-gradient(circle at 50% 20%, rgba(75, 118, 121, 0.2), transparent 38rem),
+          #081118;
+      }
+
+      main {
+        width: min(100vw, 1280px);
+        padding: clamp(12px, 2vw, 24px);
+      }
+
+      header {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 10px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(18px, 2vw, 26px);
+        font-weight: 560;
+        letter-spacing: 0.08em;
+      }
+
+      #status, #last-event {
+        margin: 0;
+        color: #aab9b7;
+        font: 13px/1.4 ui-monospace, "Cascadia Mono", monospace;
+      }
+
+      .playfield {
+        position: relative;
+        overflow: hidden;
+        border: 1px solid rgba(208, 157, 85, 0.45);
+        border-radius: 12px;
+        background: #050a0e;
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.38);
+      }
+
+      canvas {
+        display: block;
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        outline: none;
+      }
+
+      canvas:focus-visible { box-shadow: inset 0 0 0 3px #d09d55; }
+
+      .quest-ui-layer {
+        position: absolute;
+        inset: 0;
+        z-index: 20;
+        display: flex;
+        align-items: flex-start;
+        justify-content: flex-end;
+        padding: clamp(8px, 1.8vw, 20px);
+        pointer-events: none;
+      }
+
+      .quest-ui-layer[hidden] { display: none; }
+
+      .quest-ui-layer[data-surface="choice"] {
+        align-items: center;
+        justify-content: center;
+        background: rgba(3, 9, 12, 0.48);
+        pointer-events: auto;
+      }
+
+      .quest-ui-panel {
+        width: min(100%, 440px);
+        max-height: calc(100% - 4px);
+        min-width: 0;
+        overflow: auto;
+        padding: clamp(12px, 2.2vw, 22px);
+        border: 1px solid var(--quest-edge);
+        border-radius: 12px;
+        background: var(--quest-panel);
+        box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
+        color: var(--quest-text);
+        pointer-events: none;
+        scrollbar-width: thin;
+      }
+
+      .quest-ui-layer[data-surface="choice"] .quest-ui-panel { pointer-events: auto; }
+
+      .quest-ui-eyebrow,
+      .quest-ui-prompt,
+      .quest-ui-detail {
+        margin: 0;
+        overflow-wrap: anywhere;
+      }
+
+      .quest-ui-eyebrow {
+        color: var(--quest-accent);
+        font: 11px/1.35 ui-monospace, "Cascadia Mono", monospace;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .quest-ui-title {
+        margin: 6px 0 4px;
+        font-size: clamp(18px, 2.2vw, 26px);
+        line-height: 1.2;
+      }
+
+      .quest-ui-prompt,
+      .quest-ui-detail {
+        color: var(--quest-muted);
+        font-size: clamp(12px, 1.45vw, 15px);
+        line-height: 1.5;
+      }
+
+      .quest-ui-detail { margin-top: 10px; }
+
+      .quest-ui-choices {
+        display: grid;
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .quest-ui-choices:empty { display: none; }
+
+      .quest-ui-choices button {
+        display: grid;
+        gap: 3px;
+        width: 100%;
+        min-width: 0;
+        padding: 10px 12px;
+        border: 1px solid rgba(170, 185, 183, 0.38);
+        border-radius: 8px;
+        background: rgba(23, 37, 43, 0.94);
+        color: var(--quest-text);
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .quest-ui-choices button:hover { border-color: var(--quest-edge); }
+      .quest-ui-choices button[aria-disabled="true"] { cursor: wait; opacity: 0.56; }
+      .quest-ui-choices button:focus-visible {
+        outline: 2px solid var(--quest-accent);
+        outline-offset: 2px;
+      }
+
+      .quest-ui-choices strong,
+      .quest-ui-choices span { overflow-wrap: anywhere; }
+      .quest-ui-choices strong { font-size: 15px; }
+      .quest-ui-choices span { color: var(--quest-muted); font-size: 12px; }
+
+      @media (prefers-reduced-motion: no-preference) {
+        .quest-ui-panel { animation: quest-panel-in 140ms ease-out; }
+        @keyframes quest-panel-in {
+          from { opacity: 0; transform: translateY(5px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      }
+
+      footer {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        margin-top: 10px;
+      }
+
+      .profile-controls {
+        display: grid;
+        grid-template-columns: auto auto auto 1fr;
+        align-items: center;
+        gap: 10px;
+        margin-top: 12px;
+        padding: 10px 12px;
+        border: 1px solid rgba(208, 157, 85, 0.34);
+        border-radius: 10px;
+        background: rgba(5, 10, 14, 0.82);
+      }
+
+      .profile-label {
+        color: #d09d55;
+        font-size: 13px;
+        letter-spacing: 0.06em;
+      }
+
+      .qa-controls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        margin-top: 12px;
+        padding: 10px;
+        border: 1px solid rgba(170, 185, 183, 0.28);
+        border-radius: 10px;
+        background: rgba(5, 10, 14, 0.82);
+      }
+
+      .profile-controls button,
+      .qa-controls button {
+        border: 1px solid rgba(208, 157, 85, 0.55);
+        border-radius: 7px;
+        padding: 7px 10px;
+        background: #17252b;
+        color: #e7e0cf;
+        font: 12px/1 ui-monospace, "Cascadia Mono", monospace;
+        cursor: pointer;
+      }
+
+      .profile-controls button:disabled {
+        cursor: wait;
+        opacity: 0.48;
+      }
+
+      .profile-controls button:focus-visible,
+      .qa-controls button:focus-visible {
+        outline: 2px solid #d09d55;
+        outline-offset: 2px;
+      }
+
+      #profile-state {
+        margin: 0;
+        color: #aab9b7;
+        font: 12px/1.4 ui-monospace, "Cascadia Mono", monospace;
+      }
+
+      .qa-controls[hidden] { display: none; }
+
+      #qa-state {
+        margin: 0 0 0 auto;
+        color: #aab9b7;
+        font: 12px/1.4 ui-monospace, "Cascadia Mono", monospace;
+      }
+
+      @media (max-width: 640px) {
+        .profile-controls { grid-template-columns: 1fr auto; }
+        #profile-state { grid-column: 1 / -1; }
+        .quest-ui-layer { padding: 6px; }
+        .quest-ui-panel { border-radius: 9px; padding: 10px; }
+        .quest-ui-title { font-size: 17px; }
+        .quest-ui-prompt,
+        .quest-ui-detail { font-size: 12px; line-height: 1.35; }
+        .quest-ui-choices { gap: 6px; margin-top: 8px; }
+        .quest-ui-choices button { padding: 7px 9px; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>天工渡 · F1 Web Host</h1>
+        <p id="status" role="status" aria-live="polite">准备 WebAssembly…</p>
+      </header>
+      <div class="playfield">
+        <canvas id="canvas" width="1280" height="720" tabindex="0" aria-label="天工渡 F1 游戏画面"></canvas>
+        <div id="quest-ui" class="quest-ui-layer" data-testid="quest-ui" hidden></div>
+      </div>
+      <footer>
+        <p id="last-event" aria-live="polite">等待生命周期事件</p>
+        <p id="variant">Web Single · WebGL2</p>
+      </footer>
+      <section class="profile-controls" aria-label="Guest 本地存档">
+        <span class="profile-label">Guest · 本地优先</span>
+        <button id="save-profile" data-testid="save-profile" type="button" disabled>保存检查点</button>
+        <button id="export-profile" data-testid="export-profile" type="button" disabled>导出修复包</button>
+        <p id="profile-state" data-testid="profile-state" role="status" aria-live="polite" data-save-state="booting">等待 IndexedDB…</p>
+      </section>
+      <section id="qa-controls" class="qa-controls" aria-label="Lifecycle QA controls" hidden>
+        <button type="button" data-testid="qa-hide">Simulate hidden</button>
+        <button type="button" data-testid="qa-show">Simulate visible</button>
+        <button type="button" data-testid="qa-blur">Simulate blur</button>
+        <button type="button" data-testid="qa-focus">Simulate focus</button>
+        <button type="button" data-testid="qa-context-lost">Lose WebGL context</button>
+        <button type="button" data-testid="qa-context-restored">Restore WebGL context</button>
+        <p id="qa-state" data-testid="qa-state" aria-live="polite">presentation: pending</p>
+      </section>
+    </main>
+
+    <script>
+      "use strict";
+
+      const statusElement = document.getElementById("status");
+      const lastEventElement = document.getElementById("last-event");
+      const canvasElement = document.getElementById("canvas");
+      const questUiElement = document.getElementById("quest-ui");
+      const saveProfileButton = document.getElementById("save-profile");
+      const exportProfileButton = document.getElementById("export-profile");
+      const profileStateElement = document.getElementById("profile-state");
+      const qaControlsElement = document.getElementById("qa-controls");
+      const qaStateElement = document.getElementById("qa-state");
+      const pageParameters = new URLSearchParams(window.location.search);
+      const lifecycleTrace = [];
+      let contextLossExtension = null;
+      let profileBridge = null;
+      let questUiRenderer = null;
+      let profilePumpTimer = null;
+      let profilePumpStopped = false;
+      const presentationStateNames = Object.freeze({
+        0: "stopped",
+        1: "running",
+        2: "suspended",
+        3: "context_lost"
+      });
+
+      function recordLifecycle(event, detail = {}) {
+        const record = Object.freeze({
+          sequence: lifecycleTrace.length + 1,
+          time: performance.now(),
+          event,
+          ...detail
+        });
+        lifecycleTrace.push(record);
+        if (lifecycleTrace.length > 256) lifecycleTrace.shift();
+        lastEventElement.textContent = `${record.sequence}. ${event}`;
+        console.info(`[tgd.web.trace] ${JSON.stringify(record)}`);
+        return record;
+      }
+
+      function invokeBridge(name, resultType = null, argumentTypes = [], arguments_ = []) {
+        if (typeof Module.ccall !== "function") {
+          recordLifecycle("bridge.not_ready", { name });
+          return -1;
+        }
+        return Module.ccall(name, resultType, argumentTypes, arguments_);
+      }
+
+      function presentationState() {
+        return invokeBridge("tgd_web_presentation_state", "number");
+      }
+
+      function renderProfileState(state) {
+        if (!state) return;
+        const retryable = state.stateName === "save_failed" && state.hasPendingSave;
+        saveProfileButton.disabled = state.stateName !== "ready" && !retryable;
+        exportProfileButton.disabled = !state.hasSnapshot && ![
+          "save_failed",
+          "conflict_read_only",
+          "recovery_required"
+        ].includes(state.stateName);
+        saveProfileButton.textContent = retryable ? "重试保存" : "保存检查点";
+        profileStateElement.dataset.saveState = state.stateName;
+        if (state.stateName === "loading_head" || state.stateName === "loading_snapshot") {
+          profileStateElement.textContent = "正在恢复 Guest 本地档…";
+        } else if (state.stateName === "saving") {
+          profileStateElement.textContent = "正在提交 IndexedDB 原子事务…";
+        } else if (state.stateName === "ready" && state.hasSnapshot) {
+          profileStateElement.textContent = Number(state.committedSaveCount) > 0
+            ? `已保存 · 本会话 ${state.committedSaveCount} 次 · 序列 ${state.logicalSequence}`
+            : `已恢复 · 序列 ${state.logicalSequence}`;
+          profileStateElement.dataset.saveState = Number(state.committedSaveCount) > 0
+            ? "saved"
+            : "restored";
+        } else if (state.stateName === "ready") {
+          profileStateElement.textContent = "Guest 新档已就绪";
+        } else if (retryable) {
+          profileStateElement.textContent = state.errorName === "storage_quota"
+            ? "保存未提交 · 配额不足 · 可重试"
+            : `保存未提交 · ${state.errorName} · 可重试`;
+          profileStateElement.dataset.saveState = "retryable";
+        } else {
+          profileStateElement.textContent = `本地档不可写 · ${state.stateName}/${state.errorName}`;
+        }
+        recordLifecycle("profile.state", {
+          ...state,
+          displayText: profileStateElement.textContent
+        });
+      }
+
+      function renderQuestUiEvent(event) {
+        try {
+          if (!questUiRenderer?.render(event)) {
+            recordLifecycle("quest_ui.rejected", {
+              sequence: event?.sequence ?? null,
+              checksum: event?.checksum ?? null
+            });
+            return;
+          }
+          recordLifecycle("quest_ui.rendered", {
+            sequence: event.sequence,
+            checksum: event.checksum,
+            cue: event.cue,
+            source: event.sourceName,
+            surface: event.surfaceName
+          });
+        } catch (error) {
+          recordLifecycle("quest_ui.render_failed", { message: String(error) });
+        }
+      }
+
+      function acknowledgeQuestUiClose(acknowledgement) {
+        try {
+          if (!questUiRenderer?.acknowledgeClose(acknowledgement)) {
+            recordLifecycle("quest_ui.close_rejected", {
+              sequence: acknowledgement?.projectionSequence ?? null,
+              checksum: acknowledgement?.projectionChecksum ?? null
+            });
+            return;
+          }
+          recordLifecycle("quest_ui.closed", {
+            sequence: acknowledgement.projectionSequence,
+            checksum: acknowledgement.projectionChecksum,
+            reason: acknowledgement.reasonName
+          });
+        } catch (error) {
+          recordLifecycle("quest_ui.close_failed", { message: String(error) });
+        }
+      }
+
+      async function initializeProfile() {
+        if (!globalThis.TgdIndexedDbStorage) {
+          throw new Error("IndexedDB storage bridge was not linked into the Web host");
+        }
+        profileBridge = globalThis.TgdIndexedDbStorage.createBridge(Module, {
+          testFaultMode: pageParameters.get("qa") === "1"
+            ? pageParameters.get("storageFault")
+            : null,
+          onProfileState: renderProfileState,
+          onQuestUiEvent: renderQuestUiEvent,
+          onQuestUiClose: acknowledgeQuestUiClose,
+          onFatal: (error) => {
+            profileStateElement.dataset.saveState = "fatal";
+            profileStateElement.textContent = "本地档桥发生致命错误";
+            recordLifecycle("profile.fatal", { message: String(error) });
+          }
+        });
+        if (!globalThis.TgdQuestUiRenderer) {
+          throw new Error("Quest UI renderer was not linked into the Web host");
+        }
+        questUiRenderer = globalThis.TgdQuestUiRenderer.createRenderer(questUiElement, {
+          submitIntent: (intent) => profileBridge.submitQuestUiSelection(intent),
+          restoreFocus: () => canvasElement.focus({ preventScroll: true }),
+          onDiagnostic: (diagnostic) => recordLifecycle(
+            `quest_ui.${diagnostic.event}`,
+            { error: diagnostic.error }
+          )
+        });
+        window.__tgdProfile = Object.freeze({
+          getState: profileBridge.getProfileState,
+          export: profileBridge.exportProfile,
+          retry: profileBridge.retryPendingSave,
+          save: profileBridge.saveGuestCheckpoint,
+          inspectSchema: profileBridge.inspectSchema,
+          identity: profileBridge.identity
+        });
+        window.__tgdQuestUi = Object.freeze({
+          dispatchAction: questUiRenderer.dispatchAction,
+          getModel: questUiRenderer.getModel,
+          getState: profileBridge.getQuestUiState,
+          getCloseState: profileBridge.getQuestUiCloseState
+        });
+        await profileBridge.boot();
+        scheduleProfilePump();
+      }
+
+      function scheduleProfilePump() {
+        if (profilePumpStopped || profilePumpTimer !== null) return;
+        profilePumpTimer = window.setTimeout(async () => {
+          profilePumpTimer = null;
+          try {
+            await profileBridge?.drain();
+          } catch (error) {
+            profilePumpStopped = true;
+            recordLifecycle("profile.pump_failed", { message: String(error) });
+            return;
+          }
+          scheduleProfilePump();
+        }, 50);
+      }
+
+      async function waitForActiveServiceWorker(registration) {
+        const deadline = performance.now() + 15_000;
+        while (performance.now() < deadline) {
+          const activeWorker = registration.active ??
+            (await navigator.serviceWorker.getRegistration("./"))?.active ?? null;
+          if (
+            activeWorker &&
+            (activeWorker.state === "activated" || navigator.serviceWorker.controller)
+          ) {
+            return activeWorker;
+          }
+          await new Promise((resolveWait) => window.setTimeout(resolveWait, 50));
+        }
+        throw new Error("Service Worker activation timed out");
+      }
+
+      async function initializeOfflineShell() {
+        const state = { supported: "serviceWorker" in navigator, ready: false };
+        window.__tgdServiceWorker = state;
+        if (!state.supported) {
+          recordLifecycle("service_worker.unavailable");
+          return state;
+        }
+        const existingRegistration = await navigator.serviceWorker.getRegistration("./");
+        const registration = existingRegistration ??
+          await navigator.serviceWorker.register("./service-worker.js", { scope: "./" });
+        if (existingRegistration) {
+          void registration.update().catch((error) => {
+            recordLifecycle("service_worker.update_deferred", { message: String(error) });
+          });
+        }
+        const activeWorker = await waitForActiveServiceWorker(registration);
+        state.ready = true;
+        state.scope = registration.scope;
+        state.scriptUrl = activeWorker.scriptURL;
+        recordLifecycle("service_worker.ready", { scope: registration.scope });
+        return state;
+      }
+
+      function updateQaState(action) {
+        const state = presentationState();
+        const stateName = presentationStateNames[state] ?? `unknown(${state})`;
+        qaStateElement.textContent = `${action} · presentation: ${stateName}`;
+      }
+
+      function dispatchVisibility(hidden) {
+        recordLifecycle(hidden ? "document.hidden" : "document.visible", { hidden });
+        invokeBridge("axmol_hdoc_visibilitychange", null, ["number"], [hidden ? 1 : 0]);
+        invokeBridge("tgd_web_visibility_changed", null, ["number"], [hidden ? 1 : 0]);
+      }
+
+      function dispatchFocus(focused) {
+        recordLifecycle(focused ? "window.focus" : "window.blur", { focused });
+        invokeBridge("tgd_web_focus_changed", null, ["number"], [focused ? 1 : 0]);
+      }
+
+      function getContextLossExtension() {
+        if (contextLossExtension) return contextLossExtension;
+        const context = canvasElement.getContext("webgl2");
+        contextLossExtension = context?.getExtension("WEBGL_lose_context") ?? null;
+        return contextLossExtension;
+      }
+
+      canvasElement.addEventListener("webglcontextlost", (event) => {
+        event.preventDefault();
+        recordLifecycle("webgl.context_lost", { stateBefore: presentationState() });
+        invokeBridge("tgd_web_context_lost");
+        invokeBridge("axmol_webglcontextlost");
+      });
+
+      canvasElement.addEventListener("webglcontextrestored", (event) => {
+        event.preventDefault();
+        invokeBridge("axmol_webglcontextrestored");
+        invokeBridge("tgd_web_context_restored");
+        recordLifecycle("webgl.context_restored", { stateAfter: presentationState() });
+      });
+
+      document.addEventListener("visibilitychange", () => dispatchVisibility(document.hidden));
+      window.addEventListener("blur", () => dispatchFocus(false));
+      window.addEventListener("focus", () => dispatchFocus(true));
+      window.addEventListener("error", (event) => {
+        recordLifecycle("window.error", { message: event.message });
+      });
+      window.addEventListener("pagehide", () => {
+        profilePumpStopped = true;
+        if (profilePumpTimer !== null) window.clearTimeout(profilePumpTimer);
+        profilePumpTimer = null;
+        questUiRenderer?.dispose();
+        profileBridge?.shutdown();
+      }, { once: true });
+
+      saveProfileButton.addEventListener("click", async () => {
+        saveProfileButton.disabled = true;
+        try {
+          const state = profileBridge?.getProfileState();
+          if (state?.stateName === "save_failed" && state.hasPendingSave) {
+            await profileBridge.retryPendingSave();
+          } else {
+            await profileBridge?.saveGuestCheckpoint();
+          }
+        } catch (error) {
+          profileStateElement.dataset.saveState = "error";
+          profileStateElement.textContent = `保存失败 · ${String(error)}`;
+          recordLifecycle("profile.save_failed", { message: String(error) });
+        }
+      });
+
+      exportProfileButton.addEventListener("click", async () => {
+        exportProfileButton.disabled = true;
+        try {
+          const exported = await profileBridge.exportProfile();
+          const url = URL.createObjectURL(new Blob([exported.bytes], { type: exported.mediaType }));
+          const anchor = document.createElement("a");
+          anchor.href = url;
+          anchor.download = exported.fileName;
+          anchor.click();
+          window.setTimeout(() => URL.revokeObjectURL(url), 0);
+          recordLifecycle("profile.exported", {
+            snapshotId: exported.snapshotId,
+            logicalSequence: exported.logicalSequence,
+            byteLength: exported.bytes.byteLength
+          });
+        } catch (error) {
+          recordLifecycle("profile.export_failed", { message: String(error) });
+        } finally {
+          exportProfileButton.disabled = false;
+        }
+      });
+
+      window.__tgdLifecycleTrace = lifecycleTrace;
+      window.__tgdTest = Object.freeze({
+        getState: presentationState,
+        getF1State: () => ({
+          playerHealth: invokeBridge("tgd_web_f1_qa_player_health", "number"),
+          playerActive: invokeBridge("tgd_web_f1_qa_player_active", "number") !== 0,
+          activeHostiles: invokeBridge("tgd_web_f1_qa_active_hostiles", "number"),
+          retryCount: invokeBridge("tgd_web_f1_qa_retry_count", "number"),
+          questBeatIndex: invokeBridge("tgd_web_f1_qa_quest_beat_index", "number"),
+          questCompletedObjectives: invokeBridge(
+            "tgd_web_f1_qa_quest_completed_objectives",
+            "number"
+          ),
+          questRequiredObjectives: invokeBridge(
+            "tgd_web_f1_qa_quest_required_objectives",
+            "number"
+          ),
+          questSelectedChoices: invokeBridge(
+            "tgd_web_f1_qa_quest_selected_choices",
+            "number"
+          ),
+          questResolved: invokeBridge("tgd_web_f1_qa_quest_resolved", "number") !== 0,
+          resolutionRewardReady:
+            invokeBridge("tgd_web_f1_qa_resolution_reward_ready", "number") !== 0,
+          rewardClaimCommitted:
+            invokeBridge("tgd_web_f1_qa_reward_claim_committed", "number") !== 0,
+          profileOperationCount: invokeBridge(
+            "tgd_web_f1_qa_profile_operation_count",
+            "number"
+          ),
+          safePointPoseX: invokeBridge("tgd_web_f1_qa_safe_point_pose_x", "number"),
+          safePointPoseY: invokeBridge("tgd_web_f1_qa_safe_point_pose_y", "number"),
+          playerPoseX: invokeBridge("tgd_web_f1_qa_player_pose_x", "number"),
+          playerPoseY: invokeBridge("tgd_web_f1_qa_player_pose_y", "number"),
+          eligiblePlayTicks: invokeBridge("tgd_web_f1_qa_eligible_play_ticks", "number"),
+          idleTicks: invokeBridge("tgd_web_f1_qa_idle_ticks", "number"),
+          failureRetryTicks: invokeBridge(
+            "tgd_web_f1_qa_failure_retry_ticks",
+            "number"
+          ),
+          beatTargetsMet: invokeBridge("tgd_web_f1_qa_beat_targets_met", "number"),
+          playableTargetMet:
+            invokeBridge("tgd_web_f1_qa_playable_target_met", "number") !== 0,
+          incomingAttackTicks: invokeBridge(
+            "tgd_web_f1_qa_incoming_attack_ticks",
+            "number"
+          ),
+          playerBusy: invokeBridge("tgd_web_f1_qa_player_busy", "number") !== 0
+        }),
+        getTrace: () => lifecycleTrace.map((entry) => ({ ...entry })),
+        replayRewardClaim: () =>
+          invokeBridge("tgd_web_f1_qa_replay_reward_claim", "number") !== 0,
+        submitInvalidRewardClaim: () =>
+          invokeBridge("tgd_web_f1_qa_submit_invalid_reward_claim", "number") !== 0,
+        setHidden: (hidden) => dispatchVisibility(Boolean(hidden)),
+        setFocused: (focused) => dispatchFocus(Boolean(focused)),
+        loseContext: () => {
+          const extension = getContextLossExtension();
+          if (!extension) throw new Error("WEBGL_lose_context is unavailable");
+          extension.loseContext();
+        },
+        restoreContext: () => {
+          const extension = getContextLossExtension();
+          if (!extension) throw new Error("WEBGL_lose_context is unavailable");
+          extension.restoreContext();
+        }
+      });
+
+      if (pageParameters.get("qa") === "1") {
+        qaControlsElement.hidden = false;
+        const qaActions = Object.freeze({
+          "qa-hide": () => dispatchVisibility(true),
+          "qa-show": () => dispatchVisibility(false),
+          "qa-blur": () => dispatchFocus(false),
+          "qa-focus": () => dispatchFocus(true),
+          "qa-context-lost": () => window.__tgdTest.loseContext(),
+          "qa-context-restored": () => window.__tgdTest.restoreContext()
+        });
+
+        for (const [testId, action] of Object.entries(qaActions)) {
+          document.querySelector(`[data-testid="${testId}"]`).addEventListener("click", () => {
+            try {
+              action();
+              window.setTimeout(() => updateQaState(testId), 250);
+            } catch (error) {
+              qaStateElement.textContent = `${testId} · error: ${String(error)}`;
+              console.error(`[tgd.web.qa] ${testId}: ${String(error)}`);
+            }
+          });
+        }
+      }
+
+      var Module = {
+        preRun: [],
+        postRun: [() => {
+          window.setTimeout(async () => {
+            statusElement.textContent = "宿主已就绪";
+            dispatchFocus(document.hasFocus());
+            dispatchVisibility(document.hidden);
+            recordLifecycle("runtime.ready", { state: presentationState() });
+            if (!qaControlsElement.hidden) updateQaState("runtime.ready");
+            canvasElement.focus({ preventScroll: true });
+            const profileInitialization = initializeProfile().catch((error) => {
+              profileStateElement.dataset.saveState = "fatal";
+              profileStateElement.textContent = `本地档启动失败 · ${String(error)}`;
+              recordLifecycle("profile.boot_failed", { message: String(error) });
+            });
+            const offlineInitialization = initializeOfflineShell().catch((error) => {
+              recordLifecycle("service_worker.failed", { message: String(error) });
+            });
+            await Promise.allSettled([profileInitialization, offlineInitialization]);
+          }, 0);
+        }],
+        print: (...parts) => console.log(parts.join(" ")),
+        printErr: (...parts) => console.error(parts.join(" ")),
+        canvas: canvasElement,
+        setStatus: (text) => {
+          statusElement.textContent = text || "宿主已就绪";
+        },
+        monitorRunDependencies: (remaining) => {
+          if (remaining > 0) statusElement.textContent = `加载依赖：${remaining}`;
+        },
+        onAbort: (reason) => {
+          statusElement.textContent = "宿主启动失败";
+          recordLifecycle("runtime.abort", { reason: String(reason) });
+        }
+      };
+    </script>
+    {{{ SCRIPT }}}
+  </body>
+</html>

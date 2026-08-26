@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#071218" />
+    <link rel="icon" href="data:," />
+    <title>TianGongDu · System Demo 0.8.4</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: Inter, "Segoe UI", system-ui, sans-serif;
+        background: #071218;
+        color: #e8ddbf;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        min-height: 100%;
+        margin: 0;
+        background:
+          radial-gradient(circle at 78% 8%, rgba(81, 127, 124, 0.18), transparent 38rem),
+          linear-gradient(145deg, #061117, #0a1d24 58%, #071218);
+      }
+
+      body {
+        display: grid;
+        place-items: center;
+        padding: clamp(12px, 2.4vw, 32px);
+      }
+
+      main {
+        width: min(100%, 1500px);
+      }
+
+      header {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 12px;
+      }
+
+      h1 {
+        margin: 0;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: clamp(22px, 3vw, 36px);
+        font-weight: 500;
+        letter-spacing: 0.03em;
+      }
+
+      .eyebrow {
+        margin: 0 0 6px;
+        color: #7dd4c1;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+      }
+
+      .build {
+        color: #a7beb8;
+        font: 12px/1.5 ui-monospace, "Cascadia Code", monospace;
+        text-align: right;
+      }
+
+      .frame {
+        position: relative;
+        overflow: hidden;
+        border: 1px solid rgba(137, 190, 181, 0.42);
+        border-radius: 10px;
+        background: #071218;
+        box-shadow:
+          0 28px 80px rgba(0, 0, 0, 0.45),
+          inset 0 0 0 1px rgba(235, 209, 157, 0.06);
+      }
+
+      canvas {
+        display: block;
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        background: #071218;
+        cursor: default;
+        outline: none;
+      }
+
+      canvas:focus-visible {
+        box-shadow: inset 0 0 0 2px #78d4c1;
+      }
+
+      .loading {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        pointer-events: none;
+        background: rgba(6, 17, 23, 0.92);
+        transition: opacity 220ms ease;
+      }
+
+      .loading[data-ready="true"] {
+        opacity: 0;
+      }
+
+      .loading-card {
+        min-width: min(88%, 420px);
+        padding: 24px;
+        border: 1px solid rgba(125, 212, 193, 0.38);
+        background: rgba(8, 25, 31, 0.86);
+        text-align: center;
+      }
+
+      .loading-card strong {
+        display: block;
+        margin-bottom: 9px;
+        color: #e9d8aa;
+        font-family: Georgia, serif;
+        font-size: 22px;
+        font-weight: 500;
+      }
+
+      #status {
+        color: #9bc4bb;
+        font: 12px/1.5 ui-monospace, "Cascadia Code", monospace;
+      }
+
+      footer {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px 18px;
+        padding-top: 12px;
+        color: #9eb4ae;
+        font-size: 12px;
+      }
+
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      button {
+        min-height: 34px;
+        border: 1px solid rgba(139, 188, 179, 0.42);
+        border-radius: 4px;
+        padding: 7px 12px;
+        background: #102a31;
+        color: #e7d9b8;
+        font: inherit;
+        cursor: pointer;
+      }
+
+      button:hover {
+        border-color: #79cdbb;
+        background: #15363d;
+      }
+
+      button:focus-visible {
+        outline: 2px solid #79cdbb;
+        outline-offset: 2px;
+      }
+
+      #telemetry {
+        font-family: ui-monospace, "Cascadia Code", monospace;
+      }
+
+      @media (max-width: 720px) {
+        body {
+          padding: 8px;
+        }
+
+        header {
+          align-items: start;
+          flex-direction: column;
+        }
+
+        .build {
+          text-align: left;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <p class="eyebrow">Internal Blockout · Real Web Host</p>
+          <h1>TianGongDu System Demo</h1>
+        </div>
+        <div class="build">
+          Demo 0.8.5 / Workshop order + alternate route<br />
+          unique .tgdsbx → C++ runtime → Axmol
+        </div>
+      </header>
+
+      <section class="frame" aria-label="Playable TianGongDu system Demo">
+        <canvas
+          id="canvas"
+          width="1280"
+          height="720"
+          tabindex="0"
+          aria-label="System Demo game canvas. Use WASD to move, C to enter the craft workstation, 1 or 2 to buy and choose material, 3 and 4 for ordered craft operations, T to trial, G to rework, Y to deliver the workshop order, F to operate the gate, J or Space for a light attack, K for a heavy attack, and R to retry."
+        ></canvas>
+        <div class="loading" id="loading" data-ready="false" aria-live="polite">
+          <div class="loading-card">
+            <strong>Loading the unique system Demo package</strong>
+            <span id="status">Preparing WebAssembly…</span>
+          </div>
+        </div>
+      </section>
+
+      <footer>
+        <div class="controls" aria-label="Scene controls">
+          <button type="button" id="focus-scene">Focus scene</button>
+          <button type="button" id="craft-mode">Craft · C</button>
+          <button type="button" id="craft-flexible">Flexible paper · 1</button>
+          <button type="button" id="craft-salvage">Salvage paper · 2</button>
+          <button type="button" id="craft-align">Align · 3</button>
+          <button type="button" id="craft-paste">Paste · 4</button>
+          <button type="button" id="craft-trial">Rain trial · T</button>
+          <button type="button" id="craft-rework">Retension · G</button>
+          <button type="button" id="order-deliver">Deliver order · Y</button>
+          <button type="button" id="operate">Operate · F</button>
+          <button type="button" id="light-attack">Light · J / Space</button>
+          <button type="button" id="heavy-attack">Heavy · K</button>
+          <button type="button" id="retry">Local retry · R</button>
+        </div>
+        <div id="telemetry">runtime pending</div>
+      </footer>
+    </main>
+
+    <script>
+      const canvasElement = document.getElementById("canvas");
+      const loadingElement = document.getElementById("loading");
+      const statusElement = document.getElementById("status");
+      const telemetryElement = document.getElementById("telemetry");
+      const pageErrors = [];
+      const query = new URLSearchParams(window.location.search);
+      const previewToken = query.get("workbenchPreview");
+      const previewGeneration = Number(query.get("generation"));
+      const validPreviewRequest =
+        previewToken === null ||
+        (/^[A-Za-z0-9_-]{32}$/.test(previewToken) &&
+          Number.isSafeInteger(previewGeneration) &&
+          previewGeneration > 0);
+      let hostRuntimeReady = false;
+
+      const exported = (name) => {
+        if (!hostRuntimeReady) {
+          return 0;
+        }
+        const value = Module[`_${name}`];
+        if (typeof value !== "function") {
+          throw new Error(`missing system Demo export: ${name}`);
+        }
+        return value();
+      };
+
+      const getState = () => ({
+        ready: exported("tgd_system_demo_qa_ready") !== 0,
+        playerX: exported("tgd_system_demo_qa_player_x"),
+        playerY: exported("tgd_system_demo_qa_player_y"),
+        gateOpen: exported("tgd_system_demo_qa_gate_open") !== 0,
+        retryCount: exported("tgd_system_demo_qa_retry_count"),
+        blockedMoveCount: exported("tgd_system_demo_qa_blocked_move_count"),
+        packageByteCount: exported("tgd_system_demo_qa_package_byte_count"),
+        assetCount: exported("tgd_system_demo_qa_asset_count"),
+        playerHealth: exported("tgd_system_demo_qa_player_health"),
+        activeHostileCount: exported("tgd_system_demo_qa_active_hostile_count"),
+        defeatedHostileCount: exported("tgd_system_demo_qa_defeated_hostile_count"),
+        completedWaveCount: exported("tgd_system_demo_qa_completed_wave_count"),
+        completedObjectiveCount: exported(
+          "tgd_system_demo_qa_completed_objective_count"
+        ),
+        terminalCompleted:
+          exported("tgd_system_demo_qa_terminal_completed") !== 0,
+        acceptedAttackCount: exported(
+          "tgd_system_demo_qa_accepted_attack_count"
+        ),
+        repeatedTriggerCount: exported(
+          "tgd_system_demo_qa_repeated_trigger_count"
+        ),
+        craftMode: exported("tgd_system_demo_qa_craft_mode") !== 0,
+        craftInRange: exported("tgd_system_demo_qa_craft_in_range") !== 0,
+        craftStage: exported("tgd_system_demo_qa_craft_stage"),
+        craftSelectedMaterial: exported(
+          "tgd_system_demo_qa_craft_selected_material"
+        ),
+        craftCompletedOperations: exported(
+          "tgd_system_demo_qa_craft_completed_operations"
+        ),
+        craftTrialCount: exported("tgd_system_demo_qa_craft_trial_count"),
+        craftMistakeCount: exported("tgd_system_demo_qa_craft_mistake_count"),
+        craftReworkCount: exported("tgd_system_demo_qa_craft_rework_count"),
+        craftCompleted: exported("tgd_system_demo_qa_craft_completed") !== 0,
+        workshopFunds: exported("tgd_system_demo_qa_workshop_funds"),
+        workshopSpentFunds: exported("tgd_system_demo_qa_workshop_spent_funds"),
+        workshopStockFlexible: exported(
+          "tgd_system_demo_qa_workshop_stock_flexible"
+        ),
+        workshopStockSalvage: exported(
+          "tgd_system_demo_qa_workshop_stock_salvage"
+        ),
+        workshopQuality: exported("tgd_system_demo_qa_workshop_quality"),
+        workshopOccupied:
+          exported("tgd_system_demo_qa_workshop_occupied") !== 0,
+        orderFulfilled:
+          exported("tgd_system_demo_qa_order_fulfilled") !== 0,
+        shortcutOpen: exported("tgd_system_demo_qa_shortcut_open") !== 0
+      });
+
+      const dispatchKey = (code, key) => {
+        canvasElement.focus({ preventScroll: true });
+        window.dispatchEvent(new KeyboardEvent("keydown", { code, key, bubbles: true }));
+        window.dispatchEvent(new KeyboardEvent("keyup", { code, key, bubbles: true }));
+      };
+
+      const updateTelemetry = () => {
+        try {
+          const state = getState();
+          telemetryElement.textContent =
+            `x ${state.playerX} / y ${state.playerY} / ` +
+            `gate ${state.gateOpen ? "open" : "closed"} / ` +
+            `craft ${state.craftStage}${state.craftCompleted ? " passed" : ""} / ` +
+            `funds ${state.workshopFunds} / order ${state.orderFulfilled ? "done" : "open"} / ` +
+            `shortcut ${state.shortcutOpen ? "open" : "closed"} / ` +
+            `hp ${state.playerHealth} / hostiles ${state.activeHostileCount} / ` +
+            `waves ${state.completedWaveCount}/2`;
+        } catch {
+          telemetryElement.textContent = "runtime pending";
+        }
+      };
+
+      const revealSceneWhenReady = () => {
+        const state = getState();
+        if (!state.ready) {
+          statusElement.textContent = "Runtime loaded, initializing scene…";
+          window.setTimeout(revealSceneWhenReady, 50);
+          return;
+        }
+        loadingElement.dataset.ready = "true";
+        statusElement.textContent = "System Demo ready";
+        canvasElement.focus({ preventScroll: true });
+        updateTelemetry();
+        window.setInterval(updateTelemetry, 250);
+        if (previewToken !== null && window.parent !== window) {
+          window.parent.postMessage(
+            {
+              type: "tgd-system-demo-preview-ready",
+              token: previewToken,
+              generation: previewGeneration,
+              state
+            },
+            window.location.origin
+          );
+        }
+      };
+
+      const prepareWorkbenchPreviewPackage = () => {
+        if (previewToken === null) {
+          return;
+        }
+        const dependency = "tgd-workbench-preview-package";
+        addRunDependency(dependency);
+        fetch(`/api/preview-package?token=${encodeURIComponent(previewToken)}`, {
+          credentials: "same-origin",
+          cache: "no-store"
+        })
+          .then((response) => {
+            if (!response.ok) {
+              throw new Error(`preview package request failed: ${response.status}`);
+            }
+            return response.arrayBuffer();
+          })
+          .then((buffer) => {
+            const bytes = new Uint8Array(buffer);
+            if (bytes.byteLength === 0) {
+              throw new Error("preview package was empty");
+            }
+            FS.writeFile("/workbench-preview.tgdsbx", bytes);
+            removeRunDependency(dependency);
+          })
+          .catch((error) => {
+            const message = `Workbench Preview aborted: ${String(error)}`;
+            pageErrors.push(message);
+            statusElement.textContent = message;
+            abort(message);
+          });
+      };
+
+      document.getElementById("focus-scene").addEventListener("click", () => {
+        canvasElement.focus({ preventScroll: true });
+      });
+      document.getElementById("craft-mode").addEventListener("click", () => {
+        dispatchKey("KeyC", "c");
+      });
+      document.getElementById("craft-flexible").addEventListener("click", () => {
+        dispatchKey("Digit1", "1");
+      });
+      document.getElementById("craft-salvage").addEventListener("click", () => {
+        dispatchKey("Digit2", "2");
+      });
+      document.getElementById("craft-align").addEventListener("click", () => {
+        dispatchKey("Digit3", "3");
+      });
+      document.getElementById("craft-paste").addEventListener("click", () => {
+        dispatchKey("Digit4", "4");
+      });
+      document.getElementById("craft-trial").addEventListener("click", () => {
+        dispatchKey("KeyT", "t");
+      });
+      document.getElementById("craft-rework").addEventListener("click", () => {
+        dispatchKey("KeyG", "g");
+      });
+      document.getElementById("order-deliver").addEventListener("click", () => {
+        dispatchKey("KeyY", "y");
+      });
+      document.getElementById("operate").addEventListener("click", () => {
+        dispatchKey("KeyF", "f");
+      });
+      document.getElementById("light-attack").addEventListener("click", () => {
+        dispatchKey("KeyJ", "j");
+      });
+      document.getElementById("heavy-attack").addEventListener("click", () => {
+        dispatchKey("KeyK", "k");
+      });
+      document.getElementById("retry").addEventListener("click", () => {
+        dispatchKey("KeyR", "r");
+      });
+      canvasElement.addEventListener("click", () => {
+        canvasElement.focus({ preventScroll: true });
+      });
+      canvasElement.addEventListener("contextmenu", (event) => event.preventDefault());
+      window.addEventListener("keydown", (event) => {
+        if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) {
+          event.preventDefault();
+        }
+      }, { passive: false });
+      window.addEventListener("error", (event) => {
+        pageErrors.push(String(event.message || event.error || "window error"));
+      });
+      window.addEventListener("unhandledrejection", (event) => {
+        pageErrors.push(String(event.reason || "unhandled rejection"));
+      });
+
+      window.__tgdSystemDemo = Object.freeze({
+        getState,
+        getPageErrors: () => [...pageErrors],
+        focus: () => canvasElement.focus({ preventScroll: true }),
+        pressCraftMode: () => dispatchKey("KeyC", "c"),
+        pressCraftFlexible: () => dispatchKey("Digit1", "1"),
+        pressCraftSalvage: () => dispatchKey("Digit2", "2"),
+        pressCraftAlign: () => dispatchKey("Digit3", "3"),
+        pressCraftPaste: () => dispatchKey("Digit4", "4"),
+        pressCraftTrial: () => dispatchKey("KeyT", "t"),
+        pressCraftRework: () => dispatchKey("KeyG", "g"),
+        pressDeliverOrder: () => dispatchKey("KeyY", "y"),
+        pressOperate: () => dispatchKey("KeyF", "f"),
+        pressLightAttack: () => dispatchKey("KeyJ", "j"),
+        pressHeavyAttack: () => dispatchKey("KeyK", "k"),
+        pressRetry: () => dispatchKey("KeyR", "r")
+      });
+
+      var Module = {
+        preRun: [
+          () => {
+            if (!validPreviewRequest) {
+              abort("invalid Workbench Preview request");
+              return;
+            }
+            prepareWorkbenchPreviewPackage();
+          }
+        ],
+        postRun: [],
+        onRuntimeInitialized: () => {
+          hostRuntimeReady = true;
+          window.setTimeout(revealSceneWhenReady, 0);
+        },
+        print: (...parts) => console.log(parts.join(" ")),
+        printErr: (...parts) => console.error(parts.join(" ")),
+        canvas: canvasElement,
+        setStatus: (text) => {
+          statusElement.textContent = text || "Loading system Demo…";
+        },
+        monitorRunDependencies: (remaining) => {
+          if (remaining > 0) {
+            statusElement.textContent = `Loading runtime dependencies: ${remaining}`;
+          }
+        },
+        onAbort: (reason) => {
+          const message = `WebAssembly aborted: ${String(reason)}`;
+          pageErrors.push(message);
+          statusElement.textContent = message;
+        }
+      };
+      window.Module = Module;
+    </script>
+    {{{ SCRIPT }}}
+  </body>
+</html>

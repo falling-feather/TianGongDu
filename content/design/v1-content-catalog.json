@@ -320,8 +320,8 @@
     "npcIds": ["npc_shen_yan"],
     "enemyFamilyIds": ["jn_enemy_leaking_umbrella_doll", "jn_enemy_faded_paper_egret"],
     "bossId": "jn_boss_umbrella_wraith",
-    "playableTargetMinutes": 27,
-    "endToEndTestBudgetMinutes": 30
+    "playableTargetMinutes": 60,
+    "endToEndTestBudgetMinutes": 70
   },
   "bosses": [
     {

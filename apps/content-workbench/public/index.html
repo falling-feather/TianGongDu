@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>天工渡 Sandbox 编辑器</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath fill='%23b54a2b' d='M8 10h48v44H8z'/%3E%3Cpath fill='%23f4e8cf' d='M18 20h28v6H18zm0 12h20v6H18zm0 12h28v4H18z'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="/workbench.css" />
+    <script type="module" src="/workbench.mjs"></script>
+  </head>
+  <body>
+    <div class="page-glow" aria-hidden="true"></div>
+    <div class="app-shell">
+      <header class="masthead">
+        <div>
+          <p class="eyebrow">TIANGONGDU / SANDBOX AUTHORING</p>
+          <h1>场地对象工作台</h1>
+        </div>
+        <p class="scope-note">对象编辑 → 共享检查 → canonical 包 → 同包 Preview</p>
+      </header>
+
+      <section class="workspace-bar" aria-labelledby="workspace-heading">
+        <h2 id="workspace-heading" class="visually-hidden">工作区文档</h2>
+        <form id="workspace-form" class="workspace-form">
+          <label class="path-field" for="path-input">
+            <span>Workspace 内相对 JSON 路径</span>
+            <input
+              id="path-input"
+              name="relativePath"
+              type="text"
+              inputmode="text"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="sandbox/system-demo.json"
+              required
+            />
+          </label>
+          <button id="open-button" class="button primary" type="submit">打开</button>
+          <button id="reload-button" class="button" type="button" disabled>重新加载</button>
+          <button id="save-button" class="button accent" type="button" disabled>保存</button>
+        </form>
+
+        <dl class="document-status" aria-label="文档状态">
+          <div><dt>Schema</dt><dd id="schema-value">未打开</dd></div>
+          <div><dt>Revision</dt><dd id="revision-value">-</dd></div>
+          <div><dt>Saved</dt><dd id="saved-revision-value">-</dd></div>
+          <div><dt>Dirty</dt><dd id="dirty-value">否</dd></div>
+          <div class="path-status"><dt>当前文档</dt><dd id="opened-path">未打开</dd></div>
+        </dl>
+        <div id="conflict-banner" class="conflict-banner" role="alert" hidden>
+          <p>磁盘文件已外部修改。内存草稿仍保留，保存已禁用。</p>
+          <button id="resolve-conflict-button" class="button" type="button">
+            处理冲突
+          </button>
+        </div>
+      </section>
+
+      <section class="content-check" aria-labelledby="content-check-heading">
+        <div class="content-check-header">
+          <div>
+            <p class="panel-index">SHARED CONTENT</p>
+            <h2 id="content-check-heading">共享内容检查</h2>
+          </div>
+          <div class="content-check-actions">
+            <button
+              id="content-check-button"
+              class="button primary"
+              type="button"
+              disabled
+            >
+              检查当前草稿
+            </button>
+            <button
+              id="package-export-button"
+              class="button accent"
+              type="button"
+              disabled
+            >
+              导出 .tgdsbx
+            </button>
+          </div>
+        </div>
+        <p id="content-check-summary" class="content-check-summary">
+          共享内容检查当前不可用。作者草稿保持不变。
+        </p>
+        <ol
+          id="diagnostic-list"
+          class="diagnostic-list"
+          aria-label="共享内容检查问题"
+        ></ol>
+        <p
+          id="diagnostic-count-live"
+          class="visually-hidden"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        ></p>
+      </section>
+
+      <section class="preview-panel" aria-labelledby="preview-heading">
+        <div class="preview-header">
+          <div>
+            <p class="panel-index">LIVE PACKAGE</p>
+            <h2 id="preview-heading">系统 Demo Preview</h2>
+          </div>
+          <div class="preview-actions">
+            <button id="preview-launch-button" class="button primary" type="button" disabled>
+              Launch
+            </button>
+            <button id="preview-reload-button" class="button accent" type="button" disabled>
+              Safe Reload
+            </button>
+          </div>
+        </div>
+        <div class="preview-meta">
+          <p id="preview-status">当前构建尚未连接 Preview Host。</p>
+          <p id="preview-identity">generation - / package -</p>
+        </div>
+        <div id="preview-stage" class="preview-stage">
+          <div id="preview-placeholder" class="preview-placeholder">
+            <strong>上一份画面会保留到新候选完成启动。</strong>
+            <span>先执行共享内容检查，再 Launch；修改后重新检查并 Safe Reload。</span>
+          </div>
+        </div>
+      </section>
+
+      <main class="workbench-grid">
+        <nav class="object-browser" aria-labelledby="objects-heading">
+          <div class="panel-heading">
+            <p class="panel-index">01</p>
+            <h2 id="objects-heading">对象</h2>
+          </div>
+          <div class="object-actions" aria-label="对象操作">
+            <button id="create-object-button" class="button primary" type="button" disabled>
+              新增
+            </button>
+            <button id="duplicate-object-button" class="button" type="button" disabled>
+              复制
+            </button>
+            <button id="delete-object-button" class="button danger" type="button" disabled>
+              删除
+            </button>
+          </div>
+          <p id="tree-help" class="tree-help">
+            单次 Tab 进入对象树；方向键、Home、End 浏览，左右键展开收起，Enter 选择。
+          </p>
+          <ul
+            id="object-tree"
+            class="object-tree"
+            role="tree"
+            tabindex="0"
+            aria-label="Sandbox 对象、波次与目标"
+            aria-describedby="tree-help"
+          ></ul>
+        </nav>
+
+        <section class="scene-canvas-panel" aria-labelledby="scene-canvas-heading">
+          <div class="panel-heading canvas-heading">
+            <div>
+              <p class="panel-index">02</p>
+              <h2 id="scene-canvas-heading">二维场地</h2>
+            </div>
+            <div class="canvas-tools">
+              <label for="canvas-zoom">
+                缩放
+                <input
+                  id="canvas-zoom"
+                  type="range"
+                  min="100"
+                  max="240"
+                  value="100"
+                  step="20"
+                  disabled
+                />
+              </label>
+              <label class="snap-toggle" for="canvas-snap">
+                <input id="canvas-snap" type="checkbox" checked disabled />
+                100 mm 吸附
+              </label>
+            </div>
+          </div>
+          <p id="canvas-help" class="canvas-help">
+            点击选择，拖拽脚点或障碍区域更新权威毫米坐标；方向、范围和高度在属性面板精调。
+          </p>
+          <div id="scene-canvas-frame" class="scene-canvas-frame">
+            <svg
+              id="scene-canvas"
+              role="img"
+              aria-labelledby="scene-canvas-heading canvas-help"
+              tabindex="0"
+            ></svg>
+            <p id="scene-canvas-empty" class="scene-canvas-empty">打开文档后显示场地。</p>
+          </div>
+        </section>
+
+        <section class="inspector" aria-labelledby="inspector-heading">
+          <div class="panel-heading">
+            <p class="panel-index">03</p>
+            <div>
+              <h2 id="inspector-heading">属性</h2>
+              <p id="selection-summary" class="selection-summary">选择一个对象开始编辑</p>
+            </div>
+          </div>
+          <form id="inspector-form" novalidate>
+            <fieldset id="inspector-fieldset" disabled>
+              <legend class="inspector-legend">显式作者字段</legend>
+              <div id="field-grid" class="field-grid"></div>
+              <div class="inspector-actions">
+                <button id="apply-button" class="button accent" type="submit">
+                  应用属性
+                </button>
+                <span class="shortcut-hint">Ctrl/⌘ + S 保存</span>
+              </div>
+            </fieldset>
+          </form>
+        </section>
+      </main>
+
+      <footer class="feedback-strip">
+        <p id="status-live" role="status" aria-live="polite">等待打开作者文档。</p>
+        <p id="error-live" role="alert" aria-live="assertive"></p>
+      </footer>
+
+      <dialog id="conflict-dialog" class="conflict-dialog" aria-labelledby="conflict-title">
+        <form method="dialog">
+          <p class="panel-index">EXTERNAL CHANGE</p>
+          <h2 id="conflict-title">保留哪一份草稿？</h2>
+          <p>
+            继续编辑会保留当前内存草稿并维持保存禁用；载入磁盘版本会丢弃未保存修改和未应用输入。
+          </p>
+          <div class="dialog-actions">
+            <button id="continue-editing-button" class="button primary" type="button">
+              继续编辑
+            </button>
+            <button id="load-disk-button" class="button" type="button">
+              载入磁盘版本
+            </button>
+          </div>
+        </form>
+      </dialog>
+
+      <dialog id="object-dialog" class="object-dialog" aria-labelledby="object-dialog-title">
+        <form id="object-dialog-form">
+          <p class="panel-index">AUTHOR OBJECT</p>
+          <h2 id="object-dialog-title">新增对象</h2>
+          <p id="object-dialog-summary" class="dialog-summary"></p>
+          <label class="dialog-field" for="object-id-input">
+            Stable ID
+            <input
+              id="object-id-input"
+              name="objectId"
+              type="text"
+              autocomplete="off"
+              spellcheck="false"
+              required
+            />
+          </label>
+          <label class="dialog-field" for="object-label-input">
+            作者标签
+            <input
+              id="object-label-input"
+              name="objectLabel"
+              type="text"
+              autocomplete="off"
+              required
+            />
+          </label>
+          <p id="object-dialog-error" class="dialog-error" role="alert"></p>
+          <div class="dialog-actions">
+            <button id="confirm-object-button" class="button accent" type="submit">
+              创建对象
+            </button>
+            <button id="cancel-object-button" class="button" type="button">
+              取消
+            </button>
+          </div>
+        </form>
+      </dialog>
+
+      <dialog id="delete-dialog" class="object-dialog" aria-labelledby="delete-dialog-title">
+        <form id="delete-dialog-form">
+          <p class="panel-index">DELETE OBJECT</p>
+          <h2 id="delete-dialog-title">删除对象</h2>
+          <p id="delete-dialog-summary" class="dialog-summary"></p>
+          <ul id="delete-reference-list" class="delete-reference-list"></ul>
+          <p id="delete-dialog-error" class="dialog-error" role="alert"></p>
+          <div class="dialog-actions">
+            <button id="confirm-delete-button" class="button danger" type="submit">
+              确认删除
+            </button>
+            <button id="cancel-delete-button" class="button" type="button">
+              取消
+            </button>
+          </div>
+        </form>
+      </dialog>
+    </div>
+  </body>
+</html>

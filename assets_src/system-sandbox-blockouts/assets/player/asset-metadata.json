@@ -1,0 +1,161 @@
+{
+  "schemaVersion": "system-sandbox-blockout-metadata-1.0",
+  "taskId": "ART-002",
+  "authoringBase": "99a4093c51b99bc8067e10364f591011efe328ab",
+  "authoritativeRoot": "27fb87c8af74b48e0bfb8f4ef6da2f8e96d6560e",
+  "stableAssetId": "asset.system_demo.player",
+  "sandboxAssetKind": "player",
+  "displayName": "系统 Demo 玩家灰盒",
+  "owner": "ART",
+  "package": "system_demo.presentation.blockouts",
+  "status": "Blockout",
+  "integrationStatus": "not-integrated",
+  "fallbackIdentity": {
+    "id": "fallback.system_demo.player",
+    "exportName": "player",
+    "artifactPath": "fallbacks/player.svg",
+    "independentPerStableAsset": true,
+    "sha256": "0788b596a5a03d3ebaa071af74070ac60d577c647ee27c3b369eece2fcce0471",
+    "bytes": 1473
+  },
+  "source": {
+    "mode": "project-grammar-reuse",
+    "file": null,
+    "kind": "self-contained-new-fallback-from-project-grammar",
+    "generationMethod": "project-owned upright lantern-bearer grammar; simplified anew for this package",
+    "externalInputs": [],
+    "aiAssisted": true,
+    "lineage": {
+      "assetCommit": "f95454c9fa51bdaf593dc354ac21a6ed770ee31c",
+      "bindingTree": "e02ff077c0d1d57923064a2273fc9a049ec475eb",
+      "ledgerCommit": "99a4093c51b99bc8067e10364f591011efe328ab"
+    }
+  },
+  "import": {
+    "status": "planned",
+    "artifact": "not-produced",
+    "validation": "not-validated",
+    "unit": "millimeter",
+    "axes": {
+      "right": "+x",
+      "forward": "+y",
+      "up": "+height"
+    },
+    "facingConvention": "visual forward is +y; authored facing is consumed from the external sandbox definition",
+    "canonicalRoot": "root_visual",
+    "anchors": [
+      {
+        "name": "foot_center",
+        "localMm": {
+          "x": 0,
+          "y": 0,
+          "height": 0
+        },
+        "role": "canonical visual foot point"
+      },
+      {
+        "name": "weapon_contact_visual",
+        "localMm": {
+          "x": 420,
+          "y": 220,
+          "height": 980
+        },
+        "role": "presentation-only contact marker"
+      },
+      {
+        "name": "hurt_center_visual",
+        "localMm": {
+          "x": 0,
+          "y": 0,
+          "height": 980
+        },
+        "role": "presentation-only feedback center"
+      }
+    ],
+    "visualBoundsMm": {
+      "width": 1115,
+      "depth": 650,
+      "height": 1800
+    },
+    "nominalPresentationExtentMm": null,
+    "trimPolicy": "preserve root_visual, every named anchor, silhouette breaks, and fallback export identity"
+  },
+  "license": {
+    "status": "review-recorded-not-release-cleared",
+    "rightsHolder": "TianGongDu project",
+    "externalAssetLicenses": [],
+    "aiGenerationDisclosure": "Codex-assisted deterministic SVG using project-owned visual grammar; no external image input",
+    "permittedUse": "internal system Demo evaluation and production planning",
+    "releaseGate": "rights-holder sign-off, similarity review, runtime artifact report, and package policy confirmation"
+  },
+  "runtime": {
+    "status": "planned",
+    "artifact": "not-produced",
+    "validation": "not-validated",
+    "integrationStatus": "not-integrated",
+    "authorityBoundary": "Presentation-only output; all gameplay state and spatial truth remain external",
+    "stableAssetIdChangesByPlatform": false,
+    "platformVariants": {
+      "web": {
+        "variantState": "not-built",
+        "integrationState": "not-integrated",
+        "carrierPlan": "small opaque or alpha-clip presentation artifact behind a future resolver"
+      },
+      "windows": {
+        "variantState": "not-built",
+        "integrationState": "not-integrated",
+        "carrierPlan": "small opaque or alpha-clip presentation artifact behind a future resolver"
+      }
+    },
+    "fallbackWhenMissing": "fallback.system_demo.player"
+  },
+  "preview": {
+    "status": "planned",
+    "runtimeCapture": "not-produced",
+    "validation": "not-validated",
+    "artifactType": "review-board-only",
+    "reviewBoards": [
+      "previews/readability-1280x720.svg",
+      "previews/readability-1920x1080.svg",
+      "previews/readability-1230x692.svg"
+    ],
+    "actorThumbnailHeightPx": 128,
+    "requiredChecks": [
+      "grayscale silhouette",
+      "anchor marker",
+      "non-color distinction",
+      "no platform integration claim"
+    ]
+  },
+  "budget": {
+    "runtimeTargetsAreEstimates": true,
+    "measuredSourceBytes": 0,
+    "measuredFallbackBytes": 1473,
+    "commitItemLimitBytes": 32768,
+    "packageCommitLimitBytes": 1500000,
+    "targetTransportKiB": 850,
+    "targetGpuTextureMiB": 4.5,
+    "targetDrawCalls": 1,
+    "peakTransparentCoveragePercent": 5
+  },
+  "states": [
+    "neutral",
+    "eavesguard",
+    "flower-turn"
+  ],
+  "accessibility": {
+    "colorOnly": false,
+    "audioOnly": false,
+    "shapeToken": "upright-lantern-diagonal",
+    "nonColorChannels": [
+      "upright narrow trapezoid",
+      "lamp-pin dot",
+      "long folded-umbrella diagonal"
+    ]
+  },
+  "dependencies": [
+    "external player pose",
+    "external stance snapshot",
+    "future presentation resolver"
+  ]
+}

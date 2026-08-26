@@ -1,0 +1,815 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tiangongdu.example/schemas/f1-vertical-slice.schema.json",
+  "title": "TianGongDu F1 vertical slice contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "view",
+    "timing",
+    "catalogReferences",
+    "playerSeed",
+    "combatBootstrap",
+    "cellIds",
+    "beats",
+    "safePoints",
+    "questInteractions",
+    "questEncounterActivations",
+    "questCombatTriggers",
+    "questCombatOutcomes",
+    "questBossPhases",
+    "questResolutionRewards",
+    "questUiCues",
+    "paddingPolicy",
+    "ports"
+  ],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "const": "1.6.0" },
+    "id": { "const": "f1_rainy_umbrella_trial" },
+    "view": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model", "primaryGuidance", "secondaryReference", "cameraMode"],
+      "properties": {
+        "model": { "const": "2.5d-oblique-panoramic" },
+        "primaryGuidance": { "const": "douzhanshen" },
+        "secondaryReference": { "const": "warm-snow-combat-readability" },
+        "cameraMode": { "const": "author-controlled-oblique" }
+      }
+    },
+    "timing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "playableTargetMinutes",
+        "endToEndTestBudgetMinutes",
+        "startupMinutes",
+        "postResolutionPersistenceMinutes",
+        "activityGraceTicks",
+        "excludedFromPlayable"
+      ],
+      "properties": {
+        "playableTargetMinutes": { "const": 60 },
+        "endToEndTestBudgetMinutes": { "const": 70 },
+        "startupMinutes": { "const": 3 },
+        "postResolutionPersistenceMinutes": { "const": 7 },
+        "activityGraceTicks": { "const": 180 },
+        "excludedFromPlayable": {
+          "type": "array",
+          "minItems": 4,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/id" }
+        }
+      }
+    },
+    "catalogReferences": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "startFixtureId",
+        "chapterId",
+        "subregionIds",
+        "npcIds",
+        "enemyFamilyIds",
+        "bossId"
+      ],
+      "properties": {
+        "startFixtureId": { "$ref": "#/$defs/id" },
+        "chapterId": { "$ref": "#/$defs/id" },
+        "subregionIds": { "$ref": "#/$defs/idList" },
+        "npcIds": { "$ref": "#/$defs/idList" },
+        "enemyFamilyIds": { "$ref": "#/$defs/idList" },
+        "bossId": { "$ref": "#/$defs/id" }
+      }
+    },
+    "playerSeed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actorKey",
+        "initialPoseMm",
+        "moveSpeedMmPerSecond",
+        "jumpSpeedMmPerSecond",
+        "gravityMmPerSecondSquared",
+        "collisionRadiusMm",
+        "collisionHeightMm",
+        "cameraBasisQ15"
+      ],
+      "properties": {
+        "actorKey": { "type": "integer", "minimum": 1 },
+        "initialPoseMm": { "$ref": "#/$defs/pose" },
+        "moveSpeedMmPerSecond": { "type": "integer", "minimum": 1 },
+        "jumpSpeedMmPerSecond": { "type": "integer", "minimum": 1 },
+        "gravityMmPerSecondSquared": { "type": "integer", "minimum": 1 },
+        "collisionRadiusMm": { "type": "integer", "minimum": 1 },
+        "collisionHeightMm": { "type": "integer", "minimum": 1 },
+        "cameraBasisQ15": { "$ref": "#/$defs/cameraBasis" }
+      }
+    },
+    "combatBootstrap": { "$ref": "#/$defs/combatBootstrap" },
+    "cellIds": { "$ref": "#/$defs/idList" },
+    "beats": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "description": "Exactly seven authored beats. targetMinutes is a budget only; human eligible-play evidence remains external.",
+      "items": { "$ref": "#/$defs/beat" }
+    },
+    "safePoints": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 16,
+      "items": { "$ref": "#/$defs/safePoint" }
+    },
+    "questInteractions": {
+      "type": "array",
+      "minItems": 40,
+      "maxItems": 64,
+      "description": "F1 topology floor after the Rain Ferry and Shen Yan density pass; item count does not prove playable minutes.",
+      "items": { "$ref": "#/$defs/questInteraction" }
+    },
+    "questEncounterActivations": {
+      "type": "array",
+      "minItems": 12,
+      "maxItems": 16,
+      "description": "Includes selection-covered training lanes, safety-rig replacement, defeat targets, and later authored waves.",
+      "items": { "$ref": "#/$defs/questEncounterActivation" }
+    },
+    "questCombatTriggers": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 64,
+      "description": "Includes guard, evade, stance, and ability signals; target defeats remain separate outcomes.",
+      "items": { "$ref": "#/$defs/questCombatTrigger" }
+    },
+    "questCombatOutcomes": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 64,
+      "description": "Both stance lessons and later encounters require deterministic hostile-clear evidence.",
+      "items": { "$ref": "#/$defs/questCombatOutcome" }
+    },
+    "questBossPhases": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 16,
+      "items": { "$ref": "#/$defs/questBossPhase" }
+    },
+    "questResolutionRewards": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 16,
+      "items": { "$ref": "#/$defs/questResolutionReward" }
+    },
+    "questUiCues": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 16,
+      "uniqueItems": true,
+      "description": "Definition-owned projection routing and exact attempt-evidence classification for the first two beats. These cues select presentation models but never advance Quest state.",
+      "items": { "$ref": "#/$defs/questUiCue" }
+    },
+    "paddingPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repeatableCombatCountsTowardTarget",
+        "forcedWaitingCountsTowardTarget",
+        "failureRetryCountsTowardTarget"
+      ],
+      "properties": {
+        "repeatableCombatCountsTowardTarget": { "const": false },
+        "forcedWaitingCountsTowardTarget": { "const": false },
+        "failureRetryCountsTowardTarget": { "const": false }
+      }
+    },
+    "ports": {
+      "type": "array",
+      "minItems": 9,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/port" }
+    }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$" },
+    "idList": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/id" }
+    },
+    "vector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y"],
+      "properties": {
+        "x": { "type": "integer", "minimum": -32767, "maximum": 32767 },
+        "y": { "type": "integer", "minimum": -32767, "maximum": 32767 }
+      }
+    },
+    "pose": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "height", "floorLayer"],
+      "properties": {
+        "x": { "type": "integer" },
+        "y": { "type": "integer" },
+        "height": { "type": "integer" },
+        "floorLayer": { "type": "integer", "minimum": -32768, "maximum": 32767 }
+      }
+    },
+    "cameraBasis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["screenRightWorld", "screenForwardWorld", "revision"],
+      "properties": {
+        "screenRightWorld": { "$ref": "#/$defs/vector" },
+        "screenForwardWorld": { "$ref": "#/$defs/vector" },
+        "revision": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "combatResources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "health",
+        "healthMax",
+        "stamina",
+        "staminaMax",
+        "poise",
+        "poiseMax",
+        "lantern",
+        "lanternMax",
+        "evidence"
+      ],
+      "properties": {
+        "health": { "type": "integer", "minimum": 0 },
+        "healthMax": { "type": "integer", "minimum": 1 },
+        "stamina": { "type": "integer", "minimum": 0 },
+        "staminaMax": { "type": "integer", "minimum": 1 },
+        "poise": { "type": "integer", "minimum": 0 },
+        "poiseMax": { "type": "integer", "minimum": 1 },
+        "lantern": { "type": "integer", "minimum": 0 },
+        "lanternMax": { "type": "integer", "minimum": 0 },
+        "evidence": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "combatRecovery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "staminaDelayTicks",
+        "staminaIntervalTicks",
+        "staminaPerInterval",
+        "poiseDelayTicks",
+        "poiseIntervalTicks",
+        "poisePerInterval"
+      ],
+      "properties": {
+        "staminaDelayTicks": { "type": "integer", "minimum": 1, "maximum": 3600 },
+        "staminaIntervalTicks": { "type": "integer", "minimum": 1, "maximum": 600 },
+        "staminaPerInterval": { "type": "integer", "minimum": 1, "maximum": 100000 },
+        "poiseDelayTicks": { "type": "integer", "minimum": 1, "maximum": 3600 },
+        "poiseIntervalTicks": { "type": "integer", "minimum": 1, "maximum": 600 },
+        "poisePerInterval": { "type": "integer", "minimum": 1, "maximum": 100000 }
+      }
+    },
+    "combatActor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actorKey",
+        "archetypeId",
+        "faction",
+        "poseMm",
+        "resources",
+        "recovery",
+        "stanceIds",
+        "initialStanceId",
+        "initiallyActive"
+      ],
+      "properties": {
+        "actorKey": { "type": "integer", "minimum": 1 },
+        "archetypeId": { "$ref": "#/$defs/id" },
+        "faction": { "enum": ["player", "hostile", "neutral"] },
+        "poseMm": { "$ref": "#/$defs/pose" },
+        "resources": { "$ref": "#/$defs/combatResources" },
+        "recovery": { "$ref": "#/$defs/combatRecovery" },
+        "stanceIds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/id" }
+        },
+        "initialStanceId": { "$ref": "#/$defs/id" },
+        "initiallyActive": { "type": "boolean" }
+      }
+    },
+    "combatAbility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "trigger",
+        "staminaCost",
+        "windupTicks",
+        "activeTicks",
+        "recoveryTicks",
+        "rangeMm",
+        "heightToleranceMm",
+        "healthDamage",
+        "poiseDamage",
+        "feedbackTags"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "trigger": { "enum": ["light_attack", "heavy_attack", "evade"] },
+        "requiredStanceId": { "$ref": "#/$defs/id" },
+        "staminaCost": { "type": "integer", "minimum": 0 },
+        "windupTicks": { "type": "integer", "minimum": 0, "maximum": 600 },
+        "activeTicks": { "type": "integer", "minimum": 1, "maximum": 600 },
+        "recoveryTicks": { "type": "integer", "minimum": 0, "maximum": 600 },
+        "rangeMm": { "type": "integer", "minimum": 0, "maximum": 100000 },
+        "heightToleranceMm": { "type": "integer", "minimum": 0, "maximum": 100000 },
+        "healthDamage": { "type": "integer", "minimum": 0, "maximum": 100000 },
+        "poiseDamage": { "type": "integer", "minimum": 0, "maximum": 100000 },
+        "feedbackTags": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["light", "heavy", "guard", "poise_break", "evade"] }
+        }
+      }
+    },
+    "combatBootstrap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "director", "actors", "abilities"],
+      "properties": {
+        "id": { "const": "f1_encounter_umbrella_lane_bootstrap" },
+        "director": { "$ref": "#/$defs/encounterDirector" },
+        "actors": {
+          "type": "array",
+          "minItems": 11,
+          "maxItems": 16,
+          "description": "F1 player, route enemies, durable training signal rigs, defeatable proof targets, and boss.",
+          "items": { "$ref": "#/$defs/combatActor" }
+        },
+        "abilities": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": { "$ref": "#/$defs/combatAbility" }
+        }
+      }
+    },
+    "encounterDirector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "playerActorKey",
+        "aggroRangeMm",
+        "leashRangeMm",
+        "chaseSpeedMmPerSecond",
+        "formationRadiusMm",
+        "decisionIntervalTicks",
+        "postAttackCooldownTicks",
+        "maxSimultaneousAttackers"
+      ],
+      "properties": {
+        "playerActorKey": { "type": "integer", "minimum": 1 },
+        "aggroRangeMm": { "type": "integer", "minimum": 1, "maximum": 100000 },
+        "leashRangeMm": { "type": "integer", "minimum": 1, "maximum": 100000 },
+        "chaseSpeedMmPerSecond": { "type": "integer", "minimum": 60, "maximum": 100000 },
+        "formationRadiusMm": { "type": "integer", "minimum": 1, "maximum": 100000 },
+        "decisionIntervalTicks": { "type": "integer", "minimum": 1, "maximum": 600 },
+        "postAttackCooldownTicks": { "type": "integer", "minimum": 0, "maximum": 3600 },
+        "maxSimultaneousAttackers": { "type": "integer", "minimum": 1, "maximum": 15 }
+      }
+    },
+    "beat": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "targetMinutes", "cellId", "objectiveIds", "autoAdvance"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": {
+          "enum": ["exploration", "training", "combat", "investigation", "boss", "resolution"]
+        },
+        "targetMinutes": { "type": "integer", "minimum": 1 },
+        "cellId": { "$ref": "#/$defs/id" },
+        "objectiveIds": { "$ref": "#/$defs/idList" },
+        "autoAdvance": { "const": false }
+      }
+    },
+    "safePoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "beatId", "poseMm"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "beatId": { "$ref": "#/$defs/id" },
+        "poseMm": { "$ref": "#/$defs/groundPose" }
+      }
+    },
+    "questInteraction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "cellId",
+        "objectiveId",
+        "selectionId",
+        "requiredSelectionObjectiveId",
+        "requiredSelectionId",
+        "poseMm",
+        "radiusMm",
+        "prerequisiteObjectiveIds"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": { "enum": ["inspect", "operate", "talk", "choose"] },
+        "cellId": { "$ref": "#/$defs/id" },
+        "objectiveId": { "$ref": "#/$defs/id" },
+        "selectionId": {
+          "anyOf": [
+            { "$ref": "#/$defs/id" },
+            { "type": "null" }
+          ]
+        },
+        "requiredSelectionObjectiveId": {
+          "anyOf": [
+            { "$ref": "#/$defs/id" },
+            { "type": "null" }
+          ]
+        },
+        "requiredSelectionId": {
+          "anyOf": [
+            { "$ref": "#/$defs/id" },
+            { "type": "null" }
+          ]
+        },
+        "poseMm": { "$ref": "#/$defs/pose" },
+        "radiusMm": { "type": "integer", "minimum": 1, "maximum": 10000 },
+        "prerequisiteObjectiveIds": {
+          "type": "array",
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/id" }
+        }
+      }
+    },
+    "questCombatTrigger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "objectiveId",
+        "requiredStanceId",
+        "requiredAbilityId",
+        "requiredSelectionObjectiveId",
+        "requiredSelectionId",
+        "prerequisiteObjectiveIds"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": {
+          "enum": [
+            "player_ability_started",
+            "player_stance_changed",
+            "player_hit_guarded",
+            "player_hit_evaded"
+          ]
+        },
+        "objectiveId": { "$ref": "#/$defs/id" },
+        "requiredStanceId": { "$ref": "#/$defs/id" },
+        "requiredAbilityId": {
+          "oneOf": [
+            { "$ref": "#/$defs/id" },
+            { "type": "null" }
+          ]
+        },
+        "requiredSelectionObjectiveId": {
+          "anyOf": [
+            { "$ref": "#/$defs/id" },
+            { "type": "null" }
+          ]
+        },
+        "requiredSelectionId": {
+          "anyOf": [
+            { "$ref": "#/$defs/id" },
+            { "type": "null" }
+          ]
+        },
+        "prerequisiteObjectiveIds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/id" }
+        }
+      }
+    },
+    "questCombatOutcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "objectiveId", "archetypeId", "requiredCount"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": { "enum": ["hostile_archetype_defeated", "all_hostiles_defeated"] },
+        "objectiveId": { "$ref": "#/$defs/id" },
+        "archetypeId": {
+          "anyOf": [
+            { "$ref": "#/$defs/id" },
+            { "type": "null" }
+          ]
+        },
+        "requiredCount": { "type": "integer", "minimum": 0, "maximum": 16 }
+      }
+    },
+    "questEncounterActivation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "beatId",
+        "triggerObjectiveId",
+        "requiredSelectionObjectiveId",
+        "requiredSelectionId",
+        "mode",
+        "encounterId",
+        "actorKeys",
+        "actorPlacements"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "beatId": { "$ref": "#/$defs/id" },
+        "triggerObjectiveId": {
+          "anyOf": [
+            { "$ref": "#/$defs/id" },
+            { "type": "null" }
+          ]
+        },
+        "requiredSelectionObjectiveId": {
+          "anyOf": [
+            { "$ref": "#/$defs/id" },
+            { "type": "null" }
+          ]
+        },
+        "requiredSelectionId": {
+          "anyOf": [
+            { "$ref": "#/$defs/id" },
+            { "type": "null" }
+          ]
+        },
+        "mode": { "enum": ["replace", "reinforce"] },
+        "encounterId": { "$ref": "#/$defs/id" },
+        "actorKeys": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 15,
+          "uniqueItems": true,
+          "items": { "type": "integer", "minimum": 1 }
+        },
+        "actorPlacements": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 15,
+          "items": { "$ref": "#/$defs/encounterActorPlacement" }
+        }
+      }
+    },
+    "encounterActorPlacement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actorKey", "poseMm", "formationSlot"],
+      "properties": {
+        "actorKey": { "type": "integer", "minimum": 1 },
+        "poseMm": { "$ref": "#/$defs/pose" },
+        "formationSlot": { "type": "integer", "minimum": 0, "maximum": 14 }
+      }
+    },
+    "questBossPhase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "objectiveId", "actorKey", "healthPercent", "nextStanceId"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "objectiveId": { "$ref": "#/$defs/id" },
+        "actorKey": { "type": "integer", "minimum": 1 },
+        "healthPercent": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "nextStanceId": {
+          "anyOf": [
+            { "$ref": "#/$defs/id" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "questResolutionReward": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "objectiveId", "selectionId", "rewardId", "rewardDedupKey"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "objectiveId": { "$ref": "#/$defs/id" },
+        "selectionId": { "$ref": "#/$defs/id" },
+        "rewardId": { "$ref": "#/$defs/id" },
+        "rewardDedupKey": { "$ref": "#/$defs/id" }
+      }
+    },
+    "questUiResultSelector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "objectiveId",
+        "primaryResultId",
+        "secondaryResultId",
+        "polarityOverride"
+      ],
+      "properties": {
+        "source": { "enum": ["interaction_feedback", "combat_feedback"] },
+        "objectiveId": { "$ref": "#/$defs/id" },
+        "primaryResultId": { "$ref": "#/$defs/id" },
+        "secondaryResultId": {
+          "anyOf": [
+            { "$ref": "#/$defs/id" },
+            { "type": "null" }
+          ]
+        },
+        "polarityOverride": { "enum": ["none", "negative"] }
+      }
+    },
+    "questUiAttemptEvidenceResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["resultId", "status", "rejectionReason"],
+      "properties": {
+        "resultId": {
+          "anyOf": [
+            { "$ref": "#/$defs/id" },
+            { "type": "null" }
+          ]
+        },
+        "status": {
+          "enum": ["not_applicable", "accepted", "rejected", "ignored_repeat", "pending"]
+        },
+        "rejectionReason": {
+          "enum": [
+            "none",
+            "prerequisite_incomplete",
+            "selection_already_committed",
+            "wrong_target"
+          ]
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "resultId": { "type": "null" },
+            "status": { "const": "not_applicable" },
+            "rejectionReason": { "const": "none" }
+          }
+        },
+        {
+          "properties": {
+            "resultId": { "$ref": "#/$defs/id" },
+            "status": { "enum": ["accepted", "pending"] },
+            "rejectionReason": { "const": "none" }
+          }
+        },
+        {
+          "properties": {
+            "resultId": { "$ref": "#/$defs/id" },
+            "status": { "const": "rejected" },
+            "rejectionReason": {
+              "enum": [
+                "prerequisite_incomplete",
+                "selection_already_committed",
+                "wrong_target"
+              ]
+            }
+          }
+        },
+        {
+          "properties": {
+            "resultId": { "$ref": "#/$defs/id" },
+            "status": { "const": "ignored_repeat" },
+            "rejectionReason": { "const": "selection_already_committed" }
+          }
+        }
+      ]
+    },
+    "questUiAttemptEvidenceRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "objectiveId",
+        "primaryResult",
+        "secondaryResult",
+        "classification"
+      ],
+      "properties": {
+        "source": {
+          "enum": [
+            "choice_available",
+            "interaction_feedback",
+            "objective_state",
+            "combat_feedback",
+            "recovery_offer",
+            "recovery_resume"
+          ]
+        },
+        "objectiveId": { "$ref": "#/$defs/id" },
+        "primaryResult": { "$ref": "#/$defs/questUiAttemptEvidenceResult" },
+        "secondaryResult": { "$ref": "#/$defs/questUiAttemptEvidenceResult" },
+        "classification": {
+          "enum": [
+            "qualifying_first_visit",
+            "repeat_no_progress",
+            "qualifying_craft_decision",
+            "qualifying_error_feedback",
+            "qualifying_wrong_order_feedback",
+            "qualifying_craft_confirmation",
+            "qualifying_dialogue_decision",
+            "qualifying_training_risk",
+            "qualifying_combat_proof",
+            "qualifying_combat_feedback",
+            "failure_retry_excluded",
+            "resume_no_duplicate_progress"
+          ]
+        }
+      }
+    },
+    "questUiCue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "beatId",
+        "sources",
+        "objectiveIds",
+        "resultSelectors",
+        "attemptEvidenceRules"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "beatId": { "$ref": "#/$defs/id" },
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "choice_available",
+              "interaction_feedback",
+              "objective_state",
+              "combat_feedback",
+              "recovery_offer",
+              "recovery_resume"
+            ]
+          }
+        },
+        "objectiveIds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/id" }
+        },
+        "resultSelectors": {
+          "type": "array",
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/questUiResultSelector" }
+        },
+        "attemptEvidenceRules": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/questUiAttemptEvidenceRule" }
+        }
+      }
+    },
+    "port": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "owner", "status"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^I[A-Za-z0-9]+$" },
+        "owner": { "enum": ["content-core", "runtime", "gameplay", "presentation"] },
+        "status": { "enum": ["reserved", "bootstrap_implemented"] }
+      }
+    }
+  }
+}

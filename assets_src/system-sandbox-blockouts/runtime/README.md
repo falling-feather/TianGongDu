@@ -52,7 +52,7 @@ node tools/run-toolchain.mjs node --test assets_src/system-sandbox-blockouts/tes
 - Chromium revision `1223` / version `148.0.7778.96`
 - Chromium executable SHA-256 `290fa7018fda22c52ada5eddb0113baf3ebc41fd0fde6085eddb19793606c635`
 
-默认从 `%LOCALAPPDATA%/ms-playwright/chromium-1223/chrome-win64/chrome.exe` 取锁定浏览器。CI 可用 `SYSTEM_SANDBOX_CHROMIUM_EXECUTABLE` 指向同一字节的 executable；SHA、revision 或 version 不符时必须阻断。manifest 只记录版本与 SHA，不记录机器绝对路径。`--verify-determinism` 连续生成两遍并逐字节比较 24 个 PNG；`--check` 同样双遍生成，再与 manifest 和忽略目录产物逐字节比较。
+默认从 `%LOCALAPPDATA%/ms-playwright/chromium-1223/chrome-win64/chrome.exe` 取锁定浏览器。干净 CI 由 `toolchains/toolchain-lock.json` 恢复 Chrome for Testing `148.0.7778.96` 的 190,733,461-byte 官方归档，先验证 archive SHA-256，再验证安装后 `chrome.exe` SHA-256，并通过 `SYSTEM_SANDBOX_CHROMIUM_EXECUTABLE` 指向该工作区缓存；因此不能依赖 runner 或开发机残留的 Playwright 历史目录。SHA、revision 或 version 任一不符时必须阻断。manifest 只记录版本与 SHA，不记录机器绝对路径。`--verify-determinism` 连续生成两遍并逐字节比较 24 个 PNG；`--check` 同样双遍生成，再与 manifest 和忽略目录产物逐字节比较。
 
 ## 容量门
 

@@ -21,6 +21,7 @@ jobs:
     timeout-minutes: 90
     env:
       PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}\.cache\playwright
+      SYSTEM_SANDBOX_CHROMIUM_EXECUTABLE: ${{ github.workspace }}\.cache\playwright\chromium-1223\chrome-win64\chrome.exe
       TGD_BROWSER_TARGETS: chrome,edge,firefox
       TGD_BUILD_ID: g1-gh-${{ github.run_id }}-${{ github.run_attempt }}
       TGD_EXPECT_COMMIT: ${{ github.sha }}

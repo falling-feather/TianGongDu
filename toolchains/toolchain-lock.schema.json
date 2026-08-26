@@ -166,8 +166,23 @@
         "provenance": { "$ref": "#/$defs/provenance" },
         "cachePath": { "type": ["string", "null"] },
         "installRoot": { "type": ["string", "null"] },
+        "installedPath": { "type": "string", "minLength": 1 },
+        "installedIntegrity": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
         "artifactVerified": { "type": "boolean" }
-      }
+      },
+      "allOf": [
+        {
+          "if": { "required": ["installedPath"] },
+          "then": { "required": ["installedIntegrity"] }
+        },
+        {
+          "if": { "required": ["installedIntegrity"] },
+          "then": { "required": ["installedPath", "installRoot"] }
+        }
+      ]
     }
   },
   "allOf": [

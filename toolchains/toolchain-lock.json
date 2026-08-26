@@ -14,7 +14,8 @@
       "Emscripten 3.1.73 is pinned to Axmol 2.11.4's documented Windows browser-debug compatibility line.",
       "CMake 4.2.1 was rejected because it exited without diagnostics on this Unicode Windows source path; 4.3.1 passed MSVC and Clang Debug/Release and remains gated on the Axmol Web build.",
       "axslcc 1.14.0 is the exact shader compiler declared by Axmol 2.11.4's immutable 1k/build.profiles.",
-      "MSVC 19.43.34809 is selected through the exact Visual Studio component and 14.43.34808 toolset directory. The VS 17.13 default component and VS 17.14 out-of-support component carry two observed, exact cl.exe hashes; both are allowlisted and any third hash is rejected."
+      "MSVC 19.43.34809 is selected through the exact Visual Studio component and 14.43.34808 toolset directory. The VS 17.13 default component and VS 17.14 out-of-support component carry two observed, exact cl.exe hashes; both are allowlisted and any third hash is rejected.",
+      "ART-003 keeps Playwright 1.61.1 for automation but deliberately rasterizes with Chrome for Testing 148.0.7778.96 / revision 1223; its official archive and installed chrome.exe are independently SHA-256 locked so clean runners do not depend on historical browser caches."
     ],
     "promotionRequirements": [
       "all-artifacts-sha256-verified",
@@ -233,6 +234,23 @@
       },
       "cachePath": ".cache/downloads/axslcc-1.14.0-win64.zip",
       "installRoot": ".cache/toolchains/axmol-2.11.4-release/axmol-2.11.4/tools/external/axslcc",
+      "artifactVerified": true
+    },
+    "art003Chromium": {
+      "version": "148.0.7778.96-revision-1223-win64",
+      "integrity": "sha256:6cd8c5f6eeff7b6515dbcd35d050f696da3f7eac4b4a209c06e3d4354c2704a6",
+      "integrityScope": "archive",
+      "provenance": {
+        "kind": "official-release-archive",
+        "url": "https://storage.googleapis.com/chrome-for-testing-public/148.0.7778.96/win64/chrome-win64.zip",
+        "revision": "playwright-chromium-1223",
+        "expectedSizeBytes": 190733461,
+        "parent": "playwright@1.60.0-browser-manifest"
+      },
+      "cachePath": ".cache/downloads/chrome-win64-148.0.7778.96.zip",
+      "installRoot": ".cache/playwright/chromium-1223",
+      "installedPath": "chrome-win64/chrome.exe",
+      "installedIntegrity": "sha256:290fa7018fda22c52ada5eddb0113baf3ebc41fd0fde6085eddb19793606c635",
       "artifactVerified": true
     }
   }

@@ -82,6 +82,15 @@ function validateEntry(name, entry, errors) {
       pushIf(errors, !isWorkspaceRelative(path), `${name}.${field} 必须是工作区内相对路径。`);
     }
   }
+
+  const hasInstalledPath = isNonEmptyString(entry.installedPath);
+  const hasInstalledIntegrity = isNonEmptyString(entry.installedIntegrity);
+  pushIf(errors, hasInstalledPath !== hasInstalledIntegrity, `${name} installedPath 与 installedIntegrity 必须成对出现。`);
+  if (hasInstalledPath) {
+    pushIf(errors, !isWorkspaceRelative(entry.installedPath), `${name}.installedPath 必须是 installRoot 内相对路径。`);
+    pushIf(errors, !isWorkspaceRelative(entry.installRoot), `${name} 声明 installedPath 时必须提供工作区内 installRoot。`);
+    pushIf(errors, !sha256Pattern.test(entry.installedIntegrity), `${name}.installedIntegrity 必须是精确 SHA-256。`);
+  }
 }
 
 export function validateToolchainLock(lock, baseline) {
@@ -169,14 +178,43 @@ async function verifyCachedEntry(root, name, entry, errors, notes) {
   if (actual === match[1]) notes.push(`${name} SHA-256 已验证。`);
 }
 
+async function verifyInstalledEntry(root, name, entry, errors, notes) {
+  if (!entry.installedPath) return;
+  const installRoot = resolve(root, entry.installRoot);
+  const absolutePath = resolve(installRoot, entry.installedPath);
+  const relativePath = relative(installRoot, absolutePath);
+  if (relativePath.startsWith("..") || isAbsolute(relativePath)) {
+    errors.push(`${name} 安装产物越出 installRoot。`);
+    return;
+  }
+
+  try {
+    await access(absolutePath);
+  } catch {
+    errors.push(`${name} 安装产物缺失：${entry.installRoot}/${entry.installedPath}`);
+    return;
+  }
+
+  const match = sha256Pattern.exec(entry.installedIntegrity ?? "");
+  if (!match) {
+    errors.push(`${name} 安装产物缺少精确 SHA-256。`);
+    return;
+  }
+  const actual = await sha256(absolutePath);
+  pushIf(errors, actual !== match[1], `${name} 安装产物 SHA-256 不符：期望 ${match[1]}，实际 ${actual}。`);
+  if (actual === match[1]) notes.push(`${name} 安装产物 SHA-256 已验证。`);
+}
+
 export async function verifyToolchainCache(root, lock) {
   const errors = [];
   const notes = [];
   for (const [name, entry] of Object.entries(lock.tools ?? {})) {
     await verifyCachedEntry(root, name, entry, errors, notes);
+    await verifyInstalledEntry(root, name, entry, errors, notes);
   }
   for (const [name, entry] of Object.entries(lock.supportArtifacts ?? {})) {
     await verifyCachedEntry(root, `supportArtifacts.${name}`, entry, errors, notes);
+    await verifyInstalledEntry(root, `supportArtifacts.${name}`, entry, errors, notes);
   }
   return { errors, notes };
 }

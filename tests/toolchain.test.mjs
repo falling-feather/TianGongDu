@@ -37,6 +37,33 @@ test("installed executable variants remain an exact SHA-256 allowlist", () => {
   assert.match(validateToolchainLock(malformed, baseline).join("\n"), /无效 SHA-256/);
 });
 
+test("ART-003 clean runners lock both the Chromium archive and installed executable", async () => {
+  const chromium = lock.supportArtifacts.art003Chromium;
+  assert.deepEqual(
+    {
+      version: chromium.version,
+      archive: chromium.integrity,
+      bytes: chromium.provenance.expectedSizeBytes,
+      installedPath: chromium.installedPath,
+      executable: chromium.installedIntegrity
+    },
+    {
+      version: "148.0.7778.96-revision-1223-win64",
+      archive: "sha256:6cd8c5f6eeff7b6515dbcd35d050f696da3f7eac4b4a209c06e3d4354c2704a6",
+      bytes: 190733461,
+      installedPath: "chrome-win64/chrome.exe",
+      executable: "sha256:290fa7018fda22c52ada5eddb0113baf3ebc41fd0fde6085eddb19793606c635"
+    }
+  );
+
+  const missingPair = structuredClone(lock);
+  delete missingPair.supportArtifacts.art003Chromium.installedIntegrity;
+  assert.match(validateToolchainLock(missingPair, baseline).join("\n"), /必须成对出现/);
+
+  const workflow = await readFile(resolve(root, ".github/workflows/f1-clean-build.yml"), "utf8");
+  assert.match(workflow, /SYSTEM_SANDBOX_CHROMIUM_EXECUTABLE:.*chromium-1223.*chrome\.exe/);
+});
+
 test("toolchain runner folds duplicate Windows PATH keys", () => {
   const environment = buildToolchainEnvironment(root, lock, {
     Path: "C:\\first",
@@ -67,4 +94,6 @@ test("toolchain bootstrap hashes without PowerShell module autoloading", async (
   assert.doesNotMatch(bootstrap, /Get-FileHash/);
   assert.match(bootstrap, /function ConvertTo-GpgPath/);
   assert.match(bootstrap, /return "\/\$drive\/\$tail"/);
+  assert.match(bootstrap, /supportArtifacts\.art003Chromium/);
+  assert.match(bootstrap, /verified installed artifact/);
 });

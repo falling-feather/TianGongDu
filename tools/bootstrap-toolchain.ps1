@@ -120,8 +120,19 @@ function Expand-ZipIfMissing($Entry, [string]$Marker, [switch]$IntoInstallRoot) 
     $installRoot = Resolve-RepositoryPath $Entry.installRoot
     $markerPath = Join-Path $installRoot $Marker
     if (Test-Path -LiteralPath $markerPath) {
-        Write-Output "installed: $($Entry.version) ($Marker)"
-        return
+        if ([string]::IsNullOrWhiteSpace($Entry.installedIntegrity)) {
+            Write-Output "installed: $($Entry.version) ($Marker)"
+            return
+        }
+        if ($Entry.installedIntegrity -notmatch '^sha256:([0-9a-f]{64})$') {
+            throw "Entry $($Entry.version) has an invalid installed executable SHA-256."
+        }
+        $actualInstalledHash = Get-Sha256 $markerPath
+        if ($actualInstalledHash -eq $Matches[1]) {
+            Write-Output "verified installed artifact: $($Entry.version) ($actualInstalledHash)"
+            return
+        }
+        Write-Warning "Installed artifact hash drifted; restoring it from the verified archive: $markerPath"
     }
     $destination = if ($IntoInstallRoot) {
         $installRoot
@@ -132,6 +143,16 @@ function Expand-ZipIfMissing($Entry, [string]$Marker, [switch]$IntoInstallRoot) 
     Expand-Archive -LiteralPath (Resolve-RepositoryPath $Entry.cachePath) -DestinationPath $destination -Force
     if (-not (Test-Path -LiteralPath $markerPath)) {
         throw "Archive $($Entry.cachePath) did not produce $markerPath"
+    }
+    if (-not [string]::IsNullOrWhiteSpace($Entry.installedIntegrity)) {
+        if ($Entry.installedIntegrity -notmatch '^sha256:([0-9a-f]{64})$') {
+            throw "Entry $($Entry.version) has an invalid installed executable SHA-256."
+        }
+        $actualInstalledHash = Get-Sha256 $markerPath
+        if ($actualInstalledHash -ne $Matches[1]) {
+            throw "Installed artifact SHA-256 mismatch for $($Entry.version): expected $($Matches[1]), actual $actualInstalledHash"
+        }
+        Write-Output "expanded and verified installed artifact: $($Entry.version) ($actualInstalledHash)"
     }
 }
 
@@ -254,6 +275,7 @@ try {
     }
 
     Expand-ZipIfMissing $lock.supportArtifacts.sevenZip "7z.exe"
+    Expand-ZipIfMissing $lock.supportArtifacts.art003Chromium "chrome-win64\chrome.exe" -IntoInstallRoot
     Expand-ZipIfMissing $lock.tools.axmol "core\CMakeLists.txt"
     Expand-ZipIfMissing $lock.supportArtifacts.axslcc "axslcc.exe" -IntoInstallRoot
     Expand-ZipIfMissing $lock.tools.cmake "bin\cmake.exe"

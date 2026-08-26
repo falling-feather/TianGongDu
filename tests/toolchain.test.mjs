@@ -62,6 +62,7 @@ test("ART-003 clean runners lock both the Chromium archive and installed executa
 
   const workflow = await readFile(resolve(root, ".github/workflows/f1-clean-build.yml"), "utf8");
   assert.match(workflow, /SYSTEM_SANDBOX_CHROMIUM_EXECUTABLE:.*chromium-1223.*chrome\.exe/);
+  assert.match(workflow, /Check out the exact revision[\s\S]*?fetch-depth:\s*0/);
 });
 
 test("toolchain runner folds duplicate Windows PATH keys", () => {

@@ -70,6 +70,14 @@ test("Demo 0.8.1 browser route exposes package, blocker, operate, and retry evid
   }
 });
 
+test("Web package evidence uses an ASCII virtual program identity", async () => {
+  const webCmake = await read("tests/web/CMakeLists.txt");
+  assert.match(
+    webCmake,
+    /moduleFactory\(\{[\s\S]*?thisProgram:\s*"tgd-sandbox-package-service-abi"/
+  );
+});
+
 test("Demo 0.8.2 Workbench route proves CRUD, atomic Preview swap, and last-valid retention", async () => {
   const [browserRoute, server, controller, workbench] = await Promise.all([
     read("tests/browser/system-demo-workbench.mjs"),

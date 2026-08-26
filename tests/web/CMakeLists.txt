@@ -140,6 +140,10 @@ const { SandboxPackageServiceClient } =
   await import(pathToFileURL(clientPath).href);
 const module = await moduleFactory({
   noInitialRun: true,
+  // Emscripten Debug exports argv[0] through an ASCII-only WASI environ.
+  // Keep that virtual identity stable instead of leaking the physical
+  // workspace path, which may legitimately contain non-ASCII characters.
+  thisProgram: "tgd-sandbox-package-service-abi",
   locateFile(name) {
     if (name !== basename(wasmPath)) throw new Error("unexpected WASM dependency " + name);
     return wasmPath;

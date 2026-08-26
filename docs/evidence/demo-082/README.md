@@ -51,7 +51,7 @@ npm run test:system-demo-workbench
 
 ## 依据、放行边界与回退
 
-- 任务依据：[`02 §4.3`](../../02-版本规划与验收.md#43-082demo-082编辑器闭环一)、[`12 §21.6–21.9`](../../01-developer/12-内容存档与版本契约.md#216-format-11-producerdecoder-与-owning-document)、[`13 §2–10`](../../01-developer/13-编辑器与模板生产.md#2-当前能力表)、[`16 §5.4/§18.1`](../../01-developer/16-测试CI与发布门禁.md#54-demo-082-workbench--web-preview-路线) 与 [`17 §2–4`](../../01-developer/17-平台构建部署与运维.md#2-cmake-preset)。
+- 任务历史：[`03 的 2.2.1-system.17`](../../03-发布历史.md)；原任务已在 2026-08-26 周期收束时从 02 迁入历史。实现依据继续使用 [`12 §21.6–21.9`](../../01-developer/12-内容存档与版本契约.md#216-format-11-producerdecoder-与-owning-document)、[`13 §2–10`](../../01-developer/13-编辑器与模板生产.md#2-当前能力表)、[`16 §5.4/§18.1`](../../01-developer/16-测试CI与发布门禁.md#54-demo-082-workbench--web-preview-路线) 与 [`17 §2–4`](../../01-developer/17-平台构建部署与运维.md#2-cmake-preset)。
 - 实际内容/资源入口：[`system-demo.sandbox.json`](../../../content/design/system-demo.sandbox.json)、[`template-registry.json`](../../../content/templates/template-registry.json)、[`v1-content-catalog.json`](../../../content/design/v1-content-catalog.json) 与 [`runtime-import-manifest.json`](../../../assets_src/system-sandbox-blockouts/runtime/runtime-import-manifest.json)。
 - 本验收只放行 Demo 0.8.2 的本机 Web 作者闭环；Actor profile/duty/skill、Wave/Objective/terminal、两波战斗、完整 Undo/Redo、Windows 可见 Preview、三浏览器 manifest、工艺经营、NPC 与完整 Demo 仍未完成。
 - Windows MSVC Release 29/29 只证明共享 C++ 回归，不是可见 Windows 窗口证据。

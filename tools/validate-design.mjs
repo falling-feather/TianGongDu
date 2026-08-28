@@ -18,6 +18,11 @@ const topDocuments = [
   "09-术语与索引.md"
 ];
 
+const temporaryTopDocuments = [
+  "100-当前设计总览.md",
+  "110-已完成内容总览.md"
+];
+
 const developerDocuments = [
   "10-技术架构与依赖规则.md",
   "11-Runtime与Gameplay组件模型.md",
@@ -117,11 +122,20 @@ async function validateDocumentHierarchy(root, errors) {
     .map((entry) => entry.name)
     .sort();
 
-  pushIf(errors, actualTopDocs.length !== 10, `顶层文档必须恰好 10 份，当前为 ${actualTopDocs.length} 份。`);
+  const actualFormalTopDocs = actualTopDocs.filter((file) => topDocuments.includes(file));
+  const unexpectedTopDocs = actualTopDocs.filter(
+    (file) => !topDocuments.includes(file) && !temporaryTopDocuments.includes(file)
+  );
+
+  pushIf(errors, actualFormalTopDocs.length !== 10, `正式顶层文档必须恰好 10 份，当前为 ${actualFormalTopDocs.length} 份。`);
+  pushIf(errors, unexpectedTopDocs.length > 0, `存在未授权的顶层文档：${unexpectedTopDocs.join("、")}`);
   pushIf(errors, actualDeveloperDocs.length !== 10, `开发者二级文档必须恰好 10 份，当前为 ${actualDeveloperDocs.length} 份。`);
 
   for (const file of topDocuments) {
     pushIf(errors, !actualTopDocs.includes(file), `缺少顶层文档：${file}`);
+  }
+  for (const file of temporaryTopDocuments) {
+    pushIf(errors, !actualTopDocs.includes(file), `缺少用户授权的临时索引：${file}`);
   }
   for (const file of developerDocuments) {
     pushIf(errors, !actualDeveloperDocs.includes(file), `缺少开发者二级文档：${file}`);
@@ -170,6 +184,14 @@ async function validateHandoffDocumentation(root, errors) {
     const source = await readFile(join(root, relativePath), "utf8");
     for (const marker of ["> 状态", "> 最后更新", "> 维护者角色"]) {
       pushIf(errors, !source.includes(marker), `开发对接文档缺少元信息 ${marker}：${relativePath}`);
+    }
+  }
+
+  for (const file of temporaryTopDocuments) {
+    const relativePath = join("docs", file);
+    const source = await readFile(join(root, relativePath), "utf8");
+    for (const marker of ["> 状态：Temporary", "> 快照日期：", "`DOC-001`", "不取代"]) {
+      pushIf(errors, !source.includes(marker), `临时索引缺少“${marker}”：${relativePath}`);
     }
   }
 
